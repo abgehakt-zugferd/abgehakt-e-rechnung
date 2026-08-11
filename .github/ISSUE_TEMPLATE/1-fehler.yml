@@ -1,0 +1,97 @@
+name: Fehler melden
+description: Das Programm verhält sich anders, als es soll.
+labels: ["Bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Sicherheitslücken gehören nicht hierher.** Sie werden per E-Mail gemeldet,
+        nicht als öffentliches Issue. Der Weg steht in
+        [SECURITY.md](../blob/main/SECURITY.md).
+
+  - type: checkboxes
+    id: datenschutz
+    attributes:
+      label: Vor dem Absenden
+      options:
+        - label: >
+            Ich habe keine echten Rechnungs- oder Kundendaten eingefügt. Auch nicht in
+            Bildschirmfotos oder Protokollauszügen.
+          required: true
+
+  - type: textarea
+    id: passiert
+    attributes:
+      label: Was ist passiert?
+      description: Die Beobachtung, nicht die Vermutung über die Ursache.
+    validations:
+      required: true
+
+  - type: textarea
+    id: erwartet
+    attributes:
+      label: Was hätte stattdessen passieren sollen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: schritte
+    attributes:
+      label: Schritte zum Nachstellen
+      description: >
+        So genau, dass jemand anderes denselben Zustand herstellen kann. Ein Fehler,
+        der sich nicht nachstellen lässt, lässt sich auch nicht als behoben beweisen.
+      placeholder: |
+        1. Neue Rechnung anlegen, Kunde "Muster GmbH"
+        2. Eine Position mit 19 % erfassen
+        3. Auf "Finalisieren" klicken
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kritikalitaet
+    attributes:
+      label: Kritikalität
+      description: >
+        Kritisch = Datenverlust, falscher Beleg oder Rechtsverstoß möglich.
+        Hoch = Funktion unbenutzbar, kein Ausweg.
+        Mittel = Funktion eingeschränkt oder Angabe unzuverlässig, Ausweg vorhanden.
+        Niedrig = Kosmetik, Geschwindigkeit, Bequemlichkeit.
+        Im Zweifel lieber zu hoch: die Einstufung wird beim Sichten geprüft.
+      options:
+        - Kritisch
+        - Hoch
+        - Mittel
+        - Niedrig
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Steht im Seitenfuß der Anwendung.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: umgebung
+    attributes:
+      label: Umgebung
+      description: Betriebssystem und Docker-Fassung (`docker version`).
+      placeholder: |
+        macOS 15.5, Docker Desktop 4.34
+    validations:
+      required: true
+
+  - type: textarea
+    id: protokoll
+    attributes:
+      label: Protokollauszug
+      description: >
+        Falls vorhanden, die letzten Zeilen aus `docker compose logs app`.
+        Wird als Code dargestellt, Backticks sind nicht nötig.
+      render: shell
+    validations:
+      required: false

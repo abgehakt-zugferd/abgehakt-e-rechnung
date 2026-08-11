@@ -1,0 +1,19 @@
+# Kein leeres Issue: die Vorlagen fragen nach Dingen, die sonst in der ersten
+# Rückfrage nachgereicht werden müssten (Version, Schritte, Kritikalität).
+# Der Betreuer selbst umgeht das weiterhin über `gh issue create`.
+#
+# Bewusst KEINE Vorlage für `Feature` und `Roadmap`: beide sind Entscheidungen
+# des Projekts, keine Eingaben von außen. Ein Wunsch, der gleich als Feature
+# angelegt werden könnte, würde genau die Unterscheidung aufheben, für die es
+# die drei Labels gibt.
+blank_issues_enabled: false
+contact_links:
+  - name: Sicherheitslücke melden
+    url: https://github.com/abgehakt-zugferd/abgehakt-e-rechnung/blob/main/SECURITY.md
+    about: Nicht als öffentliches Issue. Der Meldeweg per E-Mail steht in SECURITY.md.
+  - name: Hilfe bei Installation und Einrichtung
+    url: https://github.com/abgehakt-zugferd/abgehakt-e-rechnung#installation
+    about: Der Ablauf Schritt für Schritt, samt der Stellen, an denen es klemmen kann.
+  - name: Begleitete Einrichtung
+    url: https://github.com/abgehakt-zugferd/abgehakt-e-rechnung/blob/main/SERVICES.md
+    about: Wer die Einrichtung nicht selbst machen möchte, findet hier den Weg.

@@ -1,0 +1,36 @@
+name: Anleitung verbessern
+description: Etwas in README, CONTRIBUTING oder DEV-DOCU ist falsch, fehlt oder ist missverständlich.
+labels: ["Doku"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Eine Anleitung, an der jemand hängen bleibt, ist ein Fehler wie jeder andere.
+        Wenn du an einer Stelle raten musstest, ist das der Bericht, den es braucht.
+
+  - type: input
+    id: stelle
+    attributes:
+      label: Welche Stelle?
+      description: Datei und Abschnitt, gern als Verweis.
+      placeholder: "README.md, Abschnitt 'Installation', Schritt 3"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Was stimmt dort nicht?
+      description: >
+        Am hilfreichsten ist, was du beim Lesen angenommen hast und was dann
+        wirklich passiert ist.
+    validations:
+      required: true
+
+  - type: textarea
+    id: vorschlag
+    attributes:
+      label: Wie müsste es dastehen?
+      description: Gern als fertiger Satz. Muss aber nicht.
+    validations:
+      required: false

@@ -1,0 +1,57 @@
+name: Wunsch äußern
+description: Etwas, das das Programm können sollte.
+labels: ["Wunsch"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ein Wunsch ist erst einmal nur ein Wunsch: keine Zusage, dass er kommt.
+        Wird er aufgegriffen, entsteht daraus eine Skizze (`Roadmap`), und erst
+        wenn die Umsetzung beschlossen ist, wird daraus ein `Feature`.
+
+        Deshalb ist die wichtigste Frage unten nicht, **was** gebaut werden soll,
+        sondern **woran du gerade scheiterst**. Der beschriebene Weg ist oft nicht
+        der einzige, und manchmal gibt es einen kürzeren.
+
+  - type: textarea
+    id: situation
+    attributes:
+      label: Woran scheiterst du heute?
+      description: >
+        Die Lage, nicht die Lösung. Was tust du im Moment stattdessen, und was
+        kostet dich das?
+      placeholder: >
+        Ich schreibe jeden Monat dieselben zwölf Rechnungen und tippe sie jedes Mal neu ab.
+    validations:
+      required: true
+
+  - type: textarea
+    id: wunsch
+    attributes:
+      label: Wie stellst du es dir vor?
+      description: Wenn du schon eine Vorstellung hast, gern hier. Sonst leer lassen.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: haeufigkeit
+    attributes:
+      label: Wie oft betrifft dich das?
+      options:
+        - Bei jeder Rechnung
+        - Jeden Monat
+        - Ein paar Mal im Jahr
+        - Einmalig
+    validations:
+      required: true
+
+  - type: textarea
+    id: rahmen
+    attributes:
+      label: Gibt es einen steuerlichen oder rechtlichen Rahmen dazu?
+      description: >
+        Falls dein Wunsch an einer Vorschrift hängt (Paragraf, Schreiben des
+        Finanzamts, Vorgabe der Kanzlei), nenne sie hier. Das entscheidet oft
+        darüber, ob etwas gebaut werden kann und wie.
+    validations:
+      required: false

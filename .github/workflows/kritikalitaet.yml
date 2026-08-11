@@ -1,0 +1,64 @@
+# Ein Auswahlfeld in einer Issue-Vorlage setzt KEIN Label. GitHub schreibt die
+# Antwort nur in den Text. Ohne diesen Ablauf stuende die Kritikalitaet also im
+# Fliesstext, und die Liste liesse sich weiterhin nicht danach filtern.
+#
+# Der Text des Issues wird ausschliesslich in JavaScript gelesen
+# (`context.payload.issue.body`), NIE ueber `${{ ... }}` in eine Shell-Zeile
+# eingesetzt. Letzteres waere eine Einschleusungsluecke: Der Text stammt bei
+# einem oeffentlichen Projekt von Fremden, und `${{ }}` fuegt ihn vor der
+# Ausfuehrung woertlich in den Befehl ein. Wer hier etwas ergaenzt, haelt sich
+# daran.
+name: kritikalitaet
+
+# Nur beim Anlegen, bewusst nicht bei `edited`: Die Einstufung wird beim Sichten
+# geprüft und oft von Hand berichtigt. Liefe der Ablauf auch bei jeder Bearbeitung,
+# würde er die Korrektur des Betreuers wieder überschreiben, sobald jemand am Text
+# etwas ändert. Erste Einordnung durch die Meldung, letztes Wort beim Projekt.
+on:
+  issues:
+    types: [opened]
+
+# Nur was gebraucht wird. Insbesondere kein `contents`: dieser Ablauf checkt
+# nichts aus und führt keinen Code aus dem Issue aus.
+permissions:
+  issues: write
+
+jobs:
+  stufe-uebernehmen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const STUFEN = ["Kritisch", "Hoch", "Mittel", "Niedrig"];
+            const issue = context.payload.issue;
+
+            // Issue-Formulare rendern jedes Feld als "### Überschrift" gefolgt vom
+            // Wert. Gesucht wird deshalb genau dieser Block, nicht irgendein
+            // Vorkommen des Wortes: "Kritisch" kann auch im Fließtext stehen.
+            const treffer = (issue.body || "").match(
+              /###\s*Kritikalität\s*\n+\s*(Kritisch|Hoch|Mittel|Niedrig)\b/
+            );
+            if (!treffer) {
+              core.info("Keine Kritikalität im Text gefunden, nichts zu tun.");
+              return;
+            }
+
+            const stufe = treffer[1];
+            const vorhanden = (issue.labels || []).map(l => l.name);
+            if (vorhanden.includes(stufe)) return;
+
+            // Zwei Stufen gleichzeitig waeren schlimmer als keine: die Liste liesse
+            // sich dann nicht mehr eindeutig sortieren.
+            for (const alt of STUFEN) {
+              if (alt !== stufe && vorhanden.includes(alt)) {
+                await github.rest.issues.removeLabel({
+                  ...context.repo, issue_number: issue.number, name: alt,
+                });
+              }
+            }
+
+            await github.rest.issues.addLabels({
+              ...context.repo, issue_number: issue.number, labels: [stufe],
+            });
+            core.info(`Kritikalität ${stufe} gesetzt.`);
