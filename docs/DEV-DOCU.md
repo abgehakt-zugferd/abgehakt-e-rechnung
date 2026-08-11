@@ -1238,6 +1238,21 @@ docker exec abgehakt_app sh -c 'for p in $(ls /proc | grep -E "^[0-9]+$"); do \
 Steht dort mehr als ein `pytest`, erst aufraeumen (`kill -9`), dann neu starten.
 Ein zweiter Lauf "zur Sicherheit" macht es schlimmer, nicht besser.
 
+**Auch ein abgebrochener `git push` hinterlaesst so einen Waisen** (2026-08-11,
+Veroeffentlichung v1.0.0). Der Pre-Push-Hook faehrt die volle Suite; laeuft der
+Push in ein Zeitlimit, gilt alles oben, nur sieht man es nicht, weil man gar
+keinen Testlauf gestartet zu haben glaubt. Vor jedem neuen Push-Versuch nachsehen.
+
+**Der Schaden ist groesser als Ueberlast: das Ergebnis wird wertlos.** Beide
+Laeufe benutzen dieselbe Testdatenbank `abgehakt_test`, und die Fixture `pg_engine`
+legt sie mit `DROP DATABASE IF EXISTS ... WITH (FORCE)` neu an. Der zweite Lauf
+reisst dem ersten also mitten im Betrieb die Datenbank samt Verbindungen weg. Was
+dabei herauskommt, kann in beide Richtungen falsch sein, nicht nur rot: ein Lauf
+kann Zeilen sehen, die der andere gerade angelegt hat, oder seine eigenen
+vermissen. Ein gruener Lauf unter diesen Umstaenden beweist nichts. Deshalb gilt
+in diesem Repo: **immer nur ein Testlauf gleichzeitig**, und nach einem Abbruch
+zuerst aufraeumen, dann von vorn.
+
 ### Reihenfolge in der CII: wo BT-10, BG-6 und BT-34/49 stehen muessen (#153)
 
 `TradePartyType` ist eine geordnete Sequenz, und ein Element an der falschen Stelle
