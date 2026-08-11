@@ -1,0 +1,79 @@
+{#
+  Zurück-Button-Leitplanke für ANLEGE-Formulare (Bug 2026-08-03).
+
+  Nach `POST …/neu` → 303 liegt der History-Eintrag des Anlegeformulars direkt hinter
+  der Zielseite. Der Zurück-Button holt ihn samt Eingaben zurück — das sieht aus wie
+  ein Editor für den gerade gespeicherten Datensatz, ist aber weiterhin das
+  ANLEGE-Formular. Ein Absenden legt einen ZWEITEN Datensatz mit neuer laufender
+  Nummer an (bei Rechnungen nach GoBD nicht mehr löschbar).
+
+  `Cache-Control: no-store` auf der GET-Route deckt nur den Pfad ab, bei dem der
+  Browser neu lädt. Bei bfcache-Wiederherstellung stellt er GAR KEINEN Request —
+  Handler, Guards und Header laufen dort nie. Deshalb muss die Seite sich selbst
+  entwerten; das hier ist die zweite Ebene, nicht die einzige.
+
+  Nur ABGESCHICKTE Einträge werden entwertet: wer ein Formular ausfüllt, woandershin
+  klickt und zurückkommt, soll seine Eingaben behalten. `sessionStorage` ist pro Tab,
+  ein zweiter Tab mit offenem Formular bleibt unberührt.
+
+  Nur für den Anlege-Modus einbinden. Bei einem Edit-Formular ist Zurück harmlos —
+  ein erneutes Absenden ändert denselben Datensatz, statt einen neuen anzulegen.
+
+  Verwendung (am Ende des Templates, nach Formular und Hinweisblock):
+    {% raw %}{% import "partials/formular_zurueck_guard.html" as zurueck_guard %}
+    {{ zurueck_guard.guard('abgehakt:…-abgeschickt', 'formular-id', 'hinweis-id') }}{% endraw %}
+#}
+{% macro guard(schluessel, formular_id, hinweis_id) %}
+<script>
+(function () {
+    const KEY = '{{ schluessel }}';
+    const formular = document.getElementById('{{ formular_id }}');
+    const hinweis = document.getElementById('{{ hinweis_id }}');
+    if (!formular || !hinweis) return;
+
+    // Speicherzugriffe gekapselt: `sessionStorage` wirft in blockierten Kontexten.
+    // Ein Fehler dürfte hier nicht hochschlagen — im Zweifel nicht entwerten.
+    function markierungGesetzt() {
+        try { return sessionStorage.getItem(KEY) === '1'; } catch (e) { return false; }
+    }
+
+    function markierungSetzen(gesetzt) {
+        try {
+            if (gesetzt) sessionStorage.setItem(KEY, '1');
+            else sessionStorage.removeItem(KEY);
+        } catch (e) {}
+    }
+
+    function istVerbrauchterEintrag(persisted) {
+        const nav = performance.getEntriesByType
+            ? performance.getEntriesByType('navigation')[0] : null;
+        const zurueck = persisted || (nav && nav.type === 'back_forward');
+        if (!zurueck) {
+            // Frisch aufgerufenes Formular: alte Markierung verfällt, sonst würde
+            // eine spätere, legitime Zurück-Navigation fälschlich entwertet.
+            markierungSetzen(false);
+            return false;
+        }
+        if (!markierungGesetzt()) return false;
+        markierungSetzen(false);   // einmalig
+        return true;
+    }
+
+    function entwerten() {
+        formular.style.display = 'none';
+        hinweis.style.display = '';
+    }
+
+    // Ab dem Absenden ist dieser History-Eintrag verbraucht.
+    formular.addEventListener('submit', function () { markierungSetzen(true); });
+
+    // Zwei Wiederherstellungspfade: Neuladen mit Navigationstyp back_forward (dieses
+    // Skript läuft erneut) und bfcache (es läuft NICHT erneut, nur `pageshow` feuert,
+    // dort mit persisted=true). Deshalb beide Stellen.
+    if (istVerbrauchterEintrag(false)) entwerten();
+    window.addEventListener('pageshow', function (event) {
+        if (istVerbrauchterEintrag(event.persisted)) entwerten();
+    });
+})();
+</script>
+{% endmacro %}

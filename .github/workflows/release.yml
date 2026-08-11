@@ -1,0 +1,27 @@
+name: release
+
+# Gate gegen Versionsdrift. Die Version steht in `backend/VERSION` — daraus liest sie
+# jede Installation, die aus einem heruntergeladenen Archiv gebaut wird (kein Git, also
+# kein `git describe`). Der Tag ist die zweite Nennung derselben Zahl, und zwei Nennungen
+# ohne Prüfung laufen auseinander: ein Release `v1.2.0`, dessen Inhalt sich als `1.1.0`
+# meldet, würde sich selbst dauerhaft als veraltet melden.
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  version-passt-zum-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag und backend/VERSION vergleichen
+        run: |
+          datei="$(tr -d '[:space:]' < backend/VERSION)"
+          tag="${GITHUB_REF_NAME#v}"
+          echo "VERSION-Datei: $datei / Tag: $tag"
+          if [ "$datei" != "$tag" ]; then
+            echo "::error::backend/VERSION ist '$datei', der Tag lautet '$GITHUB_REF_NAME'. Erst die Datei anheben und committen, dann taggen."
+            exit 1
+          fi

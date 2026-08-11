@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+{% block title %}{% if invoice %}Rechnung bearbeiten{% else %}Neue Rechnung{% endif %} – {{ PRODUCT_NAME }}{% endblock %}
+{% block content %}
+<div style="max-width:1100px;"
+     x-data="invoiceForm()"
+     x-init="init()">
+
+    {# Vorhandene Positionen als JSON-Block: im x-init-Attribut wuerde jedes
+       Anfuehrungszeichen aus einer Beschreibung das Attribut zerreissen. #}
+    <script type="application/json" id="vorhandene-positionen">{{ items_json | default('[]', true) | safe }}</script>
+    <script type="application/json" id="formular-vorgaben">{
+        "taxCategory": {{ (invoice.tax_category if invoice else 'S') | tojson }},
+        "paymentTerms": {{ ((invoice.payment_terms if invoice else None) or (company.payment_terms_default if company else '')) | tojson }}
+    }</script>
+
+    <div class="flex items-center gap-3 mb-6">
+        <a href="{% if invoice %}/invoices/{{ invoice.id }}{% else %}/invoices{% endif %}" style="color:var(--text-dim); text-decoration:none; display:inline-flex; padding:6px;">
+            <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+        </a>
+        <h1>{% if invoice %}RECHNUNG BEARBEITEN{% else %}NEUE RECHNUNG{% endif %}</h1>
+        {% if invoice %}
+        {# Rechnungsnummer ist unveraenderlich — anzeigen, nicht bearbeitbar machen. #}
+        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-text); color:var(--gold); border:1px solid var(--border); padding:3px 10px;">{{ invoice.invoice_number }}</span>
+        {% endif %}
+    </div>
+
+    {% if error %}
+    <div style="margin-bottom:16px; padding:12px 16px; background:rgba(255,77,124,0.08); border:2px solid rgba(255,77,124,0.3); font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--pink);">
+        ✗ {{ error }}
+    </div>
+    {% endif %}
+
+    {% if not invoice %}
+    <!-- Ersetzt das Formular, wenn es als bereits abgeschickter History-Eintrag
+         zurückkommt (Zurück-Button). Siehe Makro am Seitenende. -->
+    <div id="rechnung-anlegen-verbraucht" class="card space-y-4" style="display:none;">
+        <h2>ENTWURF BEREITS GESPEICHERT</h2>
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); line-height:1.5;">
+            Dieses Formular wurde bereits abgeschickt. Der Entwurf liegt in der
+            Rechnungsliste. Was hier stand, ist gespeichert und wird nicht doppelt angelegt.
+        </p>
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--amber); line-height:1.5;">
+            Ein gespeicherter Entwurf lässt sich derzeit nicht nachträglich bearbeiten.
+            Für eine Korrektur eine neue Rechnung anlegen; der Zurück-Button ist dafür
+            kein Weg, er zeigte nur eine Kopie des abgeschickten Formulars.
+        </p>
+        <div class="flex gap-3">
+            <a href="/invoices" class="btn-primary">ZUR RECHNUNGSLISTE</a>
+            <a href="/invoices/neu" class="btn-secondary">NEUE RECHNUNG</a>
+        </div>
+    </div>
+    {% endif %}
+
+    <form {% if not invoice %}id="rechnung-anlegen" {% endif %}method="post"
+          action="{% if invoice %}/invoices/{{ invoice.id }}/bearbeiten{% else %}/invoices/neu{% endif %}"
+          @submit="prepareSubmit">
+        <input type="hidden" name="items_json" :value="JSON.stringify(items)">
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <!-- Left: main data -->
+            <div class="lg:col-span-2 space-y-5">
+
+                <!-- Customer -->
+                <div class="card space-y-4">
+                    <h2>KUNDE</h2>
+                    <div>
+                        <label class="label">Kunde</label>
+                        {# Bewusst OHNE `required`. Der Server nimmt einen Entwurf ohne
+                           Kunden an; stünde hier weiter `required`, würde der Browser das
+                           Formular gar nicht erst abschicken und die getippte Arbeit wäre
+                           beim Wegklicken verloren. Pflicht wird der Kunde beim
+                           Finalisieren (BUYER_MISSING), und dort ist es fail-closed. #}
+                        <select name="customer_id" class="input" @change="updateCustomerEmail($event)">
+                            <option value="">– noch offen –</option>
+                            {% for c in customers %}
+                            <option value="{{ c.id }}" data-email="{{ c.email or '' }}" {% if invoice and c.id == invoice.customer_id %}selected{% endif %}>{{ c.name }} ({{ c.customer_number }})</option>
+                            {% endfor %}
+                        </select>
+                        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); line-height:1.5; margin-top:6px;">
+                            Kann nachgetragen werden. Zum Finalisieren wird der Kunde
+                            gebraucht, für den Entwurf nicht. Noch nicht im Stamm?
+                            Erst hier speichern, sonst ist das Getippte weg, dann
+                            <a href="/customers/neu" style="color:var(--gold);">Kunden anlegen</a>.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Line items -->
+                <div class="card space-y-4">
+                    <h2>POSITIONEN</h2>
+
+                    <div class="space-y-3">
+                        <template x-for="(item, idx) in items" :key="idx">
+                            <div style="border:1px solid var(--border); background:var(--bg);">
+
+                                <!-- Kartenkopf: laufende Nummer + Zeilensumme + Entfernen.
+                                     Die Nummer ist keine Deko — sie ist die Position, die
+                                     genau so auf der Rechnung und in der XML steht. -->
+                                <div class="flex items-center justify-between"
+                                     style="background:var(--panel); border-bottom:1px solid var(--border); padding:7px 10px;">
+                                    <span class="table-header" style="font-size:var(--fs-mikro);"
+                                          x-text="'POSITION ' + String(idx + 1).padStart(2, '0')"></span>
+                                    <div class="flex items-center gap-3">
+                                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-text); color:var(--text-hi); white-space:nowrap;"
+                                              x-text="formatEur(item.net_amount)"></span>
+                                        <button type="button" @click="removeItem(idx)"
+                                                :disabled="items.length === 1"
+                                                :style="items.length === 1 ? 'opacity:0.25; cursor:not-allowed;' : 'cursor:pointer;'"
+                                                title="Position entfernen"
+                                                style="color:var(--pink); background:none; border:none; font-size:var(--fs-gross); line-height:1; padding:0 4px;">&times;</button>
+                                    </div>
+                                </div>
+
+                                <div style="padding:10px;" class="space-y-3">
+                                    <div>
+                                        <label class="label">Beschreibung *</label>
+                                        <textarea x-model="item.description"
+                                                  @input="autoGrow($event)"
+                                                  x-init="$nextTick(() => autoGrow({ target: $el }))"
+                                                  rows="2" required
+                                                  placeholder="Leistungsbeschreibung. Zeilenumbrüche bleiben erhalten und erscheinen so auf der Rechnung"
+                                                  class="input"
+                                                  style="font-family:'VT323',monospace; font-size:var(--fs-gross); line-height:1.35; resize:none; overflow:hidden;"></textarea>
+                                    </div>
+
+                                    <div class="grid gap-3" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr));">
+                                        <div>
+                                            <label class="label">Menge *</label>
+                                            <input type="number" x-model="item.quantity" min="0" step="any" required
+                                                   class="input" style="font-size:var(--fs-gross); padding:6px 8px; text-align:right;"
+                                                   @input="calcLine(idx)">
+                                        </div>
+                                        <div>
+                                            <label class="label">Einheit</label>
+                                            <select x-model="item.unit" class="input" style="font-size:var(--fs-gross); padding:6px 8px;">
+                                                <option>Stück</option>
+                                                <option>Stunde</option>
+                                                <option>Stunden</option>
+                                                <option>Tag</option>
+                                                <option>Tage</option>
+                                                <option>Monat</option>
+                                                <option>Pauschale</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="label">Preis (netto) *</label>
+                                            <input type="number" x-model="item.unit_price" min="0" step="any" required
+                                                   class="input" style="font-size:var(--fs-gross); padding:6px 8px; text-align:right;"
+                                                   @input="calcLine(idx)">
+                                        </div>
+                                        <div>
+                                            <label class="label">MwSt.</label>
+                                            <select x-model="item.tax_rate" class="input" style="font-size:var(--fs-gross); padding:6px 8px;"
+                                                    @change="calcLine(idx)"
+                                                    :disabled="taxCategory !== 'S'"
+                                                    :style="taxCategory !== 'S' ? 'opacity:0.4; cursor:not-allowed;' : ''">
+                                                <option value="19">19 %</option>
+                                                <option value="7">7 %</option>
+                                                <option value="0">0 %</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    <button type="button" @click="addItem()" class="btn-secondary" style="font-size:var(--fs-mikro);">+ POSITION HINZUFÜGEN</button>
+
+                    <!-- Totals -->
+                    <div style="border-top:2px solid var(--border-hi); padding-top:12px;">
+                        <div class="flex justify-between" style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:4px;">
+                            <span>Nettobetrag</span>
+                            <span x-text="formatEur(netTotal)" style="font-family:'Share Tech Mono',monospace;"></span>
+                        </div>
+                        <template x-for="[rate, info] in Object.entries(taxSummary)" :key="rate">
+                            <div class="flex justify-between" style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:4px;">
+                                <span x-text="`zzgl. ${rate}% MwSt. auf ${formatEur(info.basis)}`"></span>
+                                <span x-text="formatEur(info.tax)" style="font-family:'Share Tech Mono',monospace;"></span>
+                            </div>
+                        </template>
+                        <div class="flex justify-between" style="border-top:1px solid var(--border); padding-top:10px; margin-top:6px;">
+                            <span style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--gold);">RECHNUNGSBETRAG (BRUTTO)</span>
+                            <span x-text="formatEur(grossTotal)" style="font-family:'Press Start 2P',monospace; font-size:var(--fs-text); color:var(--gold); text-shadow:0 0 14px rgba(255,215,0,0.3);"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notes -->
+                <div class="card">
+                    <label class="label">Notizen / Anmerkungen</label>
+                    <textarea name="notes" rows="3" class="input" placeholder="Erscheint auf der Rechnung">{{ (invoice.notes if invoice else '') or '' }}</textarea>
+                </div>
+            </div>
+
+            <!-- Right: metadata -->
+            <div class="space-y-5">
+                <div class="card space-y-4">
+                    <h2>RECHNUNGSDATEN</h2>
+
+                    <div>
+                        <label class="label">Steuertyp *</label>
+                        <select name="tax_category" class="input" x-model="taxCategory" @change="onTaxCategoryChange()">
+                            <option value="S">Inland (MwSt. 19 % / 7 %)</option>
+                            <option value="E">Kleinunternehmer (§ 19 UStG)</option>
+                            <option value="AE">EU B2B: Reverse Charge (§ 13b UStG)</option>
+                            <option value="K">EU: Innergemeinschaftliche Lieferung</option>
+                            <option value="O">Drittland / nicht steuerbar</option>
+                        </select>
+                        <template x-if="taxCategory !== 'S'">
+                            <p style="margin-top:8px; padding:8px 12px; background:rgba(255,171,0,0.08); border:1px solid rgba(255,171,0,0.3); font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--amber);">
+                                <span x-show="taxCategory === 'E'">Kleinunternehmer nach § 19 UStG: keine Umsatzsteuer. Steuersatz → 0 %. Der Hinweis auf die Steuerbefreiung steht auf der Rechnung. Diese Auswahl setzt voraus, dass Sie die Regelung gegenüber dem Finanzamt in Anspruch nehmen; sie stellt den Status nicht her.</span>
+                                <span x-show="taxCategory === 'AE'">Reverse Charge: Steuerschuld geht auf Käufer über. Steuersatz → 0 %.</span>
+                                <span x-show="taxCategory === 'K'">Steuerfreie EU-Lieferung. Steuersatz → 0 %.</span>
+                                <span x-show="taxCategory === 'O'">Nicht steuerbar (Drittland). Steuersatz → 0 %.</span>
+                            </p>
+                        </template>
+                    </div>
+
+                    <div>
+                        <label class="label">Rechnungsdatum *</label>
+                        <input type="date" name="issue_date" value="{{ invoice.issue_date.isoformat() if invoice else today }}" required class="input">
+                    </div>
+                    <div>
+                        <label class="label">Fälligkeitsdatum *</label>
+                        <input type="date" name="due_date" value="{{ invoice.due_date.isoformat() if invoice else due_default }}" required class="input">
+                    </div>
+                    <div>
+                        <label class="label">Leistungsdatum</label>
+                        <input type="date" name="delivery_date" value="{{ (invoice.delivery_date.isoformat() if invoice.delivery_date else '') if invoice else today }}" class="input">
+                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Pflicht ab 250 € Rechnungsbetrag (§ 14 Abs. 4 Nr. 6 UStG). Darunter freiwillig.</p>
+                    </div>
+                    <div>
+                        <label class="label">Referenz des Kunden</label>
+                        <input type="text" name="buyer_reference" value="{{ (invoice.buyer_reference if invoice else '') or '' }}" class="input" maxlength="100">
+                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Bestellnummer des Kunden, bei Behörden die Leitweg-ID</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <label class="label">Zahlungsbedingungen</label>
+                    <textarea name="payment_terms" rows="3" class="input" x-ref="paymentTerms"></textarea>
+                </div>
+
+                <button type="submit" class="btn-primary" style="width:100%; justify-content:center; padding:14px;">
+                    {% if invoice %}ÄNDERUNGEN SPEICHERN{% else %}ALS ENTWURF SPEICHERN{% endif %}
+                </button>
+                <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); color:var(--text-dim); text-align:center; line-height:2;">{% if invoice %}Rechnungsnummer und Status bleiben unverändert.{% else %}Entwurf kann danach geprüft und finalisiert werden.{% endif %}</p>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+
+function invoiceForm() {
+    return {
+        items: [],
+        taxCategory: 'S',
+        netTotal: 0,
+        grossTotal: 0,
+        taxSummary: {},
+
+        init() {
+            const lies = (id, fallback) => {
+                const el = document.getElementById(id);
+                if (!el) return fallback;
+                try { return JSON.parse(el.textContent); } catch (e) { return fallback; }
+            };
+            const vorgaben = lies('formular-vorgaben', {});
+            const vorhandene = lies('vorhandene-positionen', []);
+
+            this.taxCategory = vorgaben.taxCategory || 'S';
+
+            if (vorhandene.length) {
+                // Bearbeiten: gespeicherte Positionen laden und die Summen einmal
+                // durchrechnen, damit die Anzeige sofort stimmt.
+                this.items = vorhandene;
+                this.items.forEach((item, idx) => this.calcLine(idx));
+            } else {
+                this.addItem();
+            }
+
+            if (this.$refs.paymentTerms) {
+                this.$refs.paymentTerms.value = vorgaben.paymentTerms || '';
+            }
+        },
+
+        onTaxCategoryChange() {
+            if (this.taxCategory !== 'S') {
+                this.items.forEach((item, idx) => {
+                    item.tax_rate = '0';
+                    this.calcLine(idx);
+                });
+            }
+        },
+
+        addItem() {
+            this.items.push({
+                description: '',
+                quantity: 1,
+                unit: 'Stück',
+                unit_price: 0,
+                tax_rate: this.taxCategory === 'S' ? '19' : '0',
+                net_amount: 0,
+                tax_amount: 0,
+                gross_amount: 0,
+            });
+        },
+
+        removeItem(idx) {
+            this.items.splice(idx, 1);
+            this.calcTotals();
+        },
+
+        calcLine(idx) {
+            const item = this.items[idx];
+            const qty = parseFloat(item.quantity) || 0;
+            const price = parseFloat(item.unit_price) || 0;
+            const rate = parseFloat(item.tax_rate) || 0;
+            item.net_amount = Math.round(qty * price * 100) / 100;
+            item.tax_amount = Math.round(item.net_amount * rate / 100 * 100) / 100;
+            item.gross_amount = item.net_amount + item.tax_amount;
+            this.calcTotals();
+        },
+
+        calcTotals() {
+            let net = 0, gross = 0;
+            const summary = {};
+            for (const item of this.items) {
+                net += item.net_amount;
+                gross += item.gross_amount;
+                const rate = item.tax_rate.toString();
+                if (!summary[rate]) summary[rate] = { basis: 0, tax: 0 };
+                summary[rate].basis += item.net_amount;
+                summary[rate].tax += item.tax_amount;
+            }
+            this.netTotal = Math.round(net * 100) / 100;
+            this.grossTotal = Math.round(gross * 100) / 100;
+            this.taxSummary = summary;
+        },
+
+        autoGrow(event) {
+            // Die Beschreibung soll mitwachsen statt zu scrollen — man muss sehen,
+            // was man tippt. Erst zurücksetzen, sonst wächst die Höhe nur monoton.
+            const el = event.target;
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+        },
+
+        formatEur(val) {
+            return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(val || 0);
+        },
+
+        prepareSubmit() {},
+        updateCustomerEmail(event) {}
+    };
+}
+</script>
+
+{# Nur im Anlege-Modus: beim Bearbeiten ist Zurück harmlos (derselbe Entwurf wird
+   erneut gespeichert, es entsteht keine zweite Rechnung). #}
+{% if not invoice %}
+{% import "partials/formular_zurueck_guard.html" as zurueck_guard %}
+{{ zurueck_guard.guard('abgehakt:entwurf-formular-abgeschickt',
+                       'rechnung-anlegen', 'rechnung-anlegen-verbraucht') }}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,41 @@
+# Entwicklung, nicht Auslieferung. Start:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#
+# `docker-compose.yml` allein ist bewusst das, was ein Anwender bekommt: gebautes
+# Abbild, ein Serverprozess, kein Testwerkzeug. Diese Datei holt zurueck, was beim
+# Entwickeln gebraucht wird, und nur dort.
+#
+#   target: test  Stage mit pytest und den Testabhaengigkeiten. Ohne sie scheitert
+#                 `docker compose exec app python -m pytest tests/` an einem fehlenden
+#                 pytest, und das saehe wie ein kaputter Test aus, nicht wie ein
+#                 falsch gebautes Abbild.
+#   volumes       Code aus dem Arbeitsverzeichnis statt aus dem Abbild. `alembic` ist
+#                 dabei, weil `alembic revision --autogenerate` sonst in den Container
+#                 schreibt und die neue Migration beim naechsten Start verschwunden ist.
+#   command       Nachladen bei Codeaenderung.
+#
+# Zwei Punkte, die nicht offensichtlich sind:
+#
+# `--reload-dir /app/app` schraenkt den Dateiwaechter auf den Anwendungscode ein. Ohne die
+# Angabe wacht er ueber das ganze Arbeitsverzeichnis und startet den Server auch dann neu,
+# wenn nur eine Testdatei geschrieben wird. Genau das stand am 10.08.2026 im Log:
+#   WARNING: WatchFiles detected changes in 'tests/test_update_link_safety.py'. Reloading...
+# Dass uvicorn nur noch /app/app beobachtet, meldet es beim Start. Dass die Beschraenkung
+# unter Docker Desktop auch wirklich greift, ist NICHT nachgemessen - siehe den Abschnitt
+# "Auslieferung und Entwicklung" in docs/DEV-DOCU.md.
+#
+# `command:` wiederholt den Entrypoint-Pfad, weil es die CMD-Zeile des Abbilds ERSETZT.
+# Stuende hier `uvicorn ...` direkt, liefen die Migrationen beim Start nicht mehr, und das
+# faellt erst beim ersten Datenbankzugriff auf. Der Entrypoint reicht alles hinter dem
+# Pfad an uvicorn durch (Test: `backend/tests/test_startbefehl.py`).
+services:
+  app:
+    build:
+      target: test
+    command: ["/app/entrypoint.sh", "--reload", "--reload-dir", "/app/app"]
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - ./backend/tests:/app/tests
+      - ./backend/scripts:/app/scripts

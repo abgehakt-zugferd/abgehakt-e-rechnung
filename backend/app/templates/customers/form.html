@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}{% if customer %}Kunde bearbeiten{% else %}Neuer Kunde{% endif %} – {{ PRODUCT_NAME }}{% endblock %}
+{% block content %}
+{% set values = values if values is defined else {} %}
+{% set suggested_number = suggested_number if suggested_number is defined else '' %}
+<div style="max-width:680px;">
+    <div class="flex items-center gap-3 mb-6">
+        <a href="/customers" style="color:var(--text-dim); text-decoration:none; display:inline-flex; padding:6px;">
+            <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+        </a>
+        <h1>{% if customer %}KUNDE BEARBEITEN{% else %}NEUER KUNDE{% endif %}</h1>
+    </div>
+
+    {% if error %}
+    <div style="margin-bottom:16px; padding:12px 16px; background:rgba(255,77,124,0.08); border:2px solid rgba(255,77,124,0.3); font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--pink);">
+        ✗ {{ error }}
+    </div>
+    {% endif %}
+
+    {% if not customer %}
+    <!-- Ersetzt das Formular, wenn es als bereits abgeschickter History-Eintrag
+         zurückkommt (Zurück-Button). Siehe Makro am Seitenende. -->
+    <div id="kunde-anlegen-verbraucht" class="card space-y-4" style="display:none;">
+        <h2>KUNDE BEREITS ANGELEGT</h2>
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); line-height:1.5;">
+            Dieses Formular wurde bereits abgeschickt. Der Kunde steht in der Kundenliste.
+            Was hier stand, ist gespeichert und wird nicht doppelt angelegt.
+        </p>
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--amber); line-height:1.5;">
+            Zum Ändern den Kunden in der Liste öffnen und dort bearbeiten. Der
+            Zurück-Button ist dafür kein Weg; er zeigte nur eine Kopie des
+            abgeschickten Anlegeformulars und legte beim Speichern einen zweiten
+            Kunden mit neuer Nummer an.
+        </p>
+        <div class="flex gap-3">
+            <a href="/customers" class="btn-primary">ZUR KUNDENLISTE</a>
+            <a href="/customers/neu" class="btn-secondary">NEUER KUNDE</a>
+        </div>
+    </div>
+    {% endif %}
+
+    <form {% if not customer %}id="kunde-anlegen" {% endif %}method="post" action="{% if customer %}/customers/{{ customer.id }}/bearbeiten{% else %}/customers/neu{% endif %}" class="space-y-5">
+
+        <div class="card space-y-4">
+            <h2>STAMMDATEN</h2>
+            <div>
+                <label class="label">Kundennummer</label>
+                <input type="text" name="customer_number" value="{{ customer.customer_number if customer else (values.get('customer_number') or suggested_number) }}" class="input font-mono">
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Schema JJJJMM + lfd. Nr. (Vorschlag), bestehende Nummer einfach überschreiben.</p>
+            </div>
+            <div>
+                <label class="label">Firmen-/Kundenname *</label>
+                <input type="text" name="name" value="{{ customer.name if customer else values.get('name','') }}" required class="input">
+            </div>
+            <div>
+                <label class="label">Adresszeile 1 *</label>
+                <input type="text" name="address_line1" value="{{ customer.address_line1 if customer else values.get('address_line1','') }}" required class="input">
+            </div>
+            <div>
+                <label class="label">Adresszeile 2</label>
+                <input type="text" name="address_line2" value="{{ (customer.address_line2 if customer else values.get('address_line2','')) or '' }}" class="input">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="label">PLZ *</label>
+                    <input type="text" name="zip_code" value="{{ customer.zip_code if customer else values.get('zip_code','') }}" required class="input">
+                </div>
+                <div>
+                    <label class="label">Stadt *</label>
+                    <input type="text" name="city" value="{{ customer.city if customer else values.get('city','') }}" required class="input">
+                </div>
+            </div>
+            <div>
+                <label class="label">Land</label>
+                {% set sel_country = customer.country if customer else (values.get('country') or 'DE') %}
+                <select name="country" class="input">
+                    <option value="DE" {% if sel_country == 'DE' %}selected{% endif %}>Deutschland (DE)</option>
+                    <option value="AT" {% if sel_country == 'AT' %}selected{% endif %}>Österreich (AT)</option>
+                    <option value="CH" {% if sel_country == 'CH' %}selected{% endif %}>Schweiz (CH)</option>
+                    <option value="US" {% if sel_country == 'US' %}selected{% endif %}>USA (US)</option>
+                </select>
+            </div>
+            <div>
+                <label class="label">Status</label>
+                {% set is_active = customer.is_active if customer else True %}
+                <select name="is_active" class="input">
+                    <option value="1" {% if is_active %}selected{% endif %}>Aktiv (in Rechnungsauswahl)</option>
+                    <option value="0" {% if not is_active %}selected{% endif %}>Inaktiv (archiviert)</option>
+                </select>
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Inaktive Kunden erscheinen nicht mehr in der Auswahl beim Anlegen einer Rechnung.</p>
+            </div>
+        </div>
+
+        <div class="card space-y-4">
+            <h2>STEUER &amp; KONTAKT</h2>
+            <div>
+                <label class="label">USt-IdNr. (empfohlen für B2B)</label>
+                <input type="text" name="vat_id" value="{{ (customer.vat_id if customer else values.get('vat_id','')) or '' }}" placeholder="DE123456789" class="input font-mono">
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Bei B2B-Rechnungen über 10.000 € nach § 14a UStG erforderlich.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="label">E-Mail</label>
+                    <input type="email" name="email" value="{{ (customer.email if customer else values.get('email','')) or '' }}" class="input">
+                </div>
+                <div>
+                    <label class="label">Telefon</label>
+                    <input type="tel" name="phone" value="{{ (customer.phone if customer else values.get('phone','')) or '' }}" class="input">
+                </div>
+            </div>
+            <div>
+                <label class="label">Notizen (intern)</label>
+                <textarea name="notes" rows="3" class="input">{{ (customer.notes if customer else values.get('notes','')) or '' }}</textarea>
+            </div>
+        </div>
+
+        <div style="display:flex; gap:12px;">
+            <button type="submit" class="btn-primary">SPEICHERN</button>
+            <a href="/customers" class="btn-secondary">ABBRECHEN</a>
+        </div>
+    </form>
+</div>
+
+{# Nur im Anlege-Modus: beim Bearbeiten ist Zurück harmlos (derselbe Kunde wird
+   erneut gespeichert, es entsteht kein zweiter). #}
+{% if not customer %}
+{% import "partials/formular_zurueck_guard.html" as zurueck_guard %}
+{{ zurueck_guard.guard('abgehakt:kunden-formular-abgeschickt',
+                       'kunde-anlegen', 'kunde-anlegen-verbraucht') }}
+{% endif %}
+{% endblock %}

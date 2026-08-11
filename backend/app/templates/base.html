@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Abgehakt{% endblock %}</title>
+    <!-- Beide Buendel liegen im Image (app/static/js/, Lizenzen daneben in
+         LIZENZEN.txt). Vorher kamen sie von zwei fremden CDNs, Alpine sogar an
+         einem gleitenden Hauptversions-Stand — jeder Aufruf konnte eine andere
+         Fassung liefern. Version steht jetzt im Dateinamen; wer sie anhebt,
+         zieht tests/test_oberflaeche_lokal.py nach. -->
+    <script src="/static/js/tailwind-play-3.4.17.js"></script>
+    <script defer src="/static/js/alpine-3.15.12.min.js"></script>
+    <!-- Theme vor dem ersten Paint setzen (kein Flash). Default: Abgehakt. -->
+    <script>
+        (function () {
+            var t = 'abgehakt';
+            try { t = localStorage.getItem('abgehakt-theme') || 'abgehakt'; } catch (e) {}
+            if (t !== 'pixel' && t !== 'abgehakt') { t = 'abgehakt'; }
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
+
+    <style>
+        /* ============================================================
+           SCHRIFTEN — liegen im Image, nicht bei einem Anbieter.
+
+           Hier stand einmal ein Stylesheet-Link auf Google Fonts. Der schickte
+           bei jedem Seitenaufruf die IP-Adresse des Nutzers an Google, und
+           ohne Internet sah die Anwendung anders aus als mit. Beides passt
+           nicht zu einem Programm, das auf dem eigenen Rechner laeuft.
+
+           Bezogen ueber Bunny Fonts — als Bezugsquelle beim Einpflegen, nicht
+           zur Laufzeit. Die Dateien liegen unter app/static/fonts/, Lizenz und
+           Bezugsadresse daneben in OFL.txt.
+
+           Nur latin + latin-ext: Kyrillisch, Griechisch und Vietnamesisch
+           braucht eine deutsche Rechnung nicht. Wer sie doch braucht, holt die
+           Schnitte bei Bunny nach und ergaenzt hier eine Regel.
+
+           Geprueft von tests/test_schriften_lokal.py — der Test faellt um,
+           sobald wieder ein fremder Host in einer Vorlage steht.
+           ============================================================ */
+        @font-face {
+            font-family: 'Press Start 2P'; font-style: normal; font-weight: 400; font-display: swap;
+            src: url(/static/fonts/press-start-2p-latin-400-normal.woff2) format('woff2');
+            unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+        }
+        @font-face {
+            font-family: 'Press Start 2P'; font-style: normal; font-weight: 400; font-display: swap;
+            src: url(/static/fonts/press-start-2p-latin-ext-400-normal.woff2) format('woff2');
+            unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+        }
+        @font-face {
+            font-family: 'VT323'; font-style: normal; font-weight: 400; font-display: swap;
+            src: url(/static/fonts/vt323-latin-400-normal.woff2) format('woff2');
+            unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+        }
+        @font-face {
+            font-family: 'VT323'; font-style: normal; font-weight: 400; font-display: swap;
+            src: url(/static/fonts/vt323-latin-ext-400-normal.woff2) format('woff2');
+            unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+        }
+        @font-face {
+            font-family: 'Share Tech Mono'; font-style: normal; font-weight: 400; font-display: swap;
+            src: url(/static/fonts/share-tech-mono-latin-400-normal.woff2) format('woff2');
+            unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+        }
+        @font-face {
+            font-family: 'Staatliches'; font-style: normal; font-weight: 400; font-display: swap;
+            src: url(/static/fonts/staatliches-latin-400-normal.woff2) format('woff2');
+            unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+        }
+        @font-face {
+            font-family: 'Staatliches'; font-style: normal; font-weight: 400; font-display: swap;
+            src: url(/static/fonts/staatliches-latin-ext-400-normal.woff2) format('woff2');
+            unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+        }
+
+        /* ============================================================
+           Zwei umschaltbare Themes über html[data-theme]:
+             • abgehakt  – Behördenformular-Design (Default, Homepage-Look)
+             • pixel     – Pixel-RPG-Theme
+           Alle Komponenten-Regeln lesen Tokens (Farben, Fonts, Schatten,
+           Größen). Ein Theme = ein :root-Token-Satz. Rein struktuelle
+           Pixel-Effekte (Scanlines, Raster, Ecken-Ticks) sind unter
+           html[data-theme="pixel"] gescoped.
+           ============================================================ */
+
+        /* ---------- PIXEL THEME (konserviert) ---------- */
+        html[data-theme="pixel"] {
+            --void:        #050510;
+            --panel:       #090920;
+            --surface:     #0d0d2a;
+            --surface2:    #121240;
+            --border:      #20205c;
+            --border-hi:   #3030a0;
+            --gold:        #ffd700;
+            --gold-hi:     #ffe033;
+            --gold-dim:    #806000;
+            --gold-glow:   rgba(255,215,0,0.12);
+            --cyan:        #00e5ff;
+            --cyan-dim:    rgba(0,229,255,0.12);
+            --pink:        #ff4d7c;
+            --green:       #00e676;
+            --green-hi:    #33ff99;
+            --amber:       #ffab00;
+            --red:         #ff3344;
+            --text:        #c4c4ec;
+            --text-hi:     #eeeeff;
+            --text-dim:    #9090d8;
+            --text-faint:  #5c5ca8;
+
+            --font-display:'Press Start 2P', monospace;
+            --font-body:   'VT323', monospace;
+            --font-label:  'Press Start 2P', monospace;
+            --font-num:    'Share Tech Mono', monospace;
+            --body-size:   18px;
+
+            --fs-h1: 14px;   --fs-h2: 11.5px; --fs-h3: 10px;
+            --fs-3xl: 1.3rem; --fs-2xl: 13px; --fs-lg: 10px;
+            --fs-btn: 9px;   --fs-label: 9.5px; --fs-badge: 8px;
+            --fs-nav: 10px;  --fs-table: 9px;
+            --fs-wordmark: 20px; --fs-wordmark-sub: 8px;
+            --fs-kpi: 28px;  --fs-kpi-einheit: 0.5em;
+            --fs-mikro: 8px; --fs-klein: 10px; --fs-text: 15px; --fs-gross: 17px;
+            --lh-head: 1.9;  --lh-ctl: 1.6;
+            --ls-label: 0.5px;
+
+            --card-border-width: 2px;
+            --input-bg: var(--panel);
+            --shadow-card:        4px 4px 0 rgba(0,0,0,0.9), 0 0 24px var(--gold-glow);
+            --shadow-card-hover:  6px 6px 0 rgba(0,0,0,0.9), 0 0 36px rgba(255,215,0,0.18);
+            --shadow-btn:         3px 3px 0 rgba(0,0,0,0.95);
+            --shadow-btn-hover:   5px 5px 0 rgba(0,0,0,0.95);
+            --shadow-btn-active:  1px 1px 0 rgba(0,0,0,0.95);
+            --shadow-sidebar:     4px 0 24px rgba(0,0,0,0.95), 0 0 40px var(--gold-glow);
+            --shadow-nav-active:  0 0 18px var(--gold-glow), 3px 3px 0 rgba(0,0,0,0.8);
+            --glow-h1:            0 0 24px rgba(255,215,0,0.35), 2px 2px 0 rgba(0,0,0,0.8);
+        }
+
+        /* ---------- ABGEHAKT THEME (Default) ---------- */
+        html[data-theme="abgehakt"] {
+            --void:        #f5f5f0;   /* Papier */
+            --panel:       #ffffff;   /* Sidebar / Inputs */
+            --surface:     #ffffff;   /* Karten */
+            --surface2:    #ebebe3;   /* Papier tief / dezente Flächen */
+            --border:      #c9cec9;   /* Linie */
+            --border-hi:   #181f1a;   /* Tinte (starke Rahmen) */
+            --gold:        #181f1a;   /* „Primär"-Tinte (Buttons/Headings/aktiv) */
+            --gold-hi:     #232a24;
+            --gold-dim:    #87908a;   /* Feldgrau */
+            --gold-glow:   rgba(30,122,69,0.10);
+            --cyan:        #1e7a45;   /* Haken-Grün (Links/Fokus/H2) */
+            --cyan-dim:    rgba(30,122,69,0.14);
+            --pink:        #b5371e;   /* Stempelrot */
+            --green:       #1e7a45;
+            --green-hi:    #269253;
+            --amber:       #9a6a12;
+            --red:         #b5371e;
+            --text:        #3a443d;   /* Tinte soft */
+            --text-hi:     #181f1a;
+            --text-dim:    #6c746e;
+            --text-faint:  #9aa39c;
+
+            --font-display:'Staatliches', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+            --font-body:   -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            --font-label:  ui-monospace, 'SF Mono', 'Cascadia Mono', 'Courier New', monospace;
+            --font-num:    ui-monospace, 'SF Mono', 'Cascadia Mono', 'Courier New', monospace;
+            --body-size:   17px;
+
+            --fs-h1: 1.9rem;  --fs-h2: 1.35rem; --fs-h3: 1.1rem;
+            --fs-3xl: 2rem;   --fs-2xl: 1.5rem;  --fs-lg: 1.1rem;
+            --fs-btn: 0.86rem; --fs-label: 0.82rem; --fs-badge: 0.76rem;
+            --fs-nav: 1rem;    --fs-table: 0.92rem;
+            --fs-wordmark: 1.9rem; --fs-wordmark-sub: 0.8rem;
+            --fs-kpi: 2.5rem;  --fs-kpi-einheit: 0.42em;
+            --fs-mikro: 0.78rem; --fs-klein: 0.88rem;
+            --fs-text: 0.95rem;  --fs-gross: 1.05rem;
+            --lh-head: 1.15;  --lh-ctl: 1.15;
+            --ls-label: 0.06em;
+
+            --card-border-width: 1.5px;
+            --input-bg: #ffffff;
+            --shadow-card:        none;
+            --shadow-card-hover:  3px 3px 0 var(--border);
+            --shadow-btn:         none;
+            --shadow-btn-hover:   3px 3px 0 var(--green);
+            --shadow-btn-active:  1px 1px 0 var(--green);
+            --shadow-sidebar:     none;
+            --shadow-nav-active:  none;
+            --glow-h1:            none;
+        }
+
+        /* Abgehakt: inline gesetzte Pixel-Fonts einzelner Seiten
+           neutralisieren, ohne jede Seite anzufassen (Feinschliff später). */
+        /* Beschriftungen, Knopftexte und Aufklapper trugen inline 'Press Start 2P'.
+           Auf die schmale Auszeichnungsschrift abgebildet werden daraus gestauchte
+           Versalien, die bei kleinen Graden kaum noch lesbar sind. Sie gehoeren auf
+           die Schreibmaschinenschrift — die Auszeichnungsschrift bleibt echten
+           Ueberschriften und der Wortmarke vorbehalten. */
+        html[data-theme="abgehakt"] [style*="Press Start 2P"] { font-family: var(--font-label) !important; }
+        html[data-theme="abgehakt"] [style*="VT323"]          { font-family: var(--font-body) !important; }
+
+        /* Abgehakt: dieselben Seiten setzen auch Schatten und Laufweite inline —
+           Werte, die fuer eine Pixelschrift auf schwarzem Grund gedacht waren.
+           Auf Papier mit Tinte erzeugt `2px 2px 0 #000` ein Doppelbild, das
+           besonders bei Ziffern unlesbar wird (0 sah aus wie zwei Nullen).
+           Der Schatten gehoert zum Retro-Thema, nicht hierher. Die 2-3px
+           Laufweite stammt aus derselben Quelle und zerreisst kurze Woerter. */
+        html[data-theme="abgehakt"] [style*="text-shadow"] { text-shadow: none !important; }
+        html[data-theme="abgehakt"] [style*="letter-spacing:2px"],
+        html[data-theme="abgehakt"] [style*="letter-spacing:3px"] { letter-spacing: 0.06em !important; }
+
+        /* Kennzahl-Kachel — aufgebaut wie ein Formularfeld: Beschriftung oben,
+           Eintrag darunter in Schreibmaschinenziffern. Die Ziffern stehen in
+           Tinte, nicht in vier verschiedenen Farben; die Farbe traegt das
+           Sinnbild daneben. Sonst sehen vier Kacheln wie vier Warnstufen aus. */
+        .kpi__beschriftung {
+            font-family: var(--font-label);
+            font-size: var(--fs-label);
+            letter-spacing: var(--ls-label);
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }
+        .kpi__wert {
+            font-family: var(--font-num);
+            font-size: var(--fs-kpi);
+            font-weight: 600;
+            line-height: 1;
+            color: var(--text-hi);
+            font-variant-numeric: tabular-nums;
+        }
+        .kpi__einheit {
+            font-size: var(--fs-kpi-einheit);
+            font-weight: 500;
+            color: var(--text-dim);
+            margin-left: 0.2em;
+        }
+        html[data-theme="retro"] .kpi__wert { color: var(--gold); }
+
+        [x-cloak] { display: none !important; }
+        *, *::before, *::after { box-sizing: border-box; }
+
+        /* Spinner-Pfeile bei number-Inputs entfernen */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+
+        body {
+            font-family: var(--font-body);
+            background-color: var(--void);
+            color: var(--text);
+            font-size: var(--body-size);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        /* Pixel-only: Raster-Hintergrund + CRT-Scanlines */
+        html[data-theme="pixel"] body {
+            background-image:
+                linear-gradient(rgba(32,32,92,0.3) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(32,32,92,0.3) 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+        html[data-theme="pixel"] body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg, transparent 0px, transparent 3px,
+                rgba(0,0,10,0.07) 3px, rgba(0,0,10,0.07) 4px
+            );
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* === Tailwind Color Overrides (token-basiert → folgen dem Theme) === */
+        .text-slate-900, .text-slate-800 { color: var(--text-hi) !important; }
+        .text-slate-700, .text-slate-600 { color: var(--text) !important; }
+        .text-slate-500, .text-slate-400 { color: var(--text-dim) !important; }
+        .text-white\/80 { color: var(--text) !important; }
+        .text-white\/60, .text-white\/50 { color: var(--text-dim) !important; }
+
+        a.text-emerald-600, span.text-emerald-600 { color: var(--cyan) !important; }
+        a.text-emerald-600:hover { color: var(--gold) !important; }
+        a.hover\:text-emerald-700:hover { color: var(--gold) !important; }
+        .text-emerald-600 { color: var(--green) !important; }
+        .text-emerald-600.text-3xl { color: var(--green) !important; }
+        .text-blue-600 { color: var(--cyan) !important; }
+        .text-blue-700 { color: var(--cyan) !important; }
+        .text-blue-800 { color: var(--text-hi) !important; }
+        .text-red-400, .text-red-500, .text-red-600, .text-red-700 { color: var(--pink) !important; }
+        .text-amber-600, .text-amber-700 { color: var(--amber) !important; }
+        .text-amber-800 { color: var(--amber) !important; }
+        .text-green-600 { color: var(--green) !important; }
+
+        .bg-white { background-color: var(--surface) !important; }
+        .bg-slate-50, .bg-slate-100 { background-color: var(--surface2) !important; }
+        .bg-slate-800 { background-color: var(--panel) !important; }
+        .bg-slate-700 { background-color: var(--surface) !important; }
+        .bg-emerald-100 { background-color: var(--cyan-dim) !important; }
+        .bg-emerald-600 { background-color: var(--cyan) !important; }
+        .bg-blue-100 { background-color: var(--cyan-dim) !important; }
+        .bg-amber-50 { background-color: rgba(154,106,18,0.08) !important; }
+        .bg-amber-100 { background-color: rgba(154,106,18,0.12) !important; }
+        .bg-green-50 { background-color: var(--gold-glow) !important; }
+        .bg-red-50 { background-color: rgba(181,55,30,0.07) !important; }
+        .bg-red-100 { background-color: rgba(181,55,30,0.10) !important; }
+
+        .hover\:bg-slate-50:hover,
+        .hover\:bg-slate-50\/80:hover,
+        .hover\:bg-slate-100:hover { background-color: var(--gold-glow) !important; }
+        .hover\:bg-white:hover { background-color: var(--surface2) !important; }
+        .hover\:bg-emerald-700:hover { background-color: var(--gold) !important; }
+        .active\:bg-emerald-800:active { background-color: var(--gold-hi) !important; }
+
+        .border-slate-100, .border-slate-200, .border-slate-300 { border-color: var(--border) !important; }
+        .border-slate-100\/50 { border-color: var(--border) !important; }
+        .border-white\/10 { border-color: var(--border) !important; }
+        .divide-slate-100 > * + *, .divide-slate-100\/50 > * + *, .divide-slate-200 > * + * {
+            border-color: var(--border) !important;
+        }
+        .border-amber-200 { border-color: rgba(154,106,18,0.35) !important; }
+        .border-blue-100 { border-color: var(--cyan-dim) !important; }
+        .border-green-200 { border-color: rgba(30,122,69,0.25) !important; }
+        .border-red-200 { border-color: rgba(181,55,30,0.25) !important; }
+        .border-emerald-200 { border-color: rgba(30,122,69,0.25) !important; }
+        .border-dashed { border-style: dashed !important; }
+        .border-slate-300.border-dashed { border-color: var(--border-hi) !important; }
+
+        .from-slate-800 { --tw-gradient-from: var(--panel) !important; }
+        .to-slate-700 { --tw-gradient-to: var(--surface) !important; }
+        .focus\:ring-emerald-500\/50:focus { --tw-ring-color: var(--cyan-dim) !important; }
+        .focus\:border-emerald-500:focus { border-color: var(--cyan) !important; }
+        .shadow-md { box-shadow: none !important; }
+
+        /* === CARD COMPONENT === */
+        .card {
+            background: var(--surface) !important;
+            border: var(--card-border-width) solid var(--border-hi) !important;
+            border-radius: 0 !important;
+            padding: 1.25rem !important;
+            position: relative !important;
+            box-shadow: var(--shadow-card) !important;
+        }
+        /* Pixel-only: goldene Ecken-Ticks */
+        html[data-theme="pixel"] .card::before,
+        html[data-theme="pixel"] .card::after {
+            content: '';
+            position: absolute;
+            width: 12px; height: 12px;
+            border-color: var(--gold); border-style: solid;
+            pointer-events: none;
+        }
+        html[data-theme="pixel"] .card::before { top: -2px; left: -2px; border-width: 3px 0 0 3px; }
+        html[data-theme="pixel"] .card::after  { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; }
+
+        .card-hover { transition: box-shadow 0.15s, transform 0.05s !important; }
+        .card-hover:hover { box-shadow: var(--shadow-card-hover) !important; }
+
+        /* === BUTTONS === */
+        .btn-primary, .btn-secondary, .btn-danger, .btn-success {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 8px !important;
+            padding: 10px 18px !important;
+            font-family: var(--font-label) !important;
+            font-size: var(--fs-btn) !important;
+            line-height: var(--lh-ctl) !important;
+            border-radius: 0 !important;
+            box-shadow: var(--shadow-btn) !important;
+            cursor: pointer !important;
+            text-decoration: none !important;
+            transition: all 0.08s !important;
+            white-space: nowrap !important;
+            font-weight: normal !important;
+            text-transform: uppercase !important;
+            letter-spacing: var(--ls-label) !important;
+        }
+        .btn-primary:hover, .btn-secondary:hover, .btn-danger:hover, .btn-success:hover {
+            box-shadow: var(--shadow-btn-hover) !important;
+            transform: translate(-2px,-2px) !important;
+        }
+        .btn-primary:active, .btn-secondary:active, .btn-danger:active, .btn-success:active {
+            box-shadow: var(--shadow-btn-active) !important;
+            transform: translate(1px,1px) !important;
+        }
+
+        .btn-primary {
+            background: var(--gold) !important;
+            color: var(--void) !important;
+            border: 2px solid var(--gold) !important;
+        }
+        .btn-primary:hover { background: var(--gold-hi) !important; }
+
+        .btn-secondary {
+            background: var(--surface2) !important;
+            color: var(--text) !important;
+            border: 2px solid var(--border-hi) !important;
+        }
+        .btn-secondary:hover { border-color: var(--cyan) !important; color: var(--cyan) !important; }
+
+        .btn-danger {
+            background: var(--surface2) !important;
+            color: var(--pink) !important;
+            border: 2px solid var(--pink) !important;
+        }
+        .btn-danger:hover { background: var(--pink) !important; color: #fff !important; }
+
+        .btn-success {
+            background: var(--green) !important;
+            color: var(--void) !important;
+            border: 2px solid var(--green) !important;
+        }
+        .btn-success:hover { background: var(--green-hi) !important; }
+
+        /* === MITTEILUNG (#120) ===
+           Eigene, immer schliessbare Zone. Drei Varianten, damit derselbe
+           Hinweis an anderer Stelle im Werkzeug anders aussehen kann:
+           banner (breiter Streifen) | karte (Kachel) | inline (schmale Zeile). */
+        .mitteilung {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            background: var(--panel);
+            border: 1px solid var(--border-hi);
+            color: var(--text);
+        }
+        .mitteilung__text { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+        .mitteilung__marke {
+            font-family: var(--font-display);
+            color: var(--gold);
+            letter-spacing: 0.08em;
+            font-size: 0.75rem;
+        }
+        .mitteilung a { color: var(--cyan); text-decoration: underline; }
+        .mitteilung__zu button {
+            background: none;
+            border: none;
+            color: var(--text-dim, var(--text));
+            font-size: 1.25rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0 4px;
+        }
+        .mitteilung__zu button:hover { color: var(--gold); }
+
+        .mitteilung--banner { margin-bottom: 16px; padding: 10px 16px; }
+        .mitteilung--karte {
+            flex-direction: column;
+            align-items: stretch;
+            padding: 14px 16px;
+            border-width: var(--card-border-width, 2px);
+        }
+        .mitteilung--karte .mitteilung__zu { align-self: flex-end; }
+        .mitteilung--inline {
+            padding: 4px 8px;
+            border: none;
+            border-left: 2px solid var(--gold);
+            background: none;
+            font-size: 0.875rem;
+        }
+
+        /* === FORMS === */
+        .input {
+            width: 100% !important;
+            padding: 9px 12px !important;
+            background: var(--input-bg) !important;
+            border: var(--card-border-width) solid var(--border-hi) !important;
+            border-radius: 0 !important;
+            color: var(--text-hi) !important;
+            font-family: var(--font-body) !important;
+            font-size: var(--body-size) !important;
+            line-height: 1.4 !important;
+            outline: none !important;
+            transition: border-color 0.1s, box-shadow 0.1s !important;
+        }
+        .input:focus {
+            border-color: var(--cyan) !important;
+            box-shadow: 0 0 14px var(--cyan-dim) !important;
+        }
+        .input::placeholder { color: var(--text-dim) !important; }
+        .input option { background: var(--input-bg); color: var(--text-hi); }
+        .input-error { border-color: var(--pink) !important; }
+
+        textarea.input { resize: vertical; }
+
+        .label {
+            display: block !important;
+            font-family: var(--font-label) !important;
+            font-size: var(--fs-label) !important;
+            line-height: 1.7 !important;
+            color: var(--text-dim) !important;
+            margin-bottom: 9px !important;
+            text-transform: uppercase !important;
+            letter-spacing: var(--ls-label) !important;
+            font-weight: normal !important;
+        }
+
+        /* === BADGES === */
+        .badge {
+            display: inline-flex !important;
+            align-items: center !important;
+            padding: 3px 8px !important;
+            font-family: var(--font-label) !important;
+            font-size: var(--fs-badge) !important;
+            border: 1.5px solid currentColor !important;
+            border-radius: 0 !important;
+            text-transform: uppercase !important;
+            background: transparent !important;
+            line-height: 1.6 !important;
+            letter-spacing: var(--ls-label) !important;
+        }
+        .badge-draft    { color: var(--amber) !important; }
+        .badge-issued   { color: var(--cyan) !important; }
+        .badge-paid     { color: var(--green) !important; }
+        .badge-cancelled{ color: var(--pink) !important; }
+        .badge-discarded{ color: var(--text-dim) !important; }
+
+        /* === ALERT BOXES === */
+        .alert-success, .alert-error {
+            display: flex !important;
+            align-items: flex-start !important;
+            gap: 10px !important;
+            padding: 12px 16px !important;
+            margin-bottom: 16px !important;
+            border: var(--card-border-width) solid !important;
+            font-family: var(--font-body) !important;
+            font-size: var(--body-size) !important;
+            line-height: 1.4 !important;
+        }
+        .alert-success {
+            background: var(--gold-glow) !important;
+            border-color: var(--green) !important;
+            color: var(--text-hi) !important;
+        }
+        .alert-error {
+            background: rgba(181,55,30,0.07) !important;
+            border-color: var(--pink) !important;
+            color: var(--text-hi) !important;
+        }
+        .alert-success::before { content: '✓'; color: var(--green); font-weight: bold; flex-shrink: 0; }
+        .alert-error::before { content: '⚠'; color: var(--pink); flex-shrink: 0; }
+
+        /* === TYPOGRAPHY === */
+        h1 {
+            font-family: var(--font-display);
+            font-size: var(--fs-h1);
+            color: var(--gold);
+            text-shadow: var(--glow-h1);
+            line-height: var(--lh-head);
+            font-weight: normal;
+            letter-spacing: 0.01em;
+        }
+        h2 {
+            font-family: var(--font-display);
+            font-size: var(--fs-h2);
+            color: var(--cyan);
+            line-height: var(--lh-head);
+            font-weight: normal;
+        }
+        h3 {
+            font-family: var(--font-display);
+            font-size: var(--fs-h3);
+            color: var(--text);
+            line-height: var(--lh-head);
+            font-weight: normal;
+        }
+
+        .text-3xl {
+            font-family: var(--font-display) !important;
+            font-size: var(--fs-3xl) !important;
+            line-height: var(--lh-head) !important;
+        }
+        .text-lg {
+            font-family: var(--font-display) !important;
+            font-size: var(--fs-lg) !important;
+            line-height: var(--lh-head) !important;
+        }
+        .text-2xl {
+            font-family: var(--font-display) !important;
+            font-size: var(--fs-2xl) !important;
+            line-height: var(--lh-head) !important;
+        }
+        .font-mono { font-family: var(--font-num) !important; }
+        .font-bold  { font-weight: 700; }
+        .font-medium { font-weight: 600; }
+        .font-semibold { font-weight: 700; }
+
+        /* Ecken abrunden abschalten (beide Themes: kantige Ästhetik) */
+        .rounded-full, .rounded-xl, .rounded-lg, .rounded { border-radius: 0 !important; }
+
+        /* === TABLE STYLES === */
+        .table-header {
+            font-family: var(--font-label) !important;
+            font-size: var(--fs-table) !important;
+            color: var(--text-dim) !important;
+            text-transform: uppercase !important;
+            letter-spacing: 1px !important;
+        }
+        .table-row { border-bottom: 1px solid var(--border) !important; }
+        .table-row:hover { background: var(--gold-glow) !important; }
+        .table-container { overflow-x: auto; }
+
+        /* === SIDEBAR NAVIGATION === */
+        .nav-link {
+            display: flex !important;
+            align-items: center !important;
+            gap: 12px !important;
+            padding: 11px 14px 11px 20px !important;
+            color: var(--text) !important;
+            font-family: var(--font-label) !important;
+            font-size: var(--fs-nav) !important;
+            text-decoration: none !important;
+            border: 2px solid transparent !important;
+            border-radius: 0 !important;
+            transition: all 0.1s !important;
+            position: relative !important;
+            line-height: 1.6 !important;
+            font-weight: normal !important;
+            text-transform: uppercase !important;
+            letter-spacing: var(--ls-label) !important;
+        }
+        .nav-link:hover {
+            color: var(--gold) !important;
+            border-color: var(--gold-dim) !important;
+            background: var(--gold-glow) !important;
+        }
+        .nav-link.active {
+            color: var(--gold) !important;
+            border-color: var(--gold) !important;
+            background: var(--gold-glow) !important;
+            box-shadow: var(--shadow-nav-active) !important;
+        }
+        /* Pixel-only: blinkender ▶-Cursor am aktiven Menüpunkt */
+        html[data-theme="pixel"] .nav-link.active::before {
+            content: '▶';
+            position: absolute;
+            left: 6px;
+            font-size: 8px;
+            color: var(--gold);
+            animation: blink 1s step-end infinite;
+        }
+        .nav-link svg { flex-shrink: 0 !important; width: 16px !important; height: 16px !important; }
+
+        /* === SIDEBAR TOGGLE (mobil) === */
+        .sidebar-toggle {
+            background: none !important;
+            border: 2px solid var(--border-hi) !important;
+            color: var(--text) !important;
+            padding: 6px 10px !important;
+            cursor: pointer !important;
+            font-family: var(--font-label) !important;
+            font-size: var(--fs-nav) !important;
+            border-radius: 0 !important;
+            transition: all 0.1s !important;
+        }
+        .sidebar-toggle:hover { border-color: var(--gold) !important; color: var(--gold) !important; }
+        .sidebar-toggle svg { width: 16px !important; height: 16px !important; }
+
+        /* === THEME-UMSCHALTER === */
+        .theme-toggle {
+            width: 100%;
+            margin-top: 10px;
+            padding: 8px 10px;
+            background: transparent;
+            border: 1.5px solid var(--border);
+            color: var(--text-dim);
+            font-family: var(--font-label);
+            font-size: var(--fs-badge);
+            border-radius: 0;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: var(--ls-label);
+            transition: all 0.1s;
+            line-height: 1.5;
+        }
+        .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+
+        /* === ANIMATIONS === */
+        @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+
+        /* === SCROLLBAR === */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--panel); }
+        ::-webkit-scrollbar-thumb { background: var(--border-hi); border: 1px solid var(--border); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+        /* === MISC === */
+        details summary {
+            cursor: pointer;
+            color: var(--cyan);
+            font-family: var(--font-label);
+            font-size: var(--fs-klein);
+            user-select: none;
+        }
+        details summary:hover { color: var(--gold); }
+        pre {
+            background: var(--surface2) !important;
+            border: 1px solid var(--border-hi);
+            color: var(--text-dim);
+            font-size: var(--fs-klein);
+            padding: 8px;
+        }
+        input[type="checkbox"] { accent-color: var(--cyan); }
+        .text-balance { text-wrap: balance; }
+        .transition-colors { transition: background-color 0.1s, color 0.1s, border-color 0.1s; }
+        .transition-transform { transition: transform 0.15s; }
+        .transition-all { transition: all 0.15s; }
+        .group:hover .group-hover\:translate-x-0\.5 { transform: translateX(2px); }
+
+        /* Alert boxes */
+        .bg-amber-50\/80 { background-color: rgba(154,106,18,0.07) !important; }
+        html[data-theme="pixel"] .bg-amber-50\/80 { background-color: rgba(255,171,0,0.07) !important; }
+    </style>
+</head>
+<body x-data="{ sidebarOpen: window.innerWidth >= 1024 }">
+
+<div class="flex h-screen overflow-hidden">
+
+    <!-- Mobile overlay -->
+    <div x-show="sidebarOpen"
+         @click="sidebarOpen = false"
+         class="lg:hidden fixed inset-0 z-40"
+         style="background:rgba(0,0,16,0.55);"
+         x-cloak></div>
+
+    <!-- Sidebar -->
+    <aside class="fixed lg:static inset-y-0 left-0 z-50 lg:z-auto flex flex-col flex-shrink-0 transition-transform duration-300 lg:translate-x-0"
+           :class="{ '-translate-x-full': !sidebarOpen }"
+           style="width:260px; background:var(--panel); border-right:2px solid var(--border-hi); box-shadow:var(--shadow-sidebar);">
+
+        <!-- Logo -->
+        <div style="padding:20px 16px 16px; border-bottom:2px solid var(--border-hi); background:var(--gold-glow); flex-shrink:0;">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div style="font-family:var(--font-display); font-size:var(--fs-wordmark); color:var(--gold); text-shadow:var(--glow-h1); letter-spacing:0.02em; line-height:1; display:flex; align-items:center; gap:8px;">
+                        ABGEHAKT <span style="color:var(--green);">✓</span>
+                    </div>
+                    <div style="font-family:var(--font-label); font-size:var(--fs-wordmark-sub); color:var(--text-dim); letter-spacing:3px; margin-top:8px;">RECHNUNGEN · GOBD · DATEV</div>
+                    <div style="font-family:var(--font-body); font-size:var(--fs-text); color:var(--text-dim); margin-top:8px; letter-spacing:1px;">ZUGFeRD 2.5 · EN16931</div>
+                </div>
+                <button @click="sidebarOpen = false" class="sidebar-toggle lg:hidden">✕</button>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <nav style="padding:16px 10px; flex:1; display:flex; flex-direction:column; gap:4px; overflow-y:auto;">
+            <div style="font-family:var(--font-label); font-size:var(--fs-wordmark-sub); color:var(--text-dim); padding:6px 14px 9px; letter-spacing:3px; border-bottom:1px solid var(--border);">HAUPTMENÜ</div>
+
+            <a href="/dashboard" class="nav-link {% if request.url.path == '/dashboard' %}active{% endif %}" @click="sidebarOpen = window.innerWidth >= 1024">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                </svg>
+                ÜBERSICHT
+            </a>
+            <a href="/invoices" class="nav-link {% if '/invoices' in request.url.path %}active{% endif %}" @click="sidebarOpen = window.innerWidth >= 1024">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+                </svg>
+                RECHNUNGEN
+            </a>
+            <a href="/customers" class="nav-link {% if '/customers' in request.url.path %}active{% endif %}" @click="sidebarOpen = window.innerWidth >= 1024">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                KUNDEN
+            </a>
+
+            <div style="border-top:1px solid var(--border); margin:6px 0;"></div>
+            <div style="font-family:var(--font-label); font-size:var(--fs-wordmark-sub); color:var(--text-dim); padding:6px 14px 9px; letter-spacing:3px;">SYSTEM</div>
+
+            <a href="/archiv" class="nav-link {% if '/archiv' in request.url.path %}active{% endif %}" @click="sidebarOpen = window.innerWidth >= 1024">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
+                </svg>
+                ARCHIV
+            </a>
+
+            <a href="/export" class="nav-link {% if '/export' in request.url.path %}active{% endif %}" @click="sidebarOpen = window.innerWidth >= 1024">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                GOBD-EXPORT
+            </a>
+
+            <a href="/settings" class="nav-link {% if '/settings' in request.url.path %}active{% endif %}" @click="sidebarOpen = window.innerWidth >= 1024">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                EINSTELLUNGEN
+            </a>
+        </nav>
+
+        <!-- Footer -->
+        <div style="padding:12px 16px; border-top:2px solid var(--border); flex-shrink:0;">
+            <div style="font-family:var(--font-label); font-size:var(--fs-wordmark-sub); text-align:center; line-height:2.6; color:var(--text-dim);">
+                <div style="color:var(--green);">● SYSTEM BEREIT</div>
+            </div>
+
+            <!-- Theme umschalten (Pixel ⇄ Abgehakt), Auswahl bleibt gespeichert -->
+            <button type="button" class="theme-toggle" onclick="
+                (function () {
+                    var h = document.documentElement;
+                    var next = h.getAttribute('data-theme') === 'pixel' ? 'abgehakt' : 'pixel';
+                    h.setAttribute('data-theme', next);
+                    try { localStorage.setItem('abgehakt-theme', next); } catch (e) {}
+                    var l = document.getElementById('theme-toggle-label');
+                    if (l) l.textContent = (next === 'pixel' ? 'Pixel' : 'Abgehakt');
+                })();
+            ">Design: <span id="theme-toggle-label">Abgehakt</span> ⇄</button>
+            <script>
+                (function () {
+                    var t = document.documentElement.getAttribute('data-theme');
+                    var l = document.getElementById('theme-toggle-label');
+                    if (l) l.textContent = (t === 'pixel' ? 'Pixel' : 'Abgehakt');
+                })();
+            </script>
+
+            {% include "partials/_branding_footer.html" %}
+        </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="flex-1 flex flex-col overflow-hidden" style="background:var(--void); min-width:0;">
+        <!-- Mobile header -->
+        <header class="lg:hidden" style="background:var(--panel); border-bottom:2px solid var(--border-hi); padding:12px 16px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+            <button @click="sidebarOpen = !sidebarOpen" class="sidebar-toggle">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+            <div style="font-family:var(--font-display); font-size:1.25rem; color:var(--gold); text-shadow:var(--glow-h1); letter-spacing:0.02em; display:flex; align-items:center; gap:6px;">ABGEHAKT <span style="color:var(--green);">✓</span></div>
+            <div style="width:40px;"></div>
+        </header>
+
+        <!-- Page content -->
+        <div class="flex-1 overflow-auto" style="padding:28px 32px;">
+            {% if request.state.update_banner %}
+            {% set b = request.state.update_banner %}
+            {# Bewusst OHNE verschachtelten Kasten: zwei Tests schneiden den
+               Hinweis am ersten </div> ab (test_mitteilung, test_update_router).
+               Ein Knopf-Container darin würde ihr Prüffenster verkleinern, ohne
+               dass sie rot werden — sie prüfen auf Abwesenheit.
+               Die Formulare sind selbst Flex-Elemente (inline-flex). #}
+            <div data-update-banner="{{ b.kind }}"
+                 style="margin-bottom:16px; padding:12px 16px; border:2px solid {% if b.kind == 'escalated' %}var(--red, #b00){% else %}var(--border-hi){% endif %}; background:var(--panel); display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px;">
+              <span style="flex:1 1 260px; min-width:0;">{{ b.text }}</span>
+              {% if b.url %}<a href="{{ b.url }}" target="_blank" rel="noopener noreferrer" class="btn-secondary">Änderungen ansehen</a>{% endif %}
+              {% if b.version %}
+              {# `version` trägt nur der Hinweis auf ein wirklich vorliegendes
+                 Update — bei Erinnerung und Fehlversuch gibt es nichts
+                 einzuspielen, und die Anleitung wäre dort eine Sackgasse.
+                 Sie ist der einzige Weg dorthin: verlinkt war sie von nirgends. #}
+              <a href="/updates/anleitung" class="btn-primary">So einspielen</a>
+              {% else %}
+              <form method="post" action="/updates/pruefen" style="display:inline-flex;">
+                <button type="submit" class="btn-primary">Jetzt suchen</button>
+              </form>
+              {% endif %}
+              {% if b.dismissible %}
+              <form method="post" action="/updates/hinweis-schliessen" style="display:inline-flex;">
+                <button type="submit" data-update-dismiss class="btn-secondary">Schließen</button>
+              </form>
+              {% endif %}
+            </div>
+            {% endif %}
+            {# Pro-Hinweis in EIGENER Zone, immer schliessbar — nie im Banner oben.
+               Sonst lernt der Nutzer, Banner reflexhaft wegzuklicken. Er wird
+               getrennt berechnet, steht also auch ohne Update-Banner; das Makro
+               laesst sich in jeder Seite an anderer Stelle und in anderer
+               Variante einsetzen. #}
+            {% from "partials/mitteilung.html" import mitteilung %}
+            {{ mitteilung(request.state.mitteilung, weiter=request.url.path) }}
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Archiv – {{ PRODUCT_NAME }}{% endblock %}
+{% block content %}
+<div style="max-width:900px;">
+    <div class="mb-5">
+        <h1 style="font-size:var(--fs-gross);">ARCHIV</h1>
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">
+            Die abgelegten E-Rechnungen: das ZUGFeRD-PDF und die maßgebliche XML.
+            Beides bleibt acht Jahre aufbewahrungspflichtig.
+        </p>
+    </div>
+
+    <form method="get" action="/archiv" class="card mb-5">
+        <div class="flex flex-wrap gap-3 items-end">
+            <div style="flex:1; min-width:220px;">
+                <label class="label">Dateiname</label>
+                <input type="text" name="q" value="{{ q }}" class="input" placeholder="RE-2026-…">
+            </div>
+            <button type="submit" class="btn-primary">SUCHEN</button>
+            {% if q %}<a href="/archiv" class="btn-secondary">ZURÜCKSETZEN</a>{% endif %}
+        </div>
+    </form>
+
+    {% for bereich in bereiche %}
+    <div class="card mb-5">
+        <div class="flex items-center justify-between mb-3">
+            <h2 style="margin-bottom:0;">{{ bereich.titel }}</h2>
+            <span style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">{{ bereich.seite.gesamt }} Datei{{ "" if bereich.seite.gesamt == 1 else "en" }}{% if bereich.seite.seiten > 1 %}, Seite {{ bereich.seite.seite }} von {{ bereich.seite.seiten }}{% endif %}</span>
+        </div>
+
+        {% if bereich.seite.dateien %}
+        <div class="overflow-x-auto" style="border:1px solid var(--border);">
+            <table class="w-full" style="font-family:'VT323',monospace; font-size:var(--fs-gross);">
+                <thead style="background:var(--panel);">
+                    <tr>
+                        <th class="table-header" style="padding:8px 12px; text-align:left;">DATEI</th>
+                        <th class="table-header" style="padding:8px 12px; text-align:left;">GEÄNDERT</th>
+                        <th class="table-header" style="padding:8px 12px; text-align:right;">GRÖSSE</th>
+                        <th class="table-header" style="padding:8px 12px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for datei in bereich.seite.dateien %}
+                    <tr class="table-row">
+                        <td style="padding:8px 12px; color:var(--text-hi); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text);">{{ datei.name }}</td>
+                        <td style="padding:8px 12px; color:var(--text-dim); white-space:nowrap;">{{ datei.geaendert.strftime('%d.%m.%Y %H:%M') }}</td>
+                        <td style="padding:8px 12px; text-align:right; color:var(--text-dim); white-space:nowrap;">{{ "%.0f"|format(datei.groesse / 1024) }} KB</td>
+                        <td style="padding:8px 12px; text-align:right; white-space:nowrap;">
+                            <a href="/archiv/datei/{{ bereich.schluessel }}/{{ datei.name }}" target="_blank"
+                               style="color:var(--gold); font-family:'VT323',monospace; font-size:var(--fs-gross);">⬇ laden</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if bereich.seite.seiten > 1 %}
+        <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:10px; font-family:'VT323',monospace; font-size:var(--fs-gross);">
+            {% set basis = '?' + ('q=' ~ q ~ '&' if q else '') %}
+            {% if bereich.seite.seite > 1 %}
+            <a href="{{ basis }}seite={{ bereich.seite.seite - 1 }}" style="color:var(--gold);">← ZURÜCK</a>
+            {% endif %}
+            {% if bereich.seite.seite < bereich.seite.seiten %}
+            <a href="{{ basis }}seite={{ bereich.seite.seite + 1 }}" style="color:var(--gold);">WEITER →</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">
+            {% if q %}Keine Datei passt zu „{{ q }}".{% else %}Noch nichts abgelegt.{% endif %}
+        </p>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="card" style="border-style:dashed;">
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">
+            Alles auf einmal, mit Kunden-, Rechnungs- und Audit-Daten als Prüferpaket:
+            <a href="/export" style="color:var(--gold);">GoBD-Export</a>.
+        </p>
+    </div>
+</div>
+{% endblock %}

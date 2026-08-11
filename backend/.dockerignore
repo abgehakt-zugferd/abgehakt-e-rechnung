@@ -1,0 +1,19 @@
+# Baukontext ist `backend/` (docker-compose: `context: ./backend`) — eine
+# .dockerignore im Repo-Wurzelverzeichnis wäre wirkungslos, und `docs/`,
+# `knowledge/`, `storage/`, `backups/` liegen ohnehin außerhalb des Kontexts.
+#
+# `tests/` bleibt draußen und wird zur Laufzeit gemountet (run-tests.sh,
+# docker-compose.yml). Wer das ändert, prüft beide Aufrufe mit.
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+tests/
+.env
+*.egg-info/
+.git/
+.venv/
+venv/
+.DS_Store

@@ -1,0 +1,93 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: abgehakt_db
+    environment:
+      # Bootstrap-Superuser (OID 10). Postgres lässt diese Rolle NIE demoten
+      # ("The bootstrap user must have the SUPERUSER attribute") — deshalb darf hier
+      # NICHT die Owner-/App-Rolle stehen, sonst ist der Betrieb wieder Superuser.
+      POSTGRES_USER: ${DB_BOOTSTRAP_USER:-abgehakt_db}
+      POSTGRES_PASSWORD: ${DB_BOOTSTRAP_PASSWORD:-changeme}
+      POSTGRES_DB: ${DB_NAME:-abgehakt}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # NUR Loopback: "5432:5432" veröffentlicht die DB an alle Interfaces (0.0.0.0)
+      # und macht sie im LAN/WLAN angreifbar. Host-Tools (psql, GUI-Clients) erreichen
+      # sie über 127.0.0.1:5432 unverändert.
+      - "127.0.0.1:5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_BOOTSTRAP_USER:-abgehakt_db} -d ${DB_NAME:-abgehakt}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-backup:
+    image: prodrigestivill/postgres-backup-local:16-alpine
+    container_name: abgehakt_db_backup
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${DB_NAME:-abgehakt}
+      # Dump läuft als Owner-Rolle (NOSUPERUSER) — pg_dump braucht keinen Superuser.
+      POSTGRES_USER: ${DB_USER:-abgehakt_admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 30
+      BACKUP_KEEP_WEEKS: 8
+      BACKUP_KEEP_MONTHS: 12
+      HEALTHCHECK_PORT: 8081
+    volumes:
+      - ./backups:/backups
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ./backend
+      # Das Abbild, das eine Installation ausfuehrt: ohne pytest, ohne
+      # Testabhaengigkeiten. Die test-Stage baut `docker-compose.dev.yml`.
+      target: prod
+    container_name: abgehakt_app
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-abgehakt_admin}:${DB_PASSWORD:-changeme}@db:5432/${DB_NAME:-abgehakt}
+      # Nur für den Start (#151): der Entrypoint legt damit die Owner-Rolle an,
+      # bevor Alembic sich als sie anmeldet. Die App selbst verbindet nie so —
+      # sie läuft ausschließlich über APP_DATABASE_URL.
+      BOOTSTRAP_DATABASE_URL: postgresql://${DB_BOOTSTRAP_USER:-abgehakt_db}:${DB_BOOTSTRAP_PASSWORD:-changeme}@db:5432/${DB_NAME:-abgehakt}
+      APP_DATABASE_URL: postgresql://${DB_APP_USER:-abgehakt_app}:${DB_APP_PASSWORD:-changeme}@db:5432/${DB_NAME:-abgehakt}
+    volumes:
+      # Nur die Daten. Der Code kommt aus dem gebauten Abbild. Wuerde hier zusaetzlich
+      # `./backend/app` haengen, liefe die Installation auf dem Stand des Verzeichnisses
+      # statt auf dem, was gebaut und getestet wurde - und `--build` wuerde daran nichts
+      # aendern, weil der Mount das Abbild ueberdeckt.
+      - ./storage:/app/storage
+    ports:
+      # NUR Loopback, aus demselben Grund wie bei der Datenbank oben — und hier wiegt
+      # er schwerer: die Anwendung bringt keine Anmeldung mit (SECURITY.md). "3000:3000"
+      # hinge an allen Schnittstellen, und jeder im selben Netz koennte Rechnungen
+      # einsehen, neue anlegen, versenden und den GoBD-Export mit allen Kundendaten
+      # herunterladen. Wer den Zugriff aus dem Netz wirklich will, aendert diese Zeile
+      # und stellt eine Anmeldung davor (Reverse Proxy, VPN).
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/dashboard"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+
+volumes:
+  postgres_data:

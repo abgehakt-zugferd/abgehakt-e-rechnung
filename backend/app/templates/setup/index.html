@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Ersteinrichtung{% endblock %}
+
+{% macro wert(feld) -%}
+{{ (werte.get(feld) if werte else (company[feld] if company else '')) or '' }}
+{%- endmacro %}
+
+{% block content %}
+<div style="max-width:720px;">
+    <h1 style="font-family:var(--font-display); color:var(--gold); margin-bottom:8px;">Ersteinrichtung</h1>
+    <p style="margin-bottom:24px; color:var(--text-dim);">
+        Diese Angaben stehen auf jeder Rechnung: im PDF und in der E-Rechnungs-XML,
+        die seit 2025 rechtlich maßgeblich ist. Sie lassen sich später unter
+        <em>Einstellungen</em> ändern.
+    </p>
+
+    {% if fehler %}
+    <div data-setup-fehler style="margin-bottom:20px; padding:12px 16px; border:2px solid var(--red, #b00); background:var(--panel);">
+        {{ fehler }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/setup">
+        <fieldset style="border:2px solid var(--border-hi); padding:16px; margin-bottom:20px;">
+            <legend>Firma</legend>
+            <label>Firmenname *<br>
+                <input type="text" name="name" value="{{ wert('name') }}" required class="input"></label><br><br>
+            <label>Straße und Hausnummer *<br>
+                <input type="text" name="address_line1" value="{{ wert('address_line1') }}" required class="input"></label><br><br>
+            <label>Adresszusatz<br>
+                <input type="text" name="address_line2" value="{{ wert('address_line2') }}" class="input"></label><br><br>
+            <label>PLZ *<br>
+                <input type="text" name="zip_code" value="{{ wert('zip_code') }}" required class="input" style="max-width:140px;"></label>
+            <label>Ort *<br>
+                <input type="text" name="city" value="{{ wert('city') }}" required class="input"></label><br><br>
+            <label>Land<br>
+                <input type="text" name="country" value="{{ wert('country') or 'DE' }}" class="input" style="max-width:80px;"></label>
+        </fieldset>
+
+        <fieldset style="border:2px solid var(--border-hi); padding:16px; margin-bottom:20px;">
+            <legend>Steuerliche Angaben</legend>
+            <p style="color:var(--text-dim); margin-bottom:12px;">
+                Mindestens eine der beiden Nummern ist nach § 14 UStG Pflicht.
+            </p>
+            <label>Steuernummer<br>
+                <input type="text" name="tax_number" value="{{ wert('tax_number') }}" placeholder="123/456/78901" class="input font-mono"></label><br><br>
+            <label>USt-IdNr.<br>
+                <input type="text" name="vat_id" value="{{ wert('vat_id') }}" placeholder="DE123456789" class="input font-mono"></label>
+        </fieldset>
+
+        <fieldset style="border:2px solid var(--border-hi); padding:16px; margin-bottom:20px;">
+            <legend>Kontakt und Bank</legend>
+            <label>E-Mail<br>
+                <input type="email" name="email" value="{{ wert('email') }}" class="input"></label><br><br>
+            <label>Telefon<br>
+                <input type="tel" name="phone" value="{{ wert('phone') }}" class="input"></label><br><br>
+            <label>IBAN<br>
+                <input type="text" name="bank_iban" value="{{ wert('bank_iban') }}" class="input font-mono"></label><br><br>
+            <label>BIC<br>
+                <input type="text" name="bank_bic" value="{{ wert('bank_bic') }}" class="input font-mono"></label><br><br>
+            <label>Bank<br>
+                <input type="text" name="bank_name" value="{{ wert('bank_name') }}" class="input"></label>
+        </fieldset>
+
+        {#
+          Haftungshinweis — bewusst hier und nicht im Seitenfuß: die
+          Ersteinrichtung durchläuft jede Installation zwingend einmal, ein
+          Seitenfuß wird überall angezeigt und deshalb nirgends gelesen.
+          Kein Schließen-Knopf, kein Schalter in den Einstellungen.
+          Test: tests/test_haftungshinweis.py
+        #}
+        <p data-haftungshinweis style="margin-bottom:20px; padding:12px 16px; border:2px solid var(--border-hi); background:var(--panel); color:var(--text-dim); font-size:var(--fs-text); line-height:1.6;">
+            <strong>Ohne Gewähr, keine Steuerberatung.</strong>
+            Dieses Programm wird unentgeltlich überlassen und arbeitet ohne Gewähr für die
+            Richtigkeit seiner Ergebnisse. Es prüft die Pflichtangaben nach § 14 UStG
+            regelbasiert und erzeugt E-Rechnungen nach EN 16931. Ob ein Beleg im Einzelfall
+            vollständig und zutreffend ist, verantwortet die ausstellende Firma. Eine
+            Steuerberatung ersetzt es nicht. Einzelheiten stehen in der Lizenz
+            (AGPL-3.0, Abschnitte 15 und 16).
+        </p>
+
+        <button type="submit" class="btn">Einrichtung abschließen</button>
+    </form>
+</div>
+{% endblock %}

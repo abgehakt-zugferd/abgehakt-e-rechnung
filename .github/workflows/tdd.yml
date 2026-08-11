@@ -1,0 +1,43 @@
+name: tests
+
+# Kanonische Test-Baseline in CI: baut das Prod-Image (Python 3.11 + JRE + Ghostscript +
+# Mustang-CLI) und fährt die volle Suite darin. Dadurch SKIPPEN die 4 ZUGFeRD-/PDF-
+# Integrationstests NICHT, der rechtlich kritische E-Rechnungs-Pfad wird in CI geprüft.
+# Single Source of Truth: backend/run-tests.sh (identisch zum lokalen kanonischen Lauf).
+#
+# Dazu zwei Wachen aus `.githooks/wachen.sh`, dieselbe Datei, die auch der Pre-Push-Hook
+# aufruft. Sie stehen hier, weil der Hook nur greift, wer ihn aktiviert hat, und das tut
+# beim ersten Beitrag fast niemand: ein Pull Request mit "3000:3000" oder mit einem
+# Quellcode-Mount in `docker-compose.yml` kaeme sonst durch. Eigener Job, weil er in
+# Sekunden faellt und nicht hinter dem Abbild-Bau warten soll.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  wachen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Netzbindung und Auslieferungsabbild prüfen
+        run: .githooks/wachen.sh
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run canonical baseline + Skip-Guard (Docker 3.11, incl. Mustang/Ghostscript)
+        run: |
+          set -o pipefail
+          ./run-tests.sh 2>&1 | tee /tmp/pytest.out
+          # Fail-Guard gegen stilles Aufweichen: im Container darf nichts skippen
+          # (fehlende Mustang/GS-Werkzeuge würden den kritischen E-Rechnungs-Pfad verbergen).
+          if grep -qE "[1-9][0-9]* skipped" /tmp/pytest.out; then
+            echo "::error::Tests wurden übersprungen; im Container darf nichts skippen (Mustang/GS fehlen?)."
+            exit 1
+          fi
+        working-directory: backend

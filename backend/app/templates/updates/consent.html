@@ -1,0 +1,45 @@
+{#
+  Einwilligung vor der ersten Update-Prüfung (#120).
+
+  Hier stand einmal `{{ endpoint }}?version=…&edition=…` unter der Überschrift
+  „Übertragen wird ausschließlich das Folgende". Diesen Anhang gibt es nicht:
+  `update_check.fetch_update_info` ruft `ENDPOINT` unverändert auf. Bestätigt
+  wurde also die Übertragung von genau den zwei Angaben, die als einzige nicht
+  hinausgehen. Wer diese Seite ändert, hält sie mit `fetch_update_info` und dem
+  Abschnitt „Datenschutz" im README zusammen — eine Einwilligung, die etwas
+  anderes beschreibt als der Abruf tut, ist keine.
+
+  Wächter: tests/test_update_zustimmung.py
+#}
+{% extends "base.html" %}
+{% block content %}
+<div data-seite="update-zustimmung" style="max-width:680px;">
+  <h1>Nach Updates suchen</h1>
+
+  <div class="card" style="margin-bottom:24px;">
+    <p style="margin-top:0;">Das Programm ruft dafür eine einzige Adresse bei GitHub auf und
+       liest dort, welche Fassung zuletzt veröffentlicht wurde:</p>
+    <pre style="margin:0 0 16px; padding:12px 14px; background:var(--surface2);
+                border:2px solid var(--border-hi); overflow-x:auto;
+                font-size:0.8125rem;">{{ endpoint }}</pre>
+    <p>Über diese Installation geht dabei <strong>nichts</strong> hinaus: keine
+       Versionsnummer, keine Kennung, keine Rechnungs-, Kunden- oder Firmendaten.
+       Welche Fassung hier läuft, vergleicht das Programm anschließend auf diesem
+       Rechner.</p>
+    <p style="margin-bottom:0;">Sichtbar wird für die Gegenseite der Abruf selbst, also die
+       <strong>IP-Adresse</strong> dieses Anschlusses — wie beim Öffnen jeder Webseite.</p>
+  </div>
+
+  <p>Erwähne diesen Abruf bitte in deiner eigenen Datenschutzerklärung. Die
+     Bestätigung wird einmal gespeichert; gesucht wird auch danach nur, wenn du
+     klickst, nie im Hintergrund und nie beim Start.</p>
+
+  <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:24px;">
+    <form method="post" action="/updates/pruefen">
+      <input type="hidden" name="bestaetigt" value="1">
+      <button type="submit" class="btn-primary">Einverstanden, jetzt prüfen</button>
+    </form>
+    <a href="/" class="btn-secondary">Abbrechen</a>
+  </div>
+</div>
+{% endblock %}

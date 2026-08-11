@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen – {{ PRODUCT_NAME }}{% endblock %}
+{% block content %}
+<div style="max-width:760px;">
+    <h1 style="margin-bottom:6px;">EINSTELLUNGEN</h1>
+    <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:24px;">Systemkonfiguration &amp; Firmendaten</p>
+
+    {% if saved %}
+    <div style="margin-bottom:16px; padding:12px 16px; background:rgba(0,230,118,0.08); border:2px solid rgba(0,230,118,0.3); font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--green);">
+        ✓ GESPEICHERT
+    </div>
+    {% endif %}
+    {% if error %}
+    <div style="margin-bottom:16px; padding:12px 16px; background:rgba(255,77,124,0.08); border:2px solid rgba(255,77,124,0.3); font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--pink);">
+        ✗ {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- Company Data -->
+    <form method="post" action="/settings/firma" class="space-y-5 mb-6">
+        <div class="card space-y-4">
+            <h2>FIRMENDATEN</h2>
+            <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">{{ company.name }} · Erscheinen auf jeder Rechnung · Pflicht nach § 14 UStG</p>
+
+            <div>
+                <label class="label">Firmenname *</label>
+                <input type="text" name="name" value="{{ company.name }}" required class="input">
+            </div>
+            <div>
+                <label class="label">Adresszeile 1 *</label>
+                <input type="text" name="address_line1" value="{{ company.address_line1 }}" required class="input">
+            </div>
+            <div>
+                <label class="label">Adresszeile 2</label>
+                <input type="text" name="address_line2" value="{{ company.address_line2 or '' }}" class="input">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="label">PLZ *</label>
+                    <input type="text" name="zip_code" value="{{ company.zip_code }}" required class="input">
+                </div>
+                <div>
+                    <label class="label">Stadt *</label>
+                    <input type="text" name="city" value="{{ company.city }}" required class="input">
+                </div>
+            </div>
+            <div>
+                <label class="label">Land</label>
+                <input type="text" name="country" value="{{ company.country }}" class="input" style="max-width:80px;">
+            </div>
+
+            <div style="border-top:1px solid var(--border); padding-top:16px;">
+                <h3 style="margin-bottom:14px;">STEUER (mind. eines erforderlich)</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="label">Steuernummer</label>
+                        <input type="text" name="tax_number" value="{{ company.tax_number or '' }}" placeholder="123/456/78901" class="input font-mono">
+                    </div>
+                    <div>
+                        <label class="label">USt-IdNr.</label>
+                        <input type="text" name="vat_id" value="{{ company.vat_id or '' }}" placeholder="DE123456789" class="input font-mono">
+                    </div>
+                </div>
+            </div>
+
+            <div style="border-top:1px solid var(--border); padding-top:16px;">
+                <h3 style="margin-bottom:14px;">KONTAKT</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="label">E-Mail</label>
+                        <input type="email" name="email" value="{{ company.email or '' }}" class="input">
+                    </div>
+                    <div>
+                        <label class="label">Telefon</label>
+                        <input type="tel" name="phone" value="{{ company.phone or '' }}" class="input">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="label">Ansprechpartner</label>
+                        <input type="text" name="contact_name" value="{{ company.contact_name or '' }}" class="input" placeholder="{{ company.name or '' }}">
+                        <p class="label" style="margin-top:6px; text-transform:none;">Steht als Ansprechpartner auf jeder Rechnung. Leer lassen, dann steht dort der Firmenname.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div style="border-top:1px solid var(--border); padding-top:16px;">
+                <h3 style="margin-bottom:14px;">BANKVERBINDUNG (SEPA)</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="label">IBAN</label>
+                        <input type="text" name="bank_iban" value="{{ company.bank_iban or '' }}" placeholder="DE00 1234 5678..." class="input font-mono">
+                    </div>
+                    <div>
+                        <label class="label">BIC</label>
+                        <input type="text" name="bank_bic" value="{{ company.bank_bic or '' }}" placeholder="DEUTDEDB" class="input font-mono">
+                    </div>
+                </div>
+                <div style="margin-top:16px;">
+                    <label class="label">Bankname</label>
+                    <input type="text" name="bank_name" value="{{ company.bank_name or '' }}" class="input">
+                </div>
+            </div>
+
+            <div style="border-top:1px solid var(--border); padding-top:16px;">
+                <h3 style="margin-bottom:14px;">RECHNUNGSNUMMERN</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="label">Präfix</label>
+                        <input type="text" name="invoice_prefix" value="{{ company.invoice_prefix }}" class="input" style="max-width:100px;">
+                    </div>
+                    <div style="display:flex; align-items:flex-end; padding-bottom:6px;">
+                        <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text);">
+                            <input type="checkbox" name="invoice_year_in_number"
+                                   {% if company.invoice_year_in_number %}checked{% endif %}>
+                            Jahr in Nummer (RE-2026-001)
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <label class="label">Standard-Zahlungsbedingungen</label>
+                <textarea name="payment_terms_default" rows="2" class="input">{{ company.payment_terms_default }}</textarea>
+            </div>
+        </div>
+        <button type="submit" class="btn-primary">FIRMENDATEN SPEICHERN</button>
+    </form>
+
+    <!-- SMTP -->
+    <form method="post" action="/settings/smtp" class="card mb-5">
+        <h2 style="margin-bottom:6px;">SMTP-KONFIGURATION</h2>
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:20px;">Für E-Mail-Versand an Kunden und BCC an DATEV Upload Mail.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="label">SMTP Host *</label>
+                <input type="text" name="smtp_host" value="{{ effective.smtp_host }}" required class="input" placeholder="smtp.example.com">
+            </div>
+            <div>
+                <label class="label">Port *</label>
+                <input type="number" name="smtp_port" value="{{ effective.smtp_port }}" required class="input" placeholder="587">
+            </div>
+            <div>
+                <label class="label">Benutzername</label>
+                <input type="text" name="smtp_user" value="{{ effective.smtp_user }}" class="input" placeholder="user@example.com">
+            </div>
+            <div>
+                <label class="label">Passwort</label>
+                <input type="password" name="smtp_password" value="" class="input"
+                       placeholder="{% if effective.smtp_password %}(unverändert lassen){% else %}Passwort eingeben{% endif %}"
+                       autocomplete="new-password">
+            </div>
+            <div>
+                <label class="label">Absender E-Mail *</label>
+                <input type="email" name="smtp_from" value="{{ effective.smtp_from }}" required class="input" placeholder="noreply@firma.de">
+            </div>
+            <div style="display:flex; align-items:flex-end; padding-bottom:6px;">
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text);">
+                    <input type="checkbox" name="smtp_use_tls"
+                           {% if effective.smtp_use_tls %}checked{% endif %}>
+                    TLS aktivieren
+                </label>
+            </div>
+        </div>
+
+        <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border); display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+            {% if effective.smtp_host %}
+            {# Testmail-Feld + Button gehören zum separaten Formular unten (form=…),
+               NICHT verschachtelt – sonst verwirft der Browser das innere <form>
+               und TEST SENDEN postet an /settings/smtp (speichern) statt smtp-test. #}
+            <div style="display:flex; gap:12px; align-items:flex-end; flex:1; min-width:200px;">
+                <div style="flex:1;">
+                    <label class="label">Test-E-Mail senden an</label>
+                    <input type="email" name="test_email" form="smtp-test-form" value="{{ effective.smtp_user }}" class="input">
+                </div>
+                <button type="submit" form="smtp-test-form" class="btn-secondary">TEST SENDEN</button>
+            </div>
+            {% endif %}
+            <button type="submit" class="btn-primary" style="flex-shrink:0;">SMTP SPEICHERN</button>
+        </div>
+    </form>
+    {% if effective.smtp_host %}
+    <form id="smtp-test-form" method="post" action="/settings/smtp-test"></form>
+    {% endif %}
+
+    <!-- DATEV -->
+    <form method="post" action="/settings/datev" class="card">
+        <h2 style="margin-bottom:6px;">DATEV UPLOAD MAIL</h2>
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:20px;">
+            Die kryptische DATEV-Zieladresse für Rechnungsausgänge. Zu finden in DATEV Unternehmen Online unter:
+            <strong style="color:var(--text);">Belege → Einstellungen → Upload Mail → Konfigurieren → Rechnungsausgänge</strong>.
+        </p>
+
+        <div>
+            <label class="label">DATEV BCC E-Mail *</label>
+            <input type="email" name="datev_bcc_email" value="{{ effective.datev_bcc_email }}" required class="input" placeholder="rechnungen@datev-yourid.de">
+        </div>
+
+        <div style="margin-top:16px;">
+            <label class="label">Kopie an (CC)</label>
+            {# `or ''`: nullbares Feld — sonst rendert Jinja bei NULL den String "None"
+               und speichert ihn beim nächsten Absenden als echte Adresse. #}
+            <input type="email" name="invoice_cc_email" value="{{ config.invoice_cc_email or '' }}" class="input" placeholder="ablage@meinefirma.de">
+            <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-top:6px;">
+                Vorbelegung für den Sende-Dialog; pro Rechnung änder- und löschbar.
+                <strong style="color:var(--text);">Für den Kunden sichtbar</strong> (CC, nicht BCC).
+            </p>
+        </div>
+
+        <div style="margin-top:16px; padding:12px 16px; background:rgba(0,229,255,0.05); border:1px solid rgba(0,229,255,0.18);">
+            <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">
+                <strong style="color:var(--cyan);">HINWEIS:</strong> DATEV Upload Mail akzeptiert nur PDF-Dateien (kein reines XML).
+                ZUGFeRD-PDFs (hybrid) werden vollständig unterstützt. Max. 20 MB pro Datei.
+                Der Mail-Text wird von DATEV verworfen; nur der PDF-Anhang wird importiert.
+            </p>
+        </div>
+
+        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+            <button type="submit" class="btn-primary">DATEV SPEICHERN</button>
+        </div>
+    </form>
+
+</div>
+{% endblock %}

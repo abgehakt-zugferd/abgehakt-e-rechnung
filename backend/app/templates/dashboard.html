@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Übersicht – {{ PRODUCT_NAME }}{% endblock %}
+{% block content %}
+<div>
+    <!-- Header -->
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+        <div>
+            <h1>ÜBERSICHT</h1>
+            <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-top:2px;">Deine E-Rechnungen auf einen Blick</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <a href="/customers/neu" class="btn-secondary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                </svg>
+                KUNDE ANLEGEN
+            </a>
+            <a href="/invoices/neu" class="btn-primary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                </svg>
+                RECHNUNG ERSTELLEN
+            </a>
+        </div>
+    </div>
+
+
+    <!-- Kennzahlen -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+
+        <!-- Rechnungen gesamt -->
+        <div class="card card-hover">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="kpi__beschriftung">RECHNUNGEN GESAMT</p>
+                    <p class="kpi__wert">{{ total_invoices }}</p>
+                </div>
+                <div style="width:40px; height:40px; background:rgba(255,215,0,0.08); border:2px solid var(--gold-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    <svg style="width:20px;height:20px;color:var(--gold-dim);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Offene Rechnungen -->
+        <div class="card card-hover">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="kpi__beschriftung">OFFENE RECHNUNGEN</p>
+                    <p class="kpi__wert">{{ open_invoices }}</p>
+                </div>
+                <div style="width:40px; height:40px; background:rgba(0,229,255,0.07); border:2px solid rgba(0,229,255,0.3); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    <svg style="width:20px;height:20px;color:var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bezahlt in diesem Monat -->
+        <div class="card card-hover">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="kpi__beschriftung">BEZAHLT DIESEN MONAT</p>
+                    <p class="kpi__wert">{{ "%.0f"|format(paid_this_month|float) }}<span class="kpi__einheit">€</span></p>
+                </div>
+                <div style="width:40px; height:40px; background:rgba(0,230,118,0.07); border:2px solid rgba(0,230,118,0.3); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    <svg style="width:20px;height:20px;color:var(--green);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Umsatz im laufenden Jahr -->
+        <div class="card card-hover">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="kpi__beschriftung">UMSATZ LFD. JAHR</p>
+                    <p class="kpi__wert">{{ "%.0f"|format(revenue_ytd|float) }}<span class="kpi__einheit">€</span></p>
+                </div>
+                <div style="width:40px; height:40px; background:rgba(255,215,0,0.07); border:2px solid var(--gold-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    <svg style="width:20px;height:20px;color:var(--gold-dim);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Letzte Rechnungen -->
+    <div class="card card-hover">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+            <h2>LETZTE RECHNUNGEN</h2>
+            <a href="/invoices" style="display:inline-flex; align-items:center; gap:6px; font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); color:var(--cyan); text-decoration:none;" class="group">
+                ALLE RECHNUNGEN
+                <svg class="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </a>
+        </div>
+
+        {% if recent_invoices %}
+        <div class="overflow-x-auto" style="border:1px solid var(--border);">
+            <table class="w-full" style="font-family:'VT323',monospace; font-size:var(--fs-gross);">
+                <thead style="background:var(--panel);">
+                    <tr>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">RECHNUNGS-NR.</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">KUNDE</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">DATUM</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:right;">BETRAG</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">STATUS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for inv in recent_invoices %}
+                    <tr class="table-row">
+                        <td style="padding:10px 14px;">
+                            <a href="/invoices/{{ inv.id }}" class="group" style="display:inline-flex; align-items:center; gap:4px; color:var(--cyan); text-decoration:none; font-family:'Share Tech Mono',monospace; font-size:var(--fs-text);">
+                                {{ inv.invoice_number }}
+                                <svg class="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </a>
+                        </td>
+                        <td style="padding:10px 14px; color:var(--text);">{{ inv.customer.name if inv.customer else '–' }}</td>
+                        <td style="padding:10px 14px; color:var(--text-dim); white-space:nowrap;">{{ inv.issue_date.strftime('%d.%m.%Y') }}</td>
+                        <td style="padding:10px 14px; text-align:right; color:var(--text-hi); font-family:'Share Tech Mono',monospace;">{{ "%.2f"|format(inv.gross_total|float) }} €</td>
+                        <td style="padding:10px 14px;">
+                            <span class="badge badge-{{ inv.status }}">{{ {'draft':'Entwurf','issued':'Gestellt','paid':'Bezahlt','cancelled':'Storniert'}[inv.status] }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:48px 0; text-align:center;">
+            <div style="font-size:40px; margin-bottom:16px; opacity:0.3;">📜</div>
+            <h3 style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--text-dim); margin-bottom:8px;">KEINE RECHNUNGEN VORHANDEN</h3>
+            <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); max-width:400px; margin:0 auto 20px;">Erstelle deine erste Rechnung: im ZUGFeRD-Format, Aufbewahrung 8 Jahre.</p>
+            <a href="/invoices/neu" class="btn-primary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                </svg>
+                ERSTE RECHNUNG ERSTELLEN
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

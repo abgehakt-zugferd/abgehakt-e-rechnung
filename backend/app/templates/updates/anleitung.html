@@ -1,0 +1,51 @@
+{#
+  Wie eine neue Fassung eingespielt wird (#120).
+
+  Hier stand `docker compose pull && docker compose up -d`. Der Dienst `app`
+  wird aber aus `./backend` gebaut und hat kein veröffentlichtes Abbild:
+  `pull` überspringt ihn wortlos ("app Skipped  No image to be pulled") und
+  endet mit Rückgabewert 0. Wer der Anleitung folgte, lief danach unverändert
+  auf der alten Fassung — ohne eine einzige Fehlermeldung.
+
+  Wächter: tests/test_update_anleitung.py
+#}
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:760px;">
+  <h1>Auf eine neue Version aktualisieren</h1>
+
+  <h2>1. Zuerst sichern</h2>
+  <p>Beim Start der neuen Version laufen Datenbank-Migrationen automatisch. Sichere
+     deshalb <strong>vorher</strong>, Datenbank <em>und</em> Belege:</p>
+  <pre>docker compose exec db-backup /backup.sh
+tar czf storage-$(date +%F).tar.gz storage/</pre>
+  <p>Der Dump landet in <code>./backups/daily/</code>. Das Verzeichnis
+     <code>storage/</code> muss separat gesichert werden: Es enthält die
+     Rechnungs-PDFs; ein Datenbank-Dump allein stellt sie nicht wieder her.</p>
+
+  <h2>2. Den neuen Stand holen</h2>
+  <p>Im Verzeichnis der Installation, dort wo <code>docker-compose.yml</code> liegt.
+     Die Nummer ist die oberste Fassung von der Releases-Seite:</p>
+  <pre>git fetch --tags
+git checkout v1.2.3</pre>
+  <p>Wer das Programm nicht mit Git geholt, sondern das ZIP-Archiv entpackt hat, lädt
+     stattdessen das neue Archiv, entpackt es daneben und übernimmt aus der alten
+     Installation die Datei <code>.env</code> sowie die Verzeichnisse
+     <code>storage/</code> und <code>backups/</code>.</p>
+
+  <h2>3. Neu bauen und starten</h2>
+  <pre>docker compose up -d --build</pre>
+  <p><strong>Nur Herunterladen genügt hier nicht.</strong> Der Dienst <code>app</code>
+     wird aus dem Quelltext gebaut, es gibt kein fertiges Abbild in einer
+     Registry. Ein <code>docker&nbsp;compose&nbsp;pull</code> überspringt ihn
+     deshalb wortlos, meldet dabei Erfolg — und die alte Fassung liefe weiter.
+     Der Bau ist der einzige Weg, auf dem neuer Code hineinkommt.</p>
+
+  <h2>4. Prüfen, ob es geklappt hat</h2>
+  <p>Läuft die Anwendung nach kurzer Zeit nicht wieder, ist die Aktualisierung
+     bewusst abgebrochen worden, statt halb erledigt weiterzulaufen. Sieh nach mit:</p>
+  <pre>docker compose logs app</pre>
+  <p>In diesem Fall spiel die Sicherung aus Schritt 1 zurück und melde dich bei uns.
+     Die Sicherung ist der verlässliche Weg zurück.</p>
+</div>
+{% endblock %}

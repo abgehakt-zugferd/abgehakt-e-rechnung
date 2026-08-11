@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Rechnungen – {{ PRODUCT_NAME }}{% endblock %}
+{% block content %}
+<div>
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+            <h1>RECHNUNGEN</h1>
+            <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-top:2px;">ZUGFeRD-Rechnungen · Aufbewahrung 8 Jahre</p>
+        </div>
+        <a href="/invoices/neu" class="btn-primary flex-shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+            </svg>
+            NEUE RECHNUNG
+        </a>
+    </div>
+
+    <!-- Filter -->
+    <div class="card mb-5">
+        <form method="get" class="flex flex-wrap gap-3">
+            <div class="flex-1" style="min-width:200px;">
+                <input type="text" name="q" value="{{ q }}" placeholder="Rechnungs-Nr. oder Kunde..." class="input">
+            </div>
+            <select name="status" class="input" style="width:200px;">
+                <option value="" {% if not status_filter %}selected{% endif %}>Alle Status</option>
+                <option value="draft" {% if status_filter == 'draft' %}selected{% endif %}>Entwurf</option>
+                <option value="issued" {% if status_filter == 'issued' %}selected{% endif %}>Gestellt</option>
+                <option value="paid" {% if status_filter == 'paid' %}selected{% endif %}>Bezahlt</option>
+                <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Storniert</option>
+                <option value="discarded" {% if status_filter == 'discarded' %}selected{% endif %}>Verworfen</option>
+            </select>
+            <button type="submit" class="btn-secondary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM16 10a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1h2a1 1 0 001-1v-2z"/>
+                </svg>
+                SUCHEN
+            </button>
+            {% if q or status_filter %}
+            <a href="/invoices" class="btn-secondary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+                RESET
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+            <h2>RECHNUNGSARCHIV</h2>
+            <span style="font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); color:var(--text-dim);">{{ invoices|length }} EINTRÄGE</span>
+        </div>
+
+        {% if invoices %}
+        <div class="overflow-x-auto" style="border:1px solid var(--border); margin:0 -4px;">
+            <table class="w-full" style="font-family:'VT323',monospace; font-size:var(--fs-gross);">
+                <thead style="background:var(--panel);">
+                    <tr>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">RECHNUNGS-NR.</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">KUNDE</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">DATUM</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">FÄLLIGKEIT</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:right;">BRUTTO</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">STATUS</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">DATEV</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:right;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for inv in invoices %}
+                    <tr class="table-row">
+                        <td style="padding:10px 14px;">
+                            <a href="/invoices/{{ inv.id }}" class="group" style="display:inline-flex; align-items:center; gap:4px; color:var(--cyan); text-decoration:none; font-family:'Share Tech Mono',monospace; font-size:var(--fs-text);">
+                                {{ inv.invoice_number }}
+                                <svg class="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </a>
+                        </td>
+                        <td style="padding:10px 14px; color:var(--text);">{{ inv.customer.name if inv.customer else '–' }}</td>
+                        <td style="padding:10px 14px; color:var(--text-dim); white-space:nowrap;">{{ inv.issue_date.strftime('%d.%m.%Y') }}</td>
+                        <td style="padding:10px 14px; color:var(--text-dim); white-space:nowrap;">{{ inv.due_date.strftime('%d.%m.%Y') }}</td>
+                        <td style="padding:10px 14px; text-align:right; color:var(--text-hi); font-family:'Share Tech Mono',monospace;">{{ "%.2f"|format(inv.gross_total|float) }} €</td>
+                        <td style="padding:10px 14px;">
+                            {# .get statt [..]: ein unbekannter Status wirft sonst KeyError
+                               und nimmt die ganze Seite mit, nicht nur das Etikett. #}
+                            <span class="badge badge-{{ inv.status }}">{{ {'draft':'Entwurf','issued':'Gestellt','paid':'Bezahlt','cancelled':'Storniert','discarded':'Verworfen'}.get(inv.status, inv.status) }}</span>
+                        </td>
+                        <td style="padding:10px 14px;">
+                            {% if inv.datev_sent_at %}
+                            <span style="display:inline-flex; align-items:center; gap:4px; color:var(--green); font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro);">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                {{ inv.datev_sent_at.strftime('%d.%m.%y') }}
+                            </span>
+                            {% else %}
+                            <span style="color:var(--text-dim);">–</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
+                            {# Nur Entwuerfe sind bearbeitbar — finalisierte Rechnungen
+                               sind unveraenderlich (Korrektur nur per Storno). #}
+                            {% if inv.status == 'draft' %}
+                            <a href="/invoices/{{ inv.id }}/bearbeiten"
+                               style="color:var(--gold); font-family:'VT323',monospace; font-size:var(--fs-gross);">✎ bearbeiten</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Blättern (#Leistungsprüfung 09.08.2026). Die Zahl kommt aus der
+           Datenbank, nicht aus der geladenen Menge. #}
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:16px; font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">
+            <span>{{ gesamt }} Rechnung{{ '' if gesamt == 1 else 'en' }}{% if seiten > 1 %}, Seite {{ seite }} von {{ seiten }}{% endif %}</span>
+            {% if seiten > 1 %}
+            {% set basis = '?' + ('status=' ~ status_filter ~ '&' if status_filter else '') + ('q=' ~ q ~ '&' if q else '') %}
+            <span style="display:flex; gap:12px;">
+                {% if seite > 1 %}
+                <a href="{{ basis }}seite={{ seite - 1 }}" style="color:var(--gold);">← ZURÜCK</a>
+                {% endif %}
+                {% if seite < seiten %}
+                <a href="{{ basis }}seite={{ seite + 1 }}" style="color:var(--gold);">WEITER →</a>
+                {% endif %}
+            </span>
+            {% endif %}
+        </div>
+        {% else %}
+        <div style="padding:48px 0; text-align:center;">
+            <div style="font-size:40px; margin-bottom:16px; opacity:0.3;">📜</div>
+            <h3 style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--text-dim); margin-bottom:8px;">KEINE RECHNUNGEN GEFUNDEN</h3>
+            <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:20px;">Deine Suche hat keine Ergebnisse geliefert.</p>
+            <a href="/invoices/neu" class="btn-primary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                </svg>
+                NEUE RECHNUNG
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

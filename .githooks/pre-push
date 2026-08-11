@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# TDD-Enforcement pre-push hook, Variante für dieses Repo (Tests laufen NUR im Container).
+# Standard-Kit-Runner (python3 -m pytest auf dem Host) wäre hier ein False-RED:
+# der Host hat keine App-Dependencies. Siehe CONTRIBUTING.md.
+set -uo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+run_tests() {
+  # Zwei Bedingungen, nicht eine: Seit `docker-compose.yml` das Auslieferungsabbild
+  # baut (target: prod), laeuft im Normalfall ein app-Container OHNE pytest. Ein
+  # blindes `exec ... pytest` gaebe dort "not found" und damit ein falsches ROT -
+  # es saehe nach kaputter Suite aus, waere aber nur das richtige Abbild. Wer die
+  # Suite im Container will, startet zusaetzlich docker-compose.dev.yml.
+  if docker compose ps --services --status running 2>/dev/null | grep -qx app &&
+     docker compose exec -T app python -c "import pytest" >/dev/null 2>&1 </dev/null; then
+    echo "tdd: Entwicklungsstack laeuft, Suite im app-Container." >&2
+    docker compose exec -T app python -m pytest tests/ -q </dev/null
+  else
+    echo "tdd: kein Entwicklungsstack, kanonische Baseline (backend/run-tests.sh)." >&2
+    (cd backend && ./run-tests.sh)
+  fi
+}
+
+# Gedankenstrich-Wache (Festlegung 2026-08-08). Bewusst hier und nicht als pytest:
+# die Dokumente liegen im Repo-Wurzelverzeichnis, der Testcontainer sieht nur
+# `backend/`. Ein pytest dafuer wuerde still skippen, und ein Skip ist in diesem
+# Repo ein Fehlschlag (Skip-Guard unten) - der Push waere dann aus dem falschen
+# Grund rot. Zahl-Strich-Zahl (`§§ 140-148`, `2025-2026`) ist eine Spanne und bleibt.
+striche="$(git ls-files '*.md' | while read -r f; do
+    perl -ne 's/(?<=\d)[\x{2013}\x{2014}](?=\d)//g; print "'"'"'$ARGV:$.: $_" if /[\x{2013}\x{2014}]/' -CSD "$f"
+  done)"
+if [ -n "$striche" ]; then
+  {
+    echo ""
+    echo "dokumente: ROT - Gedankenstrich in Markdown gefunden. Push blockiert."
+    echo "  Komma, Doppelpunkt, Strichpunkt oder zwei Saetze statt dessen."
+    echo "$striche"
+  } >&2
+  exit 1
+fi
+
+# Netzbindungs- und Auslieferungs-Wache. Sie stehen in `.githooks/wachen.sh`, weil die
+# CI sie ebenfalls aufruft (`.github/workflows/tdd.yml`) - zwei Abschriften derselben
+# Regel laufen auseinander, und die CI-Abschrift faellt dabei zuletzt auf. Die
+# Gedankenstrich-Wache oben bleibt bewusst hier und nur hier: eine Schreibregel dieses
+# Projekts ist kein Grund, einen fremden Pull Request abzuweisen.
+if ! .githooks/wachen.sh; then
+  echo "  Push blockiert." >&2
+  exit 1
+fi
+
+out="$(mktemp)"
+trap 'rm -f "$out"' EXIT
+
+if run_tests 2>&1 | tee "$out"; then
+  # Skip-Guard wie in CI: still geskippte Tests (fehlendes Postgres/Mustang/GS)
+  # würden den kritischen E-Rechnungs-Pfad verbergen.
+  if grep -qE "[1-9][0-9]* skipped" "$out"; then
+    {
+      echo ""
+      echo "tdd: ROT, Tests wurden übersprungen (Skip-Guard). Push blockiert."
+    } >&2
+    exit 1
+  fi
+  echo "tdd: grün, Push erlaubt."
+  exit 0
+fi
+
+{
+  echo ""
+  echo "tdd: ROT, Push blockiert. Kein ungetesteter Code verlässt das Repo."
+  echo "     Bewusste Ausnahme nur via:  git push --no-verify"
+} >&2
+exit 1

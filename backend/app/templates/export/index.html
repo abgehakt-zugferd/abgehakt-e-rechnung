@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}GoBD-Export – {{ PRODUCT_NAME }}{% endblock %}
+{% block content %}
+<div style="max-width:760px;">
+    <h1 style="margin-bottom:6px;">GOBD-EXPORT</h1>
+    <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:24px;">
+        Datenträgerüberlassung (Z3): Alle finalisierten Rechnungen des Zeitraums als
+        CSV-Tabellen samt Original-Belegen (ZUGFeRD-PDF &amp; XML) und Änderungsprotokoll
+        in einer ZIP-Datei.
+    </p>
+    <form method="get" action="/export/gobd" class="card">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+            <div>
+                <label class="label">Von</label>
+                <input type="date" id="von" name="von" required
+                       value="{{ default_von }}"
+                       class="input">
+            </div>
+            <div>
+                <label class="label">Bis</label>
+                <input type="date" id="bis" name="bis" required
+                       value="{{ default_bis }}"
+                       class="input">
+            </div>
+        </div>
+        <button type="submit" class="btn-primary">ZIP HERUNTERLADEN</button>
+    </form>
+</div>
+{% endblock %}

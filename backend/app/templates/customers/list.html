@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Kunden – {{ PRODUCT_NAME }}{% endblock %}
+{% block content %}
+<div>
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1>KUNDEN</h1>
+            <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-top:2px;">Dein Kundenstamm</p>
+        </div>
+        <a href="/customers/neu" class="btn-primary">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+            </svg>
+            NEUER KUNDE
+        </a>
+    </div>
+
+    <div class="card mb-5">
+        <form method="get">
+            <input type="text" name="q" value="{{ q }}" placeholder="Kunde suchen..." class="input" style="max-width:400px;">
+        </form>
+    </div>
+
+    <div class="card">
+        {% if customers %}
+        <div class="overflow-x-auto" style="border:1px solid var(--border); margin:0 -4px;">
+            <table class="w-full" style="font-family:'VT323',monospace; font-size:var(--fs-gross);">
+                <thead style="background:var(--panel);">
+                    <tr>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">KUNDEN-NR.</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">NAME</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">ORT</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">E-MAIL</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">UST-IDNR.</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">AKTIONEN</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in customers %}
+                    <tr class="table-row">
+                        <td style="padding:10px 14px; color:var(--text-dim); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text);">{{ c.customer_number }}</td>
+                        <td style="padding:10px 14px; color:var(--text-hi);">{{ c.name }}</td>
+                        <td style="padding:10px 14px; color:var(--text);">{{ c.zip_code }} {{ c.city }}</td>
+                        <td style="padding:10px 14px; color:var(--text-dim);">{{ c.email or '–' }}</td>
+                        <td style="padding:10px 14px; color:var(--text-dim); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text);">{{ c.vat_id or '–' }}</td>
+                        <td style="padding:10px 14px;">
+                            <div style="display:flex; gap:10px;">
+                                <a href="/customers/{{ c.id }}/bearbeiten"
+                                   style="font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); color:var(--cyan); text-decoration:none;">EDIT</a>
+                                <form method="post" action="/customers/{{ c.id }}/loeschen"
+                                      onsubmit="return confirm('Kunde {{ c.name }} wirklich deaktivieren?')">
+                                    <button type="submit" style="font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); color:var(--pink); background:none; border:none; cursor:pointer; padding:0;">DEL</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:48px 0; text-align:center;">
+            <div style="font-size:40px; margin-bottom:16px; opacity:0.3;">⚔</div>
+            <h3 style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--text-dim); margin-bottom:8px;">
+                {% if q %}KEINE KUNDEN GEFUNDEN{% else %}NOCH KEINE KUNDEN{% endif %}
+            </h3>
+            <a href="/customers/neu" style="display:inline-block; margin-top:12px; font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); color:var(--cyan); text-decoration:none;">Ersten Kunden anlegen →</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+{#
+  Pro-Hinweis (#120) — eigene Zone, IMMER schließbar.
+
+  Als Makro und nicht fest in base.html, damit er sich an anderer Stelle im
+  Werkzeug und in anderem Layout einsetzen lässt:
+
+      {% from "partials/mitteilung.html" import mitteilung %}
+      {{ mitteilung(request.state.mitteilung, variante="karte",
+                     weiter=request.url.path) }}
+
+  Varianten: "banner" (breiter Streifen, Standard) | "karte" (Kachel) |
+  "inline" (schmale Zeile). Das Aussehen steckt in .mitteilung--* in base.html.
+
+  `weiter` bringt den Nutzer nach dem Schließen auf seine Seite zurück; der
+  Endpunkt lässt nur eigene Pfade zu (siehe routers/updates.py::_sicheres_ziel).
+
+  Bewusst OHNE `with context`: das Makro darf sich nicht auf `request` verlassen,
+  sonst ist es nur dort einsetzbar, wo ein Request-Kontext durchgereicht wird.
+#}
+{% macro mitteilung(m, variante="banner", weiter="/") %}
+{%- if m %}
+<div data-mitteilung data-mitteilung-variante="{{ variante }}"
+     class="mitteilung mitteilung--{{ variante }}">
+  <div class="mitteilung__text">
+    <span class="mitteilung__marke">INFO</span>
+    <span>{{ m.text }}</span>
+    {% if m.url %}
+    <a href="{{ m.url }}" target="_blank" rel="noopener noreferrer">Mehr dazu</a>
+    {% endif %}
+  </div>
+  <form method="post" action="/updates/mitteilung-schliessen" class="mitteilung__zu">
+    <input type="hidden" name="weiter" value="{{ weiter }}">
+    <button type="submit" data-mitteilung-schliessen aria-label="Mitteilung schließen"
+            title="Nicht mehr anzeigen">&times;</button>
+  </form>
+</div>
+{%- endif %}
+{% endmacro %}

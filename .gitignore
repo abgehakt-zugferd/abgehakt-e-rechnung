@@ -1,0 +1,58 @@
+# Secrets & Konfiguration
+.env
+*.env.local
+
+# DSGVO – Echte Rechnungsdaten (niemals in Git!)
+# storage/ ist ein LAUFZEIT-Volume, kein Repo-Inhalt: Belege (pdfs/xml), der
+# selbstverwaltete `secret.key` (#99 §5.4) und das Firmenlogo der jeweiligen
+# Installation (#99 §4.3). Ganzes Verzeichnis ignorieren, nicht nur die vier
+# bekannten Unterordner — sonst taucht eine Datei direkt in storage/ als untracked
+# auf (ein `git add -A` hat prompt das Firmenlogo mit eingecheckt).
+storage/*
+!storage/.gitkeep
+
+# DSGVO – Beispiel-Rechnungen mit echten Kundendaten
+knowledge/Beispiel-Rechnungen/
+
+# DSGVO – Echte Kundenrechnungen (Livedaten, niemals in Git!)
+livedaten/
+
+# DSGVO – DB-Backups (pg_dump, enthält echte Kunden-/Rechnungsdaten, niemals in Git!)
+backups/
+
+# Binäre Spec-Dokumente (groß, kein Mehrwert im Repo)
+knowledge/ZUGFeRD/**/*.pdf
+knowledge/ZUGFeRD/**/*.xlsx
+knowledge/ZUGFeRD/**/*.docx
+knowledge/GoBD/*.pdf
+knowledge/**/*.docx
+
+# Lokale Editorkonfiguration (nicht projektrelevant)
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Obsidian-Vault-Konfiguration (lokal, nicht projektrelevant)
+.obsidian/
+
+# Docker Volumes (werden zur Laufzeit befüllt)
+# storage/ bleibt als Verzeichnis mit .gitkeep erhalten
+
+# Lokale Entwicklungs-Override (Ports), nie committen
+docker-compose.override.yml

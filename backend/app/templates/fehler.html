@@ -1,0 +1,32 @@
+{#
+  Fehlerseite für jede abgewiesene Anfrage (siehe main.py::fehlerseite).
+
+  Der Rückweg ist der Zweck dieser Seite. Nach einem abgelehnten Formular-POST
+  ist die vorige Seite nicht wiederherstellbar — die Anlegeformulare tragen
+  `Cache-Control: no-store`, damit ein abgeschicktes Formular nicht als
+  Schein-Editor zurückkommt. Ohne Navigation säße der Mensch fest.
+
+  `{{ meldung }}` wird bewusst NICHT mit `|safe` ausgegeben: mehrere Meldungen
+  tragen abgeschickte Werte in sich (z. B. der Zielstatus in
+  `invoices.py::update_status`). Regressionstest:
+  test_fehlerseite.py::test_fremder_text_in_der_meldung_wird_maskiert
+#}
+{% extends "base.html" %}
+{% block title %}{{ ueberschrift }} – {{ PRODUCT_NAME }}{% endblock %}
+{% block content %}
+<div style="max-width:640px;">
+    <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:4px;">
+        FEHLER {{ status }}
+    </p>
+    <h1 style="margin-bottom:16px;">{{ ueberschrift }}</h1>
+
+    <div class="card">
+        <p style="font-size:var(--fs-gross); line-height:1.5;">{{ meldung }}</p>
+    </div>
+
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:24px;">
+        <a href="/dashboard" class="btn-primary">ZUR ÜBERSICHT</a>
+        <a href="/invoices" class="btn-secondary">ZU DEN RECHNUNGEN</a>
+    </div>
+</div>
+{% endblock %}

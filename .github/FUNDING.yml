@@ -1,0 +1,6 @@
+# Erzeugt den „Sponsor"-Knopf über dem Repo. Bewusst nur ein eigener Link und keine
+# Plattform mit Provision, die Zahlung geht direkt an die ZEMP Golden Goose GmbH.
+#
+# Der Betrag ist auf der Zielseite frei wählbar; Vorschläge stehen im README, nicht
+# hier (dieser Link nimmt keinen Betrag entgegen).
+custom: ["https://www.paypal.com/ncp/payment/V7RZ332PL6V68"]
