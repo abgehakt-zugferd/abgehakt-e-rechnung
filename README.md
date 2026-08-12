@@ -113,7 +113,7 @@ stattdessen und wechselt auf den Versionsstand:
 
 ```bash
 git clone https://github.com/abgehakt-zugferd/abgehakt-e-rechnung.git
-cd abgehakt-e-rechnung && git checkout v1.0.0
+cd abgehakt-e-rechnung && git checkout v1.0.1
 ```
 
 Ohne Release-Archiv und ohne Tag (also direkt vom Hauptzweig) bekommt man einen
