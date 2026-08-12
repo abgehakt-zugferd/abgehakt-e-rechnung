@@ -1,8 +1,8 @@
 # Impressum
 
 Abgehakt, das Rechnungsprogramm für E-Rechnungen, ist ein Vorhaben der ZEMP Golden Goose GmbH.
-Herausgeberin dieses Repositorys, der zugehörigen Website [abgehakt.app](https://abgehakt.app)
-und der unter [SERVICES.md](SERVICES.md) beschriebenen Leistungen ist:
+Herausgeberin dieses Repositorys und der unter [SERVICES.md](SERVICES.md) beschriebenen
+Leistungen ist:
 
 ## Angaben gemäß § 5 DDG
 
