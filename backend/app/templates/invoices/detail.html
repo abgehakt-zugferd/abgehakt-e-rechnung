@@ -1,7 +1,13 @@
 {% extends "base.html" %}
 {% block title %}{{ invoice.invoice_number }} – {{ PRODUCT_NAME }}{% endblock %}
 {% block content %}
-<div style="max-width:900px;">
+{# 1200 statt 900: Bei 900 px bekommt die linke Spalte des 3er-Rasters unten
+   zwei Drittel, also gut 570 px — zu wenig für die Positionstabelle mit ihren
+   sechs Spalten. Die Spalte NETTO wurde deshalb abgeschnitten (sichtbar nur,
+   wenn der Rollbalken ausgeblendet ist), und Beträge brachen mitten im Wert um
+   („145,00" / „€"). Diese Seite ist eine Datenansicht, kein Fließtext; die
+   Lesebreite von 900 px gilt für Prosa, nicht für eine Belegtabelle. #}
+<div style="max-width:1200px;">
     <!-- Header -->
     <div class="flex items-start justify-between mb-5">
         <div class="flex items-center gap-3">
@@ -178,10 +184,10 @@
                                 {# pre-line: ohne das kollabieren die Umbrueche und die
                                    Detailseite saehe anders aus als das PDF. #}
                                 <td style="padding:8px 12px; color:var(--text); white-space:pre-line;">{{ item.description }}</td>
-                                <td style="padding:8px 12px; text-align:right; color:var(--text-dim);">{{ item.quantity }} {{ item.unit }}</td>
-                                <td style="padding:8px 12px; text-align:right; color:var(--text-dim); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text);">{{ "%.2f"|format(item.unit_price|float) }} €</td>
-                                <td style="padding:8px 12px; text-align:right; color:var(--text-dim);">{{ item.tax_rate|int }} %</td>
-                                <td style="padding:8px 12px; text-align:right; color:var(--text-hi); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text);">{{ "%.2f"|format(item.net_amount|float) }} €</td>
+                                <td style="padding:8px 12px; text-align:right; color:var(--text-dim); white-space:nowrap;">{{ item.quantity|menge }} {{ item.unit }}</td>
+                                <td style="padding:8px 12px; text-align:right; color:var(--text-dim); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text); white-space:nowrap;">{{ item.unit_price|euro }}</td>
+                                <td style="padding:8px 12px; text-align:right; color:var(--text-dim); white-space:nowrap;">{{ item.tax_rate|int }} %</td>
+                                <td style="padding:8px 12px; text-align:right; color:var(--text-hi); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text); white-space:nowrap;">{{ item.net_amount|euro }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -191,15 +197,15 @@
                 <div style="border-top:2px solid var(--border-hi); padding-top:14px; font-family:'VT323',monospace; font-size:var(--fs-gross);">
                     <div class="flex justify-between" style="color:var(--text-dim); margin-bottom:4px;">
                         <span>Nettobetrag</span>
-                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ "%.2f"|format(invoice.net_total|float) }} €</span>
+                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ invoice.net_total|euro }}</span>
                     </div>
                     <div class="flex justify-between" style="color:var(--text-dim); margin-bottom:8px;">
                         <span>MwSt.</span>
-                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ "%.2f"|format(invoice.tax_total|float) }} €</span>
+                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ invoice.tax_total|euro }}</span>
                     </div>
                     <div class="flex justify-between" style="border-top:1px solid var(--border); padding-top:10px;">
                         <span style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--gold);">GESAMTBETRAG</span>
-                        <span style="font-family:'Press Start 2P',monospace; font-size:var(--fs-text); color:var(--gold); text-shadow:0 0 15px rgba(255,215,0,0.35);">{{ "%.2f"|format(invoice.gross_total|float) }} €</span>
+                        <span style="font-family:'Press Start 2P',monospace; font-size:var(--fs-text); color:var(--gold); text-shadow:0 0 15px rgba(255,215,0,0.35);">{{ invoice.gross_total|euro }}</span>
                     </div>
                 </div>
             </div>

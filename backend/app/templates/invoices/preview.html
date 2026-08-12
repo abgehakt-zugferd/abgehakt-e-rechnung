@@ -59,7 +59,7 @@
                     </div>
                     <div class="flex justify-between">
                         <dt>Brutto</dt>
-                        <dd style="color:var(--gold); font-family:'Share Tech Mono',monospace;">{{ "%.2f"|format(invoice.gross_total|float) }} €</dd>
+                        <dd style="color:var(--gold); font-family:'Share Tech Mono',monospace;">{{ invoice.gross_total|euro }}</dd>
                     </div>
                 </dl>
             </div>

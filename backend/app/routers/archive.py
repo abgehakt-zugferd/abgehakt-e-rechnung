@@ -17,11 +17,13 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.branding import register_branding_globals
+from app.darstellung import registriere_darstellungsfilter
 from app.config import get_settings
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
+registriere_darstellungsfilter(templates)
 
 settings = get_settings()
 

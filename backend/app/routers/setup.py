@@ -13,12 +13,14 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.branding import register_branding_globals
+from app.darstellung import registriere_darstellungsfilter
 from app.database import get_db
 from app.models.company import Company
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
+registriere_darstellungsfilter(templates)
 
 PFLICHTFELDER = ("name", "address_line1", "zip_code", "city")
 FREIE_FELDER = ("address_line2", "country", "tax_number", "vat_id",

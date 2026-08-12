@@ -9,10 +9,12 @@ from app.models.customer import Customer
 from app.models.company import Company
 from app.services.customer_number import next_customer_number
 from app.branding import register_branding_globals
+from app.darstellung import registriere_darstellungsfilter
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
+registriere_darstellungsfilter(templates)
 
 
 def _render_form(request: Request, customer, suggested_number: str, values: dict, error: str | None):

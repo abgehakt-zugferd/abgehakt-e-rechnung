@@ -8,10 +8,12 @@ from app.models.app_config import AppConfig
 from app.services import datev_email
 from app.services.invoice_number import pruefe_praefix
 from app.branding import register_branding_globals
+from app.darstellung import registriere_darstellungsfilter
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
+registriere_darstellungsfilter(templates)
 
 
 def _get_or_create_company(db: Session) -> Company:

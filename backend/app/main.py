@@ -27,6 +27,7 @@ from app.services.audit import register_audit_listeners
 from app.services.customer_guard import register_customer_guard
 from app.services.invoice_guard import register_invoice_guard
 from app.branding import PRODUCT_NAME, register_branding_globals
+from app.darstellung import registriere_darstellungsfilter
 
 # GoBD: Statusmaschinen-Guards + Audit-Log — Registrierung beim App-Import,
 # damit ausnahmslos jede Session (Web, Skripte) erfasst wird.
@@ -82,6 +83,7 @@ app = FastAPI(
 )
 templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
+registriere_darstellungsfilter(templates)
 
 # Schriften und JavaScript kommen aus dem eigenen Image statt von fremden CDNs
 # (siehe tests/test_oberflaeche_lokal.py).

@@ -19,10 +19,12 @@ from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
 from app.services.invoice_number import generate_next_invoice_number
 from app.config import get_settings
 from app.branding import register_branding_globals
+from app.darstellung import registriere_darstellungsfilter
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
+registriere_darstellungsfilter(templates)
 settings = get_settings()
 
 

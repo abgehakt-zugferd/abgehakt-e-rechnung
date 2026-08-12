@@ -18,6 +18,7 @@ from reportlab.lib.enums import TA_RIGHT, TA_LEFT, TA_CENTER
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from app.config import get_settings
+from app.darstellung import euro, menge
 from app.models.invoice import Invoice
 from app.models.company import Company
 from app.services.pdf_fonts import register_fonts
@@ -82,8 +83,12 @@ BORDER = colors.HexColor("#d9cfa6")       # warme, helle Rasterlinie
 TEXT_GRAY = colors.HexColor("#5b5b66")    # Sekundärtext, druckkontraststark
 
 
-def _money(v: Decimal) -> str:
-    return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+# Die Regel steht jetzt in `app/darstellung.py` — dieselbe, die auch die
+# Oberfläche benutzt. Vorher war sie hier ausformuliert und in den Vorlagen ein
+# zweites Mal (dort falsch): Der Beleg schrieb 2.501,38 €, der Bildschirm
+# 2501.38 €. Der Alias bleibt, damit die Aufrufstellen im Modul unverändert
+# lesen; `tests/test_geldformat.py` prüft, dass es wirklich dieselbe Funktion ist.
+_money = euro
 
 
 def _pct(v: Decimal) -> str:
@@ -198,7 +203,10 @@ def _build_item_rows(invoice: Invoice) -> list[list]:
         zeile = [
             str(item.position),
             Paragraph(_description_markup(item.description), desc_style),
-            str(item.quantity.normalize()),
+            # NICHT `str(x.normalize())`: das kippt bei durch zehn teilbaren
+            # Mengen in die Exponentialform — 120 Stunden stünden als "1.2E+2"
+            # auf der Rechnung an den Kunden.
+            menge(item.quantity),
             item.unit,
             _money(item.unit_price),
         ]

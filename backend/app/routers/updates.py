@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.branding import register_branding_globals
+from app.darstellung import registriere_darstellungsfilter
 from app.config import get_settings
 from app.database import get_db
 from app.models.app_config import AppConfig
@@ -16,6 +17,7 @@ from app.services.update_check import ENDPOINT, UpdateCheckError, fetch_update_i
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
+registriere_darstellungsfilter(templates)
 
 
 def _config(db: Session) -> AppConfig:
