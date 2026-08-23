@@ -25,51 +25,27 @@ desselben Dateisystems ist das Veröffentlichen ein atomares Umbenennen. `storag
 ist ein Mount, `/tmp` liegt im Container, ein `os.replace` darüber hinweg scheitert
 mit `Invalid cross-device link`.
 """
-import uuid
-from datetime import date
-from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.config import get_settings
-from app.database import get_db
 from app.main import app
-from app.models.customer import Customer
-from app.models.invoice import Invoice, InvoiceItem
+from app.models.invoice import Invoice
+from tests.helpers.finalize_pipeline import (
+    cleanup,
+    client,
+    fake_generate_pdf,
+    valid_draft,
+    valid_mustang,
+)
 
 settings = get_settings()
 
 
 def teardown_function():
     app.dependency_overrides.clear()
-
-
-def _client(pg_session):
-    app.dependency_overrides[get_db] = lambda: pg_session
-    return TestClient(app, follow_redirects=False)
-
-
-def _valid_draft(pg_session):
-    c = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Kunde GmbH",
-                 address_line1="Weg 1", zip_code="10115", city="Berlin", country="DE")
-    pg_session.add(c)
-    pg_session.flush()
-    inv = Invoice(invoice_number=f"RE-ARCH-{uuid.uuid4().hex[:6]}", customer_id=c.id,
-                  issue_date=date(2026, 7, 8), delivery_date=date(2026, 7, 8),
-                  due_date=date(2026, 7, 22), currency="EUR", zugferd_profile="EN16931",
-                  tax_category="S", status="draft", payment_terms="14 Tage netto",
-                  net_total=Decimal("200.00"), tax_total=Decimal("38.00"),
-                  gross_total=Decimal("238.00"))
-    inv.items = [InvoiceItem(position=1, description="Beratung", unit="Std",
-                             quantity=Decimal("2"), unit_price=Decimal("100.00"),
-                             tax_rate=Decimal("19"), net_amount=Decimal("200.00"),
-                             tax_amount=Decimal("38.00"), gross_amount=Decimal("238.00"))]
-    pg_session.add(inv)
-    pg_session.commit()
-    return inv
 
 
 def _archiv_spuren(number: str) -> list[str]:
@@ -94,26 +70,9 @@ def _storage_spuren(number: str) -> list[str]:
                   if p.is_file() and number in p.name)
 
 
-def _fake_generate_pdf(invoice, comp, path):
-    Path(path).write_bytes(b"%PDF-visual")
-
-
-def _valid_mustang():
-    return {"is_valid": True,
-            "raw": "Parsed PDF:valid\nSchema validation:valid\nXML:valid\nSummary: 0 errors",
-            "errors": [], "warnings": []}
-
-
-def _cleanup(number):
-    wurzel = settings.storage_path
-    for p in list(wurzel.rglob("*")):
-        if p.is_file() and number in p.name:
-            p.unlink(missing_ok=True)
-
-
 def test_archiv_bleibt_waehrend_der_pipeline_unberuehrt(pg_session):
     """Kein Zwischenprodukt im Archiv, solange Ghostscript und Mustang laufen (#13)."""
-    inv = _valid_draft(pg_session)
+    inv = valid_draft(pg_session, prefix="RE-ARCH")
     number = inv.invoice_number
     gesehen: dict[str, list[str]] = {}
 
@@ -128,13 +87,13 @@ def test_archiv_bleibt_waehrend_der_pipeline_unberuehrt(pg_session):
         return True
 
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=_fake_generate_pdf), \
+        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
              patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
              patch("app.routers.invoices.pdfa.to_pdfa3", side_effect=_pdfa), \
              patch("app.routers.invoices.mustang.jar_available", return_value=True), \
              patch("app.routers.invoices.mustang.combine", side_effect=_combine), \
-             patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):
-            r = _client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
+             patch("app.routers.invoices.mustang.validate", return_value=valid_mustang()):
+            r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
 
         assert r.status_code == 303, r.text
         assert gesehen["to_pdfa3"] == [], (
@@ -146,12 +105,12 @@ def test_archiv_bleibt_waehrend_der_pipeline_unberuehrt(pg_session):
             f"{gesehen['combine']}. Die Pipeline gehört nach storage/temp/."
         )
     finally:
-        _cleanup(number)
+        cleanup(number)
 
 
 def test_nach_erfolg_liegt_genau_der_fertige_beleg_im_archiv(pg_session):
     """Gutfall zum Test darüber: die Umlenkung darf den Beleg nicht verschlucken."""
-    inv = _valid_draft(pg_session)
+    inv = valid_draft(pg_session, prefix="RE-ARCH")
     number = inv.invoice_number
 
     def _combine(pdf_path, xml_path, out_path, *a, **k):
@@ -163,13 +122,13 @@ def test_nach_erfolg_liegt_genau_der_fertige_beleg_im_archiv(pg_session):
         return True
 
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=_fake_generate_pdf), \
+        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
              patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
              patch("app.routers.invoices.pdfa.to_pdfa3", side_effect=_pdfa), \
              patch("app.routers.invoices.mustang.jar_available", return_value=True), \
              patch("app.routers.invoices.mustang.combine", side_effect=_combine), \
-             patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):
-            r = _client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
+             patch("app.routers.invoices.mustang.validate", return_value=valid_mustang()):
+            r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
 
         assert r.status_code == 303, r.text
         pg_session.expire_all()
@@ -182,7 +141,7 @@ def test_nach_erfolg_liegt_genau_der_fertige_beleg_im_archiv(pg_session):
             "Arbeitsverzeichnis."
         )
     finally:
-        _cleanup(number)
+        cleanup(number)
 
 
 def test_kein_beleg_im_archiv_wenn_der_commit_scheitert(pg_session):
@@ -194,7 +153,7 @@ def test_kein_beleg_im_archiv_wenn_der_commit_scheitert(pg_session):
     kennt. Wiederholbar ist das nicht: der zweite Versuch würde ihn überschreiben,
     und bis dahin steht er in der Archivansicht.
     """
-    inv = _valid_draft(pg_session)
+    inv = valid_draft(pg_session, prefix="RE-ARCH")
     number = inv.invoice_number
     echter_commit = pg_session.commit
 
@@ -210,15 +169,15 @@ def test_kein_beleg_im_archiv_wenn_der_commit_scheitert(pg_session):
         return True
 
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=_fake_generate_pdf), \
+        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
              patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
              patch("app.routers.invoices.pdfa.to_pdfa3", side_effect=_pdfa), \
              patch("app.routers.invoices.mustang.jar_available", return_value=True), \
              patch("app.routers.invoices.mustang.combine", side_effect=_combine), \
-             patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):
+             patch("app.routers.invoices.mustang.validate", return_value=valid_mustang()):
             pg_session.commit = _commit_scheitert
             with pytest.raises(RuntimeError):
-                _client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
+                client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
 
         pg_session.commit = echter_commit
         assert _storage_spuren(number) == [], (
@@ -227,4 +186,4 @@ def test_kein_beleg_im_archiv_wenn_der_commit_scheitert(pg_session):
         )
     finally:
         pg_session.commit = echter_commit
-        _cleanup(number)
+        cleanup(number)

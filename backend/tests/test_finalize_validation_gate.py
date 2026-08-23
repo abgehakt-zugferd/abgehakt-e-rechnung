@@ -10,57 +10,22 @@ echtes Postgres — der Guard darf keine Geister-XML/Statusänderung hinterlasse
 import uuid
 from datetime import date
 from decimal import Decimal
-from unittest.mock import patch
-
-from fastapi.testclient import TestClient
 
 from app.config import get_settings
-from app.database import get_db
 from app.main import app
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
+from tests.helpers.finalize_pipeline import (
+    cleanup,
+    client,
+    finalize_with_fake_pipeline,
+)
 
 settings = get_settings()
 
 
 def teardown_function():
     app.dependency_overrides.clear()
-
-
-def _fake_generate_pdf(invoice, comp, path):
-    path.write_bytes(b"%PDF-visual")
-
-
-def _fake_combine(pdf_path, xml_path, out_path, *a, **k):
-    out_path.write_bytes(b"%PDF-zugferd")
-    return True
-
-
-def _finalize_with_fake_pipeline(pg_session, inv_id):
-    """Finalisieren mit ECHTEM Validator (Gate scharf), aber gepatchter PDF-Pipeline —
-    so ist der Positiv-/Warnings-Pfad ohne Ghostscript/Mustang deterministisch."""
-    # mustang.validate gehört seit E1 (#98) zur Pipeline — im deterministischen
-    # Positiv-/Warnings-Pfad wird ein gültiges Ergebnis (is_valid + XML:valid) gemockt.
-    valid = {"is_valid": True, "raw": "Parsed PDF:valid\nXML:valid\nSummary: 0 errors",
-             "errors": [], "warnings": []}
-    with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=_fake_generate_pdf), \
-         patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
-         patch("app.routers.invoices.pdfa.to_pdfa3", return_value=True), \
-         patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.combine", side_effect=_fake_combine), \
-         patch("app.routers.invoices.mustang.validate", return_value=valid):
-        return _client(pg_session).post(f"/invoices/{inv_id}/finalisieren")
-
-
-def _cleanup(number):
-    for suffix in ("_visual.pdf", ".pdf", "_pdfa.pdf"):
-        (settings.storage_path / "pdfs" / f"{number}{suffix}").unlink(missing_ok=True)
-    (settings.storage_path / "xml" / f"{number}.xml").unlink(missing_ok=True)
-
-
-def _client(pg_session):
-    app.dependency_overrides[get_db] = lambda: pg_session
-    return TestClient(app, follow_redirects=False)
 
 
 def _customer(pg_session):
@@ -96,7 +61,7 @@ def test_finalize_blocked_when_validation_fails(pg_session):
     """Draft ohne Positionen (NO_ITEMS) → Finalize muss mit 400 abgewiesen werden
     und die Rechnung unverändert als Draft ohne XML/PDF zurücklassen."""
     inv = _draft(pg_session, with_items=False)
-    r = _client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
+    r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
     assert r.status_code == 400
 
     pg_session.expire_all()
@@ -111,7 +76,7 @@ def test_finalize_blocked_for_non_compliant_profile(pg_session):
     NICHT finalisiert werden. Das Gate blockiert fail-closed mit 400 (nicht 500) —
     es wird keine XML/kein PDF erzeugt, die Rechnung bleibt Draft."""
     inv = _draft(pg_session, with_items=True, profile="MINIMUM")
-    r = _client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
+    r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
     assert r.status_code == 400
 
     pg_session.expire_all()
@@ -127,7 +92,7 @@ def test_finalize_passes_gate_for_valid_invoice(pg_session):
     inv = _draft(pg_session, with_items=True)
     number = inv.invoice_number
     try:
-        r = _finalize_with_fake_pipeline(pg_session, inv.id)
+        r = finalize_with_fake_pipeline(pg_session, inv.id)
         assert r.status_code == 303, r.text
         pg_session.expire_all()
         row = pg_session.get(Invoice, inv.id)
@@ -135,7 +100,7 @@ def test_finalize_passes_gate_for_valid_invoice(pg_session):
         assert row.zugferd_xml is not None
         assert row.pdf_filename == f"{number}.pdf"
     finally:
-        _cleanup(number)
+        cleanup(number)
 
 
 def test_finalize_allowed_despite_warnings(pg_session):
@@ -148,12 +113,12 @@ def test_finalize_allowed_despite_warnings(pg_session):
                  net=Decimal("10000.00"), tax=Decimal("1900.00"), gross=Decimal("11900.00"))
     number = inv.invoice_number
     try:
-        r = _finalize_with_fake_pipeline(pg_session, inv.id)
+        r = finalize_with_fake_pipeline(pg_session, inv.id)
         assert r.status_code == 303, r.text
         pg_session.expire_all()
         assert pg_session.get(Invoice, inv.id).status == "issued"
     finally:
-        _cleanup(number)
+        cleanup(number)
 
 
 def test_finalize_blocked_without_delivery_date_when_not_simplified(pg_session):
@@ -162,7 +127,7 @@ def test_finalize_blocked_without_delivery_date_when_not_simplified(pg_session):
     XML/PDF. Kleinbetrag bleibt ausgenommen (siehe test_finalize_allowed_* / Validator)."""
     inv = _draft(pg_session, with_items=True, delivery_date=None,
                  net=Decimal("250.00"), tax=Decimal("47.50"), gross=Decimal("297.50"))
-    r = _client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
+    r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
     assert r.status_code == 400
 
     pg_session.expire_all()
