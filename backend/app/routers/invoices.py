@@ -747,6 +747,39 @@ def create_storno(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
     if original.invoice_type == "credit_note":
         raise HTTPException(400, "Eine Stornorechnung kann nicht erneut storniert werden.")
 
+    # Pro Original höchstens EINE Gutschrift (#7). Zwei Gutschriften zum selben
+    # Beleg mindern die Forderung doppelt: in der OPOS-Liste, in der DATEV-Buchung
+    # und in der Umsatzsteuervoranmeldung.
+    #
+    # Auch ein noch OFFENER Entwurf blockiert. Sonst entstünden zwei Entwürfe, die
+    # beide finalisierbar sind, und der Fehler fiele erst beim zweiten
+    # Finalisieren auf, wenn bereits ein Beleg unveränderlich im Archiv liegt.
+    #
+    # Ein VERWORFENER Storno blockiert nicht: wer versehentlich storniert und den
+    # Entwurf verwirft, muss den Beleg erneut stornieren können, sonst wäre ein
+    # Fehlgriff endgültig.
+    #
+    # Die Prüfung steht VOR `generate_next_invoice_number`: der Zähler auf
+    # `Company` wird beim Ziehen der Nummer erhöht, eine Ablehnung danach ließe
+    # eine Nummernlücke ohne jeden Datensatz zurück — genau die Lücke, die #145
+    # mit dem Status `discarded` vermeiden wollte.
+    vorhandene = (
+        db.query(Invoice)
+        .filter(Invoice.original_invoice_id == original.id,
+                Invoice.status != "discarded")
+        .order_by(Invoice.invoice_number)
+        .first()
+    )
+    if vorhandene:
+        raise HTTPException(
+            400,
+            f"Zu dieser Rechnung existiert bereits die Gutschrift "
+            f"{vorhandene.invoice_number}. Ein Beleg wird nur einmal storniert; "
+            "eine zweite Gutschrift würde die Forderung doppelt mindern. Ist die "
+            "vorhandene Gutschrift versehentlich entstanden, verwirf zuerst ihren "
+            "Entwurf.",
+        )
+
     _get_company(db)  # stellt sicher, dass Firmendaten konfiguriert sind (sonst 400)
     number = generate_next_invoice_number(db)
     from app.services.storno import build_storno
