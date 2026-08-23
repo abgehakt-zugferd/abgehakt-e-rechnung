@@ -18,6 +18,7 @@ from app.models.app_config import AppConfig
 from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
                           datev_email, aenderungsprotokoll)
 from app.services.invoice_number import generate_next_invoice_number
+from app.services.archive_frist import berechne_archive_until
 from app.config import get_settings
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
@@ -108,18 +109,8 @@ def _apply_totals(invoice: Invoice, net_total: Decimal, tax_total: Decimal) -> N
     invoice.net_total = net_total.quantize(Decimal("0.01"))
     invoice.tax_total = tax_total.quantize(Decimal("0.01"))
     invoice.gross_total = (net_total + tax_total).quantize(Decimal("0.01"))
-    # GoBD: Aufbewahrungsfrist 8 Jahre ab Ausstellungsdatum. Muss dem `issue_date`
-    # FOLGEN — wird das Rechnungsdatum beim Bearbeiten geändert und die Frist bleibt
-    # stehen, driftet sie gegen den Beleg.
-    issue = invoice.issue_date
-    try:
-        invoice.archive_until = date(issue.year + 8, issue.month, issue.day)
-    except ValueError:
-        # Den 29. Februar gibt es acht Jahre spaeter nicht immer (2092 → 2100, das
-        # durch 100 und nicht durch 400 teilbar ist). Ohne diesen Zweig stuerzt das
-        # Anlegen mit ValueError ab. Ausgewichen wird nach VORNE: eine
-        # Aufbewahrungsfrist darf laenger sein als noetig, aber nie kuerzer.
-        invoice.archive_until = date(issue.year + 8, 3, 1)
+    # GoBD: Aufbewahrungsfrist endet am 31.12. des (Ausstellungsjahr + 8), § 147 Abs. 4 AO.
+    invoice.archive_until = berechne_archive_until(invoice.issue_date)
 
 
 def _run_validation(db: Session, invoice: Invoice, company: Company) -> ValidationResult:

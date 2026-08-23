@@ -55,7 +55,7 @@ def _invoice(pg_session, customer, status="draft", issue=date(2026, 6, 11)):
         net_total=Decimal("100.00"),
         tax_total=Decimal("19.00"),
         gross_total=Decimal("119.00"),
-        archive_until=date(issue.year + 8, issue.month, issue.day),
+        archive_until=date(issue.year + 8, 12, 31),
     )
     pg_session.add(inv)
     pg_session.flush()
@@ -198,7 +198,7 @@ def test_mehr_positionen_summen_stimmen(pg_session):
 
 
 def test_geaendertes_rechnungsdatum_zieht_archive_until_nach(pg_session):
-    """GoBD: archive_until muss immer issue_date + 8 Jahre sein (docs/ARCHITEKTUR.md)."""
+    """GoBD: archive_until folgt dem Jahresendprinzip zum Ausstellungsdatum."""
     cust = _customer(pg_session)
     inv = _invoice(pg_session, cust, issue=date(2026, 6, 11))
 
@@ -207,7 +207,7 @@ def test_geaendertes_rechnungsdatum_zieht_archive_until_nach(pg_session):
 
     frisch = _frisch(pg_session, inv.id)
     assert frisch.issue_date == date(2027, 3, 5)
-    assert frisch.archive_until == date(2035, 3, 5), (
+    assert frisch.archive_until == date(2035, 12, 31), (
         "archive_until driftet gegen den Beleg — Aufbewahrungsfrist falsch."
     )
 
