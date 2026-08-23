@@ -61,23 +61,12 @@ def test_create_persists_invoice_items_totals_and_archive_until(pg_session):
     assert inv.net_total == Decimal("250.00")
     assert inv.tax_total == Decimal("41.50")
     assert inv.gross_total == Decimal("291.50")
-    # GoBD/§14b UStG: exakt 8 Jahre ab Ausstellungsdatum
-    assert inv.archive_until == date(2034, 6, 11)
+    # GoBD/§14b UStG: Fristende am 31.12. des (Ausstellungsjahr + 8)
+    assert inv.archive_until == date(2034, 12, 31)
 
 
 def test_schalttag_sprengt_die_aufbewahrungsfrist_nicht(pg_session):
-    """Den 29. Februar gibt es acht Jahre spaeter nicht immer.
-
-    `date(jahr + 8, 2, 29)` wirft dann `ValueError`, und zwar mitten im Anlegen der
-    Rechnung — aus einem eingetippten Datum wird ein Serverfehler statt einer
-    Meldung. Der Fall ist selten (2092 ist der naechste: 2100 ist kein Schaltjahr,
-    weil durch 100 und nicht durch 400 teilbar), aber er haengt an einer freien
-    Eingabe, und ein Vertipper im Jahr genuegt.
-
-    Ausgewichen wird nach VORNE, auf den 1. Maerz. Eine Aufbewahrungsfrist darf
-    laenger sein als noetig, aber nie kuerzer: der 28. Februar laege einen Tag vor
-    dem Acht-Jahres-Punkt.
-    """
+    """Den 29. Februar ist als Ausstellungsdatum erlaubt; die Frist endet am Jahresende."""
     cust = _customer(pg_session)
     r = _client(pg_session).post("/invoices/neu", data={
         "customer_id": str(cust.id),
@@ -94,7 +83,7 @@ def test_schalttag_sprengt_die_aufbewahrungsfrist_nicht(pg_session):
     pg_session.expire_all()
     inv = pg_session.query(Invoice).filter(Invoice.customer_id == cust.id).first()
     assert inv is not None
-    assert inv.archive_until == date(2100, 3, 1)
+    assert inv.archive_until == date(2100, 12, 31)
 
 
 def test_create_assigns_sequential_invoice_number(pg_session):

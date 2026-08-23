@@ -39,7 +39,7 @@ Das BEG IV hat §14b Abs. 1 UStG **und** §147 Abs. 3 AO geändert: Die Aufbewah
 
 ### Für dieses System
 
-- `invoice.archive_until = issue_date + 8 Jahre` → **korrekt** (Stand 2025)
+- `invoice.archive_until = berechne_archive_until(issue_date)` mit Fristende am **31.12. des (Ausstellungsjahr + 8)**
 - Fristbeginn: Ende des Kalenderjahres, in dem die Rechnung ausgestellt wurde (§147 Abs. 4 AO)
 - Effektive Mindestaufbewahrung: meist **9 Jahre** ab Ausstellungsdatum (wegen Jahresendprinzip)
 
@@ -154,7 +154,7 @@ Vier Bestandteile (GoBD Rz. 153):
 | Kein Hard-Delete Kunden | `deleted_at` Soft-Delete | ✅ |
 | Unveränderbarkeit finalisierter Rechnungen | `status = issued/paid/cancelled` → read-only | ✅ |
 | Audit Trail | `audit_log`-Tabelle mit `old_values`/`new_values` | ✅ |
-| `archive_until` = 8 Jahre (ab 2025) | `issue_date + 8 Jahre` | ✅ |
+| `archive_until` = 8 Jahre (ab 2025) | 31.12. des (Ausstellungsjahr + 8) | ✅ |
 | ZUGFeRD XML in DB gespeichert | `invoices.zugferd_xml` | ✅ |
 | Maschinelle Auswertbarkeit | ZUGFeRD EN16931 (kein MINIMUM/BASIC-WL) | ✅ |
 | Stornierung mit Verweis auf Original | TODO: Stornorechnung referenziert Originalrechnung | ⚠️ |

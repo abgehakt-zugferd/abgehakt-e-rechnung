@@ -5,7 +5,7 @@ Fachliche Regeln (siehe Plan Global Constraints):
   - original_invoice_id referenziert die Originalrechnung.
   - Beträge/Positionen werden 1:1 (positiv) übernommen.
   - status = draft (muss noch geprüft + finalisiert werden).
-  - archive_until = issue_date + 8 Jahre (GoBD).
+  - archive_until = 31.12. des (Ausstellungsjahr + 8), § 147 Abs. 4 AO.
 """
 import uuid
 from datetime import date
@@ -71,17 +71,14 @@ def test_storno_copies_positive_amounts_and_items():
 def test_storno_sets_archive_until_eight_years_ahead():
     original = _original()
     storno = build_storno(original, "RE-2026-002", date(2026, 7, 7))
-    assert storno.archive_until == date(2034, 7, 7)
+    assert storno.archive_until == date(2034, 12, 31)
 
 
-def test_storno_archive_until_handles_leap_day_today():
-    """Feb-29-Kante: today = 29.02. eines Schaltjahres. archive_until (8 J. später) bleibt
-    valide (kein ValueError), weil 8 ein Vielfaches von 4 ist → year+8 ist ebenfalls Schaltjahr.
-    Regressionsschutz: verhindert eine 'naive' min(day, 28)-Klammerung, die das Datum verfälschen würde.
-    """
+def test_storno_archive_until_uses_year_end_not_issue_day():
+    """Ausstellung am 29.02.: Frist endet am 31.12. des Jahres plus acht, nicht am Tag."""
     original = _original()
     storno = build_storno(original, "RE-2024-002", date(2024, 2, 29))
-    assert storno.archive_until == date(2032, 2, 29)
+    assert storno.archive_until == date(2032, 12, 31)
 
 
 def test_storno_profile_is_en16931():

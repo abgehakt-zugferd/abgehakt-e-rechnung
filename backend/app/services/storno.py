@@ -8,6 +8,7 @@ Das Original wird NICHT verändert.
 from datetime import date
 
 from app.models.invoice import Invoice, InvoiceItem
+from app.services.archive_frist import berechne_archive_until
 
 
 def build_storno(original: Invoice, invoice_number: str, today: date) -> Invoice:
@@ -28,7 +29,7 @@ def build_storno(original: Invoice, invoice_number: str, today: date) -> Invoice
         net_total=original.net_total,
         tax_total=original.tax_total,
         gross_total=original.gross_total,
-        archive_until=date(today.year + 8, today.month, today.day),
+        archive_until=berechne_archive_until(today),
         status="draft",
     )
     storno.items = [
