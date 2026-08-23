@@ -795,6 +795,33 @@ class TestTaxCategories:
         assert cat is not None and cat.text == "O"
         assert reason is not None and "§ 3a Abs. 2 UStG" in reason.text
 
+    def test_e_category_code_and_exemption_reason(self):
+        """#31: Kleinunternehmer § 19 in XPath-Tests wie K/O."""
+        item = _item(
+            tax_rate=Decimal("0.00"),
+            net_amount=Decimal("500.00"),
+            tax_amount=Decimal("0.00"),
+            gross_amount=Decimal("500.00"),
+        )
+        inv = _invoice(
+            tax_category="E",
+            items=[item],
+            net_total=Decimal("500.00"),
+            tax_total=Decimal("0.00"),
+            gross_total=Decimal("500.00"),
+        )
+        root = ET.fromstring(generate_xml(inv, _company()))
+        cat = root.find(
+            ".//ram:ApplicableHeaderTradeSettlement/ram:ApplicableTradeTax/ram:CategoryCode",
+            NS,
+        )
+        reason = root.find(
+            ".//ram:ApplicableHeaderTradeSettlement/ram:ApplicableTradeTax/ram:ExemptionReason",
+            NS,
+        )
+        assert cat is not None and cat.text == "E"
+        assert reason is not None and "§ 19" in reason.text
+
     def test_inland_zero_rate_uses_z_not_ae(self):
         item = _item(
             tax_rate=Decimal("0.00"),
