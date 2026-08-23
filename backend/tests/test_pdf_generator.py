@@ -118,3 +118,26 @@ def test_credit_note_pdf_shows_gutschrift_title(tmp_path):
     pdf_generator.generate_pdf(inv, _sample_company(), out)
     text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages)
     assert "GUTSCHRIFT" in text
+
+
+def test_credit_note_pdf_zeigt_gutschriftbetrag_ohne_zahlungsblock(tmp_path):
+    """#18: Gutschrift darf keine Zahlungsaufforderung (IBAN/Verwendungszweck) suggerieren."""
+    out = tmp_path / "storno.pdf"
+    inv = _sample_invoice(_sample_customer(), invoice_type="credit_note", original_invoice_id=1)
+    inv.payment_terms = "Gutschrift/Storno zur Rechnung RE-2026-001."
+    pdf_generator.generate_pdf(inv, _sample_company(), out)
+    text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages)
+    assert "Gutschriftbetrag" in text
+    assert "Rechnungsbetrag" not in text
+    assert "IBAN:" not in text
+    assert "Verwendungszweck:" not in text
+    assert "Gutschrift/Storno zur Rechnung RE-2026-001." in text
+
+
+def test_standard_pdf_behält_zahlungsblock(tmp_path):
+    out = tmp_path / "invoice.pdf"
+    pdf_generator.generate_pdf(_sample_invoice(_sample_customer()), _sample_company(), out)
+    text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages)
+    assert "Rechnungsbetrag" in text
+    assert "IBAN:" in text
+    assert "Verwendungszweck:" in text

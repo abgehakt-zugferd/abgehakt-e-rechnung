@@ -70,6 +70,12 @@ DOCUMENT_TITLES = {
     "correction": "KORREKTURRECHNUNG",
 }
 
+GUTSCHRIFT_TYPEN = frozenset({"credit_note", "credit", "storno"})
+
+
+def _ist_gutschrift(invoice) -> bool:
+    return getattr(invoice, "invoice_type", None) in GUTSCHRIFT_TYPEN
+
 
 def _document_title(invoice) -> str:
     """Sichtbarer Belegtitel passend zum invoice_type (Default: RECHNUNG)."""
@@ -478,7 +484,10 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
             label = f"zzgl. {_pct(rate)} MwSt. auf {_money(g['basis'])}"
             totals_data.append([Paragraph(label, small), Paragraph(_money(g["tax"]), right)])
     totals_data.append([
-        Paragraph("<b>Rechnungsbetrag</b>", small_bold),
+        Paragraph(
+            "<b>Gutschriftbetrag</b>" if _ist_gutschrift(invoice) else "<b>Rechnungsbetrag</b>",
+            small_bold,
+        ),
         Paragraph(f"<b>{_money(invoice.gross_total)}</b>", right_bold)
     ])
 
@@ -500,9 +509,11 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
 
     # ── Zahlungshinweis ──────────────────────────────────────────────────────
     story.append(Spacer(1, 0.8 * cm))
-    payment_text = invoice.payment_terms or "Zahlbar ohne Abzug."
+    payment_text = invoice.payment_terms or (
+        "Gutschrift ohne Zahlungsaufforderung." if _ist_gutschrift(invoice) else "Zahlbar ohne Abzug."
+    )
     story.append(Paragraph(payment_text, small))
-    if company.bank_iban:
+    if company.bank_iban and not _ist_gutschrift(invoice):
         bank_parts = [f"IBAN: {company.bank_iban}"]
         if company.bank_bic:
             bank_parts.append(f"BIC: {company.bank_bic}")
