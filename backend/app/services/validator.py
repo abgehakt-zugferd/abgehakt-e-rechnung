@@ -42,7 +42,10 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
     warnings: list[Issue] = []
 
     gross = invoice.gross_total
-    simplified = gross < SIMPLIFIED_INVOICE_THRESHOLD
+    # „nicht uebersteigt" (§ 33 UStDV) heisst bis EINSCHLIESSLICH 250 €. Mit `<`
+    # verlangte die Pruefung bei genau 250,00 € brutto ein Leistungsdatum und wies
+    # die Finalisierung ab, fuer eine Rechnung, die das Gesetz davon befreit (#23).
+    simplified = gross <= SIMPLIFIED_INVOICE_THRESHOLD
 
     # ZUGFeRD-Profil muss EN16931-konform sein (§ 14 UStG). MINIMUM/BASIC-WL sind
     # nicht rechtskonform und werden NICHT als E-Rechnung akzeptiert (#98 E4) —
@@ -101,13 +104,13 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
         errors.append(Issue("DUE_DATE_BEFORE_ISSUE", "error", "Fälligkeitsdatum liegt vor dem Ausstellungsdatum.", "due_date"))
 
     # § 14 Abs. 4 Nr. 6 UStG – Leistungsdatum. Produktentscheid #98 E7 (2026-07-23):
-    # harter Gate statt Warnung. Bei Nicht-Kleinbetragsrechnungen (≥ 250 €) ist der
+    # harter Gate statt Warnung. Bei Nicht-Kleinbetragsrechnungen (über 250 €) ist der
     # Leistungszeitpunkt zwingend — fehlt er, blockiert das Finalize-Gate (400).
-    # Kleinbetrag (< 250 €, § 33 UStDV) bleibt ausgenommen.
+    # Kleinbetrag (bis 250 € einschließlich, § 33 UStDV) bleibt ausgenommen.
     if not simplified and not invoice.delivery_date:
         errors.append(Issue(
             "DELIVERY_DATE_MISSING", "error",
-            "Zeitpunkt der Leistungserbringung fehlt (§ 14 Abs. 4 Nr. 6 UStG) — bei Rechnungen ab 250 € zwingend erforderlich.",
+            "Zeitpunkt der Leistungserbringung fehlt (§ 14 Abs. 4 Nr. 6 UStG) — bei Rechnungen über 250 € zwingend erforderlich.",
             "delivery_date"
         ))
 

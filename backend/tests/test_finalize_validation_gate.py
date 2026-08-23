@@ -11,6 +11,8 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from app.config import get_settings
 from app.main import app
 from app.models.customer import Customer
@@ -124,7 +126,8 @@ def test_finalize_allowed_despite_warnings(pg_session):
 def test_finalize_blocked_without_delivery_date_when_not_simplified(pg_session):
     """#98 E7 (harter Gate): eine Nicht-Kleinbetragsrechnung (≥ 250 €) OHNE Leistungsdatum
     darf NICHT finalisiert werden (§ 14 Abs. 4 Nr. 6 UStG) — 400, bleibt Draft, keine
-    XML/PDF. Kleinbetrag bleibt ausgenommen (siehe test_finalize_allowed_* / Validator)."""
+    XML/PDF. Der Gegenbeweis steht in test_finalize_allowed_kleinbetrag_ohne_
+    leistungsdatum."""
     inv = _draft(pg_session, with_items=True, delivery_date=None,
                  net=Decimal("250.00"), tax=Decimal("47.50"), gross=Decimal("297.50"))
     r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
@@ -135,3 +138,30 @@ def test_finalize_blocked_without_delivery_date_when_not_simplified(pg_session):
     assert row.status == "draft"
     assert row.zugferd_xml is None
     assert row.pdf_filename is None
+
+
+@pytest.mark.parametrize("net,tax,gross", [
+    (Decimal("84.03"), Decimal("15.97"), Decimal("100.00")),    # klar darunter
+    (Decimal("210.08"), Decimal("39.92"), Decimal("250.00")),   # genau auf der Grenze
+])
+def test_finalize_allowed_kleinbetrag_ohne_leistungsdatum(pg_session, net, tax, gross):
+    """Der fehlende Gegenbeweis zum Gate oben (#24).
+
+    Ohne ihn wäre „blockiert ab 250 €" ununterscheidbar von „blockiert immer, wenn
+    das Leistungsdatum fehlt". Die Grenze selbst ist mit dabei (#23): § 33 UStDV
+    befreit Beträge, die 250 Euro nicht übersteigen, und 250,00 € übersteigt 250 €
+    nicht.
+    """
+    inv = _draft(pg_session, with_items=True, delivery_date=None,
+                 net=net, tax=tax, gross=gross)
+    number = inv.invoice_number
+    try:
+        r = finalize_with_fake_pipeline(pg_session, inv.id)
+
+        assert r.status_code == 303, r.text
+        pg_session.expire_all()
+        row = pg_session.get(Invoice, inv.id)
+        assert row.status == "issued"
+        assert row.delivery_date is None      # unverändert, nichts nachgetragen
+    finally:
+        cleanup(number)
