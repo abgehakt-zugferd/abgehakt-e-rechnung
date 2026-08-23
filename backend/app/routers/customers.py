@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from app.database import get_db
 from app.models.customer import Customer
 from app.models.company import Company
@@ -99,7 +100,12 @@ def create_customer(
         is_active=(is_active == "1"),
     )
     db.add(customer)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return _render_form(request, None, number, values,
+                            f"Kundennummer bereits vergeben: {number}")
     return RedirectResponse(url="/customers", status_code=303)
 
 
@@ -148,7 +154,13 @@ def update_customer(
     customer.phone = phone.strip() or None
     customer.notes = notes.strip() or None
     customer.is_active = (is_active == "1")
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        db.refresh(customer)
+        return _render_form(request, customer, "", {},
+                            f"Kundennummer bereits vergeben: {number}")
     return RedirectResponse(url="/customers", status_code=303)
 
 

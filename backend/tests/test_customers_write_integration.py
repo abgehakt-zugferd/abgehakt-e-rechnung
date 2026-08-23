@@ -10,6 +10,7 @@ DB/PDF/ZUGFeRD-XML) entsteht beim SPEICHERN eines leeren nullbaren Feldes. Hier 
 pg_session mit Re-Query abgesichert.
 """
 import uuid
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -60,6 +61,34 @@ def test_create_duplicate_number_persists_nothing(pg_session):
     # nur der geseedete Kunde existiert, kein zweiter mit dieser Nummer
     assert pg_session.query(Customer).filter(
         Customer.customer_number == "20260701").count() == 1
+
+
+def test_create_integrity_error_zeigt_vergebene_meldung_statt_500(pg_session):
+    """#21: Race zwischen _number_taken und commit darf keinen 500er erzeugen."""
+    _seed(pg_session, customer_number="20260701", name="Erster")
+    with patch("app.routers.customers._number_taken", return_value=False):
+        r = _client(pg_session).post("/customers/neu",
+                                     data={**_REQUIRED, "customer_number": "20260701"})
+    assert r.status_code == 200
+    assert "bereits vergeben" in r.text
+    pg_session.expire_all()
+    assert pg_session.query(Customer).filter(
+        Customer.customer_number == "20260701").count() == 1
+
+
+def test_update_integrity_error_zeigt_vergebene_meldung_statt_500(pg_session):
+    """#21: Gleiches fuer manuell eingetippte Nummer beim Bearbeiten."""
+    a = _seed(pg_session, customer_number="20260701", name="A")
+    b = _seed(pg_session, customer_number="20260702", name="B")
+    with patch("app.routers.customers._number_taken", return_value=False):
+        r = _client(pg_session).post(f"/customers/{b.id}/bearbeiten", data={
+            **_REQUIRED, "customer_number": "20260701", "name": "B umbenannt",
+        })
+    assert r.status_code == 200
+    assert "bereits vergeben" in r.text
+    pg_session.expire_all()
+    assert pg_session.get(Customer, a.id).customer_number == "20260701"
+    assert pg_session.get(Customer, b.id).customer_number == "20260702"
 
 
 def test_update_persists_changes(pg_session):
