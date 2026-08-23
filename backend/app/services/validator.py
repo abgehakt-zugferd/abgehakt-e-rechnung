@@ -222,6 +222,38 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
                 "original_invoice_id"
             ))
 
+    # Eine Gutschrift spiegelt ihr Original betragsgleich (#8). `build_storno`
+    # kopiert die Summen 1:1, und die Bearbeitungsseite ist für Gutschriften
+    # gesperrt — diese Prüfung ist die zweite Schicht davor, so wie die Wächter in
+    # der Anwendung und die Auslöser in der Datenbank zwei Schichten derselben
+    # Zusage sind. Sie steht hier, weil das Finalisieren fail-closed ist: was den
+    # Validator passiert, wandert unwiderruflich ins Archiv.
+    #
+    # OHNE Toleranz, anders als bei den Positionssummen. Dort wird gerechnet und
+    # gerundet, hier wird kopiert; jede Abweichung ist eine Eingabe, keine
+    # Rundung. Eine Toleranz ließe genau die Tür offen, die diese Regel schließt.
+    #
+    # `original_invoice` fehlt bei Testattrappen und bei einer noch nicht
+    # geladenen Beziehung; dann greift die Regel nicht. Die Referenz als solche
+    # verlangt bereits ORIGINAL_INVOICE_REQUIRED oben.
+    if invoice_type == "credit_note":
+        original = getattr(invoice, "original_invoice", None)
+        if original is not None:
+            for feld, bezeichnung in (("net_total", "Nettobetrag"),
+                                      ("tax_total", "Steuerbetrag"),
+                                      ("gross_total", "Bruttobetrag")):
+                if getattr(invoice, feld, None) != getattr(original, feld, None):
+                    errors.append(Issue(
+                        "STORNO_AMOUNT_MISMATCH", "error",
+                        f"{bezeichnung} der Gutschrift weicht von der Originalrechnung "
+                        f"{original.invoice_number} ab "
+                        f"({getattr(invoice, feld, None)} statt {getattr(original, feld, None)}). "
+                        "Eine Stornierung hebt den Beleg vollständig auf; eine "
+                        "abweichende Summe wäre eine Teilkorrektur und braucht einen "
+                        "eigenen Beleg.",
+                        feld
+                    ))
+
     # Empfehlungen
     if not invoice.payment_terms:
         warnings.append(Issue("NO_PAYMENT_TERMS", "warning", "Zahlungsbedingungen fehlen (empfohlen).", "payment_terms"))

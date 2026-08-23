@@ -159,6 +159,21 @@ def _get_draft(db: Session, invoice_id: uuid.UUID) -> Invoice:
             "Nur Entwürfe können bearbeitet werden. Eine finalisierte Rechnung ist "
             "unveränderlich — Korrektur ausschließlich per Stornorechnung.",
         )
+    # Eine Gutschrift ist der Spiegel ihres Originals, kein eigener Beleg (#8).
+    # `build_storno` kopiert die Beträge 1:1; wären sie danach änderbar, entstünde
+    # eine „Gutschrift zu RE-001" mit anderen Zahlen, und das ist buchhalterisch
+    # keine Stornierung mehr, sondern eine Teilkorrektur. Die wäre ein eigener
+    # Belegtyp (384) mit eigenem Weg, nicht ein aufgeweichtes Storno.
+    #
+    # Die Tür geht hier zu und nicht erst beim Finalisieren: wer erst zehn Minuten
+    # Positionen ändert und dann abgewiesen wird, hat zehn Minuten verloren.
+    if invoice.invoice_type == "credit_note":
+        raise HTTPException(
+            400,
+            "Eine Gutschrift lässt sich nicht bearbeiten. Sie übernimmt die Beträge "
+            "der Originalrechnung unverändert; anders wäre sie keine Stornierung "
+            "mehr. Stimmt etwas nicht, verwirf diesen Entwurf und beginne neu.",
+        )
     return invoice
 
 
@@ -699,6 +714,38 @@ def update_status(invoice_id: uuid.UUID, new_status: str = Form(...), db: Sessio
             400,
             f"Übergang von '{invoice.status}' nach '{new_status}' ist nicht erlaubt."
         )
+
+    # Bezahlt trotz Gutschrift (#15). Ein Original, zu dem eine Gutschrift
+    # existiert, darf nicht als bezahlt gelten: das wäre ein Zahlungsstatus, der
+    # seiner eigenen Korrektur widerspricht, und in OPOS und DATEV zwei Buchungen,
+    # die sich gegenseitig ausschließen. Auch der noch offene Entwurf sperrt, denn
+    # er ist die erklärte Absicht zu korrigieren.
+    #
+    # Gesperrt wird der Weg nach `paid`; das Original wird NICHT automatisch auf
+    # `cancelled` gesetzt. `invoice_guard.ALLOWED_TRANSITIONS` macht `paid` zum
+    # Endzustand, `paid → cancelled` ist verboten, und stornieren darf man hier
+    # ausdrücklich auch eine bereits bezahlte Rechnung. Eine Automatik griffe damit
+    # in der Hälfte der Fälle stillschweigend nicht. Den Wächter dafür
+    # aufzuweichen wäre der falsche Tausch: die Statusmaschine ist eine GoBD-Zusage,
+    # keine Ergonomiefrage. Der Weg nach `cancelled` bleibt eine bewusste
+    # menschliche Entscheidung und wird hier bewusst nicht mitgesperrt.
+    if new_status == "paid":
+        gutschrift = (
+            db.query(Invoice)
+            .filter(Invoice.original_invoice_id == invoice.id,
+                    Invoice.status != "discarded")
+            .order_by(Invoice.invoice_number)
+            .first()
+        )
+        if gutschrift:
+            raise HTTPException(
+                400,
+                f"Zu dieser Rechnung existiert die Gutschrift "
+                f"{gutschrift.invoice_number}. Ein stornierter Beleg kann nicht als "
+                "bezahlt geführt werden. Setze ihn auf „storniert“, oder verwirf "
+                "die Gutschrift, falls sie versehentlich entstanden ist.",
+            )
+
     invoice.status = new_status
     db.commit()
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)

@@ -102,7 +102,7 @@
                         <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
                             {# Nur Entwuerfe sind bearbeitbar — finalisierte Rechnungen
                                sind unveraenderlich (Korrektur nur per Storno). #}
-                            {% if inv.status == 'draft' %}
+                            {% if inv.status == 'draft' and inv.invoice_type != 'credit_note' %}
                             <a href="/invoices/{{ inv.id }}/bearbeiten"
                                style="color:var(--gold); font-family:'VT323',monospace; font-size:var(--fs-gross);">✎ bearbeiten</a>
                             {% endif %}

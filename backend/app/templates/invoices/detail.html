@@ -29,7 +29,12 @@
     <!-- Action Bar -->
     <div class="flex flex-wrap gap-3 mb-6">
         {% if invoice.status == 'draft' %}
+        {# Eine Gutschrift spiegelt ihr Original und ist deshalb nicht bearbeitbar (#8).
+           Der Router weist den Aufruf ohnehin ab; hier verschwindet nur der Knopf,
+           der ins Leere fuehrte. #}
+        {% if invoice.invoice_type != 'credit_note' %}
         <a href="/invoices/{{ invoice.id }}/bearbeiten" class="btn-secondary">✎ BEARBEITEN</a>
+        {% endif %}
         <a href="/invoices/{{ invoice.id }}/vorschau" class="btn-secondary">👁 VORSCHAU</a>
         <form method="post" action="/invoices/{{ invoice.id }}/pruefen">
             <button type="submit" class="btn-secondary">🔍 PRÜFEN (§ 14 UStG)</button>
