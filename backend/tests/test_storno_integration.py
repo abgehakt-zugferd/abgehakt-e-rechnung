@@ -22,12 +22,12 @@ def teardown_function():
     app.dependency_overrides.clear()
 
 
-def _original(pg_session, status="issued"):
+def _original(pg_session, status="issued", number=None):
     c = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Kunde GmbH",
                  address_line1="Weg 1", zip_code="80331", city="München", country="DE")
     pg_session.add(c)
     pg_session.flush()
-    inv = Invoice(invoice_number="ALT-2025-500", customer_id=c.id,
+    inv = Invoice(invoice_number=number or f"ALT-2025-{uuid.uuid4().hex[:6]}", customer_id=c.id,
                   issue_date=date(2025, 6, 11), due_date=date(2025, 6, 25), currency="EUR",
                   zugferd_profile="EN16931", tax_category="S", status=status,
                   net_total=Decimal("1000.00"), tax_total=Decimal("190.00"),
@@ -207,3 +207,95 @@ def test_abgewiesener_zweitstorno_verbraucht_keine_rechnungsnummer(pg_session):
     assert _zaehler(pg_session) == vorher, (
         "Der abgewiesene Zweitstorno hat eine Rechnungsnummer verbraucht."
     )
+
+
+# ---------------------------------------------------------------------------
+# Der Storno-Entwurf ist nicht bearbeitbar (#8).
+#
+# `build_storno` kopiert die Betraege 1:1 aus dem Original. Der Entwurf war
+# danach aber ueber /bearbeiten frei aenderbar, und der Validator verlangte nur
+# eine Originalreferenz, keine Deckung. Eine "Gutschrift zu RE-001" mit anderen
+# Betraegen ist buchhalterisch keine Stornierung, sondern eine Teilkorrektur, und
+# als solche waere sie ein eigener Belegtyp (384) mit eigenem Weg.
+#
+# Gesperrt wird die BEARBEITUNGSSEITE, nicht erst das Finalisieren. Wer zehn
+# Minuten Positionen aendert und dann eine Fehlermeldung bekommt, hat zehn
+# Minuten verloren; die Tuer gehoert davor zu, nicht dahinter.
+#
+# Die Pruefung im Validator bleibt trotzdem: sie ist die zweite Schicht vor dem
+# unwiderruflichen Schreiben ins Archiv, so wie Wachen in der Anwendung und
+# Ausloeser in der Datenbank zwei Schichten derselben Zusage sind.
+# ---------------------------------------------------------------------------
+
+
+def _storno_entwurf(pg_session, original):
+    _client(pg_session).post(f"/invoices/{original.id}/storno")
+    pg_session.expire_all()
+    return (pg_session.query(Invoice)
+            .filter(Invoice.original_invoice_id == original.id).one())
+
+
+def test_gutschrift_entwurf_ist_nicht_bearbeitbar(pg_session):
+    original = _original(pg_session, "issued")
+    storno = _storno_entwurf(pg_session, original)
+    r = _client(pg_session).get(f"/invoices/{storno.id}/bearbeiten")
+    assert r.status_code == 400, r.text
+
+
+def test_gutschrift_entwurf_kann_nicht_ueberschrieben_werden(pg_session):
+    """Die Sperre muss am POST haengen, nicht nur am Formular. Ein verstecktes
+    Formular ist keine Sperre."""
+    original = _original(pg_session, "issued")
+    storno = _storno_entwurf(pg_session, original)
+    vorher = storno.gross_total
+
+    r = _client(pg_session).post(f"/invoices/{storno.id}/bearbeiten", data={})
+
+    assert r.status_code == 400, r.text
+    pg_session.expire_all()
+    assert pg_session.get(Invoice, storno.id).gross_total == vorher
+
+
+def test_normaler_entwurf_bleibt_bearbeitbar(pg_session):
+    """Gegenprobe: die Sperre darf nur Gutschriften treffen."""
+    original = _original(pg_session, "draft")
+    r = _client(pg_session).get(f"/invoices/{original.id}/bearbeiten")
+    assert r.status_code == 200, r.text
+
+
+def test_detailseite_bietet_bei_gutschrift_kein_bearbeiten(pg_session):
+    original = _original(pg_session, "issued")
+    storno = _storno_entwurf(pg_session, original)
+    client = _client(pg_session)
+
+    seite = client.get(f"/invoices/{storno.id}").text
+    assert f"/invoices/{storno.id}/bearbeiten" not in seite, (
+        "Die Detailseite der Gutschrift bietet weiterhin einen Bearbeiten-Knopf an."
+    )
+
+    # Gegenprobe am normalen Entwurf: sonst bewiese der Test oben nur, dass die
+    # Zeichenkette irgendwo fehlt.
+    entwurf = _original(pg_session, "draft")  # eigene Nummer, s. Helfer
+    assert f"/invoices/{entwurf.id}/bearbeiten" in client.get(f"/invoices/{entwurf.id}").text
+
+
+def test_abweichende_gutschrift_faellt_im_validator(pg_session):
+    """Zweite Schicht vor dem Archiv: Betraege muessen EXAKT dem Original
+    entsprechen. Keine Toleranz, denn hier wird nichts gerechnet, sondern kopiert;
+    jede Abweichung ist eine Eingabe, keine Rundung."""
+    from app.models.company import Company
+    from app.services import validator
+
+    original = _original(pg_session, "issued")
+    storno = _storno_entwurf(pg_session, original)
+    company = pg_session.query(Company).filter(Company.id == 1).one()
+
+    fehler, _ = validator.validate_invoice(storno, company)
+    assert not [f for f in fehler if f.code == "STORNO_AMOUNT_MISMATCH"], (
+        "Die unveraenderte Gutschrift wurde beanstandet."
+    )
+
+    storno.gross_total = original.gross_total - Decimal("0.01")
+    fehler, _ = validator.validate_invoice(storno, company)
+    codes = [f.code for f in fehler]
+    assert "STORNO_AMOUNT_MISMATCH" in codes, codes
