@@ -668,9 +668,19 @@ def send_to_datev(invoice_id: uuid.UUID, customer_email: str = Form(""),
     # Ab hier findet ein echter Zustellversuch statt — erst ab hier wird
     # protokolliert (#146). Ein an den Vorprüfungen gescheiterter Aufruf hat nie
     # gesendet und gehört nicht ins Versandprotokoll.
+    #
+    # Der Versuch wird geschrieben und committet, BEVOR SMTP angesprochen wird (#10).
+    # Vorher lief es andersherum, und ein Commit-Fehler nach erfolgreichem Versand
+    # hinterliess keine Spur: die Mail war beim Kunden und beim Steuerbuero, die
+    # Datenbank sagte „nie gesendet", und der naechste Klick schickte den Beleg ein
+    # zweites Mal. Der Ausgang ist zu diesem Zeitpunkt offen (`success = None`) und
+    # wird unten nachgetragen; bleibt er offen stehen, ist genau das die Auskunft:
+    # die Mail koennte drausssen sein, bitte im Postausgang nachsehen.
     cc = (cc_email or "").strip()
     protokoll = InvoiceSendLog(invoice_id=invoice.id, to_email=to_email,
-                               cc_email=cc or None, datev_bcc=True, success=False)
+                               cc_email=cc or None, datev_bcc=True, success=None)
+    db.add(protokoll)
+    db.commit()
     try:
         datev_email.send_invoice(
             to_email=to_email,
@@ -682,13 +692,12 @@ def send_to_datev(invoice_id: uuid.UUID, customer_email: str = Form(""),
             cc_email=cc,
         )
     except datev_email.EmailError as e:
+        protokoll.success = False
         protokoll.error = str(e)
-        db.add(protokoll)
         db.commit()
         raise HTTPException(400, str(e))
 
     protokoll.success = True
-    db.add(protokoll)
     # `datev_sent_at` ist der ERSTversand und bleibt unverfälscht: der invoice_guard
     # verbietet Umdatieren (#98 P0.3), ein bedingungsloses Setzen ließ deshalb jeden
     # Zweitversand nach dem Absenden der Mail am Commit scheitern. Die weiteren
