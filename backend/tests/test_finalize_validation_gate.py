@@ -10,6 +10,7 @@ echtes Postgres — der Guard darf keine Geister-XML/Statusänderung hinterlasse
 import uuid
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 import pytest
 
@@ -30,21 +31,24 @@ def teardown_function():
     app.dependency_overrides.clear()
 
 
-def _customer(pg_session):
-    c = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Kunde GmbH",
-                 address_line1="Weg 1", zip_code="80331", city="München", country="DE")
+def _customer(pg_session, **over):
+    kw = dict(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Kunde GmbH",
+              address_line1="Weg 1", zip_code="80331", city="München", country="DE")
+    kw.update(over)
+    c = Customer(**kw)
     pg_session.add(c)
     pg_session.flush()
     return c
 
 
 def _draft(pg_session, *, with_items, delivery_date=date(2026, 7, 8), profile="EN16931",
-           net=Decimal("200.00"), tax=Decimal("38.00"), gross=Decimal("238.00")):
-    c = _customer(pg_session)
+           net=Decimal("200.00"), tax=Decimal("38.00"), gross=Decimal("238.00"),
+           tax_category="S", kunde=None):
+    c = kunde or _customer(pg_session)
     inv = Invoice(invoice_number=f"RE-2026-{uuid.uuid4().hex[:6]}", customer_id=c.id,
                   issue_date=date(2026, 7, 8), delivery_date=delivery_date,
                   due_date=date(2026, 7, 22), currency="EUR", zugferd_profile=profile,
-                  tax_category="S", status="draft",
+                  tax_category=tax_category, status="draft",
                   payment_terms="Zahlbar in 14 Tagen.",
                   net_total=net if with_items else Decimal("0"),
                   tax_total=tax if with_items else Decimal("0"),
@@ -52,7 +56,8 @@ def _draft(pg_session, *, with_items, delivery_date=date(2026, 7, 8), profile="E
     if with_items:
         inv.items = [InvoiceItem(position=1, description="Beratung", unit="Std",
                                  quantity=Decimal("1"), unit_price=net,
-                                 tax_rate=Decimal("19"), net_amount=net,
+                                 tax_rate=Decimal("19") if tax else Decimal("0"),
+                                 net_amount=net,
                                  tax_amount=tax, gross_amount=gross)]
     pg_session.add(inv)
     pg_session.commit()
@@ -163,5 +168,55 @@ def test_finalize_allowed_kleinbetrag_ohne_leistungsdatum(pg_session, net, tax, 
         row = pg_session.get(Invoice, inv.id)
         assert row.status == "issued"
         assert row.delivery_date is None      # unverändert, nichts nachgetragen
+    finally:
+        cleanup(number)
+
+
+def _ig_draft(pg_session, delivery_date):
+    """Innergemeinschaftliche Lieferung, 200 € brutto, also unter der Grenze des
+    § 33 UStDV. Alles andere ist gültig: 0 % Steuer und USt-IdNr. des Käufers,
+    sonst hielte das Gate schon aus einem anderen Grund an."""
+    kunde = _customer(pg_session, country="AT", city="Wien", zip_code="1010",
+                      vat_id="ATU12345678")
+    return _draft(pg_session, with_items=True, delivery_date=delivery_date,
+                  tax_category="K", kunde=kunde,
+                  net=Decimal("200.00"), tax=Decimal("0.00"), gross=Decimal("200.00"))
+
+
+def test_finalize_blocked_ig_lieferung_ohne_leistungsdatum(pg_session):
+    """#47: bei innergemeinschaftlicher Lieferung hält das Gate auch unter 250 € an.
+
+    Vorher lief dieser Beleg durch das Gate und starb erst an Mustang (BR-IC-11),
+    nach dem Erzeugen von PDF und XML, mit einer Meldung aus dem Werkzeug statt
+    einer aus der Anwendung.
+    """
+    inv = _ig_draft(pg_session, delivery_date=None)
+
+    with patch("app.routers.invoices.pdf_generator.generate_pdf") as erzeuge:
+        r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
+
+    assert r.status_code == 400
+    # Ohne diese Zusicherung wäre der Test auch ohne Gate grün: die Pipeline
+    # scheitert danach ohnehin an Mustang, ebenfalls mit 400 und ohne Spuren.
+    # Gefordert ist aber, dass es gar nicht erst so weit kommt.
+    erzeuge.assert_not_called()
+    pg_session.expire_all()
+    row = pg_session.get(Invoice, inv.id)
+    assert row.status == "draft"
+    assert row.zugferd_xml is None
+    assert row.pdf_filename is None
+
+
+def test_finalize_allowed_ig_lieferung_mit_leistungsdatum(pg_session):
+    """Gegenprobe: mit Leistungsdatum kommt derselbe Beleg durch. Ohne sie wäre der
+    Test oben auch dann grün, wenn das Gate jede ig. Lieferung abwiese."""
+    inv = _ig_draft(pg_session, delivery_date=date(2026, 7, 8))
+    number = inv.invoice_number
+    try:
+        r = finalize_with_fake_pipeline(pg_session, inv.id)
+
+        assert r.status_code == 303, r.text
+        pg_session.expire_all()
+        assert pg_session.get(Invoice, inv.id).status == "issued"
     finally:
         cleanup(number)

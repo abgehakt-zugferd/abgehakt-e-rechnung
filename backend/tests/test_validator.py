@@ -304,6 +304,92 @@ def test_delivery_date_set_no_warning():
     assert "DELIVERY_DATE_MISSING" not in _codes(warnings)
 
 
+def _ig_lieferung(**over):
+    """Innergemeinschaftliche Lieferung unter der Kleinbetragsgrenze.
+
+    Bis auf das, was der einzelne Test wegnimmt, vollständig gültig: 0 % Steuer
+    (sonst TAX_CATEGORY_RATE_MISMATCH) und USt-IdNr. des Käufers (sonst
+    BUYER_VAT_ID_REQUIRED). Ohne beides wäre ein Fehlerfall-Test grün, ohne dass
+    das Leistungsdatum je geprüft worden wäre.
+    """
+    item = _item(quantity=Decimal("1.0000"), unit_price=Decimal("200.00"),
+                 tax_rate=Decimal("0.00"), net_amount=Decimal("200.00"),
+                 tax_amount=Decimal("0.00"), gross_amount=Decimal("200.00"))
+    kw = dict(tax_category="K", items=[item],
+              net_total=Decimal("200.00"), tax_total=Decimal("0.00"),
+              gross_total=Decimal("200.00"),
+              customer=_customer(country="AT", city="Wien", vat_id="ATU12345678"))
+    kw.update(over)
+    return _invoice(**kw)
+
+
+def test_ig_lieferung_verlangt_das_leistungsdatum_auch_beim_kleinbetrag():
+    """#47: EN16931 BR-IC-11 verlangt bei innergemeinschaftlicher Lieferung das
+    Lieferdatum (BT-72) oder einen Abrechnungszeitraum, unabhängig vom Betrag.
+
+    § 33 UStDV erlässt nur die nationale Pflichtangabe; die europäische Norm gilt
+    daneben weiter. Ohne diese Regel kam der Beleg am Gate vorbei und scheiterte
+    danach an Mustang, mit einer Meldung, die niemandem sagt, was zu tun ist. Der
+    Beweis dafür steht als Schema-Test in test_zugferd_xml_schema.py.
+    """
+    errors, warnings = validate_invoice(_ig_lieferung(delivery_date=None), _company())
+
+    assert "DELIVERY_DATE_MISSING" in _codes(errors)
+    assert "DELIVERY_DATE_MISSING" not in _codes(warnings)
+
+
+def test_ig_lieferung_mit_leistungsdatum_ist_fehlerfrei():
+    """Gutfall: sonst wäre die Regel ununterscheidbar von „K geht nie durch"."""
+    errors, _ = validate_invoice(_ig_lieferung(), _company())
+
+    assert errors == [], [f.code for f in errors]
+
+
+def test_die_meldung_zur_ig_lieferung_nennt_ihren_eigenen_grund():
+    """Die Standardmeldung nennt die 250-€-Grenze. Hier stünde sie im Widerspruch
+    zum Formular, das bis 250 € einschließlich Freiwilligkeit zusagt, und ließe den
+    Nutzer glauben, er habe sich verrechnet."""
+    errors, _ = validate_invoice(_ig_lieferung(delivery_date=None), _company())
+    meldung = next(f.message for f in errors if f.code == "DELIVERY_DATE_MISSING")
+
+    assert "250" not in meldung, meldung
+    assert "innergemeinschaftlich" in meldung.lower(), meldung
+
+
+@pytest.mark.parametrize("kategorie", ["S", "AE", "O", "E"])
+def test_nur_die_ig_lieferung_durchbricht_die_kleinbetragsgrenze(kategorie):
+    """Die Ausnahme gilt K allein, nicht allen steuerfreien Kategorien.
+
+    Gegen das echte Mustang geprüft: ohne Leistungsdatum bleiben S, AE, O und E
+    gültig, nur K fällt über BR-IC-11. Eine breitere Regel würde Rechnungen
+    blockieren, die die Norm annimmt.
+    """
+    inv = _ig_lieferung(delivery_date=None, tax_category=kategorie,
+                        customer=_customer(vat_id="ATU12345678"))
+
+    errors, warnings = validate_invoice(inv, _company())
+
+    assert "DELIVERY_DATE_MISSING" not in _codes(errors)
+    assert "DELIVERY_DATE_MISSING" not in _codes(warnings)
+
+
+def test_ig_lieferung_nennt_ihren_grund_auch_ueber_250_euro():
+    """Über der Grenze verlangen beide Seiten dasselbe Datum, § 14 Abs. 4 Nr. 6
+    UStG und BR-IC-11. Die Meldung nennt dann durchgehend den engeren Grund, damit
+    sie nicht davon abhängt, ob der Betrag gerade über oder unter 250 € liegt."""
+    item = _item(quantity=Decimal("1.0000"), unit_price=Decimal("300.00"),
+                 tax_rate=Decimal("0.00"), net_amount=Decimal("300.00"),
+                 tax_amount=Decimal("0.00"), gross_amount=Decimal("300.00"))
+    inv = _ig_lieferung(delivery_date=None, items=[item],
+                        net_total=Decimal("300.00"), tax_total=Decimal("0.00"),
+                        gross_total=Decimal("300.00"))
+
+    errors, _ = validate_invoice(inv, _company())
+    meldung = next(f.message for f in errors if f.code == "DELIVERY_DATE_MISSING")
+
+    assert "innergemeinschaftlich" in meldung.lower(), meldung
+
+
 # ── Tests: Rechnungspositionen ─────────────────────────────────────────────
 
 def test_no_items():
