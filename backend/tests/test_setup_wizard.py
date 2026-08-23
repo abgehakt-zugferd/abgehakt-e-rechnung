@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from app.database import get_db
 from app.main import app
 from app.models.company import Company
+from app.models.invoice import Invoice
 
 
 def _client(pg_session):
@@ -135,3 +136,5 @@ def test_ohne_einrichtung_entsteht_keine_rechnung(pg_session):
         app.dependency_overrides.clear()
 
     assert r.status_code == 400
+    pg_session.expire_all()
+    assert pg_session.query(Invoice).count() == 0
