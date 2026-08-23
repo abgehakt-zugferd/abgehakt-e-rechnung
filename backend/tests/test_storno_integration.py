@@ -102,3 +102,108 @@ def test_storno_of_credit_note_is_rejected(pg_session):
 def test_storno_of_unknown_invoice_is_404(pg_session):
     r = _client(pg_session).post(f"/invoices/{uuid.uuid4()}/storno")
     assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Doppel-Storno (#7): pro Original hoechstens EINE Gutschrift.
+#
+# Der Router prueft heute nur, ob das ORIGINAL selbst eine Gutschrift ist. Ob
+# bereits eine Gutschrift auf dieses Original zeigt, prueft niemand. Zwei
+# Gutschriften zum selben Beleg ergeben eine doppelte Forderungsminderung: in der
+# OPOS-Liste, in der DATEV-Buchung und in der Umsatzsteuervoranmeldung.
+#
+# Zwei Feinheiten, die die Tests festhalten:
+#  - Auch ein noch OFFENER Storno-Entwurf blockiert. Sonst entstuenden zwei
+#    Entwuerfe, die beide finalisierbar waeren, und der Fehler faellt erst beim
+#    zweiten Finalisieren auf, wenn schon ein Beleg im Archiv liegt.
+#  - Ein VERWORFENER Storno blockiert nicht. Sonst gaebe es nach einem Fehlgriff
+#    keinen Weg zurueck: der Beleg waere dauerhaft nicht mehr stornierbar.
+# ---------------------------------------------------------------------------
+
+
+def _zaehler(pg_session) -> int:
+    from app.models.company import Company
+    return pg_session.query(Company).filter(Company.id == 1).one().invoice_counter
+
+
+def _stornos(pg_session, original) -> list[Invoice]:
+    return (pg_session.query(Invoice)
+            .filter(Invoice.original_invoice_id == original.id)
+            .order_by(Invoice.invoice_number).all())
+
+
+def test_zweiter_storno_auf_offenen_entwurf_wird_abgewiesen(pg_session):
+    original = _original(pg_session, "issued")
+    client = _client(pg_session)
+
+    assert client.post(f"/invoices/{original.id}/storno").status_code == 303
+    r = client.post(f"/invoices/{original.id}/storno")
+
+    assert r.status_code == 400, r.text
+    pg_session.expire_all()
+    assert len(_stornos(pg_session, original)) == 1, (
+        "Zum selben Original sind zwei Gutschriften entstanden."
+    )
+
+
+def test_zweiter_storno_nach_finalisierung_wird_abgewiesen(pg_session):
+    original = _original(pg_session, "issued")
+    client = _client(pg_session)
+
+    assert client.post(f"/invoices/{original.id}/storno").status_code == 303
+    pg_session.expire_all()
+    storno = _stornos(pg_session, original)[0]
+    # Nicht durch die Pipeline: hier interessiert nur der Zustand, nicht der Beleg.
+    storno.status = "issued"
+    pg_session.commit()
+
+    r = client.post(f"/invoices/{original.id}/storno")
+
+    assert r.status_code == 400, r.text
+    pg_session.expire_all()
+    assert len(_stornos(pg_session, original)) == 1
+
+
+def test_verworfener_storno_gibt_den_weg_frei(pg_session):
+    """Gegenprobe: die Sperre darf keine Sackgasse sein.
+
+    Wer versehentlich storniert und den Entwurf verwirft, muss den Beleg erneut
+    stornieren koennen. Sonst waere ein Fehlgriff endgueltig.
+    """
+    original = _original(pg_session, "issued")
+    client = _client(pg_session)
+
+    assert client.post(f"/invoices/{original.id}/storno").status_code == 303
+    pg_session.expire_all()
+    erster = _stornos(pg_session, original)[0]
+    assert client.post(f"/invoices/{erster.id}/verwerfen").status_code == 303
+
+    r = client.post(f"/invoices/{original.id}/storno")
+
+    assert r.status_code == 303, r.text
+    pg_session.expire_all()
+    offen = [s for s in _stornos(pg_session, original) if s.status != "discarded"]
+    assert len(offen) == 1
+
+
+def test_abgewiesener_zweitstorno_verbraucht_keine_rechnungsnummer(pg_session):
+    """Die Pruefung gehoert VOR `generate_next_invoice_number`.
+
+    Der Zaehler auf `Company` wird beim Ziehen der Nummer erhoeht. Eine Ablehnung
+    danach liesse eine Nummernluecke ohne jeden Datensatz zurueck, also genau die
+    Luecke, die #145 mit dem Status `discarded` vermeiden wollte: unerklaerbar
+    gegenueber einer Betriebspruefung.
+    """
+    original = _original(pg_session, "issued")
+    client = _client(pg_session)
+
+    assert client.post(f"/invoices/{original.id}/storno").status_code == 303
+    pg_session.expire_all()
+    vorher = _zaehler(pg_session)
+
+    assert client.post(f"/invoices/{original.id}/storno").status_code == 400
+
+    pg_session.expire_all()
+    assert _zaehler(pg_session) == vorher, (
+        "Der abgewiesene Zweitstorno hat eine Rechnungsnummer verbraucht."
+    )
