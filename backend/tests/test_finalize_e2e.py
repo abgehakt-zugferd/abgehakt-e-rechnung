@@ -17,7 +17,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.main import app
 from app.models.customer import Customer
-from app.models.invoice import Invoice, InvoiceItem
+from app.models.invoice import Invoice, InvoiceItem, ValidationResult
 from app.services import mustang, pdfa
 
 settings = get_settings()
@@ -59,7 +59,14 @@ def test_finalize_erzeugt_gueltiges_zugferd_pdf(pg_session):
     client = TestClient(app, follow_redirects=False)
 
     # 1. Prüfen (echter Validator) → valide
-    client.post(f"/invoices/{inv.id}/pruefen")
+    r_pruef = client.post(f"/invoices/{inv.id}/pruefen")
+    assert r_pruef.status_code == 303
+    pg_session.expire_all()
+    vr = (pg_session.query(ValidationResult)
+          .filter(ValidationResult.invoice_id == inv.id)
+          .order_by(ValidationResult.validated_at.desc())
+          .first())
+    assert vr is not None and vr.is_valid
 
     pdf_path = None
     xml_path = settings.storage_path / "xml" / f"{number}.xml"
