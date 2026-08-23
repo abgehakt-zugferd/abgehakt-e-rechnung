@@ -160,6 +160,7 @@ def test_dokumentation_names_period_and_conventions(tmp_path):
     assert "2026-01-01" in doc and "2026-12-31" in doc
     assert "Semikolon" in doc
     assert "UTF-8" in doc
+    assert "discarded" in doc
 
 
 def test_dokumente_are_included_from_storage(tmp_path):
@@ -186,6 +187,17 @@ def test_missing_files_are_listed_not_fatal(tmp_path):
     missing = zf.read("fehlende_dateien.txt").decode("utf-8")
     assert "RE-2026-001_zugferd.pdf" in missing
     assert "RE-2026-001.xml" in missing
+
+
+def test_discarded_entwurf_erzeugt_keinen_fehlenden_beleg_eintrag(tmp_path):
+    """#29/#11: verworfene Entwuerfe erklaeren Nummernluecken, sind aber keine fehlenden Belege."""
+    c = _customer()
+    inv = _invoice(c, number="RE-2026-DISC")
+    inv.status = "discarded"
+    zf = _build(tmp_path, customer=c, invoices=[inv])
+    assert "fehlende_dateien.txt" not in zf.namelist()
+    rows = _read_csv(zf, "rechnungen.csv")
+    assert any(r["rechnungsnummer"] == "RE-2026-DISC" and r["status"] == "discarded" for r in rows)
 
 
 def test_xml_falls_back_to_db_column_when_file_missing(tmp_path):
