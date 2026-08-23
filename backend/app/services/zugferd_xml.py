@@ -71,6 +71,13 @@ def _item_tax_category(rate: Decimal, invoice_tax_category: str) -> str:
     return "Z" if rate == Decimal("0") else "S"
 
 
+def _rate_percent_xml(rate: Decimal, tax_cat: str, indent: str) -> str:
+    """BR-O-05: Kategorie O darf keinen Steuersatz (BT-152) tragen."""
+    if tax_cat == "O":
+        return ""
+    return indent + f"<ram:RateApplicablePercent>{_fmt_amount(rate)}</ram:RateApplicablePercent>"
+
+
 def _line_items_xml(invoice: Invoice) -> str:
     inv_cat = getattr(invoice, "tax_category", "S")
     parts = []
@@ -80,6 +87,7 @@ def _line_items_xml(invoice: Invoice) -> str:
         exemption_block = ""
         if inv_cat in EXEMPTION_REASONS:
             exemption_block = f"\n                    <ram:ExemptionReason>{_esc(EXEMPTION_REASONS[inv_cat])}</ram:ExemptionReason>"
+        rate_line = _rate_percent_xml(item.tax_rate, inv_cat, "\n                    ")
         parts.append(f"""
         <ram:IncludedSupplyChainTradeLineItem>
             <ram:AssociatedDocumentLineDocument>
@@ -99,8 +107,7 @@ def _line_items_xml(invoice: Invoice) -> str:
             <ram:SpecifiedLineTradeSettlement>
                 <ram:ApplicableTradeTax>
                     <ram:TypeCode>VAT</ram:TypeCode>{exemption_block}
-                    <ram:CategoryCode>{tax_cat}</ram:CategoryCode>
-                    <ram:RateApplicablePercent>{_fmt_amount(item.tax_rate)}</ram:RateApplicablePercent>
+                    <ram:CategoryCode>{tax_cat}</ram:CategoryCode>{rate_line}
                 </ram:ApplicableTradeTax>
                 <ram:SpecifiedTradeSettlementLineMonetarySummation>
                     <ram:LineTotalAmount>{_fmt_amount(item.net_amount)}</ram:LineTotalAmount>
@@ -124,18 +131,18 @@ def _tax_summaries_xml(invoice: Invoice) -> str:
         exemption_block = ""
         if inv_cat in EXEMPTION_REASONS:
             exemption_block = f"\n                <ram:ExemptionReason>{_esc(EXEMPTION_REASONS[inv_cat])}</ram:ExemptionReason>"
+        rate_line = _rate_percent_xml(rate, inv_cat, "\n                ")
         parts.append(f"""
             <ram:ApplicableTradeTax>
                 <ram:CalculatedAmount>{_fmt_amount(totals['tax'])}</ram:CalculatedAmount>
                 <ram:TypeCode>VAT</ram:TypeCode>{exemption_block}
                 <ram:BasisAmount>{_fmt_amount(totals['basis'])}</ram:BasisAmount>
-                <ram:CategoryCode>{tax_cat}</ram:CategoryCode>
-                <ram:RateApplicablePercent>{_fmt_amount(rate)}</ram:RateApplicablePercent>
+                <ram:CategoryCode>{tax_cat}</ram:CategoryCode>{rate_line}
             </ram:ApplicableTradeTax>""")
     return "\n".join(parts)
 
 
-def _seller_id_xml(company: Company) -> str:
+def _seller_id_xml(company: Company, tax_category: str = "S") -> str:
     """BT-29, die Verkäufer-Kennung. Steht als erstes Kind von `SellerTradeParty`
     (die CII-Sequenz ist geordnet: ID, GlobalID, Name, …).
 
@@ -149,8 +156,13 @@ def _seller_id_xml(company: Company) -> str:
     Nur wenn die USt-IdNr. fehlt: liegt sie vor, ist `BR-CO-26` schon erfüllt und
     eine zweite Nennung derselben Nummer wäre Beiwerk. Offengelegt wird nichts Neues,
     die Steuernummer steht nach § 14 ohnehin auf jeder Rechnung.
+
+    Bei Kategorie O entfällt BT-31 (BR-O-02); dann muss BT-29 die Steuernummer
+    tragen, auch wenn eine USt-IdNr. in der Einrichtung hinterlegt ist.
     """
-    if company.vat_id or not company.tax_number:
+    if company.vat_id and tax_category != "O":
+        return ""
+    if not company.tax_number:
         return ""
     return f"""
                 <ram:ID>{_esc(company.tax_number)}</ram:ID>"""
@@ -215,14 +227,15 @@ def _buyer_reference_xml(invoice: Invoice) -> str:
             <ram:BuyerReference>{_esc(referenz)}</ram:BuyerReference>"""
 
 
-def _seller_tax_xml(company: Company) -> str:
+def _seller_tax_xml(company: Company, tax_category: str) -> str:
     parts = []
     if company.tax_number:
         parts.append(f"""
                 <ram:SpecifiedTaxRegistration>
                     <ram:ID schemeID="FC">{_esc(company.tax_number)}</ram:ID>
                 </ram:SpecifiedTaxRegistration>""")
-    if company.vat_id:
+    # BR-O-02: bei Kategorie O keine Verkaeufer-USt-IdNr. (BT-31).
+    if company.vat_id and tax_category != "O":
         parts.append(f"""
                 <ram:SpecifiedTaxRegistration>
                     <ram:ID schemeID="VA">{_esc(company.vat_id)}</ram:ID>
@@ -230,7 +243,9 @@ def _seller_tax_xml(company: Company) -> str:
     return "\n".join(parts)
 
 
-def _buyer_vat_xml(customer) -> str:
+def _buyer_vat_xml(customer, tax_category: str) -> str:
+    if tax_category == "O":
+        return ""
     if customer and customer.vat_id:
         return f"""
                 <ram:SpecifiedTaxRegistration>
@@ -268,15 +283,29 @@ def _esc(text: str | None) -> str:
 
 
 def _delivery_xml(invoice: Invoice) -> str:
-    if not invoice.delivery_date:
+    inv_cat = getattr(invoice, "tax_category", "S")
+    customer = invoice.customer
+    ship_to = ""
+    if inv_cat == "K" and customer:
+        # BR-IC-12: ig. Lieferung braucht Lieferland (BT-80).
+        ship_to = f"""
+            <ram:ShipToTradeParty>
+                <ram:PostalTradeAddress>
+                    <ram:CountryID>{_esc(customer.country)}</ram:CountryID>
+                </ram:PostalTradeAddress>
+            </ram:ShipToTradeParty>"""
+    if not invoice.delivery_date and not ship_to:
         return ""
-    return f"""
-        <ram:ApplicableHeaderTradeDelivery>
+    delivery_event = ""
+    if invoice.delivery_date:
+        delivery_event = f"""
             <ram:ActualDeliverySupplyChainEvent>
                 <ram:OccurrenceDateTime>
                     <udt:DateTimeString format="102">{_fmt_date(invoice.delivery_date)}</udt:DateTimeString>
                 </ram:OccurrenceDateTime>
-            </ram:ActualDeliverySupplyChainEvent>
+            </ram:ActualDeliverySupplyChainEvent>"""
+    return f"""
+        <ram:ApplicableHeaderTradeDelivery>{ship_to}{delivery_event}
         </ram:ApplicableHeaderTradeDelivery>"""
 
 
@@ -374,6 +403,7 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
         )
     profile_id = PROFILE_IDS[profile]
     customer = invoice.customer
+    inv_cat = getattr(invoice, "tax_category", "S")
 
     addr2_buyer = (f"\n                    <ram:LineTwo>{_esc(customer.address_line2)}</ram:LineTwo>"
                    if customer and customer.address_line2 else "")
@@ -410,14 +440,14 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
     <rsm:SupplyChainTradeTransaction>
 {_line_items_xml(invoice)}
         <ram:ApplicableHeaderTradeAgreement>{_buyer_reference_xml(invoice)}
-            <ram:SellerTradeParty>{_seller_id_xml(company)}
+            <ram:SellerTradeParty>{_seller_id_xml(company, inv_cat)}
                 <ram:Name>{_esc(company.name)}</ram:Name>{_seller_contact_xml(company)}
                 <ram:PostalTradeAddress>
                     <ram:PostcodeCode>{_esc(company.zip_code)}</ram:PostcodeCode>
                     <ram:LineOne>{_esc(company.address_line1)}</ram:LineOne>{addr2_seller}
                     <ram:CityName>{_esc(company.city)}</ram:CityName>
                     <ram:CountryID>{_esc(company.country)}</ram:CountryID>
-                </ram:PostalTradeAddress>{_electronic_address_xml(company.email)}{_seller_tax_xml(company)}
+                </ram:PostalTradeAddress>{_electronic_address_xml(company.email)}{_seller_tax_xml(company, inv_cat)}
             </ram:SellerTradeParty>
             <ram:BuyerTradeParty>
                 <ram:Name>{_esc(customer.name if customer else "")}</ram:Name>
@@ -426,7 +456,7 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
                     <ram:LineOne>{_esc(customer.address_line1 if customer else "")}</ram:LineOne>{addr2_buyer}
                     <ram:CityName>{_esc(customer.city if customer else "")}</ram:CityName>
                     <ram:CountryID>{_esc(customer.country if customer else "DE")}</ram:CountryID>
-                </ram:PostalTradeAddress>{_electronic_address_xml(customer.email if customer else None)}{_buyer_vat_xml(customer)}
+                </ram:PostalTradeAddress>{_electronic_address_xml(customer.email if customer else None)}{_buyer_vat_xml(customer, inv_cat)}
             </ram:BuyerTradeParty>
         </ram:ApplicableHeaderTradeAgreement>
 {_delivery_xml(invoice)}

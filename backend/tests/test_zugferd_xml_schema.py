@@ -192,6 +192,27 @@ def test_reverse_charge_ae_is_schema_valid():
     )
 
 
+@pytest.mark.parametrize("category,rate,vat_id,country", [
+    ("K", "0", "ATU12345678", "AT"),
+    ("O", "0", None, "US"),
+    ("E", "0", None, "DE"),
+])
+def test_steuerfreie_kategorien_sind_schema_valid(category, rate, vat_id, country):
+    """#28: Mustang-Schema fuer K, O und E."""
+    cust = Customer(name="Kunde GmbH", address_line1="Weg 1", zip_code="10115",
+                    city="Wien" if country == "AT" else ("New York" if country == "US" else "Berlin"),
+                    country=country, vat_id=vat_id)
+    inv = _multi_item_invoice([_item(1, "1", "100.00", rate)])
+    inv.customer = cust
+    inv.tax_category = category
+    inv.tax_total = Decimal("0")
+    inv.gross_total = inv.net_total
+    result = _validate(inv, _company())
+    assert result["is_valid"], (
+        f"Kategorie {category} XML nicht valide:\n{result['errors']}\n{result['raw']}"
+    )
+
+
 def test_seller_without_iban_is_schema_valid():
     """Verkäufer ohne Bankverbindung: der PayeePartyCreditor-Block entfällt,
     die XML muss trotzdem schema-valide bleiben."""
