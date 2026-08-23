@@ -507,7 +507,22 @@ def _veroeffentliche(pdf_quelle: Path, xml_quelle: Path) -> list[Path]:
 
 @router.post("/{invoice_id}/finalisieren")
 def finalize_invoice(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
-    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    # Zeilensperre vor der ersten teuren Zeile (#6). Zwei gleichzeitige Anfragen lasen
+    # denselben Entwurf, sahen beide `draft` und starteten beide Ghostscript und
+    # Mustang für denselben Beleg; am Ende veröffentlichte der zweite Lauf über den
+    # fertigen Beleg des ersten hinweg. `FOR UPDATE` hält den zweiten hier fest, bis
+    # der erste committet hat, und die Statusprüfung darunter liest dann den neuen
+    # Stand: kein Entwurf mehr, also eine saubere Absage statt einer zweiten Pipeline.
+    #
+    # Die Sperre steht bis zum Commit am Ende dieser Funktion, deckt also die gesamte
+    # Belegerzeugung ab. Das Warten ist gewollt: die Alternative wäre `NOWAIT` und
+    # damit eine Fehlermeldung an einen Nutzer, der nur zweimal geklickt hat.
+    invoice = (
+        db.query(Invoice)
+        .filter(Invoice.id == invoice_id)
+        .with_for_update()
+        .first()
+    )
     if not invoice:
         raise HTTPException(404)
     if invoice.status != "draft":
