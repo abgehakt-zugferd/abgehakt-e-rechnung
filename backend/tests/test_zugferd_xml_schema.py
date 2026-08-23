@@ -240,3 +240,66 @@ def test_verkaeufer_nur_mit_steuernummer_ist_gueltig():
 
     assert result["is_valid"], result["raw"][-1200:]
     assert "BR-CO-26" not in result["raw"]
+
+
+# ── Rechnung ohne Leistungsdatum (Kleinbetrag, § 33 UStDV) ──────────────────
+# Der Block <ram:ApplicableHeaderTradeDelivery> ist im CII-Schema Pflicht, auch
+# wenn nichts darin steht. Er entfiel, sobald weder ein Leistungsdatum noch ein
+# Lieferland vorlag; die Datei war dann schon am Schema unzulässig, nicht erst an
+# einer Geschäftsregel. Getroffen hat das genau die Kleinbetragsrechnung ohne
+# Leistungsdatum, die § 33 UStDV ausdrücklich erlaubt und die das Finalize-Gate
+# seit #23/#24 durchlässt.
+
+@pytest.mark.parametrize("category,rate,vat_id,country,city", [
+    ("S", "19", None, "DE", "Berlin"),
+    ("AE", "0", "ATU12345678", "AT", "Wien"),
+    ("O", "0", None, "US", "New York"),
+    ("E", "0", None, "DE", "Berlin"),
+])
+def test_kleinbetrag_ohne_leistungsdatum_ist_schema_valid(category, rate, vat_id, country, city):
+    """#47: ohne Leistungsdatum muss die XML trotzdem gültig sein.
+
+    Alle vier Steuertypen stehen hier, weil der fehlende Block keiner Kategorie
+    galt: er fehlte immer.
+    """
+    cust = Customer(name="Kunde GmbH", address_line1="Weg 1", zip_code="10115",
+                    city=city, country=country, vat_id=vat_id)
+    inv = _invoice(cust, delivery_date=None, tax_category=category)
+    if rate == "0":
+        inv.items[0].tax_rate = Decimal("0")
+        inv.items[0].tax_amount = Decimal("0")
+        inv.items[0].gross_amount = inv.items[0].net_amount
+        inv.tax_total = Decimal("0")
+        inv.gross_total = inv.net_total
+
+    result = _validate(inv, _company())
+
+    assert result["is_valid"], (
+        f"Kategorie {category} ohne Leistungsdatum nicht valide:\n{result['raw'][-1500:]}"
+    )
+
+
+def test_innergemeinschaftliche_lieferung_ohne_leistungsdatum_bleibt_unzulaessig():
+    """Die Gegenprobe, und zugleich die Begründung der Validator-Regel (#47).
+
+    Für Kategorie K verlangt EN16931 (BR-IC-11) das Lieferdatum oder einen
+    Abrechnungszeitraum, unabhängig vom Betrag. Der vollständige Delivery-Block
+    allein rettet diesen Fall also nicht; deshalb hält der Validator ihn vorher
+    auf, statt den Nutzer in eine Mustang-Meldung laufen zu lassen. Wird die Regel
+    hier je grün, gehört die Validator-Regel auf den Prüfstand statt umgekehrt.
+    """
+    cust = Customer(name="EU Kunde AG", address_line1="Ringstraße 12", zip_code="1010",
+                    city="Wien", country="AT", vat_id="ATU12345678")
+    inv = _invoice(cust, delivery_date=None, tax_category="K")
+    inv.items[0].tax_rate = Decimal("0")
+    inv.items[0].tax_amount = Decimal("0")
+    inv.items[0].gross_amount = inv.items[0].net_amount
+    inv.tax_total = Decimal("0")
+    inv.gross_total = inv.net_total
+
+    result = _validate(inv, _company())
+
+    assert not result["is_valid"], (
+        "Mustang nimmt die ig. Lieferung ohne Leistungsdatum inzwischen an"
+    )
+    assert "ActualDeliverySupplyChainEvent" in result["raw"], result["raw"][-1500:]
