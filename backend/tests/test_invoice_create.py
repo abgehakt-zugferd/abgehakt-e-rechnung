@@ -103,3 +103,55 @@ def test_create_assigns_sequential_invoice_number(pg_session):
                .filter(Invoice.customer_id == cust.id).all()]
     assert len(numbers) == 2
     assert len(set(numbers)) == 2   # fortlaufend/eindeutig
+
+
+def test_rechnungsnummer_jahr_aus_ausstellungsdatum_beim_anlegen(pg_session):
+    """#19: Beim Anlegen zaehlt issue_date, nicht date.today()."""
+    cust = _customer(pg_session)
+    r = _client(pg_session).post("/invoices/neu", data={
+        "customer_id": str(cust.id),
+        "issue_date": "2027-01-02",
+        "due_date": "2027-01-16",
+        "tax_category": "S",
+        "items_json": json.dumps([{"description": "X", "unit": "Stk",
+                                   "quantity": "1", "unit_price": "10", "tax_rate": "19"}]),
+    })
+    assert r.status_code == 303
+    pg_session.expire_all()
+    inv = pg_session.query(Invoice).filter(Invoice.customer_id == cust.id).one()
+    assert inv.invoice_number.startswith("RE-2027-")
+
+
+def test_rechnungsnummer_bleibt_nach_umdatieren_des_ausstellungsdatums(pg_session):
+    """#19/#145: Nummer ist beim Anlegen vergeben und danach unveraenderlich."""
+    cust = _customer(pg_session)
+    client = _client(pg_session)
+    r = client.post("/invoices/neu", data={
+        "customer_id": str(cust.id),
+        "issue_date": "2027-01-02",
+        "due_date": "2027-01-16",
+        "tax_category": "S",
+        "items_json": json.dumps([{"description": "X", "unit": "Stk",
+                                   "quantity": "1", "unit_price": "10", "tax_rate": "19"}]),
+    })
+    assert r.status_code == 303
+    pg_session.expire_all()
+    inv = pg_session.query(Invoice).filter(Invoice.customer_id == cust.id).one()
+    nummer = inv.invoice_number
+    assert nummer.startswith("RE-2027-")
+
+    r2 = client.post(f"/invoices/{inv.id}/bearbeiten", data={
+        "customer_id": str(cust.id),
+        "issue_date": "2026-06-11",
+        "due_date": "2026-06-25",
+        "tax_category": "S",
+        "items_json": json.dumps([{"description": "X", "unit": "Stk",
+                                   "quantity": "1", "unit_price": "10", "tax_rate": "19"}]),
+    })
+    assert r2.status_code == 303
+    pg_session.expire_all()
+    frisch = pg_session.query(Invoice).filter(Invoice.id == inv.id).one()
+    assert frisch.issue_date == date(2026, 6, 11)
+    assert frisch.invoice_number == nummer, (
+        "Bekannte Luecke (#145): Nummer folgt nicht dem nachtraeglich geaenderten Ausstellungsdatum."
+    )

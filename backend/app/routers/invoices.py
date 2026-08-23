@@ -267,7 +267,7 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
     items_json = form.get("items_json", "[]")
     raw_items = json.loads(items_json)
 
-    invoice_number = generate_next_invoice_number(db)
+    invoice_number = generate_next_invoice_number(db, issue_date=issue_date)
 
     invoice = Invoice(
         invoice_number=invoice_number,
