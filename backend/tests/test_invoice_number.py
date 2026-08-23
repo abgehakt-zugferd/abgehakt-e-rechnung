@@ -94,3 +94,14 @@ def test_raises_when_company_missing(pg_session):
     pg_session.commit()
     with pytest.raises(RuntimeError, match="Firmendaten"):
         generate_next_invoice_number(pg_session)
+
+
+def test_number_year_follows_issue_date_at_assignment(pg_session):
+    """#19: Das Jahr in der Nummer kommt aus dem Ausstellungsdatum beim Anlegen."""
+    c = _company(pg_session)
+    c.invoice_counter = 0
+    c.invoice_year_in_number = True
+    pg_session.commit()
+
+    num = generate_next_invoice_number(pg_session, issue_date=date(2027, 1, 2))
+    assert num == "RE-2027-001"

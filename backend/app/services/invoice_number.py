@@ -35,7 +35,7 @@ def pruefe_praefix(praefix: str) -> str | None:
     return None
 
 
-def generate_next_invoice_number(db: Session) -> str:
+def generate_next_invoice_number(db: Session, issue_date: date | None = None) -> str:
     company = db.query(Company).filter(Company.id == 1).with_for_update().first()
     if not company:
         raise RuntimeError("Firmendaten nicht konfiguriert. Bitte zuerst Einstellungen ausfüllen.")
@@ -45,6 +45,8 @@ def generate_next_invoice_number(db: Session) -> str:
 
     counter = str(company.invoice_counter).zfill(3)
     if company.invoice_year_in_number:
-        year = date.today().year
+        # Jahr aus dem Ausstellungsdatum beim Anlegen (#19). Die Nummer selbst bleibt
+        # danach unveraenderlich (#145); ein spaeteres Umdatieren des Belegs aendert sie nicht.
+        year = (issue_date or date.today()).year
         return f"{company.invoice_prefix}-{year}-{counter}"
     return f"{company.invoice_prefix}-{counter}"
