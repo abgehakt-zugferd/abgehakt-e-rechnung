@@ -182,6 +182,7 @@ def test_eskalierter_banner_bleibt_ohne_mitteilungstext(client, pg_session, monk
                update_notice="Sicherheitslücke.", update_mitteilung_text=TEXT,
                update_mitteilung_verworfen=None)
     r = client.get("/dashboard")
+    assert 'data-update-banner="escalated"' in r.text
     banner = r.text.split('data-update-banner="escalated"')[1].split("</div>")[0]
     assert TEXT not in banner
     assert TEXT in r.text, "in eigener Zone erscheint sie sehr wohl"

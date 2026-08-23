@@ -77,6 +77,7 @@ def _zustimmungsseite(client, pg_session, monkeypatch) -> str:
                         lambda *a, **k: pytest.fail("vor der Bestätigung darf nichts abgerufen werden"))
     r = client.post("/updates/pruefen")
     assert r.status_code == 200
+    assert 'data-seite="update-zustimmung"' in r.text
     return r.text.split('data-seite="update-zustimmung"')[1]
 
 
@@ -85,6 +86,7 @@ def _hinweis(client, art="normal") -> str:
     bewusst keine verschachtelten Kästen."""
     r = client.get("/dashboard")
     assert r.status_code == 200
+    assert f'data-update-banner="{art}"' in r.text
     return r.text.split(f'data-update-banner="{art}"')[1].split("</div>")[0]
 
 
