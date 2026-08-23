@@ -216,6 +216,14 @@ fehlerhaft.
 > Zugriff aus dem Netz wirklich braucht, stellt eine Anmeldung davor, etwa einen Reverse Proxy
 > mit Passwortschutz oder ein VPN.
 
+## Tägliche Arbeit
+
+Wie mit dem Programm gearbeitet wird, steht in [docs/ANWENDUNG.md](docs/ANWENDUNG.md): der
+Lebenslauf eines Belegs vom Entwurf bis zum Archiv, und ausführlich der Fall, der die meisten
+Rückfragen erzeugt, nämlich die **Korrektur einer bereits gestellten Rechnung**. Kurz gefasst:
+Ein gestellter Beleg wird nie geändert, sondern durch eine Gutschrift aufgehoben und
+gegebenenfalls neu geschrieben.
+
 ## Tests
 
 ```bash
