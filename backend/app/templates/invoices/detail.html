@@ -312,10 +312,18 @@
                     {% for log in invoice.send_logs %}
                     <div style="padding:8px 0;{% if not loop.last %} border-bottom:1px solid var(--border);{% endif %}">
                         <div class="flex items-center gap-2">
+                            {# Drei Ausgänge (#10): offen ist weder Erfolg noch Fehlschlag. #}
+                            {% if log.success is none %}
+                            <span style="color:var(--text-dim);">?</span>
+                            {% else %}
                             <span style="color:{% if log.success %}var(--green){% else %}var(--pink){% endif %};">{{ '✓' if log.success else '✗' }}</span>
+                            {% endif %}
                             <span style="color:var(--text-hi);">{{ log.sent_at.strftime('%d.%m.%Y %H:%M') }}</span>
                         </div>
                         <p style="color:var(--text-dim);">an {{ log.to_email }}{% if log.cc_email %}, CC {{ log.cc_email }}{% endif %}{% if log.datev_bcc %}, BCC DATEV{% endif %}</p>
+                        {% if log.success is none %}
+                        <p style="color:var(--text-dim);">AUSGANG UNBEKANNT: der Versand wurde begonnen, das Ergebnis kam nicht mehr an. Bitte im Postausgang nachsehen, bevor erneut gesendet wird.</p>
+                        {% endif %}
                         {% if log.error %}
                         <p style="color:var(--pink); white-space:pre-line;">{{ log.error }}</p>
                         {% endif %}

@@ -167,7 +167,12 @@ class InvoiceSendLog(Base):
     to_email: Mapped[str] = mapped_column(String(255), nullable=False)
     cc_email: Mapped[Optional[str]] = mapped_column(String(255))
     datev_bcc: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # Drei Ausgaenge, nicht zwei (#10): die Zeile entsteht und wird committet, BEVOR
+    # SMTP angesprochen wird. In der Zeit dazwischen ist der Ausgang offen, und NULL
+    # ist genau das. Faellt der Commit danach um, bleibt sie offen stehen: die Mail
+    # koennte drausssen sein. `False` an dieser Stelle waere eine Behauptung, die
+    # niemand geprueft hat, und die Auskunft, auf die hin jemand erneut sendet.
+    success: Mapped[Optional[bool]] = mapped_column(Boolean)
     error: Mapped[Optional[str]] = mapped_column(Text)
 
     invoice: Mapped["Invoice"] = relationship("Invoice", back_populates="send_logs")
