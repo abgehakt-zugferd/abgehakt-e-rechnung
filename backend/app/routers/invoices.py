@@ -1,5 +1,6 @@
 import uuid
 import json
+import shutil
 import tempfile
 import os
 from datetime import date, timedelta, timezone, datetime
@@ -452,6 +453,52 @@ def validate_invoice_route(invoice_id: uuid.UUID, db: Session = Depends(get_db))
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
 
 
+def _arbeitswurzel() -> Path:
+    """`storage/temp/` als Arbeitsplatz der Belegerzeugung.
+
+    Bewusst NICHT das Temp-Verzeichnis des Betriebssystems: das Veröffentlichen
+    unten ist ein `os.replace` und damit nur innerhalb desselben Dateisystems ein
+    atomares Umbenennen. `storage` ist ein eigener Mount, über die Grenze hinweg
+    scheitert es mit `Invalid cross-device link`.
+
+    `temp/` ist aus der Archivansicht ausgenommen (`routers/archive.BEREICHE` kennt
+    nur `pdfs` und `xml`) und war dort schon vorher als Platz für Zwischendateien
+    beschrieben.
+    """
+    wurzel = settings.storage_path / "temp"
+    wurzel.mkdir(parents=True, exist_ok=True)
+    return wurzel
+
+
+def _veroeffentliche(pdf_quelle: Path, xml_quelle: Path) -> list[Path]:
+    """Fertigen Beleg aus dem Arbeitsverzeichnis ins Archiv übernehmen.
+
+    `os.replace` statt Kopieren: innerhalb desselben Dateisystems ist das ein
+    atomares Umbenennen. Im Archiv erscheint deshalb nie eine halb geschriebene
+    Datei, und die Archivansicht, die das Verzeichnis ungefiltert vorliest, sieht
+    entweder nichts oder den vollständigen Beleg.
+
+    Bricht der zweite Zug ab, wird der erste zurückgenommen. Ein PDF ohne seine XML
+    im Archiv wäre eine E-Rechnung, der genau der Teil fehlt, der seit 2025 den
+    Vorrang hat.
+    """
+    ziele = [
+        (pdf_quelle, settings.storage_path / "pdfs" / pdf_quelle.name),
+        (xml_quelle, settings.storage_path / "xml" / xml_quelle.name),
+    ]
+    fertig: list[Path] = []
+    try:
+        for quelle, ziel in ziele:
+            ziel.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(quelle, ziel)
+            fertig.append(ziel)
+    except OSError:
+        for ziel in fertig:
+            ziel.unlink(missing_ok=True)
+        raise
+    return fertig
+
+
 @router.post("/{invoice_id}/finalisieren")
 def finalize_invoice(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
@@ -477,67 +524,84 @@ def finalize_invoice(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
     xml_content = zugferd_xml.generate_xml(invoice, company)
     invoice.zugferd_xml = xml_content
 
-    # 2. Visuelles PDF erzeugen
-    pdf_dir = settings.storage_path / "pdfs"
-    pdf_dir.mkdir(parents=True, exist_ok=True)
-    visual_pdf = pdf_dir / f"{invoice.invoice_number}_visual.pdf"
-    pdf_generator.generate_pdf(invoice, company, visual_pdf)
+    # Die gesamte Belegerzeugung läuft in einem Wegwerf-Verzeichnis, NICHT im Archiv
+    # (#12, #13, Dateiteil von #6). `storage/pdfs/` und `storage/xml/` sind zugleich
+    # das GoBD-Archiv und das, was `routers/archive.py` ungefiltert aus dem
+    # Dateisystem vorliest; was dort liegt, ist für den Betrachter ein Beleg. Solange
+    # die Zwischenstufen dort entstanden, war jede halbfertige Stufe sekundenlang
+    # sichtbar und herunterladbar, und ein gescheiterter Commit ließ ein PDF mit
+    # echter Rechnungsnummer zurück, das die Datenbank nicht kannte.
+    arbeitsverzeichnis = Path(tempfile.mkdtemp(
+        prefix=f"finalisieren-{invoice.invoice_number}-", dir=_arbeitswurzel()))
+    try:
+        # 2. Visuelles PDF erzeugen
+        visual_pdf = arbeitsverzeichnis / f"{invoice.invoice_number}_visual.pdf"
+        pdf_generator.generate_pdf(invoice, company, visual_pdf)
 
-    # 3. Mustang: XML in PDF einbetten → ZUGFeRD PDF
-    xml_path = settings.storage_path / "xml" / f"{invoice.invoice_number}.xml"
-    xml_path.parent.mkdir(parents=True, exist_ok=True)
-    xml_path.write_text(xml_content, encoding="utf-8")
+        # 3. Mustang: XML in PDF einbetten → ZUGFeRD PDF
+        xml_path = arbeitsverzeichnis / f"{invoice.invoice_number}.xml"
+        xml_path.write_text(xml_content, encoding="utf-8")
 
-    # Pipeline: visuelles PDF → PDF/A-3 (Ghostscript) → Mustang bettet XML ein.
-    # FAIL-CLOSED (#98 P0.1): eine E-Rechnung OHNE eingebettete ZUGFeRD-XML ist seit
-    # 2025 rechtlich unvollständig (der XML-Teil hat Vorrang). Gelingt die Einbettung
-    # nicht, wird NICHT als reines Visual-PDF „issued" — die Rechnung bleibt draft.
-    # Es geht nichts verloren: kein Commit, alle Zwischen-PDFs werden entfernt
-    # (die Datenverlust-Regression 2026-07-08 betraf das Löschen eines bereits
-    # finalisierten PDFs — hier wird gar nichts finalisiert).
-    zugferd_pdf = pdf_dir / f"{invoice.invoice_number}.pdf"
-    combined = False
-    pruefgrund = ""      # erster Prüffehler, wandert in die Fehlermeldung (s. u.)
-    if pdfa.gs_available() and mustang.jar_available():
-        pdfa_pdf = pdf_dir / f"{invoice.invoice_number}_pdfa.pdf"
-        if pdfa.to_pdfa3(visual_pdf, pdfa_pdf, title=invoice.invoice_number) and \
-                mustang.combine(pdfa_pdf, xml_path, zugferd_pdf):
-            # E1 (#98 Hardness): `combine` liefert True (rc=0 + Datei existiert) auch
-            # für ein PDF, das ein Empfänger-/Prüfer-System ablehnen würde. Mustang
-            # ist die Wahrheit — nur ein Ergebnis mit is_valid UND XML:valid (PDF/A +
-            # Schema + Schematron griffen) gilt als gültige E-Rechnung. Sonst
-            # fail-closed: die Rechnung bleibt draft (unten), kein Commit.
-            result = mustang.validate(zugferd_pdf)
-            if result["is_valid"] and "XML:valid" in result["raw"]:
-                combined = True
-            else:
-                fehler = result.get("errors") or []
-                pruefgrund = str(fehler[0]).strip() if fehler else ""
-        pdfa_pdf.unlink(missing_ok=True)
+        # Pipeline: visuelles PDF → PDF/A-3 (Ghostscript) → Mustang bettet XML ein.
+        # FAIL-CLOSED (#98 P0.1): eine E-Rechnung OHNE eingebettete ZUGFeRD-XML ist seit
+        # 2025 rechtlich unvollständig (der XML-Teil hat Vorrang). Gelingt die Einbettung
+        # nicht, wird NICHT als reines Visual-PDF „issued" — die Rechnung bleibt draft.
+        # Es geht nichts verloren: kein Commit, und das Arbeitsverzeichnis fällt im
+        # `finally` samt allen Zwischenstufen weg (die Datenverlust-Regression
+        # 2026-07-08 betraf das Löschen eines bereits finalisierten PDFs — hier wird
+        # gar nichts finalisiert).
+        zugferd_pdf = arbeitsverzeichnis / f"{invoice.invoice_number}.pdf"
+        combined = False
+        pruefgrund = ""      # erster Prüffehler, wandert in die Fehlermeldung (s. u.)
+        if pdfa.gs_available() and mustang.jar_available():
+            pdfa_pdf = arbeitsverzeichnis / f"{invoice.invoice_number}_pdfa.pdf"
+            if pdfa.to_pdfa3(visual_pdf, pdfa_pdf, title=invoice.invoice_number) and \
+                    mustang.combine(pdfa_pdf, xml_path, zugferd_pdf):
+                # E1 (#98 Hardness): `combine` liefert True (rc=0 + Datei existiert) auch
+                # für ein PDF, das ein Empfänger-/Prüfer-System ablehnen würde. Mustang
+                # ist die Wahrheit — nur ein Ergebnis mit is_valid UND XML:valid (PDF/A +
+                # Schema + Schematron griffen) gilt als gültige E-Rechnung. Sonst
+                # fail-closed: die Rechnung bleibt draft (unten), kein Commit.
+                result = mustang.validate(zugferd_pdf)
+                if result["is_valid"] and "XML:valid" in result["raw"]:
+                    combined = True
+                else:
+                    fehler = result.get("errors") or []
+                    pruefgrund = str(fehler[0]).strip() if fehler else ""
 
-    if not combined:
-        # Aufräumen und Rechnung als Entwurf belassen (kein Commit).
-        visual_pdf.unlink(missing_ok=True)
-        zugferd_pdf.unlink(missing_ok=True)
-        xml_path.unlink(missing_ok=True)
-        db.rollback()
-        # Der Prüfbericht gehört in die Meldung: ohne ihn bleibt dem Menschen nur
-        # „nochmal versuchen", und der zweite Versuch scheitert an derselben Regel
-        # (Abnahme 2026-08-09: BR-CO-26, fehlende Verkäufer-Kennung — nicht erratbar).
-        # Auf 400 Zeichen gekürzt, Mustang hängt ganze Schematron-Pfade an.
-        grund = f" Grund der Prüfung: {pruefgrund[:400]}" if pruefgrund else ""
-        raise HTTPException(
-            400,
-            "E-Rechnung konnte nicht erzeugt werden: die ZUGFeRD-XML ließ sich nicht "
-            "ins PDF einbetten (PDF/A- oder Mustang-Schritt fehlgeschlagen). Die "
-            f"Rechnung bleibt Entwurf — bitte erneut finalisieren.{grund}",
-        )
+        if not combined:
+            db.rollback()
+            # Der Prüfbericht gehört in die Meldung: ohne ihn bleibt dem Menschen nur
+            # „nochmal versuchen", und der zweite Versuch scheitert an derselben Regel
+            # (Abnahme 2026-08-09: BR-CO-26, fehlende Verkäufer-Kennung — nicht erratbar).
+            # Auf 400 Zeichen gekürzt, Mustang hängt ganze Schematron-Pfade an.
+            grund = f" Grund der Prüfung: {pruefgrund[:400]}" if pruefgrund else ""
+            raise HTTPException(
+                400,
+                "E-Rechnung konnte nicht erzeugt werden: die ZUGFeRD-XML ließ sich nicht "
+                "ins PDF einbetten (PDF/A- oder Mustang-Schritt fehlgeschlagen). Die "
+                f"Rechnung bleibt Entwurf — bitte erneut finalisieren.{grund}",
+            )
 
-    # Erfolg: visuelles Zwischen-PDF entfernen, ZUGFeRD-PDF übernehmen.
-    visual_pdf.unlink(missing_ok=True)
-    invoice.pdf_filename = zugferd_pdf.name
-    invoice.status = "issued"
-    db.commit()
+        invoice.pdf_filename = zugferd_pdf.name
+        invoice.status = "issued"
+
+        # Erst ins Archiv, dann committen. Die umgekehrte Reihenfolge wäre der
+        # schlechtere Fehler: eine gestellte Rechnung ohne Beleg auf der Platte ist
+        # unveränderlich und damit nicht mehr reparierbar, während ein Beleg ohne
+        # Datenbankzeile sich durch erneutes Finalisieren auflöst. Scheitert der
+        # Commit, wird das eben Veröffentlichte wieder eingesammelt.
+        veroeffentlicht = _veroeffentliche(zugferd_pdf, xml_path)
+        try:
+            db.commit()
+        except Exception:
+            for ziel in veroeffentlicht:
+                ziel.unlink(missing_ok=True)
+            db.rollback()
+            raise
+    finally:
+        shutil.rmtree(arbeitsverzeichnis, ignore_errors=True)
+
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
 
 

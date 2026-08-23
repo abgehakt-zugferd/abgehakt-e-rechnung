@@ -22,16 +22,21 @@ import inspect
 
 import pytest
 
-from app.routers.invoices import _run_validation, preview_pdf
+from app.routers.invoices import _run_validation, finalize_invoice, preview_pdf
 
+# Zweiter Wert: die atomare API, die diese Funktion benutzen MUSS. `finalize_invoice`
+# braucht ein ganzes Wegwerf-VERZEICHNIS statt einer einzelnen Datei (#12/#13: die
+# ZUGFeRD-Pipeline arbeitet dort, damit im Archiv nur fertige Belege erscheinen),
+# also `mkdtemp` statt `mkstemp`. Die unsichere Variante ist für beide dieselbe.
 ERZEUGT_TEMPDATEIEN = [
-    pytest.param(_run_validation, id="_run_validation"),
-    pytest.param(preview_pdf, id="preview_pdf"),
+    pytest.param(_run_validation, "tempfile.mkstemp(", id="_run_validation"),
+    pytest.param(preview_pdf, "tempfile.mkstemp(", id="preview_pdf"),
+    pytest.param(finalize_invoice, "tempfile.mkdtemp(", id="finalize_invoice"),
 ]
 
 
-@pytest.mark.parametrize("func", ERZEUGT_TEMPDATEIEN)
-def test_uses_atomic_mkstemp_not_deprecated_mktemp(func):
+@pytest.mark.parametrize("func,sichere_api", ERZEUGT_TEMPDATEIEN)
+def test_uses_atomic_mkstemp_not_deprecated_mktemp(func, sichere_api):
     src = inspect.getsource(func)
     # "mkstemp" enthält "mktemp" NICHT als Teilstring (mk-s-temp vs. mk-temp),
     # daher fängt dieser Check gezielt nur die unsichere Variante.
@@ -39,7 +44,7 @@ def test_uses_atomic_mkstemp_not_deprecated_mktemp(func):
         f"tempfile.mktemp() (TOCTOU) in {func.__name__} — durch tempfile.mkstemp() "
         "oder NamedTemporaryFile(delete=False) ersetzen."
     )
-    assert "tempfile.mkstemp(" in src, (
-        f"Erwartete atomare tempfile.mkstemp()-Nutzung in {func.__name__} nicht "
+    assert sichere_api in src, (
+        f"Erwartete atomare {sichere_api})-Nutzung in {func.__name__} nicht "
         "gefunden — wurde der Temp-Datei-Umgang umgebaut?"
     )
