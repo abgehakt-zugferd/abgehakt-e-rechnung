@@ -20,6 +20,8 @@ import re
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 import defusedxml.ElementTree as DET
 from pypdf import PdfReader
 
@@ -137,3 +139,28 @@ def test_pdf_and_xml_amounts_match_mixed_tax_rates(tmp_path):
         assert item.tax_amount in pdf_amounts, (
             f"Steueranteil {item.tax_rate} % ({item.tax_amount}) fehlt im PDF"
         )
+
+
+@pytest.mark.parametrize("tax_category", ["E", "AE", "K", "O"])
+def test_pdf_and_xml_amounts_match_steuerfreie_kategorien(tmp_path, tax_category):
+    """#32: steuerfreie Kategorien, Brutto = Netto."""
+    inv = _invoice()
+    inv.tax_category = tax_category
+    inv.tax_total = Decimal("0.00")
+    inv.gross_total = inv.net_total
+    for item in inv.items:
+        item.tax_rate = Decimal("0")
+        item.tax_amount = Decimal("0")
+        item.gross_amount = item.net_amount
+    if tax_category in ("AE", "K"):
+        inv.customer.vat_id = "DE987654321"
+    company = _company()
+    out = tmp_path / "invoice.pdf"
+    pdf_generator.generate_pdf(inv, company, out)
+    pdf_text = "".join(p.extract_text() or "" for p in PdfReader(str(out)).pages)
+    pdf_amounts = _pdf_amounts(pdf_text)
+    root = DET.fromstring(zugferd_xml.generate_xml(inv, company).encode("utf-8"))
+    xml_net = _xml_total(root, "LineTotalAmount")
+    xml_gross = _xml_total(root, "GrandTotalAmount")
+    assert xml_net in pdf_amounts
+    assert xml_gross in pdf_amounts
