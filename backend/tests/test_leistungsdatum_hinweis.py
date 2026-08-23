@@ -77,6 +77,25 @@ def test_unter_250_euro_bleibt_es_freiwillig():
     assert "DELIVERY_DATE_MISSING" not in [f.code for f in fehler]
 
 
+def test_genau_250_euro_bleibt_freiwillig():
+    """§ 33 UStDV befreit Betraege, die 250 Euro nicht uebersteigen. 250,00 €
+    uebersteigt 250 € nicht."""
+    fehler, _ = validate_invoice(_rechnung(Decimal("250.00")), _firma())
+
+    assert "DELIVERY_DATE_MISSING" not in [f.code for f in fehler]
+
+
+def test_das_formular_behauptet_die_pflicht_nicht_schon_bei_250_euro():
+    """Beide Seiten aneinandergebunden: „ab 250 €" liest sich als einschliesslich
+    und widerspricht der Pruefung genau an der Grenze."""
+    text = FORMULAR.read_text(encoding="utf-8")
+    block = text.split('name="delivery_date"')[1][:400]
+
+    assert "ab 250" not in block, (
+        "Das Formular kuendigt eine Pflicht an, die bei genau 250 € nicht besteht"
+    )
+
+
 def test_das_formular_nennt_das_leistungsdatum_nicht_empfohlen():
     text = FORMULAR.read_text(encoding="utf-8")
     block = text.split('name="delivery_date"')[1][:400]

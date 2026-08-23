@@ -229,7 +229,7 @@
                     <div>
                         <label class="label">Leistungsdatum</label>
                         <input type="date" name="delivery_date" value="{{ (invoice.delivery_date.isoformat() if invoice.delivery_date else '') if invoice else today }}" class="input">
-                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Pflicht ab 250 € Rechnungsbetrag (§ 14 Abs. 4 Nr. 6 UStG). Darunter freiwillig.</p>
+                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Pflicht über 250 € Rechnungsbetrag (§ 14 Abs. 4 Nr. 6 UStG). Bis 250 € einschließlich freiwillig (Kleinbetragsrechnung, § 33 UStDV).</p>
                     </div>
                     <div>
                         <label class="label">Referenz des Kunden</label>

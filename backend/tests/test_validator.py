@@ -275,6 +275,28 @@ def test_delivery_date_missing_ok_for_simplified():
     assert "DELIVERY_DATE_MISSING" not in _codes(warnings)
 
 
+@pytest.mark.parametrize("brutto,pflicht", [
+    (Decimal("249.99"), False),
+    (Decimal("250.00"), False),   # die Grenze selbst gehört noch zum Kleinbetrag
+    (Decimal("250.01"), True),    # der erste Cent darüber
+])
+def test_kleinbetragsgrenze_liegt_bei_genau_250_euro(brutto, pflicht):
+    """§ 33 UStDV: „deren Gesamtbetrag 250 Euro nicht übersteigt".
+
+    Nicht übersteigen heißt bis einschließlich. Bei genau 250,00 € brutto verlangte
+    die Prüfung bisher trotzdem ein Leistungsdatum und wies die Finalisierung ab —
+    für eine Rechnung, die das Gesetz ausdrücklich davon befreit. Die drei Werte
+    stehen zusammen, weil erst der Cent darüber beweist, dass die Grenze noch
+    irgendwo liegt.
+    """
+    inv = _invoice(delivery_date=None, gross_total=brutto)
+
+    errors, warnings = validate_invoice(inv, _company())
+
+    assert ("DELIVERY_DATE_MISSING" in _codes(errors)) is pflicht
+    assert "DELIVERY_DATE_MISSING" not in _codes(warnings)
+
+
 def test_delivery_date_set_no_warning():
     """Leistungsdatum gesetzt → kein DELIVERY_DATE_MISSING auch über 250 €."""
     inv = _invoice(delivery_date=date(2026, 6, 10), gross_total=Decimal("500.00"))
