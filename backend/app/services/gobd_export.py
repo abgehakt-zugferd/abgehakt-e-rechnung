@@ -140,7 +140,10 @@ Konventionen
 Enthaltene Tabellen
 -------------------
 - rechnungen.csv  ({n_invoices} Zeilen): Rechnungskopfdaten aller Belege mit
-  Status issued/paid/cancelled im Zeitraum (Ausstellungsdatum). Stornos/
+  Status issued, paid, cancelled oder discarded im Zeitraum (Ausstellungsdatum).
+  Gestellte Belege (issued/paid/cancelled) sind Buchungsbelege; verworfene Entwuerfe
+  (discarded) stehen mit in der CSV, weil ihre Nummer schon beim Anlegen vergeben
+  wurde und die Zeile die Nummernluecke fuer den Pruefer erklaert. Stornos/
   Gutschriften referenzieren das Original in "original_rechnungsnummer".
 - positionen.csv: Einzelpositionen, verknüpft über "rechnungsnummer".
 - kunden.csv      ({n_customers} Zeilen): Stammdaten der referenzierten Kunden
@@ -293,7 +296,7 @@ def build_gobd_export(
             elif inv.zugferd_xml:
                 # DB ist Primärspeicher der XML (docs/ARCHITEKTUR.md) — Datei nur Zweitablage.
                 zf.writestr(f"dokumente/{xml_name}", inv.zugferd_xml)
-            else:
+            elif inv.status not in ("draft", "discarded"):
                 missing.append(f"{inv.invoice_number}: XML fehlt ({xml_name})")
 
         if missing:
