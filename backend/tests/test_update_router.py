@@ -131,6 +131,7 @@ def test_pro_block_niemals_im_eskalierten_banner(client, pg_session, monkeypatch
          update_mitteilung_text="Pro empfängt E-Rechnungen.",
          update_mitteilung_url="https://abgehakt.app/shop")
     r = client.get("/dashboard")
+    assert 'data-update-banner="escalated"' in r.text
     eskaliert = r.text.split('data-update-banner="escalated"')[1].split("</div>")[0]
     assert "Pro empfängt" not in eskaliert
     assert 'data-mitteilung' in r.text, "der Pro-Block erscheint, aber in eigener Zone"
