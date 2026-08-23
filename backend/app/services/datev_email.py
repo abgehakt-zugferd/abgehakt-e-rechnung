@@ -16,6 +16,8 @@ from app.models.company import Company
 
 settings = get_settings()
 
+SMTP_TIMEOUT = 30  # Sekunden; ohne timeout= blockiert smtplib unbegrenzt (#9)
+
 
 class EffectiveSettings:
     """Effektive SMTP-/DATEV-Konfiguration: DB-Werte (AppConfig) überschreiben .env.
@@ -175,13 +177,13 @@ def send_invoice(
 
     context = ssl.create_default_context()
     try:
-        with smtplib.SMTP(cfg.smtp_host, cfg.smtp_port) as server:
+        with smtplib.SMTP(cfg.smtp_host, cfg.smtp_port, timeout=SMTP_TIMEOUT) as server:
             if cfg.smtp_use_tls:
                 server.starttls(context=context)
             if cfg.smtp_user and cfg.smtp_password:
                 server.login(cfg.smtp_user, cfg.smtp_password)
             server.send_message(msg)
-    except smtplib.SMTPException as e:
+    except (smtplib.SMTPException, OSError) as e:
         raise EmailError(f"SMTP-Fehler: {e}") from e
 
 
@@ -199,11 +201,11 @@ def send_test_email(to_email: str, db: Session = None) -> None:
 
     context = ssl.create_default_context()
     try:
-        with smtplib.SMTP(cfg.smtp_host, cfg.smtp_port) as server:
+        with smtplib.SMTP(cfg.smtp_host, cfg.smtp_port, timeout=SMTP_TIMEOUT) as server:
             if cfg.smtp_use_tls:
                 server.starttls(context=context)
             if cfg.smtp_user and cfg.smtp_password:
                 server.login(cfg.smtp_user, cfg.smtp_password)
             server.send_message(msg)
-    except smtplib.SMTPException as e:
+    except (smtplib.SMTPException, OSError) as e:
         raise EmailError(f"SMTP-Fehler: {e}") from e
