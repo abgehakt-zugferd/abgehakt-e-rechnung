@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, Response
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models.customer import Customer
 from app.models.company import Company
@@ -232,7 +232,8 @@ def list_invoices(
     seiten = max(1, -(-gesamt // SEITENGROESSE))
     seite = min(max(seite, 1), seiten)
 
-    invoices = (query.order_by(Invoice.issue_date.desc())
+    invoices = (query.options(joinedload(Invoice.customer))
+                .order_by(Invoice.issue_date.desc())
                 .offset((seite - 1) * SEITENGROESSE)
                 .limit(SEITENGROESSE)
                 .all())

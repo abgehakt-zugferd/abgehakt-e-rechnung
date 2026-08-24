@@ -12,13 +12,16 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
 
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
 from app.config import get_settings
+from app.database import get_db
+from app.models.invoice import Invoice
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -36,6 +39,22 @@ BEREICHE: dict[str, str] = {"pdfs": "PDF", "xml": "XML"}
 # bewusst eine Konstante, keine Einstellung.
 SEITENGROESSE = 100
 
+BELEG_STATUS = ("issued", "paid", "cancelled")
+
+
+def _bekannte_dateien(db: Session) -> tuple[set[str], set[str]]:
+    """Nur Belege aus der DB — Waisen auf der Platte bleiben unsichtbar (#13)."""
+    pdfs: set[str] = set()
+    xmls: set[str] = set()
+    for pdf, nummer in db.query(Invoice.pdf_filename, Invoice.invoice_number).filter(
+        Invoice.status.in_(BELEG_STATUS),
+    ):
+        if pdf:
+            pdfs.add(pdf)
+        if nummer:
+            xmls.add(f"{nummer}.xml")
+    return pdfs, xmls
+
 
 @dataclass
 class Dateiseite:
@@ -45,7 +64,7 @@ class Dateiseite:
     seiten: int
 
 
-def _dateien(bereich: str, q: str = "", seite: int = 1) -> Dateiseite:
+def _dateien(bereich: str, erlaubt: set[str], q: str = "", seite: int = 1) -> Dateiseite:
     """Eine Seite des Archivbereichs, neueste zuerst.
 
     Das Durchmustern des Verzeichnisses bleibt: „neueste zuerst" lässt sich ohne
@@ -69,6 +88,8 @@ def _dateien(bereich: str, q: str = "", seite: int = 1) -> Dateiseite:
                 continue
             if not eintrag.is_file():
                 continue
+            if eintrag.name not in erlaubt:
+                continue
             stat = eintrag.stat()
             treffer.append({
                 "name": eintrag.name,
@@ -85,20 +106,21 @@ def _dateien(bereich: str, q: str = "", seite: int = 1) -> Dateiseite:
 
 
 @router.get("/archiv", response_class=HTMLResponse)
-def archive_page(request: Request, q: str = "", seite: int = 1):
+def archive_page(request: Request, db: Session = Depends(get_db), q: str = "", seite: int = 1):
+    pdfs, xmls = _bekannte_dateien(db)
     return templates.TemplateResponse("archive/index.html", {
         "request": request,
         "q": q,
         "bereiche": [
             {"schluessel": schluessel, "titel": titel,
-             "seite": _dateien(schluessel, q, seite)}
+             "seite": _dateien(schluessel, pdfs if schluessel == "pdfs" else xmls, q, seite)}
             for schluessel, titel in BEREICHE.items()
         ],
     })
 
 
 @router.get("/archiv/datei/{bereich}/{name}")
-def archive_file(bereich: str, name: str):
+def archive_file(bereich: str, name: str, db: Session = Depends(get_db)):
     """Einzelne Archivdatei ausliefern.
 
     Der Dateiname kommt aus der URL — ohne Eingrenzung wäre das ein Leseloch in den
@@ -108,6 +130,10 @@ def archive_file(bereich: str, name: str):
     """
     if bereich not in BEREICHE:
         raise HTTPException(404, "Unbekannter Archivbereich.")
+    pdfs, xmls = _bekannte_dateien(db)
+    erlaubt = pdfs if bereich == "pdfs" else xmls
+    if Path(name).name not in erlaubt:
+        raise HTTPException(404, "Datei nicht gefunden.")
     basis = (settings.storage_path / bereich).resolve()
     ziel = (basis / Path(name).name).resolve()
     if ziel.parent != basis or not ziel.is_file():

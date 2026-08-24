@@ -141,6 +141,17 @@ def test_pdf_and_xml_amounts_match_mixed_tax_rates(tmp_path):
         )
 
 
+def test_gutschrift_xml_ohne_zahlungsweg_und_faelligkeit():
+    """#48: PDF und XML muessen bei Gutschriften gleich ohne Zahlungsaufforderung sein."""
+    import uuid as _uuid
+    inv = _invoice()
+    inv.invoice_type = "credit_note"
+    inv.original_invoice_id = _uuid.uuid4()
+    xml = zugferd_xml.generate_xml(inv, _company())
+    assert "SpecifiedTradeSettlementPaymentMeans" not in xml
+    assert "DueDateDateTime" not in xml
+
+
 @pytest.mark.parametrize("tax_category", ["E", "AE", "K", "O"])
 def test_pdf_and_xml_amounts_match_steuerfreie_kategorien(tmp_path, tax_category):
     """#32: steuerfreie Kategorien, Brutto = Netto."""

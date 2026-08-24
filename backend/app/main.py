@@ -16,6 +16,8 @@ from app.database import get_db
 from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import Invoice
+from app.services.customer_guard import CustomerDeleteError
+from app.services.invoice_guard import InvoiceStateError
 from app.routers import (
     customers, invoices, settings as settings_router, export, setup,
     updates, archive,
@@ -202,6 +204,34 @@ async def eingabefehlerseite(request: Request, exc: RequestValidationError):
     )
 
 
+@app.exception_handler(InvoiceStateError)
+async def rechnungsstatus_fehler(request: Request, exc: InvoiceStateError):
+    return templates.TemplateResponse(
+        request,
+        "fehler.html",
+        {
+            "status": 400,
+            "ueberschrift": _UEBERSCHRIFTEN[400],
+            "meldung": str(exc),
+        },
+        status_code=400,
+    )
+
+
+@app.exception_handler(CustomerDeleteError)
+async def kunden_loesch_fehler(request: Request, exc: CustomerDeleteError):
+    return templates.TemplateResponse(
+        request,
+        "fehler.html",
+        {
+            "status": 400,
+            "ueberschrift": _UEBERSCHRIFTEN[400],
+            "meldung": str(exc),
+        },
+        status_code=400,
+    )
+
+
 @app.get("/", response_class=RedirectResponse)
 def root():
     return RedirectResponse(url="/dashboard")
@@ -222,18 +252,24 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     first_of_month = today.replace(day=1)
 
     total_invoices = db.query(func.count(Invoice.id)).scalar() or 0
-    open_invoices = db.query(func.count(Invoice.id)).filter(Invoice.status == "issued").scalar() or 0
+    standard = Invoice.invoice_type.is_(None)
+    open_invoices = (
+        db.query(func.count(Invoice.id))
+        .filter(Invoice.status == "issued", standard)
+        .scalar()
+    ) or 0
     draft_count = db.query(func.count(Invoice.id)).filter(Invoice.status == "draft").scalar() or 0
 
     paid_this_month = (
         db.query(func.coalesce(func.sum(Invoice.gross_total), 0))
-        .filter(Invoice.status == "paid", Invoice.issue_date >= first_of_month)
+        .filter(Invoice.status == "paid", standard, Invoice.issue_date >= first_of_month)
         .scalar()
     ) or Decimal("0")
 
     revenue_ytd = (
         db.query(func.coalesce(func.sum(Invoice.gross_total), 0))
-        .filter(Invoice.status.in_(["issued", "paid"]), Invoice.issue_date >= today.replace(month=1, day=1))
+        .filter(Invoice.status.in_(["issued", "paid"]), standard,
+                Invoice.issue_date >= today.replace(month=1, day=1))
         .scalar()
     ) or Decimal("0")
 

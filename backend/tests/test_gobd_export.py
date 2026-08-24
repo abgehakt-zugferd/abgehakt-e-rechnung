@@ -163,6 +163,14 @@ def test_dokumentation_names_period_and_conventions(tmp_path):
     assert "discarded" in doc
 
 
+def test_dokumentation_timestamp_hat_zeitzone(tmp_path):
+    """#2: Erstellungszeit im Begleitschreiben mit Zeitzone, nicht naive Lokalzeit."""
+    zf = _build(tmp_path)
+    doc = zf.read("dokumentation.txt").decode("utf-8")
+    zeile = next(l for l in doc.splitlines() if l.startswith("Erstellt am:"))
+    assert "+" in zeile or zeile.rstrip().endswith("Z")
+
+
 def test_dokumente_are_included_from_storage(tmp_path):
     c = _customer()
     inv = _invoice(c)

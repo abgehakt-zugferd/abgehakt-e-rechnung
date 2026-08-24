@@ -139,3 +139,40 @@ def test_fremder_text_in_der_meldung_wird_maskiert(pg_session):
     assert r.status_code == 400
     assert "<script>alert(1)</script>" not in r.text
     assert "&lt;script&gt;" in r.text
+
+
+def test_invoice_state_error_kommt_als_html_seite(pg_session):
+    """#20: Session-Guard-Fehler duerfen nicht als nackter 500er enden."""
+    from fastapi.routing import APIRoute
+    from app.services.invoice_guard import InvoiceStateError
+
+    def _ausloeser():
+        raise InvoiceStateError("Statuswechsel nicht erlaubt.")
+
+    route = APIRoute("/_probe/invoice-state", _ausloeser, methods=["GET"])
+    app.router.routes.append(route)
+    try:
+        r = _client(pg_session).get("/_probe/invoice-state")
+        assert r.status_code == 400
+        assert r.headers["content-type"].startswith("text/html")
+        assert "Statuswechsel nicht erlaubt" in r.text
+    finally:
+        app.router.routes.remove(route)
+
+
+def test_customer_delete_error_kommt_als_html_seite(pg_session):
+    from fastapi.routing import APIRoute
+    from app.services.customer_guard import CustomerDeleteError
+
+    def _ausloeser():
+        raise CustomerDeleteError("Kunden duerfen nicht geloescht werden.")
+
+    route = APIRoute("/_probe/customer-delete", _ausloeser, methods=["GET"])
+    app.router.routes.append(route)
+    try:
+        r = _client(pg_session).get("/_probe/customer-delete")
+        assert r.status_code == 400
+        assert r.headers["content-type"].startswith("text/html")
+        assert "nicht geloescht" in r.text
+    finally:
+        app.router.routes.remove(route)
