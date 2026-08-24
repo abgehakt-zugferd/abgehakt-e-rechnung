@@ -97,6 +97,25 @@ def test_total_beyond_tolerance_flagged():
     assert "GROSS_TOTAL_MISMATCH" in _codes(inv)
 
 
+def test_item_net_within_tolerance_ok():
+    """#33: Positions-Toleranz an der 0,02-€-Grenze, nicht nur gross_total."""
+    item = _item(1, "2", "100.00", "19")
+    item.net_amount = item.net_amount + Decimal("0.02")
+    item.tax_amount = (item.net_amount * Decimal("19") / 100).quantize(Decimal("0.01"))
+    item.gross_amount = item.net_amount + item.tax_amount
+    inv = _invoice([item])
+    assert "ITEM_AMOUNT_MISMATCH" not in _codes(inv)
+
+
+def test_item_net_beyond_tolerance_flagged():
+    item = _item(1, "2", "100.00", "19")
+    item.net_amount = item.net_amount + Decimal("0.03")
+    item.tax_amount = (item.net_amount * Decimal("19") / 100).quantize(Decimal("0.01"))
+    item.gross_amount = item.net_amount + item.tax_amount
+    inv = _invoice([item])
+    assert "ITEM_AMOUNT_MISMATCH" in _codes(inv)
+
+
 # ── Ungültige Steuersätze ────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("bad_rate", ["10", "16", "20"])

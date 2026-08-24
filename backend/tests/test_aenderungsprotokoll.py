@@ -202,6 +202,7 @@ def test_das_protokoll_bietet_kein_bearbeiten_oder_loeschen(pg_session):
     app.dependency_overrides[get_db] = lambda: pg_session
 
     html = TestClient(app).get(f"/invoices/{rechnung.id}").text
+    assert "ÄNDERUNGSPROTOKOLL" in html.upper()
     abschnitt = html.upper().split("ÄNDERUNGSPROTOKOLL")[1]
 
     for verboten in ("PROTOKOLL/LOESCHEN", "PROTOKOLL/BEARBEITEN"):
