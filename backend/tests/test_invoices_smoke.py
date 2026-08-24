@@ -8,6 +8,7 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 
 from app.database import get_db
 from app.main import app
@@ -68,3 +69,24 @@ def test_invoice_detail_renders(pg_session):
 def test_invoice_detail_unknown_404(pg_session):
     r = _client(pg_session).get(f"/invoices/{uuid.uuid4()}")
     assert r.status_code == 404
+
+
+def test_liste_liest_kunden_ohne_n_plus_eins(pg_session):
+    """#1: joinedload verhindert Lazy-Loads je Zeile in der Rechnungsliste."""
+    for i in range(5):
+        _invoice(pg_session, number=f"RE-N1-{i}")
+    engine = pg_session.bind
+    abfragen: list[str] = []
+
+    def zaehle(*args, **kwargs):
+        abfragen.append(args[0])
+
+    event.listen(engine, "before_cursor_execute", zaehle)
+    try:
+        r = _client(pg_session).get("/invoices/")
+        assert r.status_code == 200
+        assert "Smoke GmbH" in r.text
+        # Mit N+1 waeren es deutlich mehr als count + eine Join-Abfrage.
+        assert len(abfragen) <= 6, f"Zu viele SQL-Abfragen: {len(abfragen)}"
+    finally:
+        event.remove(engine, "before_cursor_execute", zaehle)

@@ -119,11 +119,13 @@ def test_das_archiv_liefert_hoechstens_eine_seite(tmp_path, monkeypatch):
 
     verzeichnis = tmp_path / "pdfs"
     verzeichnis.mkdir()
-    for i in range(archive.SEITENGROESSE + 7):
-        (verzeichnis / f"RE-2026-{i:04d}.pdf").write_bytes(b"%PDF-1.4\n")
+    anzahl = archive.SEITENGROESSE + 7
+    namen = {f"RE-2026-{i:04d}.pdf" for i in range(anzahl)}
+    for name in namen:
+        (verzeichnis / name).write_bytes(b"%PDF-1.4\n")
     monkeypatch.setattr(archive.settings, "storage_path", tmp_path)
 
-    seite = archive._dateien("pdfs")
+    seite = archive._dateien("pdfs", namen)
 
     assert len(seite.dateien) == archive.SEITENGROESSE
     assert seite.gesamt == archive.SEITENGROESSE + 7
@@ -135,13 +137,13 @@ def test_das_archiv_zaehlt_auch_beim_suchen_richtig(tmp_path, monkeypatch):
 
     verzeichnis = tmp_path / "pdfs"
     verzeichnis.mkdir()
-    for i in range(5):
-        (verzeichnis / f"RE-2026-{i:04d}.pdf").write_bytes(b"%PDF-1.4\n")
-    for i in range(3):
-        (verzeichnis / f"GS-2026-{i:04d}.pdf").write_bytes(b"%PDF-1.4\n")
+    re = {f"RE-2026-{i:04d}.pdf" for i in range(5)}
+    gs = {f"GS-2026-{i:04d}.pdf" for i in range(3)}
+    for name in re | gs:
+        (verzeichnis / name).write_bytes(b"%PDF-1.4\n")
     monkeypatch.setattr(archive.settings, "storage_path", tmp_path)
 
-    seite = archive._dateien("pdfs", q="GS-")
+    seite = archive._dateien("pdfs", re | gs, q="GS-")
 
     assert seite.gesamt == 3
     assert all(d["name"].startswith("GS-") for d in seite.dateien)
@@ -155,13 +157,15 @@ def test_das_archiv_bleibt_neueste_zuerst(tmp_path, monkeypatch):
 
     verzeichnis = tmp_path / "pdfs"
     verzeichnis.mkdir()
-    for i in range(archive.SEITENGROESSE + 3):
-        p = verzeichnis / f"RE-2026-{i:04d}.pdf"
+    anzahl = archive.SEITENGROESSE + 3
+    namen = {f"RE-2026-{i:04d}.pdf" for i in range(anzahl)}
+    for i, name in enumerate(sorted(namen)):
+        p = verzeichnis / name
         p.write_bytes(b"%PDF-1.4\n")
         os.utime(p, (1_700_000_000 + i * 60, 1_700_000_000 + i * 60))
     monkeypatch.setattr(archive.settings, "storage_path", tmp_path)
 
-    seite = archive._dateien("pdfs")
+    seite = archive._dateien("pdfs", namen)
 
     zeiten = [d["geaendert"] for d in seite.dateien]
     assert zeiten == sorted(zeiten, reverse=True)

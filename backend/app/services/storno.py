@@ -30,6 +30,7 @@ def build_storno(original: Invoice, invoice_number: str, today: date) -> Invoice
         tax_total=original.tax_total,
         gross_total=original.gross_total,
         archive_until=berechne_archive_until(today),
+        buyer_reference=original.buyer_reference,
         status="draft",
     )
     storno.items = [

@@ -670,6 +670,20 @@ class TestTaxCategory:
         errors, _ = validate_invoice(inv, _company())
         assert "TAX_CATEGORY_RATE_MISMATCH" not in _codes(errors)
 
+    def test_steuerkategorie_o_verlangt_steuer_nummer(self):
+        """#46: nur USt-IdNr. reicht bei Kategorie O nicht — sonst Sackgasse bei Mustang."""
+        item = _item(tax_rate=Decimal("0.00"), net_amount=Decimal("200.00"),
+                     tax_amount=Decimal("0.00"), gross_amount=Decimal("200.00"))
+        inv = _invoice(
+            tax_category="O",
+            items=[item],
+            net_total=Decimal("200.00"),
+            tax_total=Decimal("0.00"),
+            gross_total=Decimal("200.00"),
+        )
+        errors, _ = validate_invoice(inv, _company(tax_number=None, vat_id="DE123456789"))
+        assert "SELLER_TAX_NUMBER_REQUIRED_FOR_O" in _codes(errors)
+
 
 # ── Konsistenz invoice_type ↔ original_invoice_id (ROADMAP Punkt 3) ──────────
 import uuid

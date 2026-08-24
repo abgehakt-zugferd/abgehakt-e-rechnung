@@ -14,7 +14,7 @@ import csv
 import io
 import json
 import zipfile
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Sequence
 from xml.sax.saxutils import escape
@@ -127,7 +127,7 @@ def _dokumentation(date_from: date, date_to: date,
 ================================================
 
 Zeitraum: {date_from.isoformat()} bis {date_to.isoformat()}
-Erstellt am: {datetime.now().isoformat(timespec="seconds")}
+Erstellt am: {datetime.now(timezone.utc).isoformat(timespec="seconds")}
 
 Konventionen
 ------------

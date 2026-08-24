@@ -36,6 +36,21 @@ def _inv(pg_session, status, gross, issue=date.today()):
     return inv
 
 
+def _gutschrift(pg_session, status, gross, issue=date.today()):
+    c = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Kunde",
+                 address_line1="Weg 1", zip_code="80331", city="München", country="DE")
+    pg_session.add(c)
+    pg_session.flush()
+    inv = Invoice(invoice_number=f"GS-{uuid.uuid4().hex[:6]}", customer_id=c.id,
+                  issue_date=issue, due_date=issue, currency="EUR",
+                  net_total=Decimal("0"), tax_total=Decimal("0"),
+                  gross_total=Decimal(gross), status=status,
+                  invoice_type="credit_note")
+    pg_session.add(inv)
+    pg_session.commit()
+    return inv
+
+
 def test_dashboard_zaehlt_status_korrekt(pg_session):
     for _ in range(2):
         _inv(pg_session, "draft", "0")
@@ -75,3 +90,19 @@ def test_dashboard_http_zeigt_kennzahlen(client, pg_session):
     assert r.status_code == 200
     assert ">1<" in r.text or "1</p>" in r.text
     assert "100" in r.text
+
+
+def test_dashboard_ytd_ignoriert_gutschriften(pg_session):
+    """#5: Gutschriften duerfen den YTD-Umsatz nicht aufblaehen."""
+    _inv(pg_session, "issued", "100.00")
+    _gutschrift(pg_session, "issued", "50.00")
+    ctx = main.dashboard(_request(), pg_session).context
+    assert Decimal(ctx["revenue_ytd"]) == Decimal("100.00")
+
+
+def test_dashboard_offene_posten_ignorieren_gutschriften(pg_session):
+    """#14: ausgestellte Gutschriften sind keine offenen Forderungen."""
+    _inv(pg_session, "issued", "100.00")
+    _gutschrift(pg_session, "issued", "50.00")
+    ctx = main.dashboard(_request(), pg_session).context
+    assert ctx["open_invoices"] == 1

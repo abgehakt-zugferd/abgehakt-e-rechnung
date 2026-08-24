@@ -68,6 +68,14 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
         errors.append(Issue("SELLER_ADDRESS_MISSING", "error", "Vollständige Adresse des Leistungserbringers fehlt.", "company.address"))
     if not company.tax_number and not company.vat_id:
         errors.append(Issue("SELLER_TAX_ID_MISSING", "error", "Steuernummer oder USt-IdNr. des Leistungserbringers fehlt (§ 14 Abs. 4 Nr. 2 UStG).", "company.tax"))
+    elif tax_category == "O" and not company.tax_number:
+        errors.append(Issue(
+            "SELLER_TAX_NUMBER_REQUIRED_FOR_O", "error",
+            "Bei Steuerbefreiung nach § 4 Nr. 21 UStG (Kategorie O) muss die Steuernummer "
+            "in den Einstellungen hinterlegt sein (EN16931 BR-CO-26). Die USt-IdNr. allein "
+            "genügt hier nicht.",
+            "company.tax_number",
+        ))
 
     # § 14 Abs. 4 Nr. 1 UStG – Leistungsempfänger
     customer = invoice.customer

@@ -48,3 +48,12 @@ def test_lifespan_boots_with_secret_key(monkeypatch):
     monkeypatch.setattr(get_settings(), "secret_key", "x" * 40)
     with TestClient(app):  # kein Fehler → Boot erfolgreich
         pass
+
+
+def test_entrypoint_nennt_deutschen_fehlertext():
+    """#3: Bekannte Startfehler sollen im Log erklaert werden, nicht nur set -e."""
+    from pathlib import Path
+    text = Path(__file__).resolve().parents[1] / "entrypoint.sh"
+    inhalt = text.read_text(encoding="utf-8")
+    assert "Abgehakt konnte nicht starten" in inhalt
+    assert "docker compose logs app" in inhalt

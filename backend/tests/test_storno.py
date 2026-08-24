@@ -29,6 +29,7 @@ def _original() -> Invoice:
         tax_total=Decimal("190.00"),
         gross_total=Decimal("1190.00"),
         status="issued",
+        buyer_reference="BST-4711",
     )
     inv.id = uuid.uuid4()
     inv.items = [
@@ -52,10 +53,16 @@ def test_storno_has_credit_note_type_and_reference():
     assert storno.customer_id == original.customer_id
 
 
+def test_storno_uebernimmt_buyer_reference():
+    """#16: BT-10 muss auf der Gutschrift stehen wie auf dem Original."""
+    original = _original()
+    storno = build_storno(original, "RE-2026-002", date(2026, 7, 7))
+    assert storno.buyer_reference == "BST-4711"
+
+
 def test_storno_copies_positive_amounts_and_items():
     original = _original()
     storno = build_storno(original, "RE-2026-002", date(2026, 7, 7))
-    # Beträge bleiben positiv und gleich dem Original (Stornowirkung via TypeCode 381)
     assert storno.net_total == Decimal("1000.00")
     assert storno.tax_total == Decimal("190.00")
     assert storno.gross_total == Decimal("1190.00")

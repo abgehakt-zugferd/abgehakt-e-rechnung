@@ -272,6 +272,29 @@ def _payment_means_xml(company: Company) -> str:
             </ram:SpecifiedTradeSettlementPaymentMeans>"""
 
 
+def _payment_terms_xml(invoice: Invoice) -> str:
+    """Gutschrift ohne Fälligkeit: keine Zahlungsaufforderung in der XML (#48)."""
+    text = invoice.payment_terms or "Zahlbar ohne Abzug."
+    if invoice.invoice_type == "credit_note":
+        return f"""
+            <ram:SpecifiedTradePaymentTerms>
+                <ram:Description>{_esc(text)}</ram:Description>
+            </ram:SpecifiedTradePaymentTerms>"""
+    return f"""
+            <ram:SpecifiedTradePaymentTerms>
+                <ram:Description>{_esc(text)}</ram:Description>
+                <ram:DueDateDateTime>
+                    <udt:DateTimeString format="102">{_fmt_date(invoice.due_date)}</udt:DateTimeString>
+                </ram:DueDateDateTime>
+            </ram:SpecifiedTradePaymentTerms>"""
+
+
+def _settlement_payment_xml(invoice: Invoice, company: Company) -> str:
+    if invoice.invoice_type == "credit_note":
+        return ""
+    return _payment_means_xml(company)
+
+
 def _esc(text: str | None) -> str:
     if not text:
         return ""
@@ -413,8 +436,6 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
     addr2_seller = (f"\n                    <ram:LineTwo>{_esc(company.address_line2)}</ram:LineTwo>"
                     if company.address_line2 else "")
 
-    payment_terms_text = invoice.payment_terms or "Zahlbar ohne Abzug."
-    
     # P7: TypeCode dynamisch basierend auf invoice_type
     type_code = _get_type_code(invoice)
 
@@ -466,14 +487,9 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
         <ram:ApplicableHeaderTradeSettlement>
             <ram:PaymentReference>{_esc(invoice.invoice_number)}</ram:PaymentReference>
             <ram:InvoiceCurrencyCode>{_esc(invoice.currency)}</ram:InvoiceCurrencyCode>
-{_payment_means_xml(company)}
+{_settlement_payment_xml(invoice, company)}
 {_tax_summaries_xml(invoice)}
-            <ram:SpecifiedTradePaymentTerms>
-                <ram:Description>{_esc(payment_terms_text)}</ram:Description>
-                <ram:DueDateDateTime>
-                    <udt:DateTimeString format="102">{_fmt_date(invoice.due_date)}</udt:DateTimeString>
-                </ram:DueDateDateTime>
-            </ram:SpecifiedTradePaymentTerms>
+{_payment_terms_xml(invoice)}
             <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
                 <ram:LineTotalAmount>{_fmt_amount(invoice.net_total)}</ram:LineTotalAmount>
                 <ram:TaxBasisTotalAmount>{_fmt_amount(invoice.net_total)}</ram:TaxBasisTotalAmount>

@@ -1,13 +1,26 @@
 #!/bin/sh
 set -e
+
+fehler() {
+  echo "Abgehakt konnte nicht starten: $1" >&2
+  echo "Naechster Schritt: docker compose logs app" >&2
+  exit 1
+}
+
 # Owner-Rolle sicherstellen (#151) — MUSS vor Alembic laufen: `alembic upgrade head`
 # verbindet ALS diese Rolle. Auf einer frischen Datenbank gibt es sie nicht, weil
 # Postgres beim ersten Start nur den Bootstrap-Superuser anlegt.
-python scripts/bootstrap_owner.py
-alembic upgrade head
+python scripts/bootstrap_owner.py \
+  || fehler "Datenbank-Rolle konnte nicht angelegt werden (bootstrap_owner.py). Pruefen Sie DATABASE_URL und ob Postgres erreichbar ist."
+
+alembic upgrade head \
+  || fehler "Datenbank-Migrationen sind fehlgeschlagen (alembic upgrade head). Ist Postgres bereit und DATABASE_URL korrekt?"
+
 # abgehakt_app + Grants sicherstellen (idempotent) — NACH den Migrationen, damit die
 # Grants auf die bereits existierenden Tabellen greifen (B2, Spec §5).
-python scripts/bootstrap_roles.py
+python scripts/bootstrap_roles.py \
+  || fehler "Anwendungsrolle konnte nicht eingerichtet werden (bootstrap_roles.py)."
+
 # Ohne Argumente startet hier ein Produktionsserver: ein Prozess, kein Dateiwaechter.
 # Das Nachladen (`--reload`) stand frueher fest in dieser Zeile und lief damit in jeder
 # Installation mit. Es kostete einen zweiten Prozess, startete den Server bei jeder
