@@ -1,0 +1,66 @@
+# Datenwache (Issues): prueft neue und bearbeitete Issues und Kommentare auf
+# Muster echter Daten (#49). In Issues gehoeren nur erfundene Testdaten.
+#
+# Zusatzmuster (Klarnamen, eigene Nummernkreise) NIE hier eintragen. Sie kommen
+# aus dem Actions-Secret ECHTDATEN_MUSTER (eine Regex je Zeile, '#' als Kommentar).
+#
+# Bei Fund: Label 'echtdaten-verdacht' + Hinweiskommentar. Der Kommentar nennt
+# nur die Musterklasse, nie den Treffertext.
+
+name: datenwache-issues
+
+on:
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  issues: write
+
+jobs:
+  pruefen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          ZUSATZ_MUSTER: ${{ secrets.ECHTDATEN_MUSTER }}
+        with:
+          script: |
+            const eingebaut = [
+              ['privater Schluessel', /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
+              ['IBAN-Format',         /DE\d{2} ?(?:\d{4} ?){4}\d{2}/],
+              ['USt-IdNr-Format',     /(?:^|[^A-Za-z0-9])DE\d{9}(?:[^0-9]|$)/],
+              ['Steuernummer-Format', /(?:^|[^0-9])\d{2,3}\/\d{3}\/\d{4,5}(?:[^0-9/]|$)/],
+            ];
+            const zusatz = (process.env.ZUSATZ_MUSTER || '')
+              .split('\n').map(z => z.trim())
+              .filter(z => z && !z.startsWith('#'))
+              .map(z => ['Zusatzmuster', new RegExp(z)]);
+            const text = [
+              context.payload.issue && context.payload.issue.title,
+              context.payload.issue && context.payload.issue.body,
+              context.payload.comment && context.payload.comment.body,
+            ].filter(Boolean).join('\n');
+            const klassen = [...new Set(
+              [...eingebaut, ...zusatz].filter(([, m]) => m.test(text)).map(([k]) => k)
+            )];
+            if (klassen.length === 0) return;
+            const issue_number = context.payload.issue.number;
+            try {
+              await github.rest.issues.createLabel({
+                ...context.repo, name: 'echtdaten-verdacht', color: 'b60205',
+                description: 'Datenwache: Muster echter Daten gefunden',
+              });
+            } catch (e) { /* Label existiert schon */ }
+            await github.rest.issues.addLabels({
+              ...context.repo, issue_number, labels: ['echtdaten-verdacht'],
+            });
+            await github.rest.issues.createComment({
+              ...context.repo, issue_number,
+              body: 'Datenwache: Dieser Eintrag enthaelt Text im Format echter Daten '
+                + '(Musterklasse: ' + klassen.join(', ') + '). In Issues gehoeren nur '
+                + 'erfundene Testdaten. Bitte bereinigen - und beachten: der '
+                + 'Bearbeitungsverlauf bleibt auf GitHub sichtbar; bei echten Daten '
+                + 'den Verlauf loeschen (Issue-Menue) oder den GitHub-Support bitten.',
+            });

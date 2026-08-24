@@ -1,0 +1,15 @@
+# Beispiel fuer die Zusatzmuster-Datei der Datenwache (#49).
+#
+# Die ECHTE Fassung liegt AUSSERHALB jedes Repositoriums
+# (Vorgabe: ~/.zemp/echtdaten-muster.txt, Pfad ueber ZEMP_ECHTDATEN_MUSTER)
+# bzw. fuer die Issue-Wache im Actions-Secret ECHTDATEN_MUSTER.
+# In einem Repo liegend waere die Musterliste selbst das Leck.
+#
+# Eine erweiterte Regex je Zeile. Alle Werte hier sind erfunden (probe):
+
+# Klarnamen von Beteiligten:
+Probe-Autorin
+# eigene Belegnummernkreise:
+999-99999-[0-9]{4}
+# eigene Vertragsnummernkreise:
+V-99999-[0-9]{3}
