@@ -699,6 +699,22 @@ class TestTaxCategory:
         assert "BUYER_VAT_ID_REQUIRED" not in _codes(errors)
         assert "TAX_CATEGORY_INVALID" not in _codes(errors)
 
+    def test_tax_category_e_valid_no_errors(self):
+        """#31: E (Kleinunternehmer § 19) muss in der zentralen Validator-Suite
+        positiv abgedeckt sein, nicht nur in test_kleinunternehmer.py."""
+        item = _item(tax_rate=Decimal("0.00"), net_amount=Decimal("500.00"),
+                     tax_amount=Decimal("0.00"), gross_amount=Decimal("500.00"))
+        inv = _invoice(
+            tax_category="E",
+            items=[item],
+            net_total=Decimal("500.00"),
+            tax_total=Decimal("0.00"),
+            gross_total=Decimal("500.00"),
+        )
+        errors, _ = validate_invoice(inv, _company())
+        assert "TAX_CATEGORY_RATE_MISMATCH" not in _codes(errors)
+        assert "TAX_CATEGORY_INVALID" not in _codes(errors)
+
     def test_inland_zero_rate_does_not_trigger_rate_mismatch(self):
         item = _item(tax_rate=Decimal("0.00"), net_amount=Decimal("200.00"),
                      tax_amount=Decimal("0.00"), gross_amount=Decimal("200.00"))

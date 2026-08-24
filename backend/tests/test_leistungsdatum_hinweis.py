@@ -85,11 +85,16 @@ def test_genau_250_euro_bleibt_freiwillig():
     assert "DELIVERY_DATE_MISSING" not in [f.code for f in fehler]
 
 
+def _delivery_date_block(text: str, *, limit: int = 400) -> str:
+    assert 'name="delivery_date"' in text, "Formularfeld delivery_date fehlt"
+    return text.split('name="delivery_date"')[1][:limit]
+
+
 def test_das_formular_behauptet_die_pflicht_nicht_schon_bei_250_euro():
     """Beide Seiten aneinandergebunden: „ab 250 €" liest sich als einschliesslich
     und widerspricht der Pruefung genau an der Grenze."""
     text = FORMULAR.read_text(encoding="utf-8")
-    block = text.split('name="delivery_date"')[1][:400]
+    block = _delivery_date_block(text)
 
     assert "ab 250" not in block, (
         "Das Formular kuendigt eine Pflicht an, die bei genau 250 € nicht besteht"
@@ -98,7 +103,7 @@ def test_das_formular_behauptet_die_pflicht_nicht_schon_bei_250_euro():
 
 def test_das_formular_nennt_das_leistungsdatum_nicht_empfohlen():
     text = FORMULAR.read_text(encoding="utf-8")
-    block = text.split('name="delivery_date"')[1][:400]
+    block = _delivery_date_block(text)
 
     assert "empfohlen" not in block, (
         "Das Formular nennt ein Feld freiwillig, das die Prüfung ab 250 € "
@@ -108,7 +113,7 @@ def test_das_formular_nennt_das_leistungsdatum_nicht_empfohlen():
 
 def test_das_formular_nennt_die_grenze_von_250_euro():
     text = FORMULAR.read_text(encoding="utf-8")
-    block = text.split('name="delivery_date"')[1][:400]
+    block = _delivery_date_block(text)
 
     assert "250" in block, (
         "Ohne die Grenze bleibt unklar, wann das Feld Pflicht ist"
@@ -127,7 +132,7 @@ def test_der_hinweis_steht_auch_dann_da_wenn_das_formular_neu_geladen_wird(pg_se
 
     html = TestClient(app, follow_redirects=False).get("/invoices/neu").text
 
-    assert "250" in html.split('name="delivery_date"')[1][:400]
+    assert "250" in _delivery_date_block(html)
 
 
 def test_das_formular_nennt_die_pflicht_bei_innergemeinschaftlicher_lieferung():
@@ -138,7 +143,7 @@ def test_das_formular_nennt_die_pflicht_bei_innergemeinschaftlicher_lieferung():
     Widerspruch entsteht auf derselben Seite, ohne dass er dazwischen etwas tut.
     """
     text = FORMULAR.read_text(encoding="utf-8")
-    block = text.split('name="delivery_date"')[1][:900]
+    block = _delivery_date_block(text, limit=900)
 
     assert "innergemeinschaftlich" in block.lower(), (
         "Das Formular verschweigt, dass die Kleinbetragsbefreiung bei ig. "

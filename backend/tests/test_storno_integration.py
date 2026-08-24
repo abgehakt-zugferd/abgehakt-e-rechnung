@@ -46,6 +46,22 @@ def _client(pg_session):
     return TestClient(app, follow_redirects=False)
 
 
+def test_storno_paid_invoice_persists_credit_note(pg_session):
+    """#30: bezahlte Rechnungen sind der häufigere Korrekturfall — der Router
+    erlaubt Storno für issued und paid, bisher war nur issued im HTTP→DB-Pfad
+    abgedeckt."""
+    original = _original(pg_session, "paid")
+    r = _client(pg_session).post(f"/invoices/{original.id}/storno")
+    assert r.status_code == 303
+
+    pg_session.expire_all()
+    storno = (pg_session.query(Invoice)
+              .filter(Invoice.original_invoice_id == original.id).first())
+    assert storno is not None, "Storno einer bezahlten Rechnung wurde nicht persistiert"
+    assert storno.invoice_type == "credit_note"
+    assert pg_session.get(Invoice, original.id).status == "paid"
+
+
 def test_storno_persists_credit_note_and_leaves_original(pg_session):
     original = _original(pg_session, "issued")
     r = _client(pg_session).post(f"/invoices/{original.id}/storno")

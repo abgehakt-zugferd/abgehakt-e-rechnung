@@ -10,9 +10,13 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
+from fastapi.testclient import TestClient
+
 from app.config import get_settings
+from app.database import get_db
 from app.db.immutability_triggers import install
 from app.db.roles import ensure_app_role, resolve_owner_role
+from app.main import app
 
 TEST_DB_NAME = "abgehakt_test"
 
@@ -120,6 +124,15 @@ def pg_session(pg_engine):
 
     yield session
     session.close()
+
+
+@pytest.fixture()
+def client(pg_session):
+    """TestClient mit pg_session als DB; Overrides werden nach dem Test geleert."""
+    app.dependency_overrides[get_db] = lambda: pg_session
+    with TestClient(app, follow_redirects=False) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture(scope="session")

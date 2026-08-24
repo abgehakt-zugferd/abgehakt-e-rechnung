@@ -59,3 +59,19 @@ def test_dashboard_leer_ist_null(pg_session):
     assert ctx["open_invoices"] == 0
     assert ctx["draft_count"] == 0
     assert ctx["recent_invoices"] == []
+
+
+def test_dashboard_per_http_route(client):
+    """#42: die Route durchlaufen, nicht nur main.dashboard() direkt aufrufen."""
+    r = client.get("/dashboard")
+    assert r.status_code == 200
+    assert "ÜBERSICHT" in r.text
+    assert "RECHNUNGEN GESAMT" in r.text
+
+
+def test_dashboard_http_zeigt_kennzahlen(client, pg_session):
+    _inv(pg_session, "issued", "100.00")
+    r = client.get("/dashboard")
+    assert r.status_code == 200
+    assert ">1<" in r.text or "1</p>" in r.text
+    assert "100" in r.text
