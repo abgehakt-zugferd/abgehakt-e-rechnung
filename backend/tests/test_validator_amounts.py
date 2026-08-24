@@ -7,50 +7,20 @@ Hier systematisch: konsistente Summen erzeugen KEINE Mismatch-Fehler, jenseits d
 Toleranz DOCH; ungültige Sätze werden erkannt.
 """
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 
 import pytest
 
-from app.models.company import Company
-from app.models.customer import Customer
-from app.models.invoice import Invoice, InvoiceItem
 from app.services.validator import validate_invoice
+from tests.factories import (
+    orm_company as _company,
+    orm_customer as _customer,
+    orm_invoice as _invoice,
+    orm_item as _item,
+)
 
 _MISMATCH = {"NET_TOTAL_MISMATCH", "TAX_TOTAL_MISMATCH", "GROSS_TOTAL_MISMATCH",
              "ITEM_AMOUNT_MISMATCH", "ITEM_TAX_MISMATCH"}
-
-
-def _company():
-    return Company(id=1, name="Muster Handwerk GmbH", address_line1="Musterstraße 1",
-                   zip_code="12345", city="Musterstadt", country="DE",
-                   tax_number="123/456/78901", vat_id="DE123456789")
-
-
-def _customer():
-    return Customer(name="Kunde GmbH", address_line1="Weg 1", zip_code="10115",
-                    city="Berlin", country="DE", vat_id="DE987654321")
-
-
-def _item(pos, qty, price, rate):
-    net = (Decimal(qty) * Decimal(price)).quantize(Decimal("0.01"), ROUND_HALF_UP)
-    tax = (net * Decimal(rate) / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
-    return InvoiceItem(position=pos, description="Leistung", unit="Stk",
-                       quantity=Decimal(qty), unit_price=Decimal(price),
-                       tax_rate=Decimal(rate), net_amount=net, tax_amount=tax,
-                       gross_amount=net + tax)
-
-
-def _invoice(items, *, net=None, tax=None, gross=None, tax_category="S"):
-    net = net if net is not None else sum(i.net_amount for i in items)
-    tax = tax if tax is not None else sum(i.tax_amount for i in items)
-    gross = gross if gross is not None else net + tax
-    inv = Invoice(invoice_number="RE-2026-001", issue_date=date(2026, 6, 1),
-                  due_date=date(2026, 6, 15), currency="EUR", net_total=net,
-                  tax_total=tax, gross_total=gross, tax_category=tax_category,
-                  payment_terms="14 Tage")
-    inv.customer = _customer()
-    inv.items = items
-    return inv
 
 
 def _codes(inv):

@@ -14,72 +14,14 @@ Abgedeckte Regeln:
 import pytest
 from decimal import Decimal
 from datetime import date
-from types import SimpleNamespace
 
 from app.services.validator import validate_invoice, Issue
-
-
-# ── Factories ──────────────────────────────────────────────────────────────
-
-def _company(**kwargs):
-    defaults = dict(
-        name="Muster Handwerk GmbH",
-        address_line1="Musterstraße 1",
-        zip_code="12345",
-        city="Musterstadt",
-        country="DE",
-        tax_number="12/345/67890",
-        vat_id=None,
-        bank_iban="DE89370400440532013000",
-    )
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
-
-
-def _customer(**kwargs):
-    defaults = dict(
-        name="Muster GmbH",
-        address_line1="Hauptstraße 10",
-        zip_code="80331",
-        city="München",
-        country="DE",
-        vat_id=None,
-    )
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
-
-
-def _item(position=1, description="Beratungsleistung", unit="Stunde",
-          quantity=Decimal("2.0000"), unit_price=Decimal("100.00"),
-          tax_rate=Decimal("19.00"), net_amount=Decimal("200.00"),
-          tax_amount=Decimal("38.00"), gross_amount=Decimal("238.00")):
-    return SimpleNamespace(
-        position=position, description=description, unit=unit,
-        quantity=quantity, unit_price=unit_price, tax_rate=tax_rate,
-        net_amount=net_amount, tax_amount=tax_amount, gross_amount=gross_amount,
-    )
-
-
-def _invoice(**kwargs):
-    defaults = dict(
-        invoice_number="RE-2026-001",
-        issue_date=date(2026, 6, 11),
-        due_date=date(2026, 6, 25),
-        delivery_date=date(2026, 6, 11),
-        payment_terms="Zahlbar innerhalb 14 Tagen.",
-        notes=None,
-        currency="EUR",
-        net_total=Decimal("200.00"),
-        tax_total=Decimal("38.00"),
-        gross_total=Decimal("238.00"),
-        status="draft",
-        customer=_customer(),
-        items=[_item()],
-        tax_category="S",
-        zugferd_profile="EN16931",
-    )
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
+from tests.factories import (
+    company_stub as _company,
+    customer_stub as _customer,
+    item_stub as _item,
+    validator_invoice_stub as _invoice,
+)
 
 
 def _codes(issues: list[Issue]) -> set[str]:
