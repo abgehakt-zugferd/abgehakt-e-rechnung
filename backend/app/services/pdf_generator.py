@@ -2,6 +2,7 @@
 Erstellt das visuelle Rechnungs-PDF im deutschen Standard mit ReportLab.
 Das PDF wird anschließend von Mustang mit dem ZUGFeRD-XML kombiniert.
 """
+import io
 from decimal import Decimal
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -22,6 +23,7 @@ from app.darstellung import euro, menge
 from app.models.invoice import Invoice
 from app.models.company import Company
 from app.services.pdf_fonts import register_fonts
+from app.services.epc_qr import build_epc_payload, qr_png_bytes
 from app.services.zugferd_xml import EXEMPTION_REASONS
 
 # ── Firmenlogo ───────────────────────────────────────────────────────────────
@@ -521,6 +523,20 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
             bank_parts.append(company.bank_name)
         story.append(Paragraph(" · ".join(bank_parts), small))
         story.append(Paragraph(f"Verwendungszweck: {invoice.invoice_number}", small))
+        try:
+            payload = build_epc_payload(
+                beneficiary_name=company.name,
+                iban=company.bank_iban,
+                bic=company.bank_bic,
+                amount=invoice.gross_total,
+                currency=getattr(invoice, "currency", "EUR") or "EUR",
+                remittance=invoice.invoice_number,
+            )
+            story.append(Spacer(1, 0.4 * cm))
+            story.append(Image(io.BytesIO(qr_png_bytes(payload)), width=3.5 * cm, height=3.5 * cm))
+            story.append(Paragraph("Zum Überweisen scannen.", small))
+        except ValueError:
+            pass
 
     # ── Freitext / Notiz ─────────────────────────────────────────────────────
     if invoice.notes:
