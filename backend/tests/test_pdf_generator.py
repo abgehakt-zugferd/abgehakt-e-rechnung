@@ -141,3 +141,48 @@ def test_standard_pdf_behält_zahlungsblock(tmp_path):
     assert "Rechnungsbetrag" in text
     assert "IBAN:" in text
     assert "Verwendungszweck:" in text
+
+
+def _pdf_image_count(path: Path) -> int:
+    count = 0
+    for page in PdfReader(str(path)).pages:
+        resources = page.get("/Resources")
+        if not resources:
+            continue
+        xobjects = resources.get("/XObject")
+        if not xobjects:
+            continue
+        for ref in xobjects.values():
+            obj = ref.get_object()
+            if obj.get("/Subtype") == "/Image":
+                count += 1
+    return count
+
+
+def test_standard_pdf_mit_iban_enthaelt_epc_qr(tmp_path):
+    """#52: Girocode für Banking-Apps neben dem Zahlungsblock."""
+    out = tmp_path / "invoice.pdf"
+    pdf_generator.generate_pdf(_sample_invoice(_sample_customer()), _sample_company(), out)
+    text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages)
+    assert "Zum Überweisen scannen" in text
+    assert _pdf_image_count(out) >= 1
+
+
+def test_credit_note_pdf_ohne_epc_qr(tmp_path):
+    out = tmp_path / "storno.pdf"
+    inv = _sample_invoice(_sample_customer(), invoice_type="credit_note", original_invoice_id=1)
+    pdf_generator.generate_pdf(inv, _sample_company(), out)
+    text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages)
+    assert "Zum Überweisen scannen" not in text
+    assert _pdf_image_count(out) == 0
+
+
+def test_standard_pdf_ohne_iban_kein_epc_qr(tmp_path):
+    company = _sample_company()
+    company.bank_iban = None
+    company.bank_bic = None
+    out = tmp_path / "invoice.pdf"
+    pdf_generator.generate_pdf(_sample_invoice(_sample_customer()), company, out)
+    text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages)
+    assert "Zum Überweisen scannen" not in text
+    assert _pdf_image_count(out) == 0

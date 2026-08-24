@@ -73,10 +73,14 @@ def test_ohne_logodatei_kein_logo(storage):
 
 
 def test_pdf_ohne_logodatei_wird_erzeugt(storage):
+    """Ohne Logo und ohne EPC-QR (keine IBAN) bleibt das PDF bildfrei."""
     out = storage / "inv.pdf"
-    pdf_generator.generate_pdf(_invoice(), _company(), out)
+    company = _company()
+    company.bank_iban = None
+    company.bank_bic = None
+    pdf_generator.generate_pdf(_invoice(), company, out)
     assert not _has_image_xobject(PdfReader(str(out))), \
-        "Ohne Logodatei darf kein Bild im PDF stehen"
+        "Ohne Logodatei und ohne QR darf kein Bild im PDF stehen"
 
 
 def test_pdf_bettet_vorhandenes_logo_ein(storage):

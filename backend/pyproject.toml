@@ -21,6 +21,7 @@ dependencies = [
   "python-dotenv==1.0.1",
   "cryptography==44.0.0",
   "defusedxml==0.7.1",
+  "qrcode==8.2",
 ]
 
 [dependency-groups]
