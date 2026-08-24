@@ -24,6 +24,12 @@ import xml.etree.ElementTree as ET
 from app.services.zugferd_xml import (
     generate_xml, PROFILE_IDS, NonCompliantProfileError, UnknownInvoiceTypeError,
 )
+from tests.factories import (
+    company_stub as _company,
+    customer_stub as _customer,
+    item_stub as _item,
+    zugferd_invoice_stub as _invoice,
+)
 
 NS = {
     "rsm": "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100",
@@ -31,82 +37,6 @@ NS = {
     "udt": "urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100",
     "qdt": "urn:un:unece:uncefact:data:standard:QualifiedDataType:100",
 }
-
-
-# ── Factories ──────────────────────────────────────────────────────────────
-
-def _company(**kwargs):
-    defaults = dict(
-        name="Muster Handwerk GmbH",
-        address_line1="Musterstraße 1",
-        address_line2=None,
-        zip_code="12345",
-        city="Musterstadt",
-        country="DE",
-        tax_number="12/345/67890",
-        vat_id=None,
-        # Diese drei erzeugen BG-6 und BT-34 (#153). Sie stehen hier auch dann,
-        # wenn ein Test sie nicht braucht: ein Stub, dem ein Modellfeld fehlt,
-        # bricht den Generator mit AttributeError statt eine Aussage zu prüfen.
-        email=None,
-        phone=None,
-        contact_name=None,
-        bank_iban=None,
-        bank_bic=None,
-    )
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
-
-
-def _customer(**kwargs):
-    defaults = dict(
-        name="Muster GmbH",
-        address_line1="Hauptstraße 10",
-        address_line2=None,
-        zip_code="80331",
-        city="München",
-        country="DE",
-        vat_id=None,
-        email=None,   # BT-49 (#153), siehe Kommentar in _company
-    )
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
-
-
-def _item(position=1, description="Beratungsleistung", unit="Stunde",
-          quantity=Decimal("2.0000"), unit_price=Decimal("100.00"),
-          tax_rate=Decimal("19.00"), net_amount=Decimal("200.00"),
-          tax_amount=Decimal("38.00"), gross_amount=Decimal("238.00")):
-    return SimpleNamespace(
-        position=position, description=description, unit=unit,
-        quantity=quantity, unit_price=unit_price, tax_rate=tax_rate,
-        net_amount=net_amount, tax_amount=tax_amount, gross_amount=gross_amount,
-    )
-
-
-def _invoice(**kwargs):
-    defaults = dict(
-        invoice_number="RE-2026-001",
-        issue_date=date(2026, 6, 11),
-        due_date=date(2026, 6, 25),
-        delivery_date=None,
-        payment_terms="Zahlbar innerhalb 14 Tagen.",
-        notes=None,
-        currency="EUR",
-        net_total=Decimal("200.00"),
-        tax_total=Decimal("38.00"),
-        gross_total=Decimal("238.00"),
-        status="draft",
-        zugferd_profile="EN16931",
-        customer=_customer(),
-        items=[_item()],
-        tax_category="S",
-        invoice_type=None,  # P7: Standard ist None → TypeCode 380
-        original_invoice_id=None,  # P5: Bezug auf Originalrechnung
-        original_invoice=None,  # P5: verknüpfte Originalrechnung (nur bei Storno gesetzt)
-    )
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
 
 
 def _parse(xml_str: str) -> ET.Element:

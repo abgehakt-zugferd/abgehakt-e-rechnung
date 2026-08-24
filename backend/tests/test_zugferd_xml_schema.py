@@ -20,45 +20,13 @@ import pytest
 
 from app.models.company import Company
 from app.models.customer import Customer
-from app.models.invoice import Invoice, InvoiceItem
+from app.models.invoice import Invoice
 from app.services import mustang, zugferd_xml
+from tests.factories import orm_company as _company, orm_invoice_for as _invoice, orm_item as _item
 
 pytestmark = pytest.mark.skipif(
     not mustang.jar_available(), reason="Mustang-JAR nicht verfügbar"
 )
-
-
-def _company(**over) -> Company:
-    kw = dict(
-        id=1, name="Muster Handwerk GmbH", address_line1="Musterstraße 1",
-        zip_code="12345", city="Musterstadt", email="info@example.de", phone="+49 111",
-        vat_id="DE123456789", tax_number="123/456/78901",
-        bank_iban="DE00123456780000000000", bank_bic="ABCDDEFF",
-        bank_name="Testbank", country="DE",
-    )
-    kw.update(over)
-    return Company(**kw)
-
-
-def _invoice(customer: Customer, **over) -> Invoice:
-    item = InvoiceItem(
-        position=1, description="Beratungsleistung", quantity=Decimal("2"),
-        unit="Std", unit_price=Decimal("100.00"), tax_rate=Decimal("19"),
-        net_amount=Decimal("200.00"), tax_amount=Decimal("38.00"),
-        gross_amount=Decimal("238.00"),
-    )
-    kw = dict(
-        invoice_number="RE-2026-778", issue_date=date(2026, 7, 8),
-        delivery_date=date(2026, 7, 8), due_date=date(2026, 7, 22), currency="EUR",
-        net_total=Decimal("200.00"), tax_total=Decimal("38.00"),
-        gross_total=Decimal("238.00"), tax_category="S",
-        payment_terms="Zahlbar innerhalb 14 Tagen.", notes="",
-    )
-    kw.update(over)
-    inv = Invoice(**kw)
-    inv.customer = customer
-    inv.items = [item]
-    return inv
 
 
 def _validate(invoice: Invoice, company: Company) -> dict:
@@ -125,15 +93,6 @@ def test_seller_address_variants_are_schema_valid(company_over):
 
 
 # ── Steuersätze/Summen: schema-valide XML über Sätze und gemischte Positionen ──
-
-def _item(pos, qty, price, rate):
-    net = (Decimal(qty) * Decimal(price)).quantize(Decimal("0.01"))
-    tax = (net * Decimal(rate) / 100).quantize(Decimal("0.01"))
-    return InvoiceItem(position=pos, description="Leistung", unit="Std",
-                       quantity=Decimal(qty), unit_price=Decimal(price),
-                       tax_rate=Decimal(rate), net_amount=net, tax_amount=tax,
-                       gross_amount=net + tax)
-
 
 def _multi_item_invoice(items):
     net = sum(i.net_amount for i in items)
