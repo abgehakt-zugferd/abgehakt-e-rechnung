@@ -294,8 +294,11 @@ def _delivery_xml(invoice: Invoice) -> str:
                     <ram:CountryID>{_esc(customer.country)}</ram:CountryID>
                 </ram:PostalTradeAddress>
             </ram:ShipToTradeParty>"""
-    if not invoice.delivery_date and not ship_to:
-        return ""
+    # Der Block bleibt auch dann stehen, wenn nichts darin steht: das CII-Schema
+    # verlangt <ram:ApplicableHeaderTradeDelivery> zwischen Agreement und
+    # Settlement. Fehlte er, war die Datei schon am Schema unzulässig, nicht erst
+    # an einer Geschäftsregel. Getroffen hat das die Kleinbetragsrechnung ohne
+    # Leistungsdatum, die § 33 UStDV ausdrücklich erlaubt (#47).
     delivery_event = ""
     if invoice.delivery_date:
         delivery_event = f"""

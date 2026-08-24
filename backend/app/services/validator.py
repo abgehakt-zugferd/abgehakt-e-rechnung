@@ -42,6 +42,7 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
     warnings: list[Issue] = []
 
     gross = invoice.gross_total
+    tax_category = getattr(invoice, "tax_category", "S")
     # „nicht uebersteigt" (§ 33 UStDV) heisst bis EINSCHLIESSLICH 250 €. Mit `<`
     # verlangte die Pruefung bei genau 250,00 € brutto ein Leistungsdatum und wies
     # die Finalisierung ab, fuer eine Rechnung, die das Gesetz davon befreit (#23).
@@ -107,9 +108,22 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
     # harter Gate statt Warnung. Bei Nicht-Kleinbetragsrechnungen (über 250 €) ist der
     # Leistungszeitpunkt zwingend — fehlt er, blockiert das Finalize-Gate (400).
     # Kleinbetrag (bis 250 € einschließlich, § 33 UStDV) bleibt ausgenommen.
-    if not simplified and not invoice.delivery_date:
+    #
+    # Bei innergemeinschaftlicher Lieferung (Kategorie K) gilt die
+    # Kleinbetragsausnahme NICHT: EN16931 verlangt über BR-IC-11 das Lieferdatum
+    # (BT-72) oder einen Abrechnungszeitraum, unabhängig vom Betrag. § 33 UStDV
+    # erlässt nur die nationale Pflichtangabe, die europäische Norm gilt daneben
+    # weiter. Ohne diese Zeile kam der Beleg am Gate vorbei und scheiterte danach
+    # an Mustang, mit einer Meldung aus dem Werkzeug statt einer aus der
+    # Anwendung (#47).
+    innergemeinschaftlich = tax_category == "K"
+    if not invoice.delivery_date and (not simplified or innergemeinschaftlich):
         errors.append(Issue(
             "DELIVERY_DATE_MISSING", "error",
+            "Zeitpunkt der Leistungserbringung fehlt. Bei einer innergemeinschaftlichen "
+            "Lieferung ist er unabhängig vom Rechnungsbetrag zwingend (EN16931, BR-IC-11); "
+            "die Kleinbetragsregelung des § 33 UStDV gilt dafür nicht."
+            if innergemeinschaftlich else
             "Zeitpunkt der Leistungserbringung fehlt (§ 14 Abs. 4 Nr. 6 UStG) — bei Rechnungen über 250 € zwingend erforderlich.",
             "delivery_date"
         ))
@@ -172,7 +186,6 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
             errors.append(Issue("GROSS_TOTAL_MISMATCH", "error", f"Bruttosumme {invoice.gross_total} stimmt nicht (erwartet {expected_gross}).", "gross_total"))
 
     # MwSt.-Kategorie prüfen
-    tax_category = getattr(invoice, "tax_category", "S")
     if tax_category not in VALID_TAX_CATEGORIES:
         errors.append(Issue(
             "TAX_CATEGORY_INVALID", "error",

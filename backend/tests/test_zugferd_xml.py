@@ -408,11 +408,24 @@ def test_delivery_date_bt80_included_when_set():
     assert delivery_date_el.text == "20260610"
 
 
-def test_no_delivery_block_without_date():
-    """Kein ApplicableHeaderTradeDelivery wenn delivery_date None."""
+def test_delivery_block_bleibt_leer_statt_zu_fehlen():
+    """Ohne Leistungsdatum bleibt der Block stehen, nur ohne Inhalt (#47).
+
+    Dieser Test stand hier bis zum 23.08.2026 mit der umgekehrten Zusicherung: er
+    verlangte, dass der Block ganz entfällt. Das war ein Irrtum, den nur ein Blick
+    ins CII-Schema oder ein Lauf gegen Mustang aufdeckt, und beides hatte hier
+    niemand getan. <ram:ApplicableHeaderTradeDelivery> steht zwischen Agreement und
+    Settlement und ist Pflicht, auch leer; ohne ihn wies Mustang jede Rechnung ohne
+    Leistungsdatum ab. Der Beweis dafür steht in test_zugferd_xml_schema.py, wo das
+    echte Mustang urteilt statt einer Annahme von uns.
+    """
     inv = _invoice(delivery_date=None)
     root = _parse(generate_xml(inv, _company()))
-    assert _find(root, ".//ram:ApplicableHeaderTradeDelivery") is None
+
+    block = _find(root, ".//ram:ApplicableHeaderTradeDelivery")
+    assert block is not None
+    assert _find(root, ".//ram:ApplicableHeaderTradeDelivery"
+                       "/ram:ActualDeliverySupplyChainEvent") is None
 
 
 def test_notes_bt22_included_when_set():

@@ -128,3 +128,37 @@ def test_der_hinweis_steht_auch_dann_da_wenn_das_formular_neu_geladen_wird(pg_se
     html = TestClient(app, follow_redirects=False).get("/invoices/neu").text
 
     assert "250" in html.split('name="delivery_date"')[1][:400]
+
+
+def test_das_formular_nennt_die_pflicht_bei_innergemeinschaftlicher_lieferung():
+    """#47: bei Steuertyp K gilt die Kleinbetragsbefreiung nicht.
+
+    Ohne diesen Hinweis liest der Nutzer direkt darüber „Bis 250 € einschließlich
+    freiwillig" und lässt das Feld leer, während das Gate ihn danach aufhält. Der
+    Widerspruch entsteht auf derselben Seite, ohne dass er dazwischen etwas tut.
+    """
+    text = FORMULAR.read_text(encoding="utf-8")
+    block = text.split('name="delivery_date"')[1][:900]
+
+    assert "innergemeinschaftlich" in block.lower(), (
+        "Das Formular verschweigt, dass die Kleinbetragsbefreiung bei ig. "
+        "Lieferungen nicht gilt"
+    )
+
+
+def test_die_ig_lieferung_verlangt_das_leistungsdatum_auch_unter_250_euro():
+    """Die andere Seite derselben Zusage: solange der Prüfcode das verlangt, muss
+    der Hinweis oben stehen bleiben."""
+    inv = _rechnung(Decimal("200.00"))
+    inv.delivery_date = None
+    inv.tax_category = "K"
+    inv.customer.vat_id = "ATU12345678"
+    inv.net_total = inv.gross_total = Decimal("200.00")
+    inv.tax_total = Decimal("0.00")
+    for pos in inv.items:
+        pos.unit_price = pos.net_amount = pos.gross_amount = Decimal("200.00")
+        pos.tax_rate = pos.tax_amount = Decimal("0.00")
+
+    fehler, _ = validate_invoice(inv, _firma())
+
+    assert "DELIVERY_DATE_MISSING" in [f.code for f in fehler]
