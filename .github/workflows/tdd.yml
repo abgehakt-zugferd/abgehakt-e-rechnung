@@ -25,6 +25,9 @@ jobs:
       - name: Netzbindung und Auslieferungsabbild prüfen
         run: .githooks/wachen.sh
 
+      - name: Datenwache (Charakterisierungstests)
+        run: .githooks/test_datenwache.sh
+
   test:
     runs-on: ubuntu-latest
     steps:

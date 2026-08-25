@@ -6,6 +6,13 @@ set -uo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
+# Datenwache (#49): nur neu hinzukommende Zeilen der gepushten Commits. Liest stdin
+# (pre-push-Refs); nichts anderes darf stdin vorher verbrauchen.
+if ! .githooks/datenwache.sh; then
+  echo "  Push blockiert." >&2
+  exit 1
+fi
+
 run_tests() {
   # Zwei Bedingungen, nicht eine: Seit `docker-compose.yml` das Auslieferungsabbild
   # baut (target: prod), laeuft im Normalfall ein app-Container OHNE pytest. Ein
