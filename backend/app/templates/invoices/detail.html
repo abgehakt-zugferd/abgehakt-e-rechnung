@@ -256,6 +256,34 @@
                     <p style="color:var(--text-dim); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text); margin-top:8px;">USt-IdNr.: {{ invoice.customer.vat_id }}</p>
                     {% endif %}
                 </div>
+                {# Wohin der Beleg ginge (#62). Stand vorher nur im Aufklappmenü hinter
+                   SENDEN + DATEV: einen Klick weit weg, erst nach dem Finalisieren und
+                   nur bei konfiguriertem SMTP. Hier steht es ohne Klick und schon im
+                   Entwurf, denn nur dort ist eine fehlende Adresse noch billig zu
+                   beheben. Gelesen wird dieselbe Auflösung wie im Dialog (`cc_default`,
+                   `cc_herkunft` aus `_cc_vorbelegung`), damit es keine zweite Wahrheit
+                   gibt; verbindlich bleibt das Formular beim Absenden. #}
+                <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border); font-family:'VT323',monospace; font-size:var(--fs-gross); line-height:1.5;">
+                    <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); color:var(--cyan); margin-bottom:8px;">VERSAND AN</p>
+                    {% if invoice.customer.email %}
+                    <p style="color:var(--text);"><span style="color:var(--text-dim);">An</span> {{ invoice.customer.email }}</p>
+                    {% else %}
+                    <p style="color:var(--amber);">
+                        Keine E-Mail hinterlegt. Ein Versand per Mail ist damit nicht möglich;
+                        auf Papier geht die Rechnung trotzdem.
+                    </p>
+                    <a href="/customers/{{ invoice.customer.id }}/bearbeiten" class="btn-secondary" style="margin-top:8px;">E-MAIL NACHTRAGEN</a>
+                    {% endif %}
+                    {% if cc_default %}
+                    <p style="color:var(--text); margin-top:4px;"><span style="color:var(--text-dim);">Kopie</span> {{ cc_default }}</p>
+                    <p style="color:var(--text-dim); font-size:var(--fs-text);">
+                        {% if cc_herkunft == 'kunde' %}aus dem Kundenstamm{% else %}aus den Einstellungen, gilt für alle Kunden{% endif %}
+                    </p>
+                    {% endif %}
+                    {% if datev_configured %}
+                    <p style="color:var(--text-dim); margin-top:4px;">BCC DATEV Upload Mail</p>
+                    {% endif %}
+                </div>
                 {% else %}
                 {# Hier landet man nach dem Speichern eines Entwurfs ohne Kunden. Bliebe
                    der Kasten einfach leer, wäre der Ablauf wieder eine Sackgasse, nur
