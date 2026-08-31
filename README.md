@@ -142,6 +142,13 @@ APP_DATABASE_URL=postgresql://abgehakt_app:xB7kq2LmPw9dRt4v@db:5432/abgehakt
 Alles Weitere in dieser Datei ist optional und lässt sich später in der Oberfläche einstellen.
 Die Datenbankrollen legt das Programm beim ersten Start selbst an.
 
+**Diese Datei ist ab jetzt Teil Ihres Bestandes.** Sie gehört in jede Sicherung (siehe
+*Sicherung und Rücksicherung*) und darf nicht gelöscht werden. Die drei Passwörter stehen
+nirgendwo sonst: Das Programm legt die Datenbankrollen beim ersten Start damit an, und ohne die
+Datei kommt weder das Programm noch Sie selbst an die eigenen Belege heran. Dass Schlüssel und
+E-Mail-Einstellungen ausdrücklich **nicht** hier stehen, sondern in `storage/secret.key` und in
+der Datenbank, ändert daran nichts.
+
 **Nur auf einem Linux-Server:** Das Programm läuft im Container unter einem eigenen
 Systembenutzer und schreibt Belege und Schlüssel nach `storage/`. Dieses Verzeichnis gehört
 nach dem Entpacken dem angemeldeten Menschen, nicht jenem Benutzer. Deshalb einmalig:
@@ -241,17 +248,28 @@ Container fahren will, startet den Entwicklungsstack, siehe [CONTRIBUTING.md](CO
 
 ## Sicherung und Rücksicherung
 
-Zwei Dinge müssen gesichert werden, und sie liegen an verschiedenen Orten:
+Drei Dinge müssen gesichert werden, und sie liegen an verschiedenen Orten:
 
 - **Datenbank.** Ein Dienst im Compose-Stack legt täglich einen `pg_dump` nach `./backups/`
   (30 Tage, 8 Wochen, 12 Monate). Sofortige Sicherung:
   `docker compose exec db-backup /backup.sh`
 - **`storage/`.** Die PDF- und XML-Belege sowie `secret.key`, mit dem verschlüsselte
   Einstellungen gelesen werden. Ohne diesen Schlüssel sind sie verloren.
+- **`.env`.** Die Datei aus Schritt 3 der Installation. Sie ist die einzige Stelle, an der die
+  drei Datenbankpasswörter stehen, und die Datenbank kennt keine zweite Möglichkeit, Sie
+  hereinzulassen. Ohne sie lässt sich die Rücksicherung weiter unten nicht ausführen, denn
+  jeder Befehl dort beginnt mit `. ./.env`.
 
-Beide gehören zusammen und müssen vom **selben Zeitpunkt** stammen. Die Datenbank kennt zu
-jeder Rechnung einen Dateinamen; liegt die zugehörige PDF nicht in `storage/`, ist der Beleg
-weg, auch wenn der Datensatz noch da ist.
+Die ersten beiden gehören zusammen und müssen vom **selben Zeitpunkt** stammen. Die Datenbank
+kennt zu jeder Rechnung einen Dateinamen; liegt die zugehörige PDF nicht in `storage/`, ist der
+Beleg weg, auch wenn der Datensatz noch da ist. Die `.env` ändert sich dagegen fast nie; sie
+muss nur vorhanden und dieselbe sein.
+
+Eine Warnung, die in der Praxis öfter greift als jeder Festplattenschaden: Werkzeuge und
+Aufräumbefehle, die „nicht versionierte Dateien entfernen" anbieten, löschen `.env` mit, weil
+sie bewusst nicht im Repository liegt. `git clean -xdf` ist der bekannteste. Der laufende
+Stack merkt davon nichts und arbeitet weiter; sichtbar wird der Verlust erst beim nächsten
+Neustart, und dann steht das Programm.
 
 ### Die Rücksicherung einmal durchspielen, bevor Sie sie brauchen
 
