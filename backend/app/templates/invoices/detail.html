@@ -80,7 +80,23 @@
                     <label class="label">EMPFÄNGER</label>
                     <input type="email" name="customer_email" value="{{ invoice.customer.email if invoice.customer else '' }}" class="input" style="margin-bottom:12px;" required>
                     <label class="label">KOPIE AN (CC)</label>
-                    <input type="email" name="cc_email" value="{{ cc_default }}" class="input" style="margin-bottom:12px;" placeholder="optional">
+                    {# `multiple`: ohne das Attribut weist schon der Browser eine
+                       kommagetrennte Liste ab, und der Server bekäme die zweite
+                       Adresse nie zu sehen (#58). #}
+                    <input type="email" multiple name="cc_email" value="{{ cc_default }}" class="input" style="margin-bottom:6px;" placeholder="optional, mehrere mit Komma">
+                    {# Ein vorbelegtes Feld erklärt sich nicht von selbst: woher der
+                       Wert kommt und was ein Überschreiben bedeutet, entscheidet
+                       darüber, ob jemand die Voreinstellung für alle Kunden ändert,
+                       obwohl er nur diesen einen Versand meint. #}
+                    <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); line-height:1.4; color:var(--text-dim); margin-bottom:12px;">
+                        {% if cc_herkunft == 'kunde' %}
+                        Aus dem Kundenstamm von {{ invoice.customer.name }}. Änderung gilt nur für diesen Versand.
+                        {% elif cc_herkunft == 'einstellungen' %}
+                        Aus den Einstellungen, gilt für alle Kunden. Änderung gilt nur für diesen Versand.
+                        {% else %}
+                        Mehrere Adressen mit Komma trennen. Für den Kunden sichtbar.
+                        {% endif %}
+                    </p>
                     {% if datev_configured %}
                     <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); line-height:1.6; color:var(--green); margin-bottom:12px;">✓ BCC → DATEV UPLOAD MAIL</p>
                     {% endif %}

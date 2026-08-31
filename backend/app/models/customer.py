@@ -22,6 +22,12 @@ class Customer(Base):
     country: Mapped[str] = mapped_column(String(2), nullable=False, default="DE", server_default="DE")
     vat_id: Mapped[str | None] = mapped_column(String(20))
     email: Mapped[str | None] = mapped_column(String(255))
+    # Kommagetrennte Liste (#58), gepflegt über `services/empfaenger.py`. Sie steht
+    # hier und nicht in `app_config`, weil sie zu DIESEM Kunden gehört: die globale
+    # Voreinstellung ginge sonst an jeden anderen Kunden mit in Kopie.
+    # Nicht in die ZUGFeRD-XML: dort ist die elektronische Adresse des Erwerbers
+    # (BT-49) einwertig, das bleibt `email`.
+    cc_emails: Mapped[str | None] = mapped_column(String(500))
     phone: Mapped[str | None] = mapped_column(String(50))
     notes: Mapped[str | None] = mapped_column(String(2000))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")

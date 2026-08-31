@@ -165,7 +165,9 @@ class InvoiceSendLog(Base):
     )
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     to_email: Mapped[str] = mapped_column(String(255), nullable=False)
-    cc_email: Mapped[Optional[str]] = mapped_column(String(255))
+    # Die tatsächlich verwendete Liste, nicht die Voreinstellung (#58): der Nachweis
+    # muss sagen, wer den Beleg bekommen hat.
+    cc_email: Mapped[Optional[str]] = mapped_column(String(500))
     datev_bcc: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Drei Ausgaenge, nicht zwei (#10): die Zeile entsteht und wird committet, BEVOR
     # SMTP angesprochen wird. In der Zeit dazwischen ist der Ausgang offen, und NULL

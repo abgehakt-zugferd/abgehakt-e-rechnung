@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.company import Company
 from app.models.app_config import AppConfig
-from app.services import datev_email
+from app.services import datev_email, empfaenger
 from app.services.invoice_number import pruefe_praefix
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
@@ -142,10 +142,16 @@ def save_datev(
     invoice_cc_email: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    # Vor dem Anlegen der Zeile prüfen (#58): eine abgelehnte Eingabe darf nichts
+    # schreiben, auch nicht die DATEV-Adresse aus demselben Formular.
+    cc_fehler = empfaenger.pruefe(invoice_cc_email)
+    if cc_fehler:
+        return RedirectResponse(url=f"/settings?error={cc_fehler}", status_code=303)
     config = _get_or_create_app_config(db)
     config.datev_bcc_email = datev_bcc_email.strip() if datev_bcc_email else None
-    # Leer heißt „keine Kopie" — NULL, nicht der leere String (#147).
-    config.invoice_cc_email = invoice_cc_email.strip() or None
+    # Leer heißt „keine Kopie" — NULL, nicht der leere String (#147). Mehrere
+    # Adressen sind zulässig (#58); gespeichert wird die kanonische Schreibweise.
+    config.invoice_cc_email = empfaenger.normalisiere(invoice_cc_email) or None
     db.commit()
     return RedirectResponse(url="/settings?saved=true", status_code=303)
 
