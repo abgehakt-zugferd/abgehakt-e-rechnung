@@ -111,6 +111,15 @@
                 </div>
             </div>
             <div>
+                <label class="label">Kopie an (CC)</label>
+                <input type="email" multiple name="cc_emails" value="{{ (customer.cc_emails if customer else values.get('cc_emails','')) or '' }}" class="input" placeholder="zweite@kunde.de, dritte@kunde.de">
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                    Diese Adressen erhalten jede Rechnung an diesen Kunden in Kopie, mehrere mit Komma getrennt.
+                    <strong style="color:var(--text);">Für den Kunden sichtbar</strong> (CC, nicht BCC).
+                    Steht hier etwas, gilt es statt der Voreinstellung aus den Einstellungen.
+                </p>
+            </div>
+            <div>
                 <label class="label">Notizen (intern)</label>
                 <textarea name="notes" rows="3" class="input">{{ (customer.notes if customer else values.get('notes','')) or '' }}</textarea>
             </div>

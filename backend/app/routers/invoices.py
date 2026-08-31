@@ -18,6 +18,7 @@ from app.models.app_config import AppConfig
 from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
                           datev_email, aenderungsprotokoll)
 from app.services.invoice_number import generate_next_invoice_number
+from app.services import empfaenger
 from app.services.archive_frist import berechne_archive_until
 from app.config import get_settings
 from app.branding import register_branding_globals
@@ -357,6 +358,28 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
 
 
+def _cc_vorbelegung(invoice: Invoice, app_config) -> tuple[str, str]:
+    """Vorbelegung des CC-Feldes und ihre Herkunft (#58).
+
+    Vorrangkette, ausdruecklich keine Vereinigung: liegt beim Kunden eine Liste,
+    gilt allein sie. Wuerde die globale Voreinstellung dazugemischt, liesse sie
+    sich fuer einen einzelnen Kunden nie mehr abwaehlen, ohne sie ueberall zu
+    loeschen. Ein leeres Kundenfeld heisst „nichts hinterlegt", nicht
+    „ausdruecklich keine Kopie" — deshalb erbt es die Voreinstellung.
+
+    Die Herkunft geht mit in die Oberflaeche, weil ein vorbelegtes Feld sonst
+    nicht erklaert, wem die Kopie zu verdanken ist und was ein Ueberschreiben
+    aendert (naemlich nur diesen einen Versand).
+    """
+    kunde = invoice.customer
+    if kunde is not None and kunde.cc_emails:
+        return kunde.cc_emails, "kunde"
+    voreinstellung = (app_config.invoice_cc_email if app_config else "") or ""
+    if voreinstellung:
+        return voreinstellung, "einstellungen"
+    return "", ""
+
+
 @router.get("/{invoice_id}", response_class=HTMLResponse)
 def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
@@ -373,6 +396,7 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
     # CC-Vorbelegung (#147) kommt allein aus der DB — kein .env-Gegenpart, deshalb
     # nicht über EffectiveSettings.
     app_config = db.query(AppConfig).filter(AppConfig.id == 1).first()
+    cc_default, cc_herkunft = _cc_vorbelegung(invoice, app_config)
     return templates.TemplateResponse("invoices/detail.html", {
         "request": request,
         "invoice": invoice,
@@ -380,7 +404,8 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
         "validation": latest_validation,
         "datev_configured": bool(cfg.datev_bcc_email),
         "smtp_configured": bool(cfg.smtp_host),
-        "cc_default": (app_config.invoice_cc_email if app_config else "") or "",
+        "cc_default": cc_default,
+        "cc_herkunft": cc_herkunft,
         "protokoll": aenderungsprotokoll.protokoll_fuer(db, invoice_id),
     })
 
@@ -677,7 +702,14 @@ def send_to_datev(invoice_id: uuid.UUID, customer_email: str = Form(""),
     # zweites Mal. Der Ausgang ist zu diesem Zeitpunkt offen (`success = None`) und
     # wird unten nachgetragen; bleibt er offen stehen, ist genau das die Auskunft:
     # die Mail koennte drausssen sein, bitte im Postausgang nachsehen.
-    cc = (cc_email or "").strip()
+    # Vor `db.add(protokoll)` (#58): eine abgelehnte Eingabe hat nie gesendet und
+    # darf keine Protokollzeile mit offenem Ausgang hinterlassen, die spaeter wie
+    # ein moeglicher Zweitversand aussieht.
+    cc_fehler = empfaenger.pruefe(cc_email)
+    if cc_fehler:
+        raise HTTPException(400, cc_fehler)
+    # `ohne=to_email`: wer im An-Feld steht, bekaeme die Rechnung sonst zweimal.
+    cc = empfaenger.normalisiere(cc_email, ohne=to_email)
     protokoll = InvoiceSendLog(invoice_id=invoice.id, to_email=to_email,
                                cc_email=cc or None, datev_bcc=True, success=None)
     db.add(protokoll)

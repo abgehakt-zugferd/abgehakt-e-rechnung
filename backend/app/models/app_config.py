@@ -29,7 +29,9 @@ class AppConfig(Base):
 
     # CC der Rechnungsmail (#147): sichtbare Kopie, z. B. an die eigene Ablage.
     # Nur Vorbelegung des Sende-Dialogs — verbindlich ist die abgeschickte Adresse.
-    invoice_cc_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Mehrere Adressen zulässig (#58), Format siehe `services/empfaenger.py`. Die
+    # Spalte behält ihren Namen: eine Umbenennung wäre eine Migration ohne Gewinn.
+    invoice_cc_email: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Update-Hinweis (#120). Zwei Zeitstempel mit Absicht:
     # last_checked_at = letzte ERFOLGREICHE Prüfung (speist "seit X Tagen"),

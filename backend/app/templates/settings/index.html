@@ -199,10 +199,12 @@
             <label class="label">Kopie an (CC)</label>
             {# `or ''`: nullbares Feld — sonst rendert Jinja bei NULL den String "None"
                und speichert ihn beim nächsten Absenden als echte Adresse. #}
-            <input type="email" name="invoice_cc_email" value="{{ config.invoice_cc_email or '' }}" class="input" placeholder="ablage@meinefirma.de">
+            <input type="email" multiple name="invoice_cc_email" value="{{ config.invoice_cc_email or '' }}" class="input" placeholder="ablage@meinefirma.de, archiv@meinefirma.de">
             <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-top:6px;">
                 Vorbelegung für den Sende-Dialog; pro Rechnung änder- und löschbar.
+                Mehrere Adressen mit Komma trennen.
                 <strong style="color:var(--text);">Für den Kunden sichtbar</strong> (CC, nicht BCC).
+                Gilt für <strong style="color:var(--text);">alle</strong> Kunden und wird überlagert, sobald beim Kunden eigene Adressen hinterlegt sind.
             </p>
         </div>
 

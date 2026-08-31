@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.customer import Customer
 from app.models.company import Company
 from app.services.customer_number import next_customer_number
+from app.services import empfaenger
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
 
@@ -70,6 +71,7 @@ def create_customer(
     country: str = Form("DE"),
     vat_id: str = Form(""),
     email: str = Form(""),
+    cc_emails: str = Form(""),
     phone: str = Form(""),
     notes: str = Form(""),
     is_active: str = Form("1"),
@@ -80,7 +82,11 @@ def create_customer(
         "customer_number": number, "name": name, "address_line1": address_line1,
         "address_line2": address_line2, "zip_code": zip_code, "city": city,
         "country": country, "vat_id": vat_id, "email": email, "phone": phone, "notes": notes,
+        "cc_emails": cc_emails,
     }
+    cc_fehler = empfaenger.pruefe(cc_emails)
+    if cc_fehler:
+        return _render_form(request, None, number, values, cc_fehler)
     if _number_taken(db, number):
         return _render_form(request, None, number, values,
                             f"Kundennummer bereits vergeben: {number}")
@@ -95,6 +101,7 @@ def create_customer(
         country=country.strip() or "DE",
         vat_id=vat_id.strip() or None,
         email=email.strip() or None,
+        cc_emails=empfaenger.normalisiere(cc_emails) or None,
         phone=phone.strip() or None,
         notes=notes.strip() or None,
         is_active=(is_active == "1"),
@@ -130,6 +137,7 @@ def update_customer(
     country: str = Form("DE"),
     vat_id: str = Form(""),
     email: str = Form(""),
+    cc_emails: str = Form(""),
     phone: str = Form(""),
     notes: str = Form(""),
     is_active: str = Form("1"),
@@ -138,6 +146,9 @@ def update_customer(
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(404, "Kunde nicht gefunden")
+    cc_fehler = empfaenger.pruefe(cc_emails)
+    if cc_fehler:
+        return _render_form(request, customer, "", {}, cc_fehler)
     number = customer_number.strip() or customer.customer_number
     if number != customer.customer_number and _number_taken(db, number, exclude_id=customer.id):
         return _render_form(request, customer, "", {},
@@ -151,6 +162,7 @@ def update_customer(
     customer.country = country.strip() or "DE"
     customer.vat_id = vat_id.strip() or None
     customer.email = email.strip() or None
+    customer.cc_emails = empfaenger.normalisiere(cc_emails) or None
     customer.phone = phone.strip() or None
     customer.notes = notes.strip() or None
     customer.is_active = (is_active == "1")
