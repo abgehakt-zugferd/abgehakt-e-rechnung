@@ -69,6 +69,19 @@ abgeschrieben, damit nicht zwei Fassungen auseinanderlaufen. `.env` gehört nie 
 Der Anwendungsschlüssel verwaltet sich selbst über `storage/secret.key` und wird **nicht**
 als Umgebungsvariable gesetzt.
 
+**Die Datei `.env` ist trotzdem Pflicht.** `docker-compose.yml` führt sie als `env_file`;
+fehlt sie, bricht `docker compose up` ab, bevor ein Container anläuft. Sie ist außerdem die
+einzige Stelle, an der die Passwörter der drei Datenbankrollen stehen, und die Rollen im
+Volume `postgres_data` wurden mit genau diesen Werten angelegt.
+
+Das ist deshalb eine Stolperstelle, weil zwei Dinge dort ausdrücklich **nicht** hingehören:
+der Anwendungsschlüssel (siehe oben) und die SMTP- sowie DATEV-Angaben, die verschlüsselt in
+der Datenbank liegen (`AppConfig`). Daraus wird schnell der falsche Schluss, die Datei sei
+ganz entbehrlich. Wer sie löscht, nimmt der Installation den Zugang zu ihren eigenen Belegen:
+Am 2026-08-31 lagen die Passwörter danach nur noch in der Konfiguration des laufenden
+Containers und mussten von dort zurückgeholt werden
+(`docker inspect abgehakt_app --format '{{json .Config.Env}}'`).
+
 ---
 
 <!-- tdd-enforcement-contract -->

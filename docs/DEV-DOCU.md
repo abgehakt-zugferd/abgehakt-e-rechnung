@@ -970,6 +970,42 @@ Deshalb erreicht man „kein Superuser im Betrieb" **nicht** durch Demotion, son
 Owner-Rolle in `POSTGRES_USER`, wäre sie bei einer Neuinstallation wieder Bootstrap-Superuser:
 genau die Falle, aus der dieser Abschnitt entstand.
 
+### Die `.env` ist der einzige Schlüsselbund (2026-08-31)
+
+Drei der vier Rollen oben haben ihre Zugangsdaten **ausschließlich** in `.env`; die vierte
+(`abgehakt_root`) existiert auf den meisten Installationen gar nicht. Damit ist diese eine
+Datei der Zugang zum Volume `postgres_data`, und sie liegt bewusst außerhalb der
+Versionsverwaltung.
+
+Zwei Eigenschaften machen den Verlust tückisch:
+
+- **Ein laufender Stack merkt nichts.** Container behalten ihre Umgebung im Speicher. Zwischen
+  dem Löschen und dem Sichtbarwerden können Tage liegen; der Bruch kommt erst beim nächsten
+  `docker compose up`, und der bricht dann ab, bevor irgendein Dienst startet, weil
+  `docker-compose.yml` die Datei als `env_file` führt.
+- **Sie wird versehentlich mitgelöscht.** Alles, was „nicht versionierte Dateien entfernt",
+  nimmt sie mit, allen voran `git clean -xdf`. Ein zweiter Weg dorthin ist der Irrtum, die
+  Datei sei entbehrlich, weil Anwendungsschlüssel (`storage/secret.key`) und die SMTP-Angaben
+  (verschlüsselt in `AppConfig`) ausdrücklich **nicht** darin stehen. Beides stimmt, der
+  Schluss daraus nicht.
+
+**Rückweg, solange ein Container existiert.** Die Werte stehen in seiner Konfiguration:
+
+```bash
+docker inspect abgehakt_app --format '{{json .Config.Env}}'
+```
+
+`DATABASE_URL`, `BOOTSTRAP_DATABASE_URL` und `APP_DATABASE_URL` enthalten Benutzer und
+Passwort im Klartext; daraus lässt sich `.env` vollständig wiederherstellen. Das gilt auch für
+einen gestoppten Container, solange er nicht entfernt wurde.
+
+**Rückweg, wenn kein Container mehr da ist.** Dann bleibt der lokale Socket im
+Datenbankcontainer: das offizielle Postgres-Abbild vertraut Verbindungen über den Socket ohne
+Passwort, deshalb funktioniert `docker compose exec db psql -U abgehakt_admin` ohne Eingabe.
+Darüber lassen sich die Passwörter neu setzen (`ALTER ROLE … PASSWORD '…'`) und anschließend in
+eine frische `.env` schreiben. Das ist Break-Glass, kein Betriebsweg, und es setzt voraus, dass
+das Volume noch existiert.
+
 ### Owner anlegen: macht der Start selbst (#151)
 
 `scripts/bootstrap_owner.py` läuft im Entrypoint **vor** Alembic, verbindet über
