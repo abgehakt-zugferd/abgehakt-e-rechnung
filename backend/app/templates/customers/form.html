@@ -45,6 +45,10 @@
 
         <div class="card space-y-4">
             <h2>STAMMDATEN</h2>
+            {% if customer %}
+            {% import "partials/schnittstellen_id.html" as schnittstelle %}
+            {{ schnittstelle.feld(customer.id) }}
+            {% endif %}
             <div>
                 <label class="label">Kundennummer</label>
                 <input type="text" name="customer_number" value="{{ customer.customer_number if customer else (values.get('customer_number') or suggested_number) }}" class="input font-mono">
