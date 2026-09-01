@@ -1,6 +1,6 @@
 # Ketten-Testinstanz (abgehakt)
 
-Parallele Installation für ZEMP-Kettenproben — **nicht** die Live-Instanz auf Port 3000.
+Parallele Installation für ZEMP-Kettenproben, **nicht** die Live-Instanz auf Port 3000.
 
 ## Was sie tut
 
@@ -41,4 +41,4 @@ rm -rf storage-integration
 ## Live-Installation
 
 Der Stack auf **3000/5432** (`docker compose up` ohne `-p abgehakt-test`) bleibt
-unverändert. Zwei Compose-Dateien, anderer Projektname — siehe `docs/docker-issues.md`.
+unverändert. Zwei Compose-Dateien, anderer Projektname; siehe `docs/docker-issues.md`.
