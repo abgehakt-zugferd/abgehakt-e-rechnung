@@ -7,7 +7,7 @@ services:
       # ("The bootstrap user must have the SUPERUSER attribute") — deshalb darf hier
       # NICHT die Owner-/App-Rolle stehen, sonst ist der Betrieb wieder Superuser.
       POSTGRES_USER: ${DB_BOOTSTRAP_USER:-abgehakt_db}
-      POSTGRES_PASSWORD: ${DB_BOOTSTRAP_PASSWORD:-changeme}
+      POSTGRES_PASSWORD: ${DB_BOOTSTRAP_PASSWORD:?in .env setzen — s. .env.example}
       POSTGRES_DB: ${DB_NAME:-abgehakt}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -34,7 +34,7 @@ services:
       POSTGRES_DB: ${DB_NAME:-abgehakt}
       # Dump läuft als Owner-Rolle (NOSUPERUSER) — pg_dump braucht keinen Superuser.
       POSTGRES_USER: ${DB_USER:-abgehakt_admin}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?in .env setzen — s. .env.example}
       SCHEDULE: "@daily"
       BACKUP_KEEP_DAYS: 30
       BACKUP_KEEP_WEEKS: 8
@@ -53,12 +53,12 @@ services:
     container_name: abgehakt_app
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-abgehakt_admin}:${DB_PASSWORD:-changeme}@db:5432/${DB_NAME:-abgehakt}
+      DATABASE_URL: postgresql://${DB_USER:-abgehakt_admin}:${DB_PASSWORD:?in .env setzen — s. .env.example}@db:5432/${DB_NAME:-abgehakt}
       # Nur für den Start (#151): der Entrypoint legt damit die Owner-Rolle an,
       # bevor Alembic sich als sie anmeldet. Die App selbst verbindet nie so —
       # sie läuft ausschließlich über APP_DATABASE_URL.
-      BOOTSTRAP_DATABASE_URL: postgresql://${DB_BOOTSTRAP_USER:-abgehakt_db}:${DB_BOOTSTRAP_PASSWORD:-changeme}@db:5432/${DB_NAME:-abgehakt}
-      APP_DATABASE_URL: postgresql://${DB_APP_USER:-abgehakt_app}:${DB_APP_PASSWORD:-changeme}@db:5432/${DB_NAME:-abgehakt}
+      BOOTSTRAP_DATABASE_URL: postgresql://${DB_BOOTSTRAP_USER:-abgehakt_db}:${DB_BOOTSTRAP_PASSWORD:?in .env setzen — s. .env.example}@db:5432/${DB_NAME:-abgehakt}
+      APP_DATABASE_URL: postgresql://${DB_APP_USER:-abgehakt_app}:${DB_APP_PASSWORD:?in .env setzen — s. .env.example}@db:5432/${DB_NAME:-abgehakt}
     volumes:
       # Nur die Daten. Der Code kommt aus dem gebauten Abbild. Wuerde hier zusaetzlich
       # `./backend/app` haengen, liefe die Installation auf dem Stand des Verzeichnisses

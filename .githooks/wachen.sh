@@ -95,4 +95,25 @@ elif [ "$d_uid:$d_gid" != "$r_paar" ]; then
   fehler=1
 fi
 
+# Geteilte Belegordner: dieselbe Gruppenkennung wie in den anderen Stacks (SYSTEMLANDSCHAFT § 8).
+if ! grep -q 'EXTRA_GROUP_GID=2000' backend/Dockerfile || \
+   ! grep -q 'zemp-belege' backend/Dockerfile; then
+  {
+    echo ""
+    echo "gruppe: ROT - backend/Dockerfile fehlt die gemeinsame Gruppe (GID 2000)."
+    echo "  Stufe 6 braucht dieselbe Gruppenkennung in allen drei Abbildern."
+  } >&2
+  fehler=1
+fi
+
+# Ein Platzhalter, der als Vorgabe funktioniert, ist ein Kennwort im Quelltext.
+if grep -qE '\$\{DB_[A-Z_]*PASSWORD:-' docker-compose.yml; then
+  {
+    echo ""
+    echo "compose: ROT - docker-compose.yml setzt Postgres-Passwoerter still auf Vorgabe."
+    echo "  Pflichtvariablen mit :? — s. .env.example (wie feiyr/tantiemen)."
+  } >&2
+  fehler=1
+fi
+
 exit "$fehler"
