@@ -70,9 +70,10 @@ DOCUMENT_TITLES = {
     "credit": "GUTSCHRIFT",
     "storno": "GUTSCHRIFT",
     "correction": "KORREKTURRECHNUNG",
+    "self_billing": "GUTSCHRIFT",
 }
 
-GUTSCHRIFT_TYPEN = frozenset({"credit_note", "credit", "storno"})
+GUTSCHRIFT_TYPEN = frozenset({"credit_note", "credit", "storno", "self_billing"})
 
 
 def _ist_gutschrift(invoice) -> bool:

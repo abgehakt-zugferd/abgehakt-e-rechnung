@@ -8,6 +8,8 @@ Quellcodes.
 """
 from fastapi.templating import Jinja2Templates
 
+from app.installation import is_testinstanz
+
 PRODUCT_NAME = "Abgehakt"
 SOURCE_URL = "https://github.com/abgehakt-zugferd/abgehakt-e-rechnung"
 
@@ -21,3 +23,4 @@ def register_branding_globals(templates: Jinja2Templates) -> None:
     """
     templates.env.globals["PRODUCT_NAME"] = PRODUCT_NAME
     templates.env.globals["SOURCE_URL"] = SOURCE_URL
+    templates.env.globals["is_testinstanz"] = is_testinstanz

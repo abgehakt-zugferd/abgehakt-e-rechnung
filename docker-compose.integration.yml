@@ -1,0 +1,48 @@
+# Ketten-Testinstanz — parallel zur Live-Installation, ohne Kollision.
+#
+# Start:
+#   cp integration.env.example integration.env   # Werte eintragen
+#   docker compose -p abgehakt-test \
+#     -f docker-compose.yml -f docker-compose.integration.yml \
+#     --env-file integration.env up -d --build
+#
+# Stop + Daten wegwerfen:
+#   docker compose -p abgehakt-test \
+#     -f docker-compose.yml -f docker-compose.integration.yml down -v
+#
+# GUI: http://127.0.0.1:3001  (Live bleibt :3000)
+# DB:  127.0.0.1:5433         (Live bleibt :5432)
+#
+# Wichtig: `-p abgehakt-test` — anderer Projektname, siehe docs/docker-issues.md.
+
+services:
+  db:
+    container_name: abgehakt_test_db
+    ports: !override
+      - "127.0.0.1:5433:5432"
+    volumes: !override
+      - postgres_data_integration:/var/lib/postgresql/data
+
+  db-backup:
+    profiles: ["integration-off"]
+
+  app:
+    container_name: abgehakt_test_app
+    env_file: !override
+      - integration.env
+    ports: !override
+      - "127.0.0.1:3001:3000"
+    volumes: !override
+      - ./storage-integration:/app/storage
+      - ${ZEMP_UEBERGABEN:?in integration.env setzen}:/zemp-uebergaben
+      - ./backend/schluessel:/app/schluessel:ro
+    environment:
+      INSTALLATION_MODE: testinstanz
+      TESTINSTANZ_MAIL_TO: ${TESTINSTANZ_MAIL_TO:?in integration.env setzen}
+      ZEMP_UEBERGABEN: /zemp-uebergaben
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      BOOTSTRAP_DATABASE_URL: postgresql://${DB_BOOTSTRAP_USER}:${DB_BOOTSTRAP_PASSWORD}@db:5432/${DB_NAME}
+      APP_DATABASE_URL: postgresql://${DB_APP_USER}:${DB_APP_PASSWORD}@db:5432/${DB_NAME}
+
+volumes:
+  postgres_data_integration:

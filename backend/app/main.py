@@ -25,6 +25,7 @@ from app.routers import (
 from app.dependencies.herkunft import pruefe_herkunft
 from app.dependencies.update_banner_dep import load_update_banner
 from app.config import get_settings
+from app.installation import is_testinstanz, testinstanz_mail_to
 from app.services.audit import register_audit_listeners
 from app.services.customer_guard import register_customer_guard
 from app.services.invoice_guard import register_invoice_guard
@@ -65,6 +66,11 @@ def validate_startup_config(settings) -> None:
         warnings.warn(
             "SECRET_KEY sollte mindestens 32 Zeichen lang sein für ausreichende Sicherheit.",
             UserWarning,
+        )
+    if is_testinstanz() and not testinstanz_mail_to():
+        raise RuntimeError(
+            "INSTALLATION_MODE=testinstanz erfordert TESTINSTANZ_MAIL_TO — "
+            "ohne Zieladresse ist kein Mailversand erlaubt (Ketten-Test, keine Live-Kunden)."
         )
 
 

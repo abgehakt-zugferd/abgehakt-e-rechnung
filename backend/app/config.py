@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     storage_path: Path = Path("/app/storage")
     mustang_jar: Path = Path("/app/lib/Mustang-CLI.jar")
 
+    # `production` (Default) oder `testinstanz` — siehe docker-compose.integration.yml
+    installation_mode: str = "production"
+    # Pflicht bei testinstanz: alle Mails gehen nur hierhin (Kunde/DATEV nie).
+    testinstanz_mail_to: str = ""
+
     class Config:
         env_file = ".env"
         extra = "ignore"

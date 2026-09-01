@@ -1,0 +1,29 @@
+# Isolierte Ketten-Testinstanz — NICHT die Live-Installation.
+#
+# Kopieren: cp integration-env.example integration.env
+# Werte eintragen (Passwörter, TESTINSTANZ_MAIL_TO, SMTP, ZEMP_UEBERGABEN).
+#
+# Start:
+#   docker compose -p abgehakt-test \
+#     -f docker-compose.yml -f docker-compose.integration.yml \
+#     --env-file integration.env up -d --build
+
+TESTINSTANZ_MAIL_TO=deine-postbox@example.de
+INSTALLATION_MODE=testinstanz
+ZEMP_UEBERGABEN=/pfad/zu/zemp-uebergaben-test
+
+DB_BOOTSTRAP_USER=abgehakt_db
+DB_BOOTSTRAP_PASSWORD=ersetzen-mit-zufaellig
+DB_USER=abgehakt_admin
+DB_PASSWORD=ersetzen-mit-zufaellig
+DB_APP_USER=abgehakt_app
+DB_APP_PASSWORD=ersetzen-mit-zufaellig
+DB_NAME=abgehakt
+
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=
+SMTP_USE_TLS=true
+DATEV_BCC_EMAIL=

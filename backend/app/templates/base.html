@@ -802,7 +802,11 @@
         <!-- Footer -->
         <div style="padding:12px 16px; border-top:2px solid var(--border); flex-shrink:0;">
             <div style="font-family:var(--font-label); font-size:var(--fs-wordmark-sub); text-align:center; line-height:2.6; color:var(--text-dim);">
+                {% if is_testinstanz() %}
+                <div style="color:var(--red, #c00); font-weight:bold;">● TESTINSTANZ</div>
+                {% else %}
                 <div style="color:var(--green);">● SYSTEM BEREIT</div>
+                {% endif %}
             </div>
 
             <!-- Theme umschalten (Pixel ⇄ Abgehakt), Auswahl bleibt gespeichert -->
@@ -837,12 +841,27 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                 </svg>
             </button>
-            <div style="font-family:var(--font-display); font-size:1.25rem; color:var(--gold); text-shadow:var(--glow-h1); letter-spacing:0.02em; display:flex; align-items:center; gap:6px;">ABGEHAKT <span style="color:var(--green);">✓</span></div>
+            <div style="font-family:var(--font-display); font-size:1.25rem; color:var(--gold); text-shadow:var(--glow-h1); letter-spacing:0.02em; display:flex; align-items:center; gap:6px;">
+                {% if is_testinstanz() %}
+                <span style="color:var(--red, #c00);">TESTINSTANZ</span>
+                {% else %}
+                ABGEHAKT <span style="color:var(--green);">✓</span>
+                {% endif %}
+            </div>
             <div style="width:40px;"></div>
         </header>
 
         <!-- Page content -->
         <div class="flex-1 overflow-auto" style="padding:28px 32px;">
+            {% if is_testinstanz() %}
+            <div data-testinstanz-banner
+                 style="margin-bottom:16px; padding:12px 16px; border:2px solid var(--red, #c00); background:var(--panel); color:var(--text);">
+                <strong style="color:var(--red, #c00); font-family:var(--font-label);">TESTINSTANZ</strong>
+                — Ketten- und Integrationsprüfung. Keine Produktivdaten.
+                Jeder E-Mail-Versand geht nur an die in <code>TESTINSTANZ_MAIL_TO</code> hinterlegte Postbox,
+                nie an Kunden oder DATEV.
+            </div>
+            {% endif %}
             {% if request.state.update_banner %}
             {% set b = request.state.update_banner %}
             {# Bewusst OHNE verschachtelten Kasten: zwei Tests schneiden den
