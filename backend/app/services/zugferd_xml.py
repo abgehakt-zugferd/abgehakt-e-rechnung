@@ -36,6 +36,21 @@ EXEMPTION_REASONS = {
     "O": "Nicht im Steuergebiet des Ausstellers steuerbar gemäß § 3a Abs. 2 UStG.",
 }
 
+# Gutschriftverfahren (389): Kleinunternehmer ist der Beteiligte, nicht der Aussteller.
+EXEMPTION_SELF_BILLING_E = (
+    "Kein Ausweis von Umsatzsteuer gemäß § 19 UStG (Kleinunternehmer Beteiligung)."
+)
+
+
+def exemption_reason(invoice: Invoice) -> str | None:
+    """Befreiungstext passend zum Belegtyp — nicht immer identisch mit EXEMPTION_REASONS."""
+    cat = getattr(invoice, "tax_category", "S")
+    if cat not in EXEMPTION_REASONS:
+        return None
+    if getattr(invoice, "invoice_type", None) == "self_billing" and cat == "E":
+        return EXEMPTION_SELF_BILLING_E
+    return EXEMPTION_REASONS[cat]
+
 UN_UNIT_CODES = {
     "Stück": "C62",
     "Stunde": "HUR",
@@ -86,7 +101,9 @@ def _line_items_xml(invoice: Invoice) -> str:
         tax_cat = _item_tax_category(item.tax_rate, inv_cat)
         exemption_block = ""
         if inv_cat in EXEMPTION_REASONS:
-            exemption_block = f"\n                    <ram:ExemptionReason>{_esc(EXEMPTION_REASONS[inv_cat])}</ram:ExemptionReason>"
+            grund = exemption_reason(invoice)
+            if grund:
+                exemption_block = f"\n                    <ram:ExemptionReason>{_esc(grund)}</ram:ExemptionReason>"
         rate_line = _rate_percent_xml(item.tax_rate, inv_cat, "\n                    ")
         parts.append(f"""
         <ram:IncludedSupplyChainTradeLineItem>
@@ -130,7 +147,9 @@ def _tax_summaries_xml(invoice: Invoice) -> str:
         tax_cat = _item_tax_category(rate, inv_cat)
         exemption_block = ""
         if inv_cat in EXEMPTION_REASONS:
-            exemption_block = f"\n                <ram:ExemptionReason>{_esc(EXEMPTION_REASONS[inv_cat])}</ram:ExemptionReason>"
+            grund = exemption_reason(invoice)
+            if grund:
+                exemption_block = f"\n                <ram:ExemptionReason>{_esc(grund)}</ram:ExemptionReason>"
         rate_line = _rate_percent_xml(rate, inv_cat, "\n                ")
         parts.append(f"""
             <ram:ApplicableTradeTax>

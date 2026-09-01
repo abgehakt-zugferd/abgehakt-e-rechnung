@@ -777,6 +777,90 @@ deutsche Rechnung nicht, das spart rund zwei Drittel.
 
 ## Umgebung / Workflow
 
+### Ketten-Integration über Übergabebelege (Stufe 6, #22)
+
+Abgehakt nimmt in der Ketten-Integration **keine REST-Aufrufe** von tantiemen entgegen. Transport
+ist der gemeinsame Belegordner (`UEBERGABEN_ORDNER`); Format und Kanonisierung stehen in
+der privaten Ketten-Dokumentation `UEBERGABEFORMAT.md` (Published Language der drei Apps).
+
+**Richtung für Stufe 6:** `tantiemen-app-nach-abgehakt`, signierte JSON-Dateien mit
+`nutzlast_art: abrechnungsauftrag`. Abgehakt liest, prüft die Signatur mit **eigener**
+RFC-8785-Implementierung (`app/services/uebergabebeleg.py`), legt **nur Entwürfe** an
+(`invoice_type=self_billing`, TypeCode 389), finalisiert und versendet nicht automatisch.
+
+```mermaid
+flowchart LR
+  subgraph ordner["UEBERGABEN_ORDNER"]
+    E["feiyr-konto-nach-tantiemen-app/"]
+    A["tantiemen-app-nach-abgehakt/"]
+    Q["abgehakt-nach-tantiemen-app/"]
+  end
+  feiyr["feiyr-konto"] -->|"erloesmeldung"| E
+  E --> tantiemen["tantiemen-app"]
+  tantiemen -->|"abrechnungsauftrag"| A
+  A --> abgehakt["abgehakt (dieses Repo)"]
+  abgehakt -->|"quittung Stufe 7"| Q
+  Q --> tantiemen
+```
+
+| Schritt | Werkzeug / Modul | Ergebnis |
+|---|---|---|
+| Beleg lesen + Signatur | `uebergabebeleg.beleg_pruefen()` | `Belegbefund` |
+| Schlüssel | `backend/schluessel/<absender>/<id>.pub` + `.json` | § 6 Gültigkeit am `erzeugt_am` |
+| Auftrag → Entwürfe | `abrechnungsauftrag_import.entwuerfe_aus_roh()` | `Invoice` status `draft` |
+| Ordner-Stapel | `abrechnungsauftrag_import.ordner_einlesen()` | überspringt bereits importierte `beleg_id` |
+| CLI | `python scripts/uebergabe_einlesen.py` | committet DB-Session nach Erfolg |
+
+**Partner-Zuordnung:** `nutzlast.gutschriften[].beteiligter.partner_id` muss exakt
+`customers.id` (UUID) sein, dieselbe Kennung wie die Schnittstellen-ID in der Kunden-UI
+(#66). Unbekannte UUID → Ablehnung, kein neuer Kunde.
+
+**Idempotenz:** `notes` enthält `uebergabe-beleg:{beleg_id}`. Zweiter Import derselben
+Datei → `BelegSchonVerarbeitet`.
+
+**Steuer (vorläufig):** tantiemen liefert nur Netto; Entwürfe tragen 7 % (§ 12 Abs. 2 Nr.
+7c) bis Steuer aus Stammdaten nachgezogen ist. **Formgerechte 389** braucht außerdem
+vollständige Verkäufer-Stammdaten (Steuernummer etc.) in abgehakt.
+
+#### Ketten-Testinstanz (nicht Live)
+
+Parallele Installation für Integrationsproben; Details in
+[`INTEGRATION-TESTINSTANZ.md`](INTEGRATION-TESTINSTANZ.md).
+
+```bash
+cp integration-env.example integration.env   # TESTINSTANZ_MAIL_TO, UEBERGABEN_ORDNER, Passwoerter
+docker compose -p abgehakt-test \
+  -f docker-compose.yml -f docker-compose.integration.yml \
+  --env-file integration.env up -d --build
+```
+
+| | Live | Testinstanz (`abgehakt-test`) |
+|---|---|---|
+| GUI | `http://127.0.0.1:3000` | `http://127.0.0.1:3001` |
+| Kennzeichnung | normal | Banner **TESTINSTANZ** |
+| E-Mail | Kunde + DATEV-BCC | nur `TESTINSTANZ_MAIL_TO` |
+| Daten | `storage/`, Postgres `:5432` | `storage-integration/`, `:5433` |
+
+Compose-Mounts in der Testinstanz: Wegwerf-`storage-integration`, `${UEBERGABEN_ORDNER}` nach
+`/uebergaben`, `backend/schluessel` nach `/app/schluessel` (nur oeffentliche Schluessel).
+
+#### Import aus der Testinstanz
+
+```bash
+# Nach Auftrag von tantiemen in .../tantiemen-app-nach-abgehakt/
+docker compose -p abgehakt-test exec app python scripts/uebergabe_einlesen.py
+```
+
+`UEBERGABEN_ORDNER` ist im Container `/uebergaben` gesetzt; das Skript liest
+`tantiemen-app-nach-abgehakt/*.json`, überspringt bereits verarbeitete `beleg_id`, committet
+neue Entwürfe. Entwürfe danach im GUI prüfen und nur in der Testinstanz finalisieren.
+
+**Sichtbarkeit ohne Broker:** Kettenstand optional mit einem Belegmonitor-Werkzeug
+(liest denselben Belegordner, keine Signaturpruefung).
+
+**Tests:** `tests/test_abrechnungsauftrag_import.py`, `tests/test_testinstanz.py`. Suite
+wie üblich über `./run-tests.sh` (Wegwerf-Postgres im Container, nicht Live-DB).
+
 ### Auslieferung und Entwicklung: `--reload` war der vermeintliche Aufhänger (2026-08-10)
 
 Symptom: Der Stack „hängt sich mehrfach auf", obwohl die App kaum rechnet. Drei Ursachen, von

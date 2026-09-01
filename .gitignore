@@ -1,6 +1,7 @@
 # Secrets & Konfiguration
 .env
 *.env.local
+integration.env
 
 # DSGVO – Echte Rechnungsdaten (niemals in Git!)
 # storage/ ist ein LAUFZEIT-Volume, kein Repo-Inhalt: Belege (pdfs/xml), der
@@ -10,6 +11,7 @@
 # auf (ein `git add -A` hat prompt das Firmenlogo mit eingecheckt).
 storage/*
 !storage/.gitkeep
+storage-integration/
 
 # DSGVO – Beispiel-Rechnungen mit echten Kundendaten
 knowledge/Beispiel-Rechnungen/

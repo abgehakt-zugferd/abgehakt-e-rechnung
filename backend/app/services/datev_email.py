@@ -10,6 +10,7 @@ import ssl
 from email.message import EmailMessage
 from pathlib import Path
 from app.config import get_settings
+from app.installation import is_testinstanz, testinstanz_mail_to
 from sqlalchemy.orm import Session
 from app.models.app_config import AppConfig
 from app.models.company import Company
@@ -71,6 +72,35 @@ def _get_effective_smtp_config(db: Session | None = None):
 
 class EmailError(Exception):
     pass
+
+
+def _testinstanz_empfaenger(
+    geplant_an: str,
+    geplant_cc: str | None,
+    geplant_bcc: list[str],
+) -> tuple[str, str, list[str], list[str]]:
+    """Leitet alle Adressen auf TESTINSTANZ_MAIL_TO um; Original nur im Text."""
+    ziel = testinstanz_mail_to()
+    if not ziel:
+        raise EmailError(
+            "TESTINSTANZ ohne TESTINSTANZ_MAIL_TO — Versand blockiert."
+        )
+    hinweis = [
+        "[TESTINSTANZ — Testpost, keine echte Rechnung an Kunden oder DATEV]",
+        f"Geplant an: {geplant_an}",
+    ]
+    if geplant_cc:
+        hinweis.append(f"Geplant CC: {geplant_cc}")
+    if geplant_bcc:
+        hinweis.append(f"Geplant BCC: {', '.join(geplant_bcc)}")
+    hinweis.append("")
+    return ziel, "", [], hinweis
+
+
+def _betreff(prefix: str) -> str:
+    if is_testinstanz():
+        return f"[TESTINSTANZ] {prefix}"
+    return prefix
 
 
 def _company(db: Session | None):
@@ -150,22 +180,32 @@ def send_invoice(
 
     msg = EmailMessage()
     msg["From"] = cfg.smtp_from
-    msg["To"] = to_email
-    msg["Subject"] = f"Rechnung {invoice_number}"
 
-    # CC (#147): sichtbare Kopie, z. B. an die eigene Ablage. Ein leeres Feld darf
-    # KEINEN leeren Cc-Kopf erzeugen — manche Mailserver weisen das zurück.
-    cc = (cc_email or "").strip()
-    if cc:
-        msg["Cc"] = cc
-
+    geplant_cc = (cc_email or "").strip()
     bcc_addresses = []
     if bcc_datev and cfg.datev_bcc_email:
         bcc_addresses.append(cfg.datev_bcc_email)
-    if bcc_addresses:
+
+    if is_testinstanz():
+        an, cc, bcc_addresses, hinweis = _testinstanz_empfaenger(
+            to_email, geplant_cc, bcc_addresses,
+        )
+        msg["To"] = an
+        body_prefix = hinweis
+    else:
+        msg["To"] = to_email
+        cc = geplant_cc
+        body_prefix = []
+        if cc:
+            msg["Cc"] = cc
+
+    msg["Subject"] = _betreff(f"Rechnung {invoice_number}")
+
+    if bcc_addresses and not is_testinstanz():
         msg["Bcc"] = ", ".join(bcc_addresses)
 
-    msg.set_content(build_invoice_body(invoice_number, _company(db)))
+    text = "\n".join(body_prefix) + build_invoice_body(invoice_number, _company(db))
+    msg.set_content(text)
 
     with open(pdf_path, "rb") as f:
         msg.add_attachment(
@@ -194,10 +234,18 @@ def send_test_email(to_email: str, db: Session = None) -> None:
 
     msg = EmailMessage()
     msg["From"] = cfg.smtp_from
-    msg["To"] = to_email
-    body, betreff = build_test_mail(_company(db))
-    msg["Subject"] = betreff
-    msg.set_content(body)
+
+    if is_testinstanz():
+        an, _, _, hinweis = _testinstanz_empfaenger(to_email, None, [])
+        msg["To"] = an
+        body, betreff = build_test_mail(_company(db))
+        msg.set_content("\n".join(hinweis) + body)
+        msg["Subject"] = _betreff(betreff)
+    else:
+        msg["To"] = to_email
+        body, betreff = build_test_mail(_company(db))
+        msg["Subject"] = betreff
+        msg.set_content(body)
 
     context = ssl.create_default_context()
     try:
