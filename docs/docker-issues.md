@@ -114,3 +114,90 @@ compose up -d` (frischer Container) → volle Suite mit `< /dev/null` lief in **
 `-T … < /dev/null` starten, auch im normalen Compose-Stack und nicht nur im `-p`-Worktree.
 Einzelne Nicht-Mustang-Dateien sind unkritisch; sobald ein `combine`/`validate` in der
 Auswahl ist, ist der offene stdin die Falle.
+
+---
+
+## 🔴 Docker-Desktop-Ressourcen ändern löscht alle Named Volumes (2026-09-01)
+
+**Was passiert ist:** Eine Änderung an den Resource-Settings von Docker Desktop
+(Einstellungen → Resources), und danach war *alles* weg: Container, Images und
+sämtliche Named Volumes, über alle Projekte auf dem Rechner hinweg. Kein
+Fehlerdialog danach, kein Log. Docker Desktop startet einfach mit einer leeren
+Umgebung, als wäre es frisch installiert.
+
+**Ursache:** Wird die **Disk-Größe** verkleinert, legt Docker Desktop das
+Disk-Image neu an, statt es zu verkleinern. Das Bestätigungsfenster weist darauf
+hin, aber es erscheint im selben Zug wie „Apply & restart" und liest sich wie
+eine Routinemeldung. **Eine Sicherung legt Docker Desktop dabei nicht an**, und
+es gibt keine zweite Kopie: Das alte Image ist überschrieben, nicht verschoben.
+
+**Woran man es erkennt:** der Unterschied zwischen scheinbarer und tatsächlich
+belegter Größe des Disk-Images. Nur das beweist die Neuanlage; ein leeres
+`docker ps -a` allein könnte auch ein vertauschter Context sein:
+
+```bash
+R=~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw
+ls -lh "$R" | awk '{print "scheinbar:  " $5}'   # z. B. 24G
+du  -h "$R" | awk '{print "belegt:     " $1}'   # 6,1M  → das Image ist leer
+```
+
+Weichen die beiden so weit auseinander, ist nichts mehr da. Sind sie ähnlich
+groß, liegen die Daten noch und es ist ein anderes Problem; dann zuerst
+`docker context ls` prüfen, ob überhaupt die richtige Umgebung aktiv ist
+(ein zweiter Daemon wie `colima` ist ein häufiger Grund für „alles weg").
+
+**Was überlebt und was nicht.** Die Grenze verläuft exakt zwischen den beiden
+Mount-Arten im Compose:
+
+| | Ort | Nach dem Vorfall |
+|---|---|---|
+| `postgres_data:/var/lib/postgresql/data` | Named Volume, **im** Disk-Image | weg |
+| `./backups:/backups` | Bind Mount, im Projektordner | unversehrt |
+| `./storage:/app/storage` | Bind Mount, im Projektordner | unversehrt |
+
+Dass dieses Projekt den Vorfall ohne Datenverlust überstanden hat, liegt allein
+daran: Der `db-backup`-Dienst schreibt nach `./backups`, also **außerhalb** des
+Disk-Images. Der Dump von 02:00 enthielt die Rechnungen des Vortages; PDF und
+XML lagen ohnehin in `./storage`. Ein Sicherungsdienst, der in ein Named Volume
+schriebe, wäre mit demselben Schieberegler mitgelöscht worden.
+
+**Wiederherstellung.** Der reguläre Weg steht in der README unter
+„Im Ernstfall". Er setzt voraus, dass die Datenbankrollen existieren; sie
+entstehen beim ersten Start des `app`-Containers. Ist nur die Datenbank
+gefragt und soll das App-Image nicht erst gebaut werden, lassen sich die
+Rollen vorab leer anlegen; `ensure_owner_role`/`ensure_app_role` in
+`backend/app/db/roles.py` setzen Passwort und Rechte beim nächsten Start
+ohnehin neu. Die Funktionen sind idempotent und ausdrücklich dafür gebaut:
+
+```bash
+docker compose up -d db
+
+docker compose exec -T db psql -U "$DB_BOOTSTRAP_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 <<'SQL'
+DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='abgehakt_admin')
+  THEN CREATE ROLE abgehakt_admin LOGIN NOSUPERUSER CREATEROLE CREATEDB; END IF; END $$;
+DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='abgehakt_app')
+  THEN CREATE ROLE abgehakt_app  LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE; END IF; END $$;
+SQL
+
+gunzip -c backups/last/abgehakt-latest.sql.gz \
+  | docker compose exec -T db psql -q -v ON_ERROR_STOP=1 -U "$DB_BOOTSTRAP_USER" -d "$DB_NAME"
+
+docker compose up -d app     # setzt Passwörter und Rechte auf die Rollen
+```
+
+Ohne die beiden Rollen bricht das Einspielen bei der ersten `ALTER … OWNER TO`-
+oder `GRANT`-Zeile ab: Der Dump enthält Rechtezuweisungen, aber kein
+`CREATE ROLE`. Mit `ON_ERROR_STOP=1` sieht man das sofort; ohne läuft es scheinbar
+durch und hinterlässt eine halbe Datenbank.
+
+**Vorbeugung.** An den Resource-Settings nichts ändern, ohne vorher zu wissen,
+was in Named Volumes liegt:
+
+```bash
+docker volume ls                      # was gäbe es zu verlieren
+docker compose exec db-backup /backup.sh   # Sicherung von jetzt, vor der Änderung
+```
+
+Die Disk-Größe **nur vergrößern**. Ein Verkleinern gibt den Platz nicht frei,
+den man sich davon erhofft; der Weg dahin ist `docker system prune` bei
+laufendem Bestand, nicht der Schieberegler.
