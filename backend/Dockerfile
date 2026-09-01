@@ -43,6 +43,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 ARG APP_VERSION=
 ENV APP_VERSION=${APP_VERSION}
 
+# Gemeinsame Gruppenkennung fuer geteilte Belegordner (EXTRA_GROUP_GID abgestimmt
+# mit den anderen Stacks der Installation). UID bleibt 100 — § 8 gleicht nur die Gruppe.
+ARG EXTRA_GROUP_NAME=zemp-belege
+ARG EXTRA_GROUP_GID=2000
+
 COPY . .
 
 # Kennungen ausdruecklich vergeben: der README weist Linux-Anwender an, `storage/` auf
@@ -52,7 +57,9 @@ COPY . .
 # Anwender koennte seine eigenen Belege nicht schreiben. `.githooks/wachen.sh` haelt
 # beide Stellen zusammen.
 RUN addgroup --system --gid 101 appgroup && \
+    addgroup --gid ${EXTRA_GROUP_GID} ${EXTRA_GROUP_NAME} && \
     adduser --system --uid 100 --ingroup appgroup appuser && \
+    usermod --append --groups ${EXTRA_GROUP_NAME} appuser && \
     mkdir -p /app/storage/pdfs /app/storage/xml /app/storage/imports /app/storage/temp && \
     chown -R appuser:appgroup /app && \
     chmod +x /app/entrypoint.sh
