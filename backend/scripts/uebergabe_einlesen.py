@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""CLI: signierte Abrechnungsaufträge aus ZEMP_UEBERGABEN einlesen → Entwürfe.
+"""CLI: signierte Abrechnungsauftraege aus UEBERGABEN_ORDNER einlesen, Entwuerfe anlegen.
 
-Nur für Test/Integration — nicht gegen die Live-Installation ohne Wegwerf-DB.
+Nur fuer Test/Integration, nicht gegen die Live-Installation ohne Wegwerf-DB.
 Nutzt dieselbe Postgres wie die App (DATABASE_URL). Committet nach erfolgreichem Import.
 """
 from __future__ import annotations
@@ -15,9 +15,9 @@ from app.services.abrechnungsauftrag_import import ordner_einlesen
 
 
 def main() -> int:
-    wurzel = os.environ.get("ZEMP_UEBERGABEN")
+    wurzel = os.environ.get("UEBERGABEN_ORDNER")
     if not wurzel:
-        print("ZEMP_UEBERGABEN ist nicht gesetzt", file=sys.stderr)
+        print("UEBERGABEN_ORDNER ist nicht gesetzt", file=sys.stderr)
         return 2
     schluessel = Path(__file__).resolve().parents[1] / "schluessel"
     db = SessionLocal()
@@ -26,7 +26,7 @@ def main() -> int:
         db.commit()
         print(f"{len(entwuerfe)} Entwurf(e) angelegt")
         for inv in entwuerfe:
-            print(f"  {inv.invoice_number} → {inv.customer_id}")
+            print(f"  {inv.invoice_number} -> {inv.customer_id}")
         return 0
     except Exception as fehler:
         db.rollback()

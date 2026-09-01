@@ -34,12 +34,12 @@ services:
       - "127.0.0.1:3001:3000"
     volumes: !override
       - ./storage-integration:/app/storage
-      - ${ZEMP_UEBERGABEN:?in integration.env setzen}:/zemp-uebergaben
+      - ${UEBERGABEN_ORDNER:?in integration.env setzen}:/uebergaben
       - ./backend/schluessel:/app/schluessel:ro
     environment:
       INSTALLATION_MODE: testinstanz
       TESTINSTANZ_MAIL_TO: ${TESTINSTANZ_MAIL_TO:?in integration.env setzen}
-      ZEMP_UEBERGABEN: /zemp-uebergaben
+      UEBERGABEN_ORDNER: /uebergaben
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
       BOOTSTRAP_DATABASE_URL: postgresql://${DB_BOOTSTRAP_USER}:${DB_BOOTSTRAP_PASSWORD}@db:5432/${DB_NAME}
       APP_DATABASE_URL: postgresql://${DB_APP_USER}:${DB_APP_PASSWORD}@db:5432/${DB_NAME}

@@ -777,11 +777,11 @@ deutsche Rechnung nicht, das spart rund zwei Drittel.
 
 ## Umgebung / Workflow
 
-### ZEMP-Integration über Übergabebelege (Stufe 6, #22)
+### Ketten-Integration über Übergabebelege (Stufe 6, #22)
 
-Abgehakt nimmt in der ZEMP-Kette **keine REST-Aufrufe** von tantiemen entgegen. Transport
-ist der gemeinsame Belegordner (`ZEMP_UEBERGABEN`); Format und Kanonisierung stehen in
-`zemp-integration/dokumente/UEBERGABEFORMAT.md` (Published Language der drei Apps).
+Abgehakt nimmt in der Ketten-Integration **keine REST-Aufrufe** von tantiemen entgegen. Transport
+ist der gemeinsame Belegordner (`UEBERGABEN_ORDNER`); Format und Kanonisierung stehen in
+der privaten Ketten-Dokumentation `UEBERGABEFORMAT.md` (Published Language der drei Apps).
 
 **Richtung für Stufe 6:** `tantiemen-app-nach-abgehakt`, signierte JSON-Dateien mit
 `nutzlast_art: abrechnungsauftrag`. Abgehakt liest, prüft die Signatur mit **eigener**
@@ -790,7 +790,7 @@ RFC-8785-Implementierung (`app/services/uebergabebeleg.py`), legt **nur Entwürf
 
 ```mermaid
 flowchart LR
-  subgraph ordner["ZEMP_UEBERGABEN"]
+  subgraph ordner["UEBERGABEN_ORDNER"]
     E["feiyr-konto-nach-tantiemen-app/"]
     A["tantiemen-app-nach-abgehakt/"]
     Q["abgehakt-nach-tantiemen-app/"]
@@ -828,7 +828,7 @@ Parallele Installation für Integrationsproben; Details in
 [`INTEGRATION-TESTINSTANZ.md`](INTEGRATION-TESTINSTANZ.md).
 
 ```bash
-cp integration-env.example integration.env   # TESTINSTANZ_MAIL_TO, ZEMP_UEBERGABEN, Passwörter
+cp integration-env.example integration.env   # TESTINSTANZ_MAIL_TO, UEBERGABEN_ORDNER, Passwoerter
 docker compose -p abgehakt-test \
   -f docker-compose.yml -f docker-compose.integration.yml \
   --env-file integration.env up -d --build
@@ -841,23 +841,22 @@ docker compose -p abgehakt-test \
 | E-Mail | Kunde + DATEV-BCC | nur `TESTINSTANZ_MAIL_TO` |
 | Daten | `storage/`, Postgres `:5432` | `storage-integration/`, `:5433` |
 
-Compose-Mounts in der Testinstanz: Wegwerf-`storage-integration`, `${ZEMP_UEBERGABEN}` nach
-`/zemp-uebergaben`, `backend/schluessel` nach `/app/schluessel` (nur öffentliche Schlüssel).
+Compose-Mounts in der Testinstanz: Wegwerf-`storage-integration`, `${UEBERGABEN_ORDNER}` nach
+`/uebergaben`, `backend/schluessel` nach `/app/schluessel` (nur oeffentliche Schluessel).
 
 #### Import aus der Testinstanz
 
 ```bash
-# Nach Auftrag von tantiemen in ~/zemp-uebergaben-test/tantiemen-app-nach-abgehakt/
+# Nach Auftrag von tantiemen in .../tantiemen-app-nach-abgehakt/
 docker compose -p abgehakt-test exec app python scripts/uebergabe_einlesen.py
 ```
 
-`ZEMP_UEBERGABEN` ist im Container `/zemp-uebergaben` gesetzt; das Skript liest
+`UEBERGABEN_ORDNER` ist im Container `/uebergaben` gesetzt; das Skript liest
 `tantiemen-app-nach-abgehakt/*.json`, überspringt bereits verarbeitete `beleg_id`, committet
 neue Entwürfe. Entwürfe danach im GUI prüfen und nur in der Testinstanz finalisieren.
 
-**Sichtbarkeit ohne Broker:** Kettenstand optional mit
-`zemp-integration/werkzeuge/belegmonitor/stand.sh` (liest denselben Belegordner, keine
-Signaturprüfung).
+**Sichtbarkeit ohne Broker:** Kettenstand optional mit einem Belegmonitor-Werkzeug
+(liest denselben Belegordner, keine Signaturpruefung).
 
 **Tests:** `tests/test_abrechnungsauftrag_import.py`, `tests/test_testinstanz.py`. Suite
 wie üblich über `./run-tests.sh` (Wegwerf-Postgres im Container, nicht Live-DB).

@@ -1,6 +1,6 @@
 # Ketten-Testinstanz (abgehakt)
 
-Parallele Installation für ZEMP-Kettenproben, **nicht** die Live-Instanz auf Port 3000.
+Parallele Installation für Kettenproben, **nicht** die Live-Instanz auf Port 3000.
 
 ## Was sie tut
 
@@ -17,11 +17,11 @@ Ohne `TESTINSTANZ_MAIL_TO` startet die App nicht (`fail-closed`).
 ```bash
 cd abgehakt-e-rechnung
 cp integration-env.example integration.env
-# integration.env: TESTINSTANZ_MAIL_TO, Passwörter, SMTP, ZEMP_UEBERGABEN
+# integration.env: TESTINSTANZ_MAIL_TO, Passwoerter, SMTP, UEBERGABEN_ORDNER
 
-mkdir -p ~/zemp-uebergaben-test/tantiemen-app-nach-abgehakt
-mkdir -p ~/zemp-uebergaben-test/abgehakt-nach-tantiemen-app
-# ZEMP_UEBERGABEN in integration.env auf diesen Pfad setzen
+mkdir -p ~/uebergaben-test/tantiemen-app-nach-abgehakt
+mkdir -p ~/uebergaben-test/abgehakt-nach-tantiemen-app
+# UEBERGABEN_ORDNER in integration.env auf diesen Pfad setzen
 
 docker compose -p abgehakt-test \
   -f docker-compose.yml -f docker-compose.integration.yml \
