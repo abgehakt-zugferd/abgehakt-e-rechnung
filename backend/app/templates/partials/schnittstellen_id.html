@@ -1,0 +1,56 @@
+{# Schnittstellen-ID (Customer.id) — partner_id im Abrechnungsauftrag (#66).
+   Kein DB-Feld: nur Anzeige der bestehenden UUID. #}
+{% macro feld(partner_id) %}
+<div>
+    <label class="label">Schnittstellen-ID</label>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="text" readonly value="{{ partner_id }}"
+               class="input font-mono" id="schnittstellen-id-{{ partner_id }}"
+               style="flex:1; min-width:0;">
+        <button type="button" class="btn-secondary"
+                onclick="abgehaktKopieren('schnittstellen-id-{{ partner_id }}', 'schnittstellen-hinweis-{{ partner_id }}')">
+            KOPIEREN
+        </button>
+    </div>
+    <p id="schnittstellen-hinweis-{{ partner_id }}"
+       style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+        Diese ID beim Beteiligten in der Tantiemen-App eintragen — für den Abrechnungsauftrag.
+    </p>
+</div>
+<script>
+if (!window.abgehaktKopieren) {
+    window.abgehaktKopieren = function (feldId, hinweisId) {
+        var feld = document.getElementById(feldId);
+        var hinweis = document.getElementById(hinweisId);
+        if (!feld) return;
+        var text = feld.value;
+        var ok = function () {
+            if (hinweis) {
+                hinweis.textContent = 'In Zwischenablage kopiert.';
+                hinweis.style.color = 'var(--cyan)';
+            }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(ok).catch(function () {
+                feld.select();
+                document.execCommand('copy');
+                ok();
+            });
+        } else {
+            feld.select();
+            document.execCommand('copy');
+            ok();
+        }
+    };
+}
+</script>
+{% endmacro %}
+
+{% macro liste_kopieren(partner_id) %}
+<button type="button"
+        style="font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); color:var(--cyan); background:none; border:none; cursor:pointer; padding:0;"
+        onclick="abgehaktKopieren('schnittstellen-liste-{{ partner_id }}', null)">
+    COPY
+</button>
+<input type="hidden" id="schnittstellen-liste-{{ partner_id }}" value="{{ partner_id }}">
+{% endmacro %}
