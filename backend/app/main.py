@@ -2,7 +2,7 @@ import http
 import mimetypes
 import warnings
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from fastapi import FastAPI, Request, Depends
 from fastapi.exceptions import RequestValidationError
@@ -256,6 +256,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 
     today = date.today()
     first_of_month = today.replace(day=1)
+    month_start = datetime(first_of_month.year, first_of_month.month, 1, tzinfo=timezone.utc)
 
     total_invoices = db.query(func.count(Invoice.id)).scalar() or 0
     standard = Invoice.invoice_type.is_(None)
@@ -266,9 +267,15 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     ) or 0
     draft_count = db.query(func.count(Invoice.id)).filter(Invoice.status == "draft").scalar() or 0
 
+    # Bezahlt diesen Monat = als bezahlt vermerkt diesen Monat (updated_at), nicht
+    # Ausstellungsdatum. Juli-Rechnung, die im September bezahlt wird, zaehlt hier.
     paid_this_month = (
         db.query(func.coalesce(func.sum(Invoice.gross_total), 0))
-        .filter(Invoice.status == "paid", standard, Invoice.issue_date >= first_of_month)
+        .filter(
+            Invoice.status == "paid",
+            standard,
+            Invoice.updated_at >= month_start,
+        )
         .scalar()
     ) or Decimal("0")
 

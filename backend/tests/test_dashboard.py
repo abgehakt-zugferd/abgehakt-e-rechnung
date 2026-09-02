@@ -68,6 +68,26 @@ def test_dashboard_zaehlt_status_korrekt(pg_session):
     assert Decimal(ctx["paid_this_month"]) == Decimal("50.00")
 
 
+def test_dashboard_bezahlt_diesen_monat_nutzt_zahlungsmonat(pg_session):
+    """Juli-Rechnung, im September als bezahlt markiert, zaehlt im September."""
+    inv = _inv(pg_session, "issued", "300.00", issue=date(2026, 7, 8))
+    inv.status = "paid"
+    pg_session.commit()
+    ctx = main.dashboard(_request(), pg_session).context
+    assert Decimal(ctx["paid_this_month"]) == Decimal("300.00")
+
+
+def test_dashboard_bezahlt_diesen_monat_ignoriert_vorherigen_monat(pg_session):
+    from datetime import datetime, timezone
+
+    _inv(pg_session, "paid", "100.00", issue=date(2026, 7, 8))
+    inv = pg_session.query(Invoice).filter(Invoice.gross_total == Decimal("100.00")).one()
+    inv.updated_at = datetime(2026, 8, 15, tzinfo=timezone.utc)
+    pg_session.commit()
+    ctx = main.dashboard(_request(), pg_session).context
+    assert Decimal(ctx["paid_this_month"]) == Decimal("0.00")
+
+
 def test_dashboard_leer_ist_null(pg_session):
     ctx = main.dashboard(_request(), pg_session).context
     assert ctx["total_invoices"] == 0
