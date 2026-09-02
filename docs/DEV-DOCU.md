@@ -879,9 +879,17 @@ Normale Rechnungen: weiterhin Warnung `NO_BANK_DETAILS` wenn Firmen-IBAN fehlt.
 #### USt-IdNr.-Pruefung ueber VIES (Migration 008)
 
 Existenz und Gueltigkeit einer USt-IdNr. werden gegen die EU-VIES-REST-Schnittstelle
-geprueft (`app/services/ust_id_pruefung.py`). **Kein Hintergrundabruf und kein Abruf
-beim Speichern**; nur nach Klick auf „Jetzt bei VIES pruefen" und Bestaetigung auf der
-Einwilligungsseite (`ust_id_vies/consent.html`), die die Ziel-URL anzeigt.
+geprueft (`app/services/ust_id_pruefung.py`, Endpoint in `VIES_ENDPOINT`). **Kein
+Hintergrundabruf und kein Abruf beim Speichern**; nur nach Klick auf „Jetzt bei VIES
+pruefen" und Bestaetigung im **Modal-Dialog** auf derselben Seite (`partials/
+ust_id_vies_dialog.html`, ausserhalb des Speicher-Formulars; Button `js-vies-consent-open`
+in `ust_id_vies_status.html` ist `type="button"`). POST mit `bestaetigt=1` an
+`/customers/{id}/ust-id-pruefen` bzw. Einstellungen; Router lesen USt-IdNr. und Name aus
+den Formularfeldern (`eingaben_fuer_pruefung`).
+
+Die Vorlage `ust_id_vies/consent.html` ist eine eigenstaendige Einwilligungsseite (gleicher
+Text); der produktive Weg ist der Dialog. Nutzer-Doku: `docs/ANWENDUNG.md` (Abschnitt
+USt-IdNr. bei VIES pruefen).
 
 | Ergebnis | Speicherung | Finalize |
 |---|---|---|
@@ -895,7 +903,8 @@ Name-Abgleich: qualifizierte Anfrage mit `traderName` und optional eigener USt-I
 Requester. Fuer deutsche Nummern liefert VIES oft nur Gueltigkeit, keinen Namen; dann bleibt
 der Abgleich `unbekannt`, kein Fehler.
 
-Tests mocken VIES mit `httpx.MockTransport` (`tests/test_ust_id_pruefung.py`).
+Tests mocken VIES mit `httpx.MockTransport` (`tests/test_ust_id_pruefung.py`);
+Einwilligungsdialog: `tests/test_ust_id_zustimmung.py` (Waechter `ust_id_vies_dialog.html`).
 
 ### Auslieferung und Entwicklung: `--reload` war der vermeintliche Aufhänger (2026-08-10)
 

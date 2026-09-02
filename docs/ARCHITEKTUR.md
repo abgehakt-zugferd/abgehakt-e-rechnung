@@ -272,6 +272,22 @@ Kennung. Version und Ausgabe stehen weiter in der Signatur von `fetch_update_inf
 aber nicht gesendet, der Vergleich passiert lokal. Test:
 `test_update_fetch.py::test_abruf_verraet_nichts_ueber_die_installation`.
 
+### USt-IdNr.-Prüfung über VIES
+
+Sie läuft **ausschließlich auf Nutzerklick**: kein Scheduler, kein Start-Hook, kein Abruf beim
+Speichern von Kunden oder Firmendaten. Vor jedem Abruf zeigt ein Modal (`partials/
+ust_id_vies_dialog.html`) die Ziel-URL (`VIES_ENDPOINT`) und die übertragenen Felder; ohne
+`bestaetigt=1` im POST wird nichts aufgerufen.
+
+Der Server sendet an `ec.europa.eu` nur die zu prüfende USt-IdNr., optional `traderName` und
+optional die eigene USt-IdNr. als Requester; keine Rechnungen, keine weiteren Stammdaten.
+Ergebnis und Zeitpunkt landen in `customers` bzw. `company` (`vat_id_checked_at`,
+`vat_id_check_valid`, `vat_id_vies_name`, `vat_id_name_match`). Änderung der USt-IdNr. beim
+Speichern setzt den Prüfstand zurück (`zuruecksetzen` in `ust_id_pruefung.py`).
+
+Der Validator (`validator._ust_id_validator_issues`) mappt den Prüfstand auf Warnungen und
+Fehler beim Finalisieren. Tests: `test_ust_id_pruefung.py`, `test_ust_id_zustimmung.py`.
+
 ## Datenbankmigrationen
 
 ```bash

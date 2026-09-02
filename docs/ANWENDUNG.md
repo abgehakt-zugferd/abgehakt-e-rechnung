@@ -28,6 +28,112 @@ lieber nichts ab als etwas Unbrauchbares.
 
 ---
 
+## Stammdaten: Kunden und Firma
+
+### Kunden
+
+Jeder Kunde hat eine **Kundennummer** (Pflicht), einen Namen und optional Adresse, E-Mail,
+Telefon und USt-IdNr. Zusätzlich können Sie pro Kunde **CC-Adressen** hinterlegen: diese
+erhalten jede Rechnung an diesen Kunden in Kopie und überlagern die Voreinstellung aus den
+Einstellungen.
+
+Unter **Bankverbindung (Auszahlung)** können IBAN, BIC und Bankname des Beteiligten stehen.
+Diese Felder sind für **Gutschriften** und **Abrechnungsgutschriften** (Typ 389) gedacht, nicht
+für normale Rechnungen: dort zahlt der Kunde an Ihre Firmen-IBAN in den Einstellungen.
+
+Kunden werden nicht gelöscht, nur **inaktiv** gesetzt. Inaktive Kunden erscheinen nicht mehr in
+der Auswahl beim Anlegen einer Rechnung.
+
+### Firma
+
+Die Firmendaten (Name, Anschrift, Steuernummer oder USt-IdNr., Bankverbindung für
+**Eingänge**) stehen unter **Einstellungen**. Ohne vollständige Firmendaten bleibt die
+Rechnungserstellung gesperrt.
+
+---
+
+<a id="ust-idnr-bei-vies-prufen"></a>
+
+## USt-IdNr. bei VIES prüfen
+
+VIES (VAT Information Exchange System) ist die offizielle EU-Schnittstelle, mit der Sie
+prüfen können, ob eine USt-IdNr. im jeweiligen Mitgliedstaat registriert und gültig ist. Das
+Programm nutzt sie **nur auf Ihren Wunsch**, nicht beim Speichern, nicht im Hintergrund und
+nicht automatisch vor jeder Rechnung.
+
+### Wo und wann
+
+- **Kunde bearbeiten:** unter der USt-IdNr. erscheint der VIES-Status und der Button **Jetzt
+  bei VIES prüfen**. Beim **Anlegen** eines neuen Kunden gibt es den Button noch nicht; zuerst
+  speichern, dann bearbeiten.
+- **Einstellungen:** dieselbe Prüfung für die **eigene** Firmen-USt-IdNr.
+
+### Ablauf
+
+1. USt-IdNr. und Name im Formular eintragen oder prüfen (der Name dient dem Abgleich).
+2. **Jetzt bei VIES prüfen** klicken. Es öffnet sich ein **Dialog auf derselben Seite** (kein
+   Sprung zu einer anderen Seite).
+3. Der Dialog zeigt die **Ziel-URL** der EU-Schnittstelle und genau, was übertragen wird:
+   Ländercode und Nummer der zu prüfenden USt-IdNr., der Name für den Abgleich und optional
+   Ihre eigene USt-IdNr. als Anfragender.
+4. Mit **Einverstanden, jetzt prüfen** starten Sie die Abfrage. **Abbrechen** baut keine
+   Verbindung auf.
+5. Nach der Antwort bleiben Sie auf der Bearbeiten-Seite. Der Status unter der USt-IdNr. wird
+   aktualisiert (gültig, ungültig, nicht erreichbar, Name stimmt / weicht ab / unbekannt).
+
+**Speichern** des Kunden- oder Firmenformulars ruft VIES **nicht** auf. Wer nur die Nummer
+ändern und speichern will, ohne zu prüfen, kann das tun; beim Finalisieren kann eine Warnung
+erscheinen, dass noch nicht geprüft wurde.
+
+### Was VIES liefert und was nicht
+
+| Ergebnis im Programm | Bedeutung |
+|---|---|
+| Gültig | VIES meldet die Nummer als registriert und gültig. |
+| Ungültig | VIES meldet die Nummer als ungültig oder nicht registriert. Beim Finalisieren ist das ein **Fehler**. |
+| Nicht erreichbar | Netz- oder Serverproblem; Gültigkeit bleibt unbekannt. Warnung beim Finalisieren. |
+| Noch nicht geprüft | Warnung beim Finalisieren, kein automatischer Abruf. |
+| Name stimmt / weicht ab | Abgleich zwischen hinterlegtem Namen und VIES-Antwort. |
+| Name unbekannt | VIES lieferte keinen Namen, bei **deutschen** Nummern häufig. Kein Fehler. |
+
+VIES prüft **Existenz und Gültigkeit** der Nummer zum Zeitpunkt der Abfrage, keine
+Steuerberatung und keinen vollständigen Identitätsnachweis des Geschäftspartners.
+
+### Datenschutz und Zweck
+
+Die Abfrage ist der **vorgesehene Zweck** von VIES: Geschäftspartner-USt-IdNr. verifizieren.
+Übertragen werden nur die genannten Felder, keine Rechnungen und keine weiteren Stammdaten.
+Die EU-Kommission und das zuständige nationale Register verarbeiten die Anfrage; für die
+Gegenseite ist der Abruf sichtbar, inklusive der **IP-Adresse** des Anschlusses, von dem Ihr
+Server die Anfrage stellt.
+
+Wenn Sie die USt-IdNr. im Formular ändern und speichern, wird der alte Prüfstand verworfen.
+Dann ist eine neue Prüfung nötig.
+
+---
+
+<a id="gutschriften-auszahlung"></a>
+
+## Gutschriften und Auszahlung an Beteiligte
+
+Bei einer **normalen Rechnung** zahlt der Empfänger an **Ihre Firma**. Der EPC-QR-Code auf dem
+PDF verweist auf die Firmen-IBAN aus den Einstellungen.
+
+Bei einer **Gutschrift** oder **Abrechnungsgutschrift** (389) zahlt **Sie** an den
+**Beteiligten** (den Kunden). Dafür trägt der Kundenstamm optional IBAN, BIC und Bank unter
+**Bankverbindung (Auszahlung)**.
+
+| Beleg | Zahlungsempfänger im PDF | EPC-QR |
+|---|---|---|
+| Rechnung (380) | Firma | Firmen-IBAN, Rechnungsbetrag |
+| Gutschrift / 389 | Kunde | Kunden-IBAN, Gutschriftbetrag |
+
+Ohne Kunden-IBAN entsteht die Gutschrift ohne QR-Code; beim Finalisieren erscheint eine
+**Warnung**, dass keine Bankverbindung des Kunden hinterlegt ist. Die Gutschrift ist dennoch
+möglich, wenn alle Pflichtangaben stimmen.
+
+---
+
 ## Anwendungsfall: eine gestellte Rechnung korrigieren
 
 ### Warum es keinen Knopf zum Ändern gibt

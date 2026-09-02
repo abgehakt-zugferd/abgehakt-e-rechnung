@@ -7,6 +7,30 @@ Server: keine Cloud, kein Konto, keine Übertragung von Rechnungsdaten an Dritte
 Eine erzeugte Rechnung ist ein PDF/A-3 mit eingebetteter, maschinenlesbarer XML: für Menschen
 lesbar und für die Buchhaltungssoftware des Empfängers auswertbar, in einer Datei.
 
+## Was das Programm leistet
+
+- **E-Rechnungen nach EN 16931** als PDF/A-3 mit eingebetteter ZUGFeRD/Factur-X-XML. Vor dem
+  Archivieren prüft Mustang Schema und Schematron; scheitert die Prüfung, bleibt der Beleg Entwurf.
+- **Unveränderliches Archiv:** gestellte Rechnungen lassen sich nicht ändern und nicht löschen.
+  Korrekturen laufen über eine Gutschrift, nicht über eine Bearbeitung des Originals.
+- **Kundenstamm** mit Schnittstellen-ID für Kettenimport, CC-Adressen pro Kunde und optionaler
+  Bankverbindung des Beteiligten für Auszahlungen (siehe unten).
+- **USt-IdNr. bei VIES prüfen:** Existenz und Gültigkeit einer USt-IdNr. gegen die offizielle
+  EU-Schnittstelle, nur auf Knopfdruck nach Einwilligung im Dialog auf der Seite; kein Abruf beim
+  Speichern und nichts im Hintergrund. Ablauf und Grenzen:
+  [USt-IdNr. bei VIES prüfen](docs/ANWENDUNG.md#ust-idnr-bei-vies-prufen).
+- **Gutschriften mit EPC-QR:** bei hinterlegter Kunden-IBAN zahlt der QR-Code auf dem PDF an den
+  Beteiligten; normale Rechnungen zahlen an Ihre Firmen-IBAN in den Einstellungen.
+- **Versand** per E-Mail an den Kunden, optional mit Kopie an die Kanzlei und Blindkopie an die
+  DATEV-Upload-Adresse, über Ihren eigenen Mailserver.
+- **GoBD-Export:** Prüferpaket mit Belegen, Stammdaten und Änderungsprotokoll für einen Zeitraum.
+- **Änderungsprotokoll** für Rechnungen, Kunden und Firmendaten; keine nachträgliche Bearbeitung
+  von Positionen an gestellten Belegen.
+- **Update-Prüfung:** optional, nur auf Klick und nach einmaliger Bestätigung; ohne Übertragung
+  von Rechnungs- oder Kundendaten.
+
+Weitere Abläufe (Entwurf, Finalisieren, Storno): [docs/ANWENDUNG.md](docs/ANWENDUNG.md).
+
 ## Warum es das gibt
 
 Mein Steuerberater hat mir von der E-Rechnungspflicht erzählt. Ich habe daraufhin nach einem
@@ -226,7 +250,8 @@ fehlerhaft.
 ## Tägliche Arbeit
 
 Wie mit dem Programm gearbeitet wird, steht in [docs/ANWENDUNG.md](docs/ANWENDUNG.md): der
-Lebenslauf eines Belegs vom Entwurf bis zum Archiv, und ausführlich der Fall, der die meisten
+Lebenslauf eines Belegs vom Entwurf bis zum Archiv, Stammdaten, **USt-IdNr. bei VIES prüfen**,
+Gutschriften mit Auszahlung an Beteiligte, und ausführlich der Fall, der die meisten
 Rückfragen erzeugt, nämlich die **Korrektur einer bereits gestellten Rechnung**. Kurz gefasst:
 Ein gestellter Beleg wird nie geändert, sondern durch eine Gutschrift aufgehoben und
 gegebenenfalls neu geschrieben.
@@ -402,7 +427,7 @@ Auch die Oberfläche selbst holt nichts von außen: Schriften, das CSS-Werkzeug 
 JavaScript-Bibliothek liegen im Image. Der Aufruf einer Seite erzeugt keine Verbindung zu
 einem fremden Server.
 
-Ihre Daten verlassen den Rechner an genau **drei** Stellen, und alle drei stoßen Sie selbst an:
+Ihre Daten verlassen den Rechner an genau **vier** Stellen, und alle vier stoßen Sie selbst an:
 
 1. **Rechnungsversand.** Die Mail geht an Ihren Kunden, auf Wunsch mit Kopie an die Kanzlei
    und als Blindkopie an die DATEV-Upload-Adresse. Über Ihren eigenen Mailserver.
@@ -412,7 +437,13 @@ Ihre Daten verlassen den Rechner an genau **drei** Stellen, und alle drei stoße
    Ihrem Rechner. Was GitHub sieht, ist der Abruf selbst, also Ihre IP-Adresse wie bei jedem
    Aufruf einer Webseite. Die Prüfung läuft **nur auf Klick**, nie im Hintergrund und nie beim
    Start, und erst nach einer einmaligen Bestätigung.
-3. **GoBD-Export.** Er erzeugt eine Datei auf Ihrem Rechner. Wohin die geht, entscheiden Sie.
+3. **USt-IdNr. bei VIES prüfen.** Sie sendet eine Anfrage an die EU-Schnittstelle VIES der
+   Kommission (`ec.europa.eu`), nur nach Klick auf „Jetzt bei VIES prüfen" und Bestätigung im
+   Dialog. Übertragen werden die zu prüfende USt-IdNr., der Name für den Abgleich und optional
+   Ihre eigene USt-IdNr. als Anfragender; keine Rechnungen, keine weiteren Stammdaten. VIES
+   ist genau für diese Prüfung vorgesehen; die Gegenseite sieht den Abruf, also Ihre
+   IP-Adresse. Beim Speichern des Formulars wird **keine** Verbindung zu VIES aufgebaut.
+4. **GoBD-Export.** Er erzeugt eine Datei auf Ihrem Rechner. Wohin die geht, entscheiden Sie.
 
 Für die Daten Ihrer Kunden sind **Sie** verantwortlich im Sinne der DSGVO, nicht der Autor des
 Programms. Dazu gehören die Auskunft an Betroffene, die Zugriffskontrolle auf den Rechner und
