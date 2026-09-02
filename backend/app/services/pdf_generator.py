@@ -80,6 +80,61 @@ def _ist_gutschrift(invoice) -> bool:
     return getattr(invoice, "invoice_type", None) in GUTSCHRIFT_TYPEN
 
 
+def _zahlung_an_kunde(invoice) -> bool:
+    """Gutschrift: Überweisung an den Kunden (nicht an die Firma)."""
+    return _ist_gutschrift(invoice)
+
+
+def _zahlungs_empfaenger(invoice, company):
+    """(Name, IBAN, BIC, Bankname) für Anzeige und EPC-QR, oder None."""
+    customer = invoice.customer
+    if _zahlung_an_kunde(invoice):
+        if not customer or not customer.bank_iban:
+            return None
+        return (
+            customer.name,
+            customer.bank_iban,
+            customer.bank_bic,
+            customer.bank_name,
+        )
+    if company.bank_iban:
+        return (
+            company.name,
+            company.bank_iban,
+            company.bank_bic,
+            company.bank_name,
+        )
+    return None
+
+
+def _epc_qr_anhaengen(story, invoice, company, small) -> None:
+    ziel = _zahlungs_empfaenger(invoice, company)
+    if not ziel:
+        return
+    name, iban, bic, bank_name = ziel
+    bank_parts = [f"IBAN: {iban}"]
+    if bic:
+        bank_parts.append(f"BIC: {bic}")
+    if bank_name:
+        bank_parts.append(bank_name)
+    story.append(Paragraph(" · ".join(bank_parts), small))
+    story.append(Paragraph(f"Verwendungszweck: {invoice.invoice_number}", small))
+    try:
+        payload = build_epc_payload(
+            beneficiary_name=name,
+            iban=iban,
+            bic=bic,
+            amount=invoice.gross_total,
+            currency=getattr(invoice, "currency", "EUR") or "EUR",
+            remittance=invoice.invoice_number,
+        )
+        story.append(Spacer(1, 0.4 * cm))
+        story.append(Image(io.BytesIO(qr_png_bytes(payload)), width=3.5 * cm, height=3.5 * cm))
+        story.append(Paragraph("Zum Überweisen scannen.", small))
+    except ValueError:
+        pass
+
+
 def _document_title(invoice) -> str:
     """Sichtbarer Belegtitel passend zum invoice_type (Default: RECHNUNG)."""
     return DOCUMENT_TITLES.get(getattr(invoice, "invoice_type", None), "RECHNUNG")
@@ -512,32 +567,16 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
 
     # ── Zahlungshinweis ──────────────────────────────────────────────────────
     story.append(Spacer(1, 0.8 * cm))
-    payment_text = invoice.payment_terms or (
-        "Gutschrift ohne Zahlungsaufforderung." if _ist_gutschrift(invoice) else "Zahlbar ohne Abzug."
-    )
+    if _zahlung_an_kunde(invoice) and _zahlungs_empfaenger(invoice, company):
+        payment_text = invoice.payment_terms or (
+            "Bitte überweisen Sie den Gutschriftbetrag auf die unten genannte Bankverbindung."
+        )
+    elif _ist_gutschrift(invoice):
+        payment_text = invoice.payment_terms or "Gutschrift ohne Zahlungsaufforderung."
+    else:
+        payment_text = invoice.payment_terms or "Zahlbar ohne Abzug."
     story.append(Paragraph(payment_text, small))
-    if company.bank_iban and not _ist_gutschrift(invoice):
-        bank_parts = [f"IBAN: {company.bank_iban}"]
-        if company.bank_bic:
-            bank_parts.append(f"BIC: {company.bank_bic}")
-        if company.bank_name:
-            bank_parts.append(company.bank_name)
-        story.append(Paragraph(" · ".join(bank_parts), small))
-        story.append(Paragraph(f"Verwendungszweck: {invoice.invoice_number}", small))
-        try:
-            payload = build_epc_payload(
-                beneficiary_name=company.name,
-                iban=company.bank_iban,
-                bic=company.bank_bic,
-                amount=invoice.gross_total,
-                currency=getattr(invoice, "currency", "EUR") or "EUR",
-                remittance=invoice.invoice_number,
-            )
-            story.append(Spacer(1, 0.4 * cm))
-            story.append(Image(io.BytesIO(qr_png_bytes(payload)), width=3.5 * cm, height=3.5 * cm))
-            story.append(Paragraph("Zum Überweisen scannen.", small))
-        except ValueError:
-            pass
+    _epc_qr_anhaengen(story, invoice, company, small)
 
     # ── Freitext / Notiz ─────────────────────────────────────────────────────
     if invoice.notes:

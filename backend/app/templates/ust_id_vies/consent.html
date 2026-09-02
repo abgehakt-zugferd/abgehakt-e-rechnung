@@ -1,0 +1,44 @@
+{#
+  Einwilligung vor jeder VIES-Abfrage.
+
+  Es gibt keinen Hintergrundabruf und keinen Abruf beim Speichern — nur nach
+  Klick auf „Jetzt bei VIES pruefen" und Bestaetigung auf dieser Seite.
+
+  Waechter: tests/test_ust_id_zustimmung.py
+#}
+{% extends "base.html" %}
+{% block content %}
+<div data-seite="vies-zustimmung" style="max-width:680px;">
+  <h1>USt-IdNr. bei VIES pruefen</h1>
+
+  <div class="card" style="margin-bottom:24px;">
+    <p style="margin-top:0;">Das Programm stellt dafuer eine Verbindung zur
+       EU-Schnittstelle VIES auf und sendet eine POST-Anfrage an:</p>
+    <pre style="margin:0 0 16px; padding:12px 14px; background:var(--surface2);
+                border:2px solid var(--border-hi); overflow-x:auto;
+                font-size:0.8125rem;">{{ endpoint }}</pre>
+    <p><strong>Uebertragen wird:</strong></p>
+    <ul style="margin:0 0 16px; padding-left:1.25rem;">
+      <li>Laendercode und USt-IdNr.: <span class="font-mono">{{ vat_id }}</span></li>
+      <li>Name fuer den Abgleich: <strong>{{ trader_name }}</strong></li>
+      {% if requester_vat %}
+      <li>Eigene USt-IdNr. als Anfragender: <span class="font-mono">{{ requester_vat }}</span></li>
+      {% endif %}
+    </ul>
+    <p style="margin-bottom:0;">Sichtbar wird fuer die Gegenseite der Abruf selbst, also die
+       <strong>IP-Adresse</strong> dieses Anschlusses. Es werden keine Rechnungs- oder
+       Kundenstammdaten ausser der genannten USt-IdNr. und des Namens uebertragen.</p>
+  </div>
+
+  <p>Ohne deine Bestaetigung auf dieser Seite wird <strong>keine</strong> Internetverbindung
+     zu VIES aufgebaut — auch nicht beim Speichern des Formulars.</p>
+
+  <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:24px;">
+    <form method="post" action="{{ execute_url }}">
+      <input type="hidden" name="bestaetigt" value="1">
+      <button type="submit" class="btn-primary">Einverstanden, jetzt pruefen</button>
+    </form>
+    <a href="{{ cancel_url }}" class="btn-secondary">Abbrechen</a>
+  </div>
+</div>
+{% endblock %}

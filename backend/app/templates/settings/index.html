@@ -58,7 +58,10 @@
                     </div>
                     <div>
                         <label class="label">USt-IdNr.</label>
-                        <input type="text" name="vat_id" value="{{ company.vat_id or '' }}" placeholder="DE123456789" class="input font-mono">
+                        <input type="text" name="vat_id" value="{{ company.vat_id or '' }}" placeholder="DE und neun Ziffern" class="input font-mono">
+                        {% with entity=company, pruefen_url='/settings/ust-id-pruefen' %}
+                        {% include "partials/ust_id_vies_status.html" %}
+                        {% endwith %}
                     </div>
                 </div>
             </div>

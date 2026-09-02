@@ -10,6 +10,15 @@ from app.models.customer import Customer
 from app.models.company import Company
 from app.services.customer_number import next_customer_number
 from app.services import empfaenger
+from app.services.bankverbindung import normalisiere_bic, normalisiere_iban, pruefe_bic, pruefe_iban
+from app.services.ust_id_pruefung import (
+    VIES_ENDPOINT,
+    normalisiere_ust_id,
+    pruefe_ust_id_format,
+    pruefe_ust_id_vies,
+    speichern as ust_speichern,
+    zuruecksetzen as ust_zuruecksetzen,
+)
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
 
@@ -29,11 +38,92 @@ def _render_form(request: Request, customer, suggested_number: str, values: dict
     })
 
 
+def _bank_felder(
+    bank_iban: str,
+    bank_bic: str,
+    bank_name: str,
+) -> tuple[dict, str | None]:
+    """Normalisiert Bankfelder oder liefert Formularwerte + Fehlermeldung."""
+    iban_fehler = pruefe_iban(bank_iban)
+    if iban_fehler:
+        return {
+            "bank_iban": bank_iban,
+            "bank_bic": bank_bic,
+            "bank_name": bank_name,
+        }, iban_fehler
+    bic_fehler = pruefe_bic(bank_bic)
+    if bic_fehler:
+        return {
+            "bank_iban": bank_iban,
+            "bank_bic": bank_bic,
+            "bank_name": bank_name,
+        }, bic_fehler
+    return {
+        "bank_iban": bank_iban,
+        "bank_bic": bank_bic,
+        "bank_name": bank_name.strip(),
+    }, None
+
+
+def _bank_speichern(customer: Customer, felder: dict) -> None:
+    customer.bank_iban = normalisiere_iban(felder.get("bank_iban"))
+    customer.bank_bic = normalisiere_bic(felder.get("bank_bic"))
+    customer.bank_name = (felder.get("bank_name") or "").strip() or None
+
+
 def _number_taken(db: Session, number: str, exclude_id=None) -> bool:
     q = db.query(Customer).filter(Customer.customer_number == number)
     if exclude_id is not None:
         q = q.filter(Customer.id != exclude_id)
     return q.first() is not None
+
+
+def _get_company(db: Session) -> Company | None:
+    return db.query(Company).filter(Company.id == 1).first()
+
+
+def _ust_id_verarbeiten(
+    customer: Customer,
+    roh_vat_id: str,
+) -> tuple[str | None, str | None]:
+    """Normalisiert USt-IdNr. und setzt Pruefstand zurueck bei Aenderung. Kein VIES-Abruf."""
+    neu = normalisiere_ust_id(roh_vat_id) if (roh_vat_id or "").strip() else None
+    if neu:
+        fmt = pruefe_ust_id_format(neu)
+        if fmt:
+            return neu, fmt
+    alt = customer.vat_id
+    if not neu:
+        ust_zuruecksetzen(customer)
+        customer.vat_id = None
+        return None, None
+    if neu != alt:
+        ust_zuruecksetzen(customer)
+    customer.vat_id = neu
+    return neu, None
+
+
+def _vies_consent_page(
+    request: Request,
+    *,
+    vat_id: str,
+    trader_name: str,
+    requester_vat: str | None,
+    execute_url: str,
+    cancel_url: str,
+):
+    return templates.TemplateResponse(
+        request,
+        "ust_id_vies/consent.html",
+        {
+            "endpoint": VIES_ENDPOINT,
+            "vat_id": vat_id,
+            "trader_name": trader_name,
+            "requester_vat": requester_vat,
+            "execute_url": execute_url,
+            "cancel_url": cancel_url,
+        },
+    )
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -73,6 +163,9 @@ def create_customer(
     email: str = Form(""),
     cc_emails: str = Form(""),
     phone: str = Form(""),
+    bank_iban: str = Form(""),
+    bank_bic: str = Form(""),
+    bank_name: str = Form(""),
     notes: str = Form(""),
     is_active: str = Form("1"),
     db: Session = Depends(get_db),
@@ -84,6 +177,10 @@ def create_customer(
         "country": country, "vat_id": vat_id, "email": email, "phone": phone, "notes": notes,
         "cc_emails": cc_emails,
     }
+    bank_felder, bank_fehler = _bank_felder(bank_iban, bank_bic, bank_name)
+    values.update(bank_felder)
+    if bank_fehler:
+        return _render_form(request, None, number, values, bank_fehler)
     cc_fehler = empfaenger.pruefe(cc_emails)
     if cc_fehler:
         return _render_form(request, None, number, values, cc_fehler)
@@ -99,13 +196,17 @@ def create_customer(
         zip_code=zip_code.strip(),
         city=city.strip(),
         country=country.strip() or "DE",
-        vat_id=vat_id.strip() or None,
         email=email.strip() or None,
         cc_emails=empfaenger.normalisiere(cc_emails) or None,
         phone=phone.strip() or None,
         notes=notes.strip() or None,
         is_active=(is_active == "1"),
     )
+    _bank_speichern(customer, bank_felder)
+    _, ust_fehler = _ust_id_verarbeiten(customer, vat_id)
+    if ust_fehler:
+        values["vat_id"] = customer.vat_id or vat_id
+        return _render_form(request, None, number, values, ust_fehler)
     db.add(customer)
     try:
         db.commit()
@@ -139,6 +240,9 @@ def update_customer(
     email: str = Form(""),
     cc_emails: str = Form(""),
     phone: str = Form(""),
+    bank_iban: str = Form(""),
+    bank_bic: str = Form(""),
+    bank_name: str = Form(""),
     notes: str = Form(""),
     is_active: str = Form("1"),
     db: Session = Depends(get_db),
@@ -146,6 +250,10 @@ def update_customer(
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(404, "Kunde nicht gefunden")
+    bank_felder, bank_fehler = _bank_felder(bank_iban, bank_bic, bank_name)
+    if bank_fehler:
+        values = bank_felder
+        return _render_form(request, customer, "", values, bank_fehler)
     cc_fehler = empfaenger.pruefe(cc_emails)
     if cc_fehler:
         return _render_form(request, customer, "", {}, cc_fehler)
@@ -160,12 +268,15 @@ def update_customer(
     customer.zip_code = zip_code.strip()
     customer.city = city.strip()
     customer.country = country.strip() or "DE"
-    customer.vat_id = vat_id.strip() or None
     customer.email = email.strip() or None
     customer.cc_emails = empfaenger.normalisiere(cc_emails) or None
     customer.phone = phone.strip() or None
     customer.notes = notes.strip() or None
     customer.is_active = (is_active == "1")
+    _bank_speichern(customer, bank_felder)
+    _, ust_fehler = _ust_id_verarbeiten(customer, vat_id)
+    if ust_fehler:
+        return _render_form(request, customer, "", {"vat_id": customer.vat_id or vat_id}, ust_fehler)
     try:
         db.commit()
     except IntegrityError:
@@ -174,6 +285,40 @@ def update_customer(
         return _render_form(request, customer, "", {},
                             f"Kundennummer bereits vergeben: {number}")
     return RedirectResponse(url="/customers", status_code=303)
+
+
+@router.post("/{customer_id}/ust-id-pruefen")
+def pruefe_customer_ust_id(
+    request: Request,
+    customer_id: uuid.UUID,
+    bestaetigt: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(404, "Kunde nicht gefunden")
+    if not customer.vat_id:
+        raise HTTPException(400, "Keine USt-IdNr. hinterlegt")
+    company = _get_company(db)
+    execute = f"/customers/{customer_id}/ust-id-pruefen"
+    cancel = f"/customers/{customer_id}/bearbeiten"
+    if bestaetigt != "1":
+        return _vies_consent_page(
+            request,
+            vat_id=customer.vat_id,
+            trader_name=customer.name,
+            requester_vat=company.vat_id if company else None,
+            execute_url=execute,
+            cancel_url=cancel,
+        )
+    ergebnis = pruefe_ust_id_vies(
+        customer.vat_id,
+        customer.name,
+        company.vat_id if company else None,
+    )
+    ust_speichern(customer, ergebnis)
+    db.commit()
+    return RedirectResponse(url=f"/customers/{customer_id}/bearbeiten", status_code=303)
 
 
 @router.post("/{customer_id}/loeschen")

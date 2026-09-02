@@ -273,22 +273,34 @@ def _buyer_vat_xml(customer, tax_category: str) -> str:
     return ""
 
 
-def _payment_means_xml(company: Company) -> str:
-    if not company.bank_iban:
+def _payment_means_xml(iban: str, bic: str | None = None) -> str:
+    if not iban:
         return ""
     bic_block = ""
-    if company.bank_bic:
+    if bic:
         bic_block = f"""
                 <ram:PayeeSpecifiedCreditorFinancialInstitution>
-                    <ram:BICID>{_esc(company.bank_bic)}</ram:BICID>
+                    <ram:BICID>{_esc(bic)}</ram:BICID>
                 </ram:PayeeSpecifiedCreditorFinancialInstitution>"""
     return f"""
             <ram:SpecifiedTradeSettlementPaymentMeans>
                 <ram:TypeCode>58</ram:TypeCode>
                 <ram:PayeePartyCreditorFinancialAccount>
-                    <ram:IBANID>{_esc(company.bank_iban)}</ram:IBANID>
+                    <ram:IBANID>{_esc(iban)}</ram:IBANID>
                 </ram:PayeePartyCreditorFinancialAccount>{bic_block}
             </ram:SpecifiedTradeSettlementPaymentMeans>"""
+
+
+def _company_payment_means_xml(company: Company) -> str:
+    if not company.bank_iban:
+        return ""
+    return _payment_means_xml(company.bank_iban, company.bank_bic)
+
+
+def _gutschrift_zahlung_an_kunde(invoice: Invoice) -> bool:
+    return getattr(invoice, "invoice_type", None) in {
+        "credit_note", "credit", "storno", "self_billing",
+    }
 
 
 def _payment_terms_xml(invoice: Invoice) -> str:
@@ -309,9 +321,12 @@ def _payment_terms_xml(invoice: Invoice) -> str:
 
 
 def _settlement_payment_xml(invoice: Invoice, company: Company) -> str:
-    if invoice.invoice_type == "credit_note":
+    customer = invoice.customer
+    if _gutschrift_zahlung_an_kunde(invoice):
+        if customer and customer.bank_iban:
+            return _payment_means_xml(customer.bank_iban, customer.bank_bic)
         return ""
-    return _payment_means_xml(company)
+    return _company_payment_means_xml(company)
 
 
 def _esc(text: str | None) -> str:

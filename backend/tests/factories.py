@@ -6,22 +6,25 @@ AttributeError in einer Datei und fachliche Assertion in einer anderen enden.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from types import SimpleNamespace
 
 from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
+from tests.probe_daten import IBAN_FIRMA_PROBE, UST_DE_PROBE, UST_DE_PROBE_2
 
 # Felder, die SimpleNamespace-Stubs fuer Validator und ZUGFeRD-Generator tragen muessen.
 COMPANY_STUB_FIELDS = (
     "name", "address_line1", "address_line2", "zip_code", "city", "country",
-    "tax_number", "vat_id", "email", "phone", "contact_name", "bank_iban", "bank_bic",
+    "tax_number", "vat_id", "vat_id_checked_at", "vat_id_check_valid", "vat_id_vies_name", "vat_id_name_match",
+    "email", "phone", "contact_name", "bank_iban", "bank_bic",
 )
 CUSTOMER_STUB_FIELDS = (
     "name", "address_line1", "address_line2", "zip_code", "city", "country",
-    "vat_id", "email",
+    "vat_id", "vat_id_checked_at", "vat_id_check_valid", "vat_id_vies_name", "vat_id_name_match",
+    "email", "bank_iban", "bank_bic", "bank_name",
 )
 ITEM_STUB_FIELDS = (
     "position", "description", "unit", "quantity", "unit_price", "tax_rate",
@@ -38,6 +41,11 @@ INVOICE_STUB_FIELDS = (
 def _stub(defaults: dict, **kwargs):
     merged = defaults.copy()
     merged.update(kwargs)
+    if merged.get("vat_id") and merged.get("vat_id_checked_at") is None:
+        merged["vat_id_checked_at"] = datetime.now(timezone.utc)
+        merged.setdefault("vat_id_check_valid", True)
+        merged.setdefault("vat_id_name_match", "unbekannt")
+        merged.setdefault("vat_id_vies_name", None)
     return SimpleNamespace(**merged)
 
 
@@ -51,6 +59,10 @@ def company_stub(**kwargs):
         country="DE",
         tax_number="12/345/67890",
         vat_id=None,
+        vat_id_checked_at=None,
+        vat_id_check_valid=None,
+        vat_id_vies_name=None,
+        vat_id_name_match=None,
         email=None,
         phone=None,
         contact_name=None,
@@ -68,7 +80,14 @@ def customer_stub(**kwargs):
         city="München",
         country="DE",
         vat_id=None,
+        vat_id_checked_at=None,
+        vat_id_check_valid=None,
+        vat_id_vies_name=None,
+        vat_id_name_match=None,
         email=None,
+        bank_iban=None,
+        bank_bic=None,
+        bank_name=None,
     ), **kwargs)
 
 
@@ -141,14 +160,18 @@ def orm_company(**over) -> Company:
         city="Musterstadt",
         country="DE",
         tax_number="123/456/78901",
-        vat_id="DE123456789",
+        vat_id=UST_DE_PROBE,
         email="info@example.de",
         phone="+49 111",
-        bank_iban="DE00123456780000000000",
+        bank_iban=IBAN_FIRMA_PROBE,
         bank_bic="ABCDDEFF",
         bank_name="Testbank",
     )
     kw.update(over)
+    if kw.get("vat_id") and kw.get("vat_id_checked_at") is None and "vat_id_checked_at" not in over:
+        kw["vat_id_checked_at"] = datetime.now(timezone.utc)
+        kw.setdefault("vat_id_check_valid", True)
+        kw.setdefault("vat_id_name_match", "unbekannt")
     return Company(**kw)
 
 
@@ -159,9 +182,13 @@ def orm_customer(**over) -> Customer:
         zip_code="10115",
         city="Berlin",
         country="DE",
-        vat_id="DE987654321",
+        vat_id=UST_DE_PROBE_2,
     )
     kw.update(over)
+    if kw.get("vat_id") and kw.get("vat_id_checked_at") is None and "vat_id_checked_at" not in over:
+        kw["vat_id_checked_at"] = datetime.now(timezone.utc)
+        kw.setdefault("vat_id_check_valid", True)
+        kw.setdefault("vat_id_name_match", "unbekannt")
     return Customer(**kw)
 
 
