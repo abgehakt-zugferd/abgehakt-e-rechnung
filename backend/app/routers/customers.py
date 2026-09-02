@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -12,7 +13,7 @@ from app.services.customer_number import next_customer_number
 from app.services import empfaenger
 from app.services.bankverbindung import normalisiere_bic, normalisiere_iban, pruefe_bic, pruefe_iban
 from app.services.ust_id_pruefung import (
-    VIES_ENDPOINT,
+    eingaben_fuer_pruefung,
     normalisiere_ust_id,
     pruefe_ust_id_format,
     pruefe_ust_id_vies,
@@ -28,13 +29,15 @@ register_branding_globals(templates)
 registriere_darstellungsfilter(templates)
 
 
-def _render_form(request: Request, customer, suggested_number: str, values: dict, error: str | None):
+def _render_form(request: Request, customer, suggested_number: str, values: dict, error: str | None,
+                 company_vat_id: str | None = None):
     return templates.TemplateResponse("customers/form.html", {
         "request": request,
         "customer": customer,
         "suggested_number": suggested_number,
         "values": values,
         "error": error,
+        "company_vat_id": company_vat_id,
     })
 
 
@@ -101,29 +104,6 @@ def _ust_id_verarbeiten(
         ust_zuruecksetzen(customer)
     customer.vat_id = neu
     return neu, None
-
-
-def _vies_consent_page(
-    request: Request,
-    *,
-    vat_id: str,
-    trader_name: str,
-    requester_vat: str | None,
-    execute_url: str,
-    cancel_url: str,
-):
-    return templates.TemplateResponse(
-        request,
-        "ust_id_vies/consent.html",
-        {
-            "endpoint": VIES_ENDPOINT,
-            "vat_id": vat_id,
-            "trader_name": trader_name,
-            "requester_vat": requester_vat,
-            "execute_url": execute_url,
-            "cancel_url": cancel_url,
-        },
-    )
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -218,11 +198,17 @@ def create_customer(
 
 
 @router.get("/{customer_id}/bearbeiten", response_class=HTMLResponse)
-def edit_customer_form(customer_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
+def edit_customer_form(customer_id: uuid.UUID, request: Request, db: Session = Depends(get_db),
+                       vies_error: str = ""):
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(404, "Kunde nicht gefunden")
-    return _render_form(request, customer, "", {}, None)
+    company = _get_company(db)
+    return _render_form(
+        request, customer, "", {},
+        vies_error.strip() or None,
+        company_vat_id=company.vat_id if company else None,
+    )
 
 
 @router.post("/{customer_id}/bearbeiten")
@@ -292,28 +278,30 @@ def pruefe_customer_ust_id(
     request: Request,
     customer_id: uuid.UUID,
     bestaetigt: str = Form(default=""),
+    check_vat_id: str = Form(default=""),
+    check_name: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(404, "Kunde nicht gefunden")
-    if not customer.vat_id:
-        raise HTTPException(400, "Keine USt-IdNr. hinterlegt")
-    company = _get_company(db)
-    execute = f"/customers/{customer_id}/ust-id-pruefen"
-    cancel = f"/customers/{customer_id}/bearbeiten"
     if bestaetigt != "1":
-        return _vies_consent_page(
-            request,
-            vat_id=customer.vat_id,
-            trader_name=customer.name,
-            requester_vat=company.vat_id if company else None,
-            execute_url=execute,
-            cancel_url=cancel,
+        raise HTTPException(400, "Einwilligung erforderlich")
+    vat, name, fehler = eingaben_fuer_pruefung(
+        check_vat_id, customer.vat_id, check_name, customer.name,
+    )
+    if fehler:
+        return RedirectResponse(
+            url=f"/customers/{customer_id}/bearbeiten?vies_error={quote(fehler)}",
+            status_code=303,
         )
+    if vat != customer.vat_id:
+        ust_zuruecksetzen(customer)
+        customer.vat_id = vat
+    company = _get_company(db)
     ergebnis = pruefe_ust_id_vies(
-        customer.vat_id,
-        customer.name,
+        vat,
+        name,
         company.vat_id if company else None,
     )
     ust_speichern(customer, ergebnis)

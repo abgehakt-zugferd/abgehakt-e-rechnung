@@ -7,6 +7,7 @@ import httpx
 from app.services.ust_id_pruefung import (
     VIES_ENDPOINT,
     aufteilen_ust_id,
+    eingaben_fuer_pruefung,
     namen_gleich,
     normalisiere_ust_id,
     pruefe_ust_id_format,
@@ -114,6 +115,15 @@ def test_speichern_und_zuruecksetzen():
     assert kunde.vat_id_name_match == "stimmt"
     zuruecksetzen(kunde)
     assert kunde.vat_id_checked_at is None
+
+
+def test_eingaben_fuer_pruefung_nutzt_formularwerte():
+    vat, name, fehler = eingaben_fuer_pruefung(
+        UST_DE_PROBE_3, UST_DE_PROBE, "Neuer Name", "Alter Name",
+    )
+    assert fehler is None
+    assert vat == UST_DE_PROBE_3
+    assert name == "Neuer Name"
 
 
 def test_validator_ungueltige_kunden_ust_id():

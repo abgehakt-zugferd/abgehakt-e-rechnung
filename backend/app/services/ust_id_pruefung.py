@@ -1,7 +1,7 @@
 """USt-IdNr. gegen die EU-VIES-Schnittstelle pruefen (Existenz, Gueltigkeit, Name).
 
-Kein Scheduler, kein Abruf beim Speichern: nur nach Klick und expliziter Zustimmung
-auf der Einwilligungsseite (`ust_id_vies/consent.html`). Tests nutzen httpx.MockTransport.
+Kein Scheduler, kein Abruf beim Speichern: nur nach Klick, Einwilligung im Dialog,
+dann POST mit bestaetigt=1. Tests nutzen httpx.MockTransport.
 """
 from __future__ import annotations
 
@@ -69,6 +69,26 @@ def pruefe_ust_id_format(roh: str | None) -> str | None:
             "(z. B. Laendercode DE und neun Ziffern), ohne Leerzeichen."
         )
     return None
+
+
+def eingaben_fuer_pruefung(
+    form_vat_id: str,
+    gespeichert_vat_id: str | None,
+    form_name: str,
+    gespeichert_name: str,
+) -> tuple[str | None, str, str | None]:
+    """(vat_id, trader_name, fehlermeldung) aus Formular und gespeichertem Stand."""
+    roh = (form_vat_id or "").strip() or (gespeichert_vat_id or "")
+    if not roh:
+        return None, gespeichert_name, "Keine USt-IdNr. zum Pruefen."
+    neu = normalisiere_ust_id(roh)
+    if not neu:
+        return None, gespeichert_name, "USt-IdNr. unlesbar."
+    fmt = pruefe_ust_id_format(neu)
+    if fmt:
+        return neu, gespeichert_name, fmt
+    name = (form_name or "").strip() or gespeichert_name
+    return neu, name, None
 
 
 def _namen_normalisieren(name: str) -> str:

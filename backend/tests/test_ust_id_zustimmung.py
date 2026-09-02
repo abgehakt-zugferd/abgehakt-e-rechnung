@@ -1,8 +1,8 @@
 """
-Einwilligung vor VIES-Abfragen: URL sichtbar, kein Abruf ohne Bestaetigung,
-kein Abruf beim Speichern.
+Einwilligungsdialog vor VIES-Abfragen: URL im Dialog, kein Abruf ohne Bestaetigung,
+kein verschachteltes Formular (Button darf nicht Speichern triggern).
 
-Waechter fuer ust_id_vies/consent.html und die Router customers/settings.
+Waechter: partials/ust_id_vies_dialog.html
 """
 import re
 from datetime import datetime, timezone
@@ -41,37 +41,42 @@ def _kunde_mit_ust(pg_session):
     return kunde
 
 
-def _zustimmungsseite(client, kunde_id, monkeypatch) -> str:
-    monkeypatch.setattr(
-        "app.routers.customers.pruefe_ust_id_vies",
-        lambda *a, **k: pytest.fail("vor der Bestaetigung darf VIES nicht aufgerufen werden"),
-    )
-    r = client.post(f"/customers/{kunde_id}/ust-id-pruefen")
+def _bearbeiten_seite(client, kunde_id) -> str:
+    r = client.get(f"/customers/{kunde_id}/bearbeiten")
     assert r.status_code == 200
     assert 'data-seite="vies-zustimmung"' in r.text
     return r.text.split('data-seite="vies-zustimmung"')[1]
 
 
-def test_zustimmung_zeigt_vies_url(client, pg_session, monkeypatch):
+def test_dialog_auf_bearbeiten_seite_zeigt_vies_url(client, pg_session):
     kunde = _kunde_mit_ust(pg_session)
-    inhalt = _zustimmungsseite(client, kunde.id, monkeypatch)
+    inhalt = _bearbeiten_seite(client, kunde.id)
     assert VIES_ENDPOINT in inhalt
 
 
-def test_zustimmung_zeigt_ust_id_und_name(client, pg_session, monkeypatch):
+def test_dialog_zeigt_gespeicherte_ust_id(client, pg_session):
     kunde = _kunde_mit_ust(pg_session)
-    inhalt = _zustimmungsseite(client, kunde.id, monkeypatch)
-    assert UST_DE_PROBE in inhalt
-    assert kunde.name in inhalt
+    html = client.get(f"/customers/{kunde.id}/bearbeiten").text
+    assert UST_DE_PROBE in html
+    assert kunde.name in html
 
 
-def test_zustimmung_benennt_ip_adresse(client, pg_session, monkeypatch):
+def test_dialog_benennt_ip_adresse(client, pg_session):
     kunde = _kunde_mit_ust(pg_session)
-    inhalt = _zustimmungsseite(client, kunde.id, monkeypatch)
+    inhalt = _bearbeiten_seite(client, kunde.id)
     assert "IP-Adresse" in inhalt
 
 
-def test_zustimmung_kein_abruf_beim_speichern(client, pg_session, monkeypatch):
+def test_vies_button_ist_kein_form_submit(client, pg_session):
+    kunde = _kunde_mit_ust(pg_session)
+    html = client.get(f"/customers/{kunde.id}/bearbeiten").text
+    assert "js-vies-consent-open" in html
+    assert 'class="btn-secondary js-vies-consent-open"' in html or "js-vies-consent-open" in html
+    # Kein verschachteltes <form> fuer VIES innerhalb des Kundenformulars
+    assert html.count("<form") == 2  # Kundenformular + Dialog-Formular ausserhalb
+
+
+def test_speichern_ruft_vies_nicht_auf(client, pg_session, monkeypatch):
     monkeypatch.setattr(
         "app.routers.customers.pruefe_ust_id_vies",
         lambda *a, **k: pytest.fail("Speichern darf VIES nicht aufrufen"),
@@ -96,9 +101,15 @@ def test_zustimmung_kein_abruf_beim_speichern(client, pg_session, monkeypatch):
     assert kunde.vat_id_checked_at is None
 
 
-def test_knoepfe_der_zustimmung_sind_als_knopf_erkennbar(client, pg_session, monkeypatch):
+def test_post_ohne_einwilligung_wird_abgelehnt(client, pg_session):
     kunde = _kunde_mit_ust(pg_session)
-    inhalt = _zustimmungsseite(client, kunde.id, monkeypatch)
+    r = client.post(f"/customers/{kunde.id}/ust-id-pruefen")
+    assert r.status_code == 400
+
+
+def test_knoepfe_im_dialog_sind_als_knopf_erkennbar(client, pg_session):
+    kunde = _kunde_mit_ust(pg_session)
+    inhalt = _bearbeiten_seite(client, kunde.id)
     knoepfe = KNOPF.findall(inhalt)
     assert knoepfe
     for k in knoepfe:
@@ -126,7 +137,11 @@ def test_mit_bestaetigung_wird_vies_gerufen(client, pg_session, monkeypatch):
     monkeypatch.setattr("app.routers.customers.pruefe_ust_id_vies", fake_vies)
     r = client.post(
         f"/customers/{kunde.id}/ust-id-pruefen",
-        data={"bestaetigt": "1"},
+        data={
+            "bestaetigt": "1",
+            "check_vat_id": UST_DE_PROBE,
+            "check_name": kunde.name,
+        },
     )
     assert r.status_code == 303
     assert gesehen["ust_id"] == UST_DE_PROBE

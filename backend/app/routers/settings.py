@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, Form
+from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -8,7 +8,7 @@ from app.models.app_config import AppConfig
 from app.services import datev_email, empfaenger
 from app.services.invoice_number import pruefe_praefix
 from app.services.ust_id_pruefung import (
-    VIES_ENDPOINT,
+    eingaben_fuer_pruefung,
     normalisiere_ust_id,
     pruefe_ust_id_format,
     pruefe_ust_id_vies,
@@ -132,25 +132,22 @@ def save_company(
 def pruefe_company_ust_id(
     request: Request,
     bestaetigt: str = Form(default=""),
+    check_vat_id: str = Form(default=""),
+    check_name: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
     company = _get_or_create_company(db)
-    if not company.vat_id:
-        return settings_page(request, db, saved=False, error="Keine USt-IdNr. hinterlegt.")
     if bestaetigt != "1":
-        return templates.TemplateResponse(
-            request,
-            "ust_id_vies/consent.html",
-            {
-                "endpoint": VIES_ENDPOINT,
-                "vat_id": company.vat_id,
-                "trader_name": company.name,
-                "requester_vat": None,
-                "execute_url": "/settings/ust-id-pruefen",
-                "cancel_url": "/settings",
-            },
-        )
-    ergebnis = pruefe_ust_id_vies(company.vat_id, company.name)
+        raise HTTPException(400, "Einwilligung erforderlich")
+    vat, name, fehler = eingaben_fuer_pruefung(
+        check_vat_id, company.vat_id, check_name, company.name,
+    )
+    if fehler:
+        return settings_page(request, db, saved=False, error=fehler)
+    if vat != company.vat_id:
+        ust_zuruecksetzen(company)
+        company.vat_id = vat
+    ergebnis = pruefe_ust_id_vies(vat, name)
     ust_speichern(company, ergebnis)
     db.commit()
     return RedirectResponse(url="/settings", status_code=303)

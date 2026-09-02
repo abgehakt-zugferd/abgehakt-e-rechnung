@@ -17,7 +17,7 @@
     {% endif %}
 
     <!-- Company Data -->
-    <form method="post" action="/settings/firma" class="space-y-5 mb-6">
+    <form id="settings-firma" method="post" action="/settings/firma" class="space-y-5 mb-6">
         <div class="card space-y-4">
             <h2>FIRMENDATEN</h2>
             <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">{{ company.name }} · Erscheinen auf jeder Rechnung · Pflicht nach § 14 UStG</p>
@@ -59,7 +59,7 @@
                     <div>
                         <label class="label">USt-IdNr.</label>
                         <input type="text" name="vat_id" value="{{ company.vat_id or '' }}" placeholder="DE und neun Ziffern" class="input font-mono">
-                        {% with entity=company, pruefen_url='/settings/ust-id-pruefen' %}
+                        {% with entity=company, pruefen_url='/settings/ust-id-pruefen', form_root='settings-firma' %}
                         {% include "partials/ust_id_vies_status.html" %}
                         {% endwith %}
                     </div>
@@ -127,6 +127,10 @@
         </div>
         <button type="submit" class="btn-primary">FIRMENDATEN SPEICHERN</button>
     </form>
+
+    {% with execute_url='/settings/ust-id-pruefen' %}
+    {% include "partials/ust_id_vies_dialog.html" %}
+    {% endwith %}
 
     <!-- SMTP -->
     <form method="post" action="/settings/smtp" class="card mb-5">
