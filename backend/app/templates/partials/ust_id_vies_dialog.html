@@ -1,0 +1,73 @@
+{#
+  Einwilligungsdialog fuer VIES — ausserhalb aller anderen Formulare (kein nested form).
+  Waechter: tests/test_ust_id_zustimmung.py
+#}
+<div id="vies-consent-backdrop" class="js-vies-consent-backdrop" hidden
+     style="position:fixed; inset:0; z-index:200; background:rgba(0,0,16,0.65);"></div>
+<div id="vies-consent-dialog" class="js-vies-consent-dialog" data-seite="vies-zustimmung" hidden
+     role="dialog" aria-modal="true" aria-labelledby="vies-consent-title"
+     style="position:fixed; z-index:201; left:50%; top:50%; transform:translate(-50%,-50%);
+            width:min(640px, calc(100vw - 32px)); max-height:calc(100vh - 48px); overflow:auto;
+            background:var(--surface); border:2px solid var(--border-hi); box-shadow:var(--shadow-sidebar); padding:20px;">
+  <h2 id="vies-consent-title" style="margin:0 0 16px; font-size:var(--fs-gross);">USt-IdNr. bei VIES pruefen</h2>
+  <div class="card" style="margin-bottom:16px;">
+    <p style="margin-top:0;">Das Programm stellt dafuer eine Verbindung zur EU-Schnittstelle VIES auf und sendet eine POST-Anfrage an:</p>
+    <pre style="margin:0 0 16px; padding:12px 14px; background:var(--surface2); border:2px solid var(--border-hi); overflow-x:auto; font-size:0.8125rem;">{{ VIES_ENDPOINT }}</pre>
+    <p><strong>Uebertragen wird:</strong></p>
+    <ul style="margin:0 0 16px; padding-left:1.25rem;">
+      <li>Laendercode und USt-IdNr.: <span class="font-mono" id="vies-dialog-vat"></span></li>
+      <li>Name fuer den Abgleich: <strong id="vies-dialog-name"></strong></li>
+      {% if requester_vat %}
+      <li>Eigene USt-IdNr. als Anfragender: <span class="font-mono">{{ requester_vat }}</span></li>
+      {% endif %}
+    </ul>
+    <p style="margin-bottom:0;">Sichtbar wird fuer die Gegenseite der Abruf selbst, also die <strong>IP-Adresse</strong> dieses Anschlusses.</p>
+  </div>
+  <p style="margin-bottom:16px;">Ohne deine Bestaetigung wird <strong>keine</strong> Internetverbindung zu VIES aufgebaut.</p>
+  <form method="post" action="{{ execute_url }}" id="vies-consent-form" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+    <input type="hidden" name="bestaetigt" value="1">
+    <input type="hidden" name="check_vat_id" id="vies-check-vat-id">
+    <input type="hidden" name="check_name" id="vies-check-name">
+    <button type="submit" class="btn-primary">Einverstanden, jetzt pruefen</button>
+    <button type="button" class="btn-secondary js-vies-consent-close">Abbrechen</button>
+  </form>
+</div>
+<script>
+(function () {
+  var dialog = document.getElementById('vies-consent-dialog');
+  var backdrop = document.getElementById('vies-consent-backdrop');
+  var form = document.getElementById('vies-consent-form');
+  if (!dialog || !backdrop || !form) return;
+
+  function schliessen() {
+    dialog.hidden = true;
+    backdrop.hidden = true;
+  }
+
+  function oeffnen(btn) {
+    var root = btn.dataset.formRoot ? document.getElementById(btn.dataset.formRoot) : document;
+    var vatFeld = root ? root.querySelector('input[name="vat_id"]') : null;
+    var nameFeld = root ? root.querySelector('input[name="name"]') : null;
+    var vat = (vatFeld && vatFeld.value || '').trim();
+    if (!vat) {
+      alert('Bitte zuerst eine USt-IdNr. eintragen.');
+      return;
+    }
+    form.action = btn.dataset.pruefenUrl || form.action;
+    document.getElementById('vies-check-vat-id').value = vat;
+    document.getElementById('vies-check-name').value = (nameFeld && nameFeld.value || '').trim();
+    document.getElementById('vies-dialog-vat').textContent = vat;
+    document.getElementById('vies-dialog-name').textContent = (nameFeld && nameFeld.value || '').trim() || '–';
+    dialog.hidden = false;
+    backdrop.hidden = false;
+  }
+
+  document.querySelectorAll('.js-vies-consent-open').forEach(function (btn) {
+    btn.addEventListener('click', function () { oeffnen(btn); });
+  });
+  document.querySelectorAll('.js-vies-consent-close').forEach(function (btn) {
+    btn.addEventListener('click', schliessen);
+  });
+  backdrop.addEventListener('click', schliessen);
+})();
+</script>
