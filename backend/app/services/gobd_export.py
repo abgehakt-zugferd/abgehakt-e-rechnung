@@ -29,6 +29,7 @@ from app.models.invoice import AuditLog, Invoice
 _RECHNUNGEN_COLS = [
     ("rechnungsnummer", "A"), ("rechnungstyp", "A"), ("status", "A"),
     ("ausstellungsdatum", "D"), ("faelligkeitsdatum", "D"), ("leistungsdatum", "D"),
+    ("leistungszeitraum_von", "D"), ("leistungszeitraum_bis", "D"),
     ("kundennummer", "A"), ("kundenname", "A"),
     ("nettobetrag", ("N", 2)), ("steuerbetrag", ("N", 2)), ("bruttobetrag", ("N", 2)),
     ("waehrung", "A"), ("steuerkategorie", "A"), ("original_rechnungsnummer", "A"),
@@ -79,6 +80,7 @@ def _rechnungen_csv(invoices: Sequence[Invoice]) -> str:
         rows.append([
             inv.invoice_number, _fmt(inv.invoice_type), inv.status,
             _fmt(inv.issue_date), _fmt(inv.due_date), _fmt(inv.delivery_date),
+            _fmt(inv.service_period_start), _fmt(inv.service_period_end),
             inv.customer.customer_number if inv.customer else "",
             inv.customer.name if inv.customer else "",
             _fmt(inv.net_total), _fmt(inv.tax_total), _fmt(inv.gross_total),

@@ -229,10 +229,19 @@
                     <div>
                         <label class="label">Leistungsdatum</label>
                         <input type="date" name="delivery_date" value="{{ (invoice.delivery_date.isoformat() if invoice.delivery_date else '') if invoice else today }}" class="input">
-                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Pflicht über 250 € Rechnungsbetrag (§ 14 Abs. 4 Nr. 6 UStG). Bis 250 € einschließlich freiwillig (Kleinbetragsrechnung, § 33 UStDV).</p>
+                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Einzelner Leistungstag. Pflicht über 250 € (§ 14 Abs. 4 Nr. 6 UStG) oder als Zeitraum unten. Bis 250 € einschließlich freiwillig (§ 33 UStDV).</p>
                         <template x-if="taxCategory === 'K'">
                             <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--amber);">Bei innergemeinschaftlicher Lieferung immer Pflicht, auch unter 250 € (EN16931, BR-IC-11).</p>
                         </template>
+                    </div>
+                    <div>
+                        <label class="label">Leistungszeitraum von</label>
+                        <input type="date" name="service_period_start" value="{{ invoice.service_period_start.isoformat() if invoice and invoice.service_period_start else '' }}" class="input">
+                    </div>
+                    <div>
+                        <label class="label">Leistungszeitraum bis</label>
+                        <input type="date" name="service_period_end" value="{{ invoice.service_period_end.isoformat() if invoice and invoice.service_period_end else '' }}" class="input">
+                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Für Quartalsabrechnungen und Tantiemen: von und bis gemeinsam setzen. Ersetzt das Einzeldatum für die Pflichtangabe.</p>
                     </div>
                     <div>
                         <label class="label">Referenz des Kunden</label>

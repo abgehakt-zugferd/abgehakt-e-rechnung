@@ -2,6 +2,7 @@
 
 import json
 import uuid
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -135,6 +136,9 @@ def test_import_erzeugt_entwurf(pg_session, signier_setup):
     assert inv.gross_total == Decimal("107.00")
     assert len(inv.items) == 1
     assert inv.items[0].tax_rate == Decimal("7.00")
+    assert inv.service_period_start == date(2026, 7, 1)
+    assert inv.service_period_end == date(2026, 9, 30)
+    assert inv.delivery_date is None
 
 
 def test_unbekannter_partner_wird_abgelehnt(pg_session, signier_setup):

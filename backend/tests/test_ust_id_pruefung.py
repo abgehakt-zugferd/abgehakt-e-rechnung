@@ -6,6 +6,7 @@ import httpx
 
 from app.services.ust_id_pruefung import (
     VIES_ENDPOINT,
+    _name_abgleich,
     aufteilen_ust_id,
     eingaben_fuer_pruefung,
     namen_gleich,
@@ -137,3 +138,36 @@ def test_validator_ungueltige_kunden_ust_id():
     inv = validator_invoice_stub(customer=kunde)
     errors, _ = validate_invoice(inv, company_stub())
     assert any(e.code == "BUYER_VAT_ID_VIES_INVALID" for e in errors)
+
+
+def test_invalid_trader_match_ohne_erwarteten_namen_ist_unbekannt():
+    assert _name_abgleich("INVALID", "Registrierter Name", "") == "unbekannt"
+    assert _name_abgleich("INVALID", None, "   ") == "unbekannt"
+
+
+def test_rechnung_unterdrueckt_name_mismatch_ohne_vies_name():
+    kunde = customer_stub(
+        name="Polymorph Audiobook",
+        vat_id=UST_DE_PROBE,
+        vat_id_checked_at=datetime.now(timezone.utc),
+        vat_id_check_valid=True,
+        vat_id_vies_name=None,
+        vat_id_name_match="weicht_ab",
+    )
+    inv = validator_invoice_stub(customer=kunde)
+    _, warnings = validate_invoice(inv, company_stub())
+    assert not any(w.code == "BUYER_VAT_ID_NAME_MISMATCH" for w in warnings)
+
+
+def test_rechnung_unterdrueckt_name_mismatch_ohne_kundenname():
+    kunde = customer_stub(
+        name="",
+        vat_id=UST_DE_PROBE,
+        vat_id_checked_at=datetime.now(timezone.utc),
+        vat_id_check_valid=True,
+        vat_id_vies_name="Firma GmbH",
+        vat_id_name_match="weicht_ab",
+    )
+    inv = validator_invoice_stub(customer=kunde)
+    _, warnings = validate_invoice(inv, company_stub())
+    assert not any(w.code == "BUYER_VAT_ID_NAME_MISMATCH" for w in warnings)

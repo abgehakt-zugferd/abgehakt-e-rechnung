@@ -14,6 +14,7 @@ from app.database import get_db
 from app.models.customer import Customer
 from app.models.company import Company
 from app.models.invoice import Invoice, InvoiceItem, ValidationResult, InvoiceSendLog
+from app.services.leistungszeit import parse_leistungszeit_from_form
 from app.models.app_config import AppConfig
 from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
                           datev_email, aenderungsprotokoll)
@@ -277,8 +278,7 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
     customer_id = _kunde_id(form)
     issue_date = date.fromisoformat(form.get("issue_date"))
     due_date = date.fromisoformat(form.get("due_date"))
-    delivery_date_str = form.get("delivery_date", "").strip()
-    delivery_date = date.fromisoformat(delivery_date_str) if delivery_date_str else None
+    delivery_date, service_period_start, service_period_end = parse_leistungszeit_from_form(form)
     tax_category = form.get("tax_category", "S").strip() or "S"
 
     items_json = form.get("items_json", "[]")
@@ -292,6 +292,8 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
         issue_date=issue_date,
         due_date=due_date,
         delivery_date=delivery_date,
+        service_period_start=service_period_start,
+        service_period_end=service_period_end,
         payment_terms=form.get("payment_terms", "").strip() or company.payment_terms_default,
         buyer_reference=form.get("buyer_reference", "").strip() or None,
         notes=form.get("notes", "").strip() or None,
@@ -332,14 +334,16 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
     company = _get_company(db)
     form = await request.form()
 
-    delivery_date_str = form.get("delivery_date", "").strip()
+    delivery_date, service_period_start, service_period_end = parse_leistungszeit_from_form(form)
 
     # Unveränderlich bleiben `invoice_number`, `id`, `status` und `created_at` —
     # sie tauchen hier bewusst nicht auf.
     invoice.customer_id = _kunde_id(form)
     invoice.issue_date = date.fromisoformat(form.get("issue_date"))
     invoice.due_date = date.fromisoformat(form.get("due_date"))
-    invoice.delivery_date = date.fromisoformat(delivery_date_str) if delivery_date_str else None
+    invoice.delivery_date = delivery_date
+    invoice.service_period_start = service_period_start
+    invoice.service_period_end = service_period_end
     invoice.tax_category = form.get("tax_category", "S").strip() or "S"
     invoice.payment_terms = form.get("payment_terms", "").strip() or company.payment_terms_default
     invoice.buyer_reference = form.get("buyer_reference", "").strip() or None

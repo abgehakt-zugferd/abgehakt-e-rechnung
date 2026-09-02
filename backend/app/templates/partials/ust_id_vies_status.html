@@ -18,7 +18,7 @@
     {% endif %}
     {% if entity.vat_id_name_match == 'stimmt' %}
     <p style="margin:0; color:var(--cyan);">Name stimmt mit dem hinterlegten Namen ueberein.</p>
-    {% elif entity.vat_id_name_match == 'weicht_ab' %}
+    {% elif entity.vat_id_name_match == 'weicht_ab' and entity.vat_id_vies_name and entity.name %}
     <p style="margin:0; color:var(--amber);">Name weicht vom hinterlegten Namen ab.</p>
     {% elif entity.vat_id_check_valid %}
     <p style="margin:0;">Name konnte nicht abgeglichen werden (VIES liefert fuer manche Laender keinen Namen).</p>

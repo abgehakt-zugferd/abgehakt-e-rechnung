@@ -145,6 +145,15 @@
                         <p class="label">Leistungsdatum</p>
                         <p style="color:var(--text-hi);">{{ invoice.delivery_date.strftime('%d.%m.%Y') if invoice.delivery_date else '–' }}</p>
                     </div>
+                    {% if invoice.service_period_start and invoice.service_period_end %}
+                    <div>
+                        <p class="label">Leistungszeitraum</p>
+                        <p style="color:var(--text-hi);">
+                            {{ invoice.service_period_start.strftime('%d.%m.%Y') }}
+                            – {{ invoice.service_period_end.strftime('%d.%m.%Y') }}
+                        </p>
+                    </div>
+                    {% endif %}
                     <div>
                         <p class="label">ZUGFeRD-Profil</p>
                         <p style="color:var(--cyan); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text);">{{ invoice.zugferd_profile }}</p>

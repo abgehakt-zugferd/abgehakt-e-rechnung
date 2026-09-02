@@ -431,8 +431,14 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         ("Rechnungsnummer:", invoice.invoice_number),
         ("Rechnungsdatum:", invoice.issue_date.strftime("%d.%m.%Y")),
         ("Leistungsdatum:", delivery_str),
-        ("Fälligkeitsdatum:", invoice.due_date.strftime("%d.%m.%Y")),
     ]
+    if invoice.service_period_start and invoice.service_period_end:
+        period_str = (
+            f"{invoice.service_period_start.strftime('%d.%m.%Y')} – "
+            f"{invoice.service_period_end.strftime('%d.%m.%Y')}"
+        )
+        meta_rows.append(("Leistungszeitraum:", period_str))
+    meta_rows.append(("Fälligkeitsdatum:", invoice.due_date.strftime("%d.%m.%Y")))
     if getattr(customer, "customer_number", None):
         meta_rows.append(("Kundennummer:", customer.customer_number))
     # BT-10: der Kunde ordnet die Rechnung genau hieran seiner Bestellung zu.

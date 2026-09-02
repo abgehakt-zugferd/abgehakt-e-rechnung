@@ -31,7 +31,9 @@ ITEM_STUB_FIELDS = (
     "net_amount", "tax_amount", "gross_amount",
 )
 INVOICE_STUB_FIELDS = (
-    "invoice_number", "issue_date", "due_date", "delivery_date", "payment_terms",
+    "invoice_number", "issue_date", "due_date", "delivery_date",
+    "service_period_start", "service_period_end",
+    "payment_terms",
     "notes", "currency", "net_total", "tax_total", "gross_total", "status",
     "customer", "items", "tax_category", "zugferd_profile", "invoice_type",
     "original_invoice_id", "original_invoice",
@@ -111,6 +113,8 @@ def validator_invoice_stub(**kwargs):
         issue_date=date(2026, 6, 11),
         due_date=date(2026, 6, 25),
         delivery_date=date(2026, 6, 11),
+        service_period_start=None,
+        service_period_end=None,
         payment_terms="Zahlbar innerhalb 14 Tagen.",
         notes=None,
         currency="EUR",
@@ -134,6 +138,8 @@ def zugferd_invoice_stub(**kwargs):
         issue_date=date(2026, 6, 11),
         due_date=date(2026, 6, 25),
         delivery_date=None,
+        service_period_start=None,
+        service_period_end=None,
         payment_terms="Zahlbar innerhalb 14 Tagen.",
         notes=None,
         currency="EUR",

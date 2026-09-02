@@ -41,6 +41,8 @@ FELDNAMEN = {
     "issue_date": "Rechnungsdatum",
     "due_date": "Fälligkeitsdatum",
     "delivery_date": "Leistungsdatum",
+    "service_period_start": "Leistungszeitraum von",
+    "service_period_end": "Leistungszeitraum bis",
     "payment_terms": "Zahlungsbedingungen",
     "buyer_reference": "Referenz des Kunden",
     "notes": "Anmerkungen",

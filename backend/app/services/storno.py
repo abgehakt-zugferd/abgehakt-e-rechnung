@@ -18,6 +18,8 @@ def build_storno(original: Invoice, invoice_number: str, today: date) -> Invoice
         issue_date=today,
         due_date=today,
         delivery_date=original.delivery_date,
+        service_period_start=original.service_period_start,
+        service_period_end=original.service_period_end,
         payment_terms=f"Gutschrift/Storno zur Rechnung {original.invoice_number}.",
         notes=f"Storno zur Rechnung {original.invoice_number} "
               f"vom {original.issue_date.strftime('%d.%m.%Y')}.",

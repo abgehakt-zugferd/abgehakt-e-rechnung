@@ -339,6 +339,22 @@ def _esc(text: str | None) -> str:
             .replace('"', "&quot;"))
 
 
+def _billing_period_xml(invoice: Invoice) -> str:
+    start = invoice.service_period_start
+    end = invoice.service_period_end
+    if not start or not end:
+        return ""
+    return f"""
+            <ram:BillingSpecifiedPeriod>
+                <ram:StartDateTime>
+                    <udt:DateTimeString format="102">{_fmt_date(start)}</udt:DateTimeString>
+                </ram:StartDateTime>
+                <ram:EndDateTime>
+                    <udt:DateTimeString format="102">{_fmt_date(end)}</udt:DateTimeString>
+                </ram:EndDateTime>
+            </ram:BillingSpecifiedPeriod>"""
+
+
 def _delivery_xml(invoice: Invoice) -> str:
     inv_cat = getattr(invoice, "tax_category", "S")
     customer = invoice.customer
@@ -521,6 +537,7 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
         <ram:ApplicableHeaderTradeSettlement>
             <ram:PaymentReference>{_esc(invoice.invoice_number)}</ram:PaymentReference>
             <ram:InvoiceCurrencyCode>{_esc(invoice.currency)}</ram:InvoiceCurrencyCode>
+{_billing_period_xml(invoice)}
 {_settlement_payment_xml(invoice, company)}
 {_tax_summaries_xml(invoice)}
 {_payment_terms_xml(invoice)}

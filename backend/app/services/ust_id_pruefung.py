@@ -113,6 +113,8 @@ def _name_abgleich(
     if trader_name_match == "VALID":
         return "stimmt"
     if trader_name_match == "INVALID":
+        if not (erwartet or "").strip():
+            return "unbekannt"
         return "weicht_ab"
     if vies_name and erwartet:
         return "stimmt" if namen_gleich(erwartet, vies_name) else "weicht_ab"

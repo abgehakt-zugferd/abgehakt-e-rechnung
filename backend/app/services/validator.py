@@ -7,6 +7,11 @@ Begründung niemand nachvollziehen kann, ist in einem Steuerkontext wertlos.
 """
 from decimal import Decimal, ROUND_HALF_UP
 from dataclasses import dataclass
+from app.services.leistungszeit import (
+    hat_leistungszeitpunkt,
+    leistungszeitraum_teilweise,
+    leistungszeitraum_ungueltig,
+)
 from app.models.invoice import Invoice
 from app.models.company import Company
 from app.services.zugferd_xml import TYPE_CODE_MAP, COMPLIANT_PROFILES
@@ -69,6 +74,12 @@ def _ust_id_validator_issues(
             field,
         ))
     if name_match == "weicht_ab":
+        if prefix == "BUYER":
+            kundenname = (getattr(entity, "name", None) or "").strip()
+            vies_name = (getattr(entity, "vat_id_vies_name", None) or "").strip()
+            # Abgleich ohne hinterlegten Namen oder ohne VIES-Namen: nur im Kundenstamm.
+            if not kundenname or not vies_name:
+                return
         warnings.append(Issue(
             f"{prefix}_VAT_ID_NAME_MISMATCH", "warning",
             "Der bei VIES registrierte Name weicht vom hinterlegten Namen ab.",
@@ -180,7 +191,19 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
     # an Mustang, mit einer Meldung aus dem Werkzeug statt einer aus der
     # Anwendung (#47).
     innergemeinschaftlich = tax_category == "K"
-    if not invoice.delivery_date and (not simplified or innergemeinschaftlich):
+    if leistungszeitraum_teilweise(invoice):
+        errors.append(Issue(
+            "SERVICE_PERIOD_INCOMPLETE", "error",
+            "Leistungszeitraum unvollständig: von- und bis-Datum müssen beide gesetzt sein.",
+            "service_period",
+        ))
+    if leistungszeitraum_ungueltig(invoice):
+        errors.append(Issue(
+            "SERVICE_PERIOD_INVALID", "error",
+            "Leistungszeitraum ungültig: das von-Datum liegt nach dem bis-Datum.",
+            "service_period",
+        ))
+    if not hat_leistungszeitpunkt(invoice) and (not simplified or innergemeinschaftlich):
         errors.append(Issue(
             "DELIVERY_DATE_MISSING", "error",
             "Zeitpunkt der Leistungserbringung fehlt. Bei einer innergemeinschaftlichen "

@@ -33,6 +33,8 @@ class Invoice(Base):
     issue_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     due_date: Mapped[date] = mapped_column(Date, nullable=False)
     delivery_date: Mapped[Optional[date]] = mapped_column(Date)
+    service_period_start: Mapped[Optional[date]] = mapped_column(Date)
+    service_period_end: Mapped[Optional[date]] = mapped_column(Date)
     payment_terms: Mapped[Optional[str]] = mapped_column(String(500))
     # BT-10, die Referenz des Käufers (#153): im B2B seine Bestellnummer, gegenüber
     # Behörden die Leitweg-ID. Gehört zur Rechnung, nicht zum Kunden — sie ändert

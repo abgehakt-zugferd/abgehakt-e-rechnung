@@ -183,9 +183,12 @@ def entwuerfe_aus_befund(
 
         kunde = _kunde_finden(db, partner_id)
         lz = gutschrift.get("leistungszeitraum") or {}
-        delivery_date = None
+        service_period_start = None
+        service_period_end = None
+        if lz.get("von"):
+            service_period_start = date.fromisoformat(lz["von"])
         if lz.get("bis"):
-            delivery_date = date.fromisoformat(lz["bis"])
+            service_period_end = date.fromisoformat(lz["bis"])
 
         invoice_number = generate_next_invoice_number(db, issue_date=issue_date)
         invoice = Invoice(
@@ -193,7 +196,9 @@ def entwuerfe_aus_befund(
             customer_id=kunde.id,
             issue_date=issue_date,
             due_date=due_date,
-            delivery_date=delivery_date,
+            delivery_date=None,
+            service_period_start=service_period_start,
+            service_period_end=service_period_end,
             payment_terms=company.payment_terms_default,
             buyer_reference=f"auftrag-{quartal}",
             notes=f"{marker}; quartal={quartal}; partner={partner_id}",
