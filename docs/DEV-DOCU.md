@@ -861,6 +861,42 @@ neue Entwürfe. Entwürfe danach im GUI prüfen und nur in der Testinstanz final
 **Tests:** `tests/test_abrechnungsauftrag_import.py`, `tests/test_testinstanz.py`. Suite
 wie üblich über `./run-tests.sh` (Wegwerf-Postgres im Container, nicht Live-DB).
 
+#### Kunden-Bankverbindung und Gutschrift-QR
+
+Gutschriften (inkl. Abrechnungsgutschrift 389) zahlen **an den Kunden** (Beteiligten).
+Dafür trägt `customers` optional `bank_iban`, `bank_bic`, `bank_name` (Migration 007).
+Pflege im Kundenformular unter „Bankverbindung (Auszahlung)".
+
+| Belegtyp | Zahlungsempfänger im PDF/XML | EPC-QR (Girocode) |
+|---|---|---|
+| Rechnung (380) | Firma (`company.bank_iban`) | Betrag = Brutto, Empfänger = Firma |
+| Gutschrift / 389 | Kunde (`customer.bank_iban`) | Betrag = Gutschriftbetrag, Empfänger = Kunde |
+
+Ohne Kunden-IBAN: Gutschrift ohne QR (Hinweis „ohne Zahlungsaufforderung").
+Validator: Warnung `CUSTOMER_BANK_MISSING` bei Gutschriften ohne Kunden-IBAN.
+Normale Rechnungen: weiterhin Warnung `NO_BANK_DETAILS` wenn Firmen-IBAN fehlt.
+
+#### USt-IdNr.-Pruefung ueber VIES (Migration 008)
+
+Existenz und Gueltigkeit einer USt-IdNr. werden gegen die EU-VIES-REST-Schnittstelle
+geprueft (`app/services/ust_id_pruefung.py`). **Kein Hintergrundabruf und kein Abruf
+beim Speichern**; nur nach Klick auf „Jetzt bei VIES pruefen" und Bestaetigung auf der
+Einwilligungsseite (`ust_id_vies/consent.html`), die die Ziel-URL anzeigt.
+
+| Ergebnis | Speicherung | Finalize |
+|---|---|---|
+| gueltig | `vat_id_check_valid=true` | kein Fehler |
+| ungueltig | `vat_id_check_valid=false` | Fehler `BUYER/SELLER_VAT_ID_VIES_INVALID` |
+| Name weicht ab | `vat_id_name_match=weicht_ab` | Warnung `*_VAT_ID_NAME_MISMATCH` |
+| VIES nicht erreichbar | `vat_id_check_valid=NULL` | Warnung `*_VAT_ID_VIES_UNAVAILABLE` |
+| noch nie geprueft | Felder leer | Warnung `*_VAT_ID_NOT_CHECKED` |
+
+Name-Abgleich: qualifizierte Anfrage mit `traderName` und optional eigener USt-IdNr. als
+Requester. Fuer deutsche Nummern liefert VIES oft nur Gueltigkeit, keinen Namen; dann bleibt
+der Abgleich `unbekannt`, kein Fehler.
+
+Tests mocken VIES mit `httpx.MockTransport` (`tests/test_ust_id_pruefung.py`).
+
 ### Auslieferung und Entwicklung: `--reload` war der vermeintliche Aufhänger (2026-08-10)
 
 Symptom: Der Stack „hängt sich mehrfach auf", obwohl die App kaum rechnet. Drei Ursachen, von

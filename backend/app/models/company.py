@@ -23,6 +23,10 @@ class Company(Base):
     country: Mapped[str] = mapped_column(String(2), nullable=False, default="DE", server_default="DE")
     tax_number: Mapped[str | None] = mapped_column(String(50))
     vat_id: Mapped[str | None] = mapped_column(String(20))
+    vat_id_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    vat_id_check_valid: Mapped[bool | None] = mapped_column(Boolean)
+    vat_id_vies_name: Mapped[str | None] = mapped_column(String(500))
+    vat_id_name_match: Mapped[str | None] = mapped_column(String(20))
     email: Mapped[str | None] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(50))
     # BT-41, der Ansprechpartner auf der Rechnung (#153). Leer erlaubt: dann steht

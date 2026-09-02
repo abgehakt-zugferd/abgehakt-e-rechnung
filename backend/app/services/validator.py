@@ -37,6 +37,45 @@ class Issue:
     field: str | None = None
 
 
+def _ust_id_validator_issues(
+    entity,
+    errors: list[Issue],
+    warnings: list[Issue],
+    prefix: str,
+    field: str,
+) -> None:
+    """VIES-Pruefstand aus Kunde/Firma in Validator-Meldungen."""
+    checked = getattr(entity, "vat_id_checked_at", None)
+    valid = getattr(entity, "vat_id_check_valid", None)
+    name_match = getattr(entity, "vat_id_name_match", None)
+    if not checked:
+        warnings.append(Issue(
+            f"{prefix}_VAT_ID_NOT_CHECKED", "warning",
+            "USt-IdNr. wurde noch nicht bei VIES geprueft.",
+            field,
+        ))
+        return
+    if valid is None:
+        warnings.append(Issue(
+            f"{prefix}_VAT_ID_VIES_UNAVAILABLE", "warning",
+            "VIES war beim letzten Pruefversuch nicht erreichbar; Gueltigkeit unbekannt.",
+            field,
+        ))
+        return
+    if valid is False:
+        errors.append(Issue(
+            f"{prefix}_VAT_ID_VIES_INVALID", "error",
+            "USt-IdNr. ist bei VIES als ungueltig oder nicht registriert gemeldet.",
+            field,
+        ))
+    if name_match == "weicht_ab":
+        warnings.append(Issue(
+            f"{prefix}_VAT_ID_NAME_MISMATCH", "warning",
+            "Der bei VIES registrierte Name weicht vom hinterlegten Namen ab.",
+            field,
+        ))
+
+
 def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], list[Issue]]:
     errors: list[Issue] = []
     warnings: list[Issue] = []
@@ -76,6 +115,14 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
             "genügt hier nicht.",
             "company.tax_number",
         ))
+    if company.vat_id:
+        _ust_id_validator_issues(
+            company,
+            errors,
+            warnings,
+            prefix="SELLER",
+            field="company.vat_id",
+        )
 
     # § 14 Abs. 4 Nr. 1 UStG – Leistungsempfänger
     customer = invoice.customer
@@ -99,6 +146,14 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
                 f"Bei B2B-Geschäften wird die Angabe der USt-IdNr. des Leistungsempfängers empfohlen.",
                 "customer.vat_id"
             ))
+        if customer.vat_id:
+            _ust_id_validator_issues(
+                customer,
+                errors,
+                warnings,
+                prefix="BUYER",
+                field="customer.vat_id",
+            )
 
     # § 14 Abs. 4 Nr. 4 UStG – Rechnungsnummer
     if not invoice.invoice_number:
@@ -281,7 +336,19 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
     # Empfehlungen
     if not invoice.payment_terms:
         warnings.append(Issue("NO_PAYMENT_TERMS", "warning", "Zahlungsbedingungen fehlen (empfohlen).", "payment_terms"))
-    if company and not company.bank_iban:
+    if company and not company.bank_iban and not _gutschrift_auszahlung(invoice):
         warnings.append(Issue("NO_BANK_DETAILS", "warning", "Bankverbindung in den Einstellungen nicht hinterlegt (empfohlen für SEPA-Zahlungen).", "company.bank_iban"))
+    if _gutschrift_auszahlung(invoice) and invoice.customer and not invoice.customer.bank_iban:
+        warnings.append(Issue(
+            "CUSTOMER_BANK_MISSING", "warning",
+            "Bankverbindung des Kunden fehlt (IBAN für Gutschrift-Auszahlung und EPC-QR empfohlen).",
+            "customer.bank_iban",
+        ))
 
     return errors, warnings
+
+
+def _gutschrift_auszahlung(invoice: Invoice) -> bool:
+    return getattr(invoice, "invoice_type", None) in {
+        "credit_note", "credit", "storno", "self_billing",
+    }

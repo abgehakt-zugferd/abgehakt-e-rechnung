@@ -101,8 +101,13 @@
             <h2>STEUER &amp; KONTAKT</h2>
             <div>
                 <label class="label">USt-IdNr. (empfohlen für B2B)</label>
-                <input type="text" name="vat_id" value="{{ (customer.vat_id if customer else values.get('vat_id','')) or '' }}" placeholder="DE123456789" class="input font-mono">
-                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Bei B2B-Rechnungen über 10.000 € nach § 14a UStG erforderlich.</p>
+                <input type="text" name="vat_id" value="{{ (customer.vat_id if customer else values.get('vat_id','')) or '' }}" placeholder="DE und neun Ziffern" class="input font-mono">
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Bei B2B-Rechnungen ueber 10.000 EUR wird die Angabe empfohlen. Existenz und Gueltigkeit nur per Button „Jetzt bei VIES pruefen" (mit Einwilligung, keine Verbindung beim Speichern).</p>
+                {% if customer %}
+                {% with entity=customer, pruefen_url='/customers/' ~ customer.id ~ '/ust-id-pruefen' %}
+                {% include "partials/ust_id_vies_status.html" %}
+                {% endwith %}
+                {% endif %}
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -126,6 +131,29 @@
             <div>
                 <label class="label">Notizen (intern)</label>
                 <textarea name="notes" rows="3" class="input">{{ (customer.notes if customer else values.get('notes','')) or '' }}</textarea>
+            </div>
+        </div>
+
+        <div class="card space-y-4">
+            <h2>BANKVERBINDUNG (AUSZAHLUNG)</h2>
+            <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.4;">
+                Für Gutschriften und Abrechnungsgutschriften (389): IBAN des Beteiligten für Überweisung
+                und EPC-QR auf dem PDF. Bei normalen Rechnungen zahlt der Kunde an Ihre Firmen-IBAN
+                (Einstellungen).
+            </p>
+            <div>
+                <label class="label">IBAN</label>
+                <input type="text" name="bank_iban" value="{{ (customer.bank_iban if customer else values.get('bank_iban','')) or '' }}" placeholder="DE00 1234 5678..." class="input font-mono">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="label">BIC</label>
+                    <input type="text" name="bank_bic" value="{{ (customer.bank_bic if customer else values.get('bank_bic','')) or '' }}" placeholder="COBADEFFXXX" class="input font-mono">
+                </div>
+                <div>
+                    <label class="label">Bank</label>
+                    <input type="text" name="bank_name" value="{{ (customer.bank_name if customer else values.get('bank_name','')) or '' }}" class="input">
+                </div>
             </div>
         </div>
 

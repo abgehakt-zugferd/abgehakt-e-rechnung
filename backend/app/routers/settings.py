@@ -7,6 +7,14 @@ from app.models.company import Company
 from app.models.app_config import AppConfig
 from app.services import datev_email, empfaenger
 from app.services.invoice_number import pruefe_praefix
+from app.services.ust_id_pruefung import (
+    VIES_ENDPOINT,
+    normalisiere_ust_id,
+    pruefe_ust_id_format,
+    pruefe_ust_id_vies,
+    speichern as ust_speichern,
+    zuruecksetzen as ust_zuruecksetzen,
+)
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
 
@@ -87,6 +95,12 @@ def save_company(
         return settings_page(request, db, saved=False, error=meldung)
 
     company = _get_or_create_company(db)
+    alt_vat = company.vat_id
+    neu_vat = normalisiere_ust_id(vat_id) if (vat_id or "").strip() else None
+    if neu_vat:
+        fmt = pruefe_ust_id_format(neu_vat)
+        if fmt:
+            return settings_page(request, db, saved=False, error=fmt)
     company.name = name.strip()
     company.address_line1 = address_line1.strip()
     company.address_line2 = address_line2.strip() or None
@@ -94,7 +108,13 @@ def save_company(
     company.city = city.strip()
     company.country = country.strip() or "DE"
     company.tax_number = tax_number.strip() or None
-    company.vat_id = vat_id.strip() or None
+    if not neu_vat:
+        ust_zuruecksetzen(company)
+        company.vat_id = None
+    else:
+        if neu_vat != alt_vat:
+            ust_zuruecksetzen(company)
+        company.vat_id = neu_vat
     company.email = email.strip() or None
     company.phone = phone.strip() or None
     company.contact_name = contact_name.strip() or None
@@ -106,6 +126,34 @@ def save_company(
     company.payment_terms_default = payment_terms_default.strip() or "Zahlbar innerhalb von 14 Tagen nach Rechnungseingang ohne Abzug."
     db.commit()
     return RedirectResponse(url="/settings?saved=true", status_code=303)
+
+
+@router.post("/ust-id-pruefen")
+def pruefe_company_ust_id(
+    request: Request,
+    bestaetigt: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    company = _get_or_create_company(db)
+    if not company.vat_id:
+        return settings_page(request, db, saved=False, error="Keine USt-IdNr. hinterlegt.")
+    if bestaetigt != "1":
+        return templates.TemplateResponse(
+            request,
+            "ust_id_vies/consent.html",
+            {
+                "endpoint": VIES_ENDPOINT,
+                "vat_id": company.vat_id,
+                "trader_name": company.name,
+                "requester_vat": None,
+                "execute_url": "/settings/ust-id-pruefen",
+                "cancel_url": "/settings",
+            },
+        )
+    ergebnis = pruefe_ust_id_vies(company.vat_id, company.name)
+    ust_speichern(company, ergebnis)
+    db.commit()
+    return RedirectResponse(url="/settings", status_code=303)
 
 
 @router.post("/smtp")
