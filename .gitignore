@@ -16,6 +16,14 @@ storage-integration/
 # DSGVO – Beispiel-Rechnungen mit echten Kundendaten
 knowledge/Beispiel-Rechnungen/
 
+# Lokale Wissens-Erweiterungen (firmenspezifisch, nicht fuer das Repo)
+knowledge/Buchhaltung/
+knowledge/Lizenzierung/
+knowledge/Vertrieb/
+
+# Lokaler Import von Belegen anderer Installationen
+migration/
+
 # DSGVO – Echte Kundenrechnungen (Livedaten, niemals in Git!)
 livedaten/
 
