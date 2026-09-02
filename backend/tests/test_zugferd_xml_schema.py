@@ -262,3 +262,23 @@ def test_innergemeinschaftliche_lieferung_ohne_leistungsdatum_bleibt_unzulaessig
         "Mustang nimmt die ig. Lieferung ohne Leistungsdatum inzwischen an"
     )
     assert "ActualDeliverySupplyChainEvent" in result["raw"], result["raw"][-1500:]
+
+
+def test_leistungszeitraum_ohne_leistungsdatum_ist_schema_valid():
+    """BillingSpecifiedPeriod muss nach ApplicableTradeTax stehen (CII-Sequenz).
+
+    Stand falsch vor PaymentMeans → Mustang type 18 (Schemafehler Zeile ~104).
+    """
+    cust = Customer(**CUSTOMER_VARIANTS["de_minimal"])
+    inv = _invoice(
+        cust,
+        delivery_date=None,
+        service_period_start=date(2026, 4, 1),
+        service_period_end=date(2026, 6, 30),
+    )
+    result = _validate(inv, _company())
+    assert result["is_valid"], (
+        f"Leistungszeitraum ohne Einzeldatum nicht schema-valide:\n"
+        f"{result['errors']}\n{result['raw'][-1500:]}"
+    )
+    assert "BillingSpecifiedPeriod" in zugferd_xml.generate_xml(inv, _company())

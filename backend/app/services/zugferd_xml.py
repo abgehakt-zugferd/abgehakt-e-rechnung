@@ -537,9 +537,9 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
         <ram:ApplicableHeaderTradeSettlement>
             <ram:PaymentReference>{_esc(invoice.invoice_number)}</ram:PaymentReference>
             <ram:InvoiceCurrencyCode>{_esc(invoice.currency)}</ram:InvoiceCurrencyCode>
-{_billing_period_xml(invoice)}
 {_settlement_payment_xml(invoice, company)}
 {_tax_summaries_xml(invoice)}
+{_billing_period_xml(invoice)}
 {_payment_terms_xml(invoice)}
             <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
                 <ram:LineTotalAmount>{_fmt_amount(invoice.net_total)}</ram:LineTotalAmount>
