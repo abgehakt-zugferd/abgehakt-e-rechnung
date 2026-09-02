@@ -13,7 +13,7 @@
       {% endif %}
       <span style="color:var(--text-dim);"> ({{ entity.vat_id_checked_at.strftime('%d.%m.%Y %H:%M') }} UTC)</span>
     </p>
-    {% if entity.vat_id_vies_name %}
+    {% if entity.vat_id_vies_name and entity.vat_id_vies_name.strip() not in ('---', '-', '–') %}
     <p style="margin:0 0 6px;">Registrierter Name: <span style="color:var(--text);">{{ entity.vat_id_vies_name }}</span></p>
     {% endif %}
     {% if entity.vat_id_name_match == 'stimmt' %}

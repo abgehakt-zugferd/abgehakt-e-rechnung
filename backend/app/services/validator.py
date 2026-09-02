@@ -12,6 +12,7 @@ from app.services.leistungszeit import (
     leistungszeitraum_teilweise,
     leistungszeitraum_ungueltig,
 )
+from app.services.ust_id_pruefung import vies_name_vergleichbar
 from app.models.invoice import Invoice
 from app.models.company import Company
 from app.services.zugferd_xml import TYPE_CODE_MAP, COMPLIANT_PROFILES
@@ -56,7 +57,9 @@ def _ust_id_validator_issues(
     if not checked:
         warnings.append(Issue(
             f"{prefix}_VAT_ID_NOT_CHECKED", "warning",
-            "USt-IdNr. wurde noch nicht bei VIES geprueft.",
+            "Eigene USt-IdNr. in den Einstellungen wurde noch nicht bei VIES geprueft."
+            if prefix == "SELLER" else
+            "USt-IdNr. des Kunden wurde noch nicht bei VIES geprueft.",
             field,
         ))
         return
@@ -74,15 +77,15 @@ def _ust_id_validator_issues(
             field,
         ))
     if name_match == "weicht_ab":
-        if prefix == "BUYER":
-            kundenname = (getattr(entity, "name", None) or "").strip()
-            vies_name = (getattr(entity, "vat_id_vies_name", None) or "").strip()
-            # Abgleich ohne hinterlegten Namen oder ohne VIES-Namen: nur im Kundenstamm.
-            if not kundenname or not vies_name:
-                return
+        stammname = (getattr(entity, "name", None) or "").strip()
+        vies_name = vies_name_vergleichbar(getattr(entity, "vat_id_vies_name", None))
+        if not stammname or not vies_name:
+            return
         warnings.append(Issue(
             f"{prefix}_VAT_ID_NAME_MISMATCH", "warning",
-            "Der bei VIES registrierte Name weicht vom hinterlegten Namen ab.",
+            "Der bei VIES registrierte Firmenname weicht vom Namen in den Einstellungen ab."
+            if prefix == "SELLER" else
+            "Der bei VIES registrierte Name weicht vom Kundennamen ab.",
             field,
         ))
 

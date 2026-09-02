@@ -145,7 +145,25 @@ def test_invalid_trader_match_ohne_erwarteten_namen_ist_unbekannt():
     assert _name_abgleich("INVALID", None, "   ") == "unbekannt"
 
 
-def test_rechnung_unterdrueckt_name_mismatch_ohne_vies_name():
+def test_vies_name_normalisiert_ignoriert_platzhalter():
+    from app.services.ust_id_pruefung import vies_name_normalisiert
+    assert vies_name_normalisiert("---") is None
+    assert vies_name_normalisiert("  ---  ") is None
+    assert vies_name_normalisiert("Firma GmbH") == "Firma GmbH"
+
+
+def test_rechnung_unterdrueckt_name_mismatch_bei_vies_platzhalter():
+    kunde = customer_stub(
+        name="Polymorph Audiobook",
+        vat_id=UST_DE_PROBE,
+        vat_id_checked_at=datetime.now(timezone.utc),
+        vat_id_check_valid=True,
+        vat_id_vies_name="---",
+        vat_id_name_match="weicht_ab",
+    )
+    inv = validator_invoice_stub(customer=kunde)
+    _, warnings = validate_invoice(inv, company_stub())
+    assert not any(w.code == "BUYER_VAT_ID_NAME_MISMATCH" for w in warnings)
     kunde = customer_stub(
         name="Polymorph Audiobook",
         vat_id=UST_DE_PROBE,

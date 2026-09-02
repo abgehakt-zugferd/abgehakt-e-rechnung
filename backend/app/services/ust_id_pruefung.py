@@ -18,6 +18,9 @@ TIMEOUT = httpx.Timeout(12.0, connect=5.0, read=12.0)
 # Griechenland: VIES erwartet EL, Schreibweise oft GR.
 _VIES_LAENDER = {"GR": "EL"}
 
+# VIES liefert fuer manche Laender Platzhalter statt eines Firmennamens.
+_VIES_NAME_PLATZHALTER = frozenset({"---", "–", "-", "...", "n/a", "na", "none"})
+
 _NAME_SUFFIX = re.compile(
     r"\b(gmbh|ag|kg|ohg|ug|e\.?k\.?|inc|llc|co|corp|limited|ltd)\b",
     re.IGNORECASE,
@@ -89,6 +92,20 @@ def eingaben_fuer_pruefung(
         return neu, gespeichert_name, fmt
     name = (form_name or "").strip() or gespeichert_name
     return neu, name, None
+
+
+def vies_name_normalisiert(roh: str | None) -> str | None:
+    """Registrierter Name aus VIES oder None, wenn kein vergleichbarer Name."""
+    s = (roh or "").strip()
+    if not s:
+        return None
+    if s.casefold() in _VIES_NAME_PLATZHALTER or set(s) <= {"-", "–"}:
+        return None
+    return s
+
+
+def vies_name_vergleichbar(roh: str | None) -> str:
+    return vies_name_normalisiert(roh) or ""
 
 
 def _namen_normalisieren(name: str) -> str:
@@ -218,7 +235,7 @@ def pruefe_ust_id_vies(
         )
 
     gueltig = bool(data.get("valid"))
-    vies_name = (data.get("name") or "").strip() or None
+    vies_name = vies_name_normalisiert((data.get("name") or "").strip() or None)
     vies_adresse = (data.get("address") or "").strip() or None
     trader_match = data.get("traderNameMatch")
 
