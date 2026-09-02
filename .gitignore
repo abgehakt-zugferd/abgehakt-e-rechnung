@@ -32,6 +32,7 @@ knowledge/**/*.docx
 # Lokale Editorkonfiguration (nicht projektrelevant)
 .idea/
 .vscode/
+CLAUDE.md
 
 # Python
 __pycache__/
