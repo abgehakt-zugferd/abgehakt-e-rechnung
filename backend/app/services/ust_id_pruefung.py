@@ -284,7 +284,7 @@ def status_text(entity) -> str | None:
     match = entity.vat_id_name_match
     if match == "stimmt":
         teile.append("Name stimmt mit dem hinterlegten Namen ueberein.")
-    elif match == "weicht_ab":
+    elif match == "weicht_ab" and vies_name_vergleichbar(entity.vat_id_vies_name) and (entity.name or "").strip():
         teile.append("Name weicht vom hinterlegten Namen ab.")
     else:
         teile.append("Name konnte nicht abgeglichen werden (VIES liefert fuer dieses Land oft keinen Namen).")

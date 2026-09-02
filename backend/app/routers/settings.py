@@ -15,6 +15,7 @@ from app.services.ust_id_pruefung import (
     speichern as ust_speichern,
     zuruecksetzen as ust_zuruecksetzen,
 )
+from app.services.adresse import bereinige_adresszeile2
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
 
@@ -103,7 +104,7 @@ def save_company(
             return settings_page(request, db, saved=False, error=fmt)
     company.name = name.strip()
     company.address_line1 = address_line1.strip()
-    company.address_line2 = address_line2.strip() or None
+    company.address_line2 = bereinige_adresszeile2(name, address_line2)
     company.zip_code = zip_code.strip()
     company.city = city.strip()
     company.country = country.strip() or "DE"

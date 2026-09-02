@@ -7,6 +7,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from collections import defaultdict
 from app.models.invoice import Invoice
 from app.models.company import Company
+from app.services.adresse import bereinige_adresszeile2
 
 PROFILE_IDS = {
     # ZUGFeRD 2.5 / Factur-X 1.09 (gültig ab 30.06.2026): EN16931-ID vereinfacht
@@ -481,10 +482,14 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
     customer = invoice.customer
     inv_cat = getattr(invoice, "tax_category", "S")
 
-    addr2_buyer = (f"\n                    <ram:LineTwo>{_esc(customer.address_line2)}</ram:LineTwo>"
-                   if customer and customer.address_line2 else "")
-    addr2_seller = (f"\n                    <ram:LineTwo>{_esc(company.address_line2)}</ram:LineTwo>"
-                    if company.address_line2 else "")
+    addr2_buyer = ""
+    if customer:
+        buyer_line2 = bereinige_adresszeile2(customer.name, customer.address_line2)
+        if buyer_line2:
+            addr2_buyer = f"\n                    <ram:LineTwo>{_esc(buyer_line2)}</ram:LineTwo>"
+    seller_line2 = bereinige_adresszeile2(company.name, company.address_line2)
+    addr2_seller = (f"\n                    <ram:LineTwo>{_esc(seller_line2)}</ram:LineTwo>"
+                    if seller_line2 else "")
 
     # P7: TypeCode dynamisch basierend auf invoice_type
     type_code = _get_type_code(invoice)

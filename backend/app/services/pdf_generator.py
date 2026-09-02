@@ -22,6 +22,7 @@ from app.config import get_settings
 from app.darstellung import euro, menge
 from app.models.invoice import Invoice
 from app.models.company import Company
+from app.services.adresse import bereinige_adresszeile2
 from app.services.pdf_fonts import register_fonts
 from app.services.epc_qr import build_epc_payload, qr_png_bytes
 from app.services.zugferd_xml import EXEMPTION_REASONS
@@ -342,8 +343,9 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     addr_lines = [company.name]
     if company.address_line1:
         addr_lines.append(company.address_line1)
-    if company.address_line2:
-        addr_lines.append(company.address_line2)
+    line2 = bereinige_adresszeile2(company.name, company.address_line2)
+    if line2:
+        addr_lines.append(line2)
     addr_lines.append(f"{company.zip_code} {company.city}")
     if company.email:
         addr_lines.append(company.email)
@@ -420,18 +422,21 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     cust_addr = [customer.name]
     if customer.address_line1:
         cust_addr.append(customer.address_line1)
-    if customer.address_line2:
-        cust_addr.append(customer.address_line2)
+    cust_line2 = bereinige_adresszeile2(customer.name, customer.address_line2)
+    if cust_line2:
+        cust_addr.append(cust_line2)
     cust_addr.append(f"{customer.zip_code} {customer.city}")
     if customer.country and customer.country != "DE":
         cust_addr.append(customer.country)
 
-    delivery_str = invoice.delivery_date.strftime("%d.%m.%Y") if invoice.delivery_date else "–"
     meta_rows = [
         ("Rechnungsnummer:", invoice.invoice_number),
         ("Rechnungsdatum:", invoice.issue_date.strftime("%d.%m.%Y")),
-        ("Leistungsdatum:", delivery_str),
     ]
+    if invoice.delivery_date:
+        meta_rows.append(
+            ("Leistungsdatum:", invoice.delivery_date.strftime("%d.%m.%Y"))
+        )
     if invoice.service_period_start and invoice.service_period_end:
         period_str = (
             f"{invoice.service_period_start.strftime('%d.%m.%Y')} – "

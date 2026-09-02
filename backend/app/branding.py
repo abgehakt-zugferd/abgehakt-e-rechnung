@@ -9,7 +9,7 @@ Quellcodes.
 from fastapi.templating import Jinja2Templates
 
 from app.installation import is_testinstanz
-from app.services.ust_id_pruefung import VIES_ENDPOINT
+from app.services.ust_id_pruefung import VIES_ENDPOINT, vies_name_vergleichbar
 
 PRODUCT_NAME = "Abgehakt"
 SOURCE_URL = "https://github.com/abgehakt-zugferd/abgehakt-e-rechnung"
@@ -25,4 +25,5 @@ def register_branding_globals(templates: Jinja2Templates) -> None:
     templates.env.globals["PRODUCT_NAME"] = PRODUCT_NAME
     templates.env.globals["SOURCE_URL"] = SOURCE_URL
     templates.env.globals["VIES_ENDPOINT"] = VIES_ENDPOINT
+    templates.env.globals["vies_name_vergleichbar"] = vies_name_vergleichbar
     templates.env.globals["is_testinstanz"] = is_testinstanz

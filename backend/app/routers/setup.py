@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.services.adresse import bereinige_adresszeile2
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
 from app.database import get_db
@@ -69,6 +70,8 @@ async def speichern(request: Request, db: Session = Depends(get_db)):
         company = Company(id=1)
         db.add(company)
     for feld, wert in werte.items():
+        if feld == "address_line2":
+            wert = bereinige_adresszeile2(werte["name"], wert)
         setattr(company, feld, wert or None)
     company.country = werte["country"] or "DE"
     company.setup_completed_at = datetime.now(timezone.utc)

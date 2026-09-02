@@ -141,10 +141,12 @@
                         <p class="label">Fälligkeitsdatum</p>
                         <p style="color:var(--text-hi);">{{ invoice.due_date.strftime('%d.%m.%Y') }}</p>
                     </div>
+                    {% if invoice.delivery_date %}
                     <div>
                         <p class="label">Leistungsdatum</p>
-                        <p style="color:var(--text-hi);">{{ invoice.delivery_date.strftime('%d.%m.%Y') if invoice.delivery_date else '–' }}</p>
+                        <p style="color:var(--text-hi);">{{ invoice.delivery_date.strftime('%d.%m.%Y') }}</p>
                     </div>
+                    {% endif %}
                     {% if invoice.service_period_start and invoice.service_period_end %}
                     <div>
                         <p class="label">Leistungszeitraum</p>

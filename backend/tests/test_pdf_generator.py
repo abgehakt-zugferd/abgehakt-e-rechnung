@@ -112,6 +112,18 @@ def test_generated_pdf_contains_mandatory_content(tmp_path):
         assert needle in text, f"Pflichtinhalt fehlt im PDF: {needle}"
 
 
+def test_header_ohne_doppelten_firmennamen_in_adresszeile2(tmp_path):
+    """Adresszeile 2 darf den Namen nicht wiederholen (häufiger Setup-Fehler)."""
+    company = _sample_company()
+    company.name = "Duplikat Test GmbH"
+    company.address_line2 = "Duplikat Test GmbH"
+    out = tmp_path / "invoice.pdf"
+    pdf_generator.generate_pdf(_sample_invoice(_sample_customer()), company, out)
+    text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages).casefold()
+    # Brand-Stempel (GROSS) + Kontaktblock (normal) = genau zwei Nennungen
+    assert text.count("duplikat test gmbh") == 2
+
+
 def test_credit_note_pdf_shows_gutschrift_title(tmp_path):
     out = tmp_path / "storno.pdf"
     inv = _sample_invoice(_sample_customer(), invoice_type="credit_note", original_invoice_id=1)

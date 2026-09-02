@@ -20,6 +20,7 @@ from app.services.ust_id_pruefung import (
     speichern as ust_speichern,
     zuruecksetzen as ust_zuruecksetzen,
 )
+from app.services.adresse import bereinige_adresszeile2
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
 
@@ -172,7 +173,7 @@ def create_customer(
         customer_number=number,
         name=name.strip(),
         address_line1=address_line1.strip(),
-        address_line2=address_line2.strip() or None,
+        address_line2=bereinige_adresszeile2(name, address_line2),
         zip_code=zip_code.strip(),
         city=city.strip(),
         country=country.strip() or "DE",
@@ -250,7 +251,7 @@ def update_customer(
     customer.customer_number = number
     customer.name = name.strip()
     customer.address_line1 = address_line1.strip()
-    customer.address_line2 = address_line2.strip() or None
+    customer.address_line2 = bereinige_adresszeile2(name, address_line2)
     customer.zip_code = zip_code.strip()
     customer.city = city.strip()
     customer.country = country.strip() or "DE"

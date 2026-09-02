@@ -13,12 +13,12 @@
       {% endif %}
       <span style="color:var(--text-dim);"> ({{ entity.vat_id_checked_at.strftime('%d.%m.%Y %H:%M') }} UTC)</span>
     </p>
-    {% if entity.vat_id_vies_name and entity.vat_id_vies_name.strip() not in ('---', '-', '–') %}
+    {% if entity.vat_id_vies_name and vies_name_vergleichbar(entity.vat_id_vies_name) %}
     <p style="margin:0 0 6px;">Registrierter Name: <span style="color:var(--text);">{{ entity.vat_id_vies_name }}</span></p>
     {% endif %}
     {% if entity.vat_id_name_match == 'stimmt' %}
     <p style="margin:0; color:var(--cyan);">Name stimmt mit dem hinterlegten Namen ueberein.</p>
-    {% elif entity.vat_id_name_match == 'weicht_ab' and entity.vat_id_vies_name and entity.name %}
+    {% elif entity.vat_id_name_match == 'weicht_ab' and vies_name_vergleichbar(entity.vat_id_vies_name) and entity.name %}
     <p style="margin:0; color:var(--amber);">Name weicht vom hinterlegten Namen ab.</p>
     {% elif entity.vat_id_check_valid %}
     <p style="margin:0;">Name konnte nicht abgeglichen werden (VIES liefert fuer manche Laender keinen Namen).</p>

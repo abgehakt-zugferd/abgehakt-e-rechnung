@@ -81,6 +81,23 @@ def test_xml_enthaelt_billing_specified_period():
     assert "20260930" in xml
 
 
+def test_pdf_ohne_leistungsdatum_zeile_wenn_nur_zeitraum(tmp_path):
+    from pypdf import PdfReader
+    from app.services import pdf_generator
+    from tests.test_pdf_generator import _sample_company
+
+    inv = validator_invoice_stub(
+        delivery_date=None,
+        service_period_start=date(2026, 4, 1),
+        service_period_end=date(2026, 6, 30),
+    )
+    out = tmp_path / "invoice.pdf"
+    pdf_generator.generate_pdf(inv, _sample_company(), out)
+    text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages)
+    assert "Leistungszeitraum:" in text
+    assert "Leistungsdatum:" not in text
+
+
 def test_ig_lieferung_mit_zeitraum_ohne_einzeldatum():
     inv = _invoice(
         delivery_date=None,
