@@ -45,7 +45,12 @@ ENV APP_VERSION=${APP_VERSION}
 
 # Gemeinsame Gruppenkennung fuer geteilte Belegordner (EXTRA_GROUP_GID abgestimmt
 # mit den anderen Stacks der Installation). UID bleibt 100 — § 8 gleicht nur die Gruppe.
-ARG EXTRA_GROUP_NAME=zemp-belege
+#
+# Massgeblich ist die ZAHL, nicht der Name: der Kernel prueft Dateirechte gegen die
+# GID, und wie die Gruppe in diesem Abbild heisst, sieht ausserhalb niemand. Der Name
+# darf deshalb neutral sein, und der Firmennamen-Waechter unter `tests/` besteht
+# darauf: dieses Repo ist oeffentlich, der Name gehoerte einem fremden Betrieb.
+ARG EXTRA_GROUP_NAME=belegordner
 ARG EXTRA_GROUP_GID=2000
 
 COPY . .

@@ -32,9 +32,6 @@ VERBOTEN = re.compile(r"ZEMP|Golden Goose|Salachweg|Buchloe|zemp|saleshero", re.
 
 _IGNORIEREN = ("__pycache__", "storage/", "lib/", ".pytest_cache", ".ruff_cache")
 
-# Technische Gruppenkennung (GID 2000) — kein Firmenname in der Oberflaeche.
-_DOCKERFILE = Path("Dockerfile")
-
 # Diese Datei nennt die verbotenen Wörter selbst — sie ist die Liste. Seit der
 # Suchraum das ganze Repo umfasst (statt nur `app/`), fände sie sich sonst selbst
 # und wäre nie grün zu bekommen.
@@ -49,13 +46,22 @@ def _treffer(pfad: Path) -> list[str]:
 
 def _dateien(muster: str) -> list[Path]:
     return sorted(p for p in WURZEL.rglob(muster)
-                  if p != _SELBST and p != _DOCKERFILE
+                  if p != _SELBST
                   and not any(x in str(p) for x in _IGNORIEREN))
 
 
-@pytest.mark.parametrize("muster", ["*.html", "*.py", "*.sh", "*.ini", "*.toml", "*.md"])
+@pytest.mark.parametrize(
+    "muster", ["*.html", "*.py", "*.sh", "*.ini", "*.toml", "*.md", "Dockerfile"],
+)
 def test_kein_fremder_firmenname(muster):
-    treffer = [t for p in _dateien(muster) for t in _treffer(p)]
+    dateien = _dateien(muster)
+    # Ein leerer Suchraum waere gruen, ohne etwas geprueft zu haben. Beim
+    # Dockerfile ist das der wahrscheinliche Fall: er liegt nur deshalb im
+    # Abbild, weil `COPY . .` ihn mitnimmt, und waere fort, sobald ihn jemand
+    # in `.dockerignore` eintraegt.
+    assert dateien, f"kein Suchraum fuer {muster}: der Waechter prueft nichts"
+
+    treffer = [t for p in dateien for t in _treffer(p)]
 
     assert not treffer, "Fremder Firmenname im Repo:\n" + "\n".join(treffer)
 
