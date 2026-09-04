@@ -21,6 +21,47 @@ from app.main import app
 TEST_DB_NAME = "abgehakt_test"
 
 
+def _vektor_lage() -> str:
+    from tests.helpers.formatvektoren import (
+        UMGEBUNGSVARIABLE,
+        vektorordner,
+    )
+
+    ordner = vektorordner()
+    if ordner:
+        return f"formatvektoren: gemessen gegen {ordner}"
+    return (
+        "formatvektoren: NICHT GEMESSEN, kein Vektorordner mit protokoll.json "
+        f"({UMGEBUNGSVARIABLE} setzen)"
+    )
+
+
+def pytest_report_header(config):
+    return _vektor_lage()
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """Sagen, ob gegen die Formatvektoren gemessen wurde (abgehakt#72).
+
+    Fehlt der Vektorordner, sammelt tests/vektoren/ nichts ein: kein Skip, denn ein
+    fehlender Ordner ist kein fehlgeschlagener Test, und ein Skip waere in
+    diesem Repository ein Fehlschlag. Ohne diese Zeile saehe so ein Lauf
+    genauso gruen aus wie einer, der wirklich gemessen hat.
+
+    Am Ende und nicht nur im Kopf, weil der kanonische Lauf `pytest -q` fahrt
+    und `-q` den Kopf unterdrueckt: eine Sichtbarkeit, die der eigene
+    Standardlauf verschluckt, ist keine.
+    """
+    from tests.helpers.formatvektoren import vektorordner
+
+    lage = _vektor_lage()
+    if vektorordner():
+        terminalreporter.write_line(lage)
+    else:
+        terminalreporter.write_sep("=", "formatvektoren", red=True, bold=True)
+        terminalreporter.write_line(lage, red=True)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def test_archiv(tmp_path_factory):
     """Belege aus Tests in ein Wegwerf-Verzeichnis lenken, nicht ins echte Archiv.
@@ -96,7 +137,7 @@ def pg_session(pg_engine):
             conn.execute(text(f"ALTER TABLE {tbl} DISABLE TRIGGER USER"))
         try:
             conn.execute(text(
-                "TRUNCATE app_config, audit_log, validation_results, "
+                "TRUNCATE app_config, audit_log, validation_results, uebergabe_eingaenge, "
                 "invoice_items, invoices, customers, company RESTART IDENTITY CASCADE"
             ))
         finally:

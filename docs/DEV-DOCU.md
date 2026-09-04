@@ -777,16 +777,17 @@ deutsche Rechnung nicht, das spart rund zwei Drittel.
 
 ## Umgebung / Workflow
 
-### Ketten-Integration über Übergabebelege (Stufe 6, #22)
+### Ketten-Integration über Übergabebelege (#22)
 
-Abgehakt nimmt in der Ketten-Integration **keine REST-Aufrufe** von tantiemen entgegen. Transport
-ist der gemeinsame Belegordner (`UEBERGABEN_ORDNER`); Format und Kanonisierung stehen in
-der privaten Ketten-Dokumentation `UEBERGABEFORMAT.md` (Published Language der drei Apps).
+Abgehakt nimmt in der Ketten-Integration **keine REST-Aufrufe** entgegen. Transport ist der
+gemeinsame Belegordner (`UEBERGABEN_ORDNER`); Format und Kanonisierung stehen in der
+privaten Ketten-Dokumentation `UEBERGABEFORMAT.md` (Published Language der drei Apps).
 
-**Richtung für Stufe 6:** `tantiemen-app-nach-abgehakt`, signierte JSON-Dateien mit
-`nutzlast_art: abrechnungsauftrag`. Abgehakt liest, prüft die Signatur mit **eigener**
-RFC-8785-Implementierung (`app/services/uebergabebeleg.py`), legt **nur Entwürfe** an
-(`invoice_type=self_billing`, TypeCode 389), finalisiert und versendet nicht automatisch.
+**Richtung:** `tantiemen-app-nach-abgehakt`, signierte JSON-Dateien mit
+`nutzlast_art: abrechnungsauftrag`. Abgehakt liest, prüft mit **eigener**
+RFC-8785-Implementierung (`app/services/uebergabebeleg.py`) und legt **nur Entwürfe** an
+(`invoice_type=self_billing`, TypeCode 389). Finalisiert und versendet wird nichts
+automatisch.
 
 ```mermaid
 flowchart LR
@@ -803,24 +804,96 @@ flowchart LR
   Q --> tantiemen
 ```
 
-| Schritt | Werkzeug / Modul | Ergebnis |
+#### Der Schalter: aus, bis jemand ihn umlegt
+
+Unter **Einstellungen** steht der Schalter **Beleg-Integration**, Voreinstellung **aus**
+(`app_config.beleg_integration_aktiv`). Solange er aus ist, gibt es weder den Menüpunkt
+BELEGE noch die Schnittstellen-ID beim Kunden noch die Protokollfassung, und
+`/uebergaben` antwortet mit 404. Das ist keine Bequemlichkeit: abgehakt ist die einzige
+der drei Anwendungen, die ausgeliefert wird, und ein Menü für eine Kette, von der ein
+fremder Installateur nie gehört hat, ist dort Verwirrung.
+
+**Die Stolperstelle dazu gehört in jede Einrichtungsanleitung:** wer die Kette aufsetzt,
+muss die Integration **zuerst einschalten**, sonst findet er die Schnittstellen-ID nicht,
+die die Gegenseite von ihm verlangt.
+
+#### Lesen wirkt nicht, erst der Knopf wirkt
+
+| Schritt | Modul | Ergebnis |
 |---|---|---|
-| Beleg lesen + Signatur | `uebergabebeleg.beleg_pruefen()` | `Belegbefund` |
-| Schlüssel | `backend/schluessel/<absender>/<id>.pub` + `.json` | § 6 Gültigkeit am `erzeugt_am` |
-| Auftrag → Entwürfe | `abrechnungsauftrag_import.entwuerfe_aus_roh()` | `Invoice` status `draft` |
-| Ordner-Stapel | `abrechnungsauftrag_import.ordner_einlesen()` | überspringt bereits importierte `beleg_id` |
-| CLI | `python scripts/uebergabe_einlesen.py` | committet DB-Session nach Erfolg |
+| Beleg beurteilen | `uebergabe_befund.beleg_beurteilen()` | `Belegurteil` (ein Befund je Beleg) |
+| Vorgeschichte | `uebergabe_eingang.DatenbankLage` | zuletzt angenommener Beleg, bekannte Kennungen, Kundenstamm |
+| Ansicht | `routers/uebergaben.py` GET | Tabelle, **transient**: kein Datensatz, kein Zustand |
+| Anlegen | `routers/uebergaben.py` POST | `abrechnungsauftrag_wirkung.entwuerfe_anlegen()` |
+| Entwürfe + Gedächtnis | `abrechnungsauftrag_wirkung` | `Invoice` status `draft` und eine Zeile in `uebergabe_eingaenge` |
+| Befundbericht (nur lesen) | `python scripts/uebergabe_einlesen.py` | Zeile je Beleg, schreibt nichts |
 
-**Partner-Zuordnung:** `nutzlast.gutschriften[].beteiligter.partner_id` muss exakt
-`customers.id` (UUID) sein, dieselbe Kennung wie die Schnittstellen-ID in der Kunden-UI
-(#66). Unbekannte UUID → Ablehnung, kein neuer Kunde.
+Der Befund entsteht an **einer** Stelle, als Ergebnisobjekt und nicht in der
+Tabellendarstellung: er ist später der Inhalt der Quittung (Stufe 7), und ob die beim
+Lesen oder beim Knopfdruck geschrieben wird, ist damit noch offen. In den Belegordner
+schreibt diese Anwendung **nie** (§ 12: der Ordner ist Archiv nach § 147 AO).
 
-**Idempotenz:** `notes` enthält `uebergabe-beleg:{beleg_id}`. Zweiter Import derselben
-Datei → `BelegSchonVerarbeitet`.
+#### Prüfhaken und Befundcodes
 
-**Steuer (vorläufig):** tantiemen liefert nur Netto; Entwürfe tragen 7 % (§ 12 Abs. 2 Nr.
-7c) bis Steuer aus Stammdaten nachgezogen ist. **Formgerechte 389** braucht außerdem
-vollständige Verkäufer-Stammdaten (Steuernummer etc.) in abgehakt.
+Die Reihenfolge geht von der Datei nach innen: Bytes, Umschlag, Fassung, Art, Nutzlast-Hash,
+Schlüssel und Signatur, Kennung, Kette, Adressat, dann die Nutzlast. Gemeldet wird der
+erste Grund, mit `pfad` auf das Feld (`$` für das ganze Dokument).
+
+```
+summe.netto            == Summe positionen.netto      (exakt, ohne Toleranz)
+runde(basis_netto x satz / 100) == position.netto      (wo herleitung steht)
+Summe grundlagen[].erloes_netto  <=  bemessung.erloes_netto
+```
+
+Die letzte Zeile ist eine Falle: `grundlagen` ist ein **Auszug**, kein Nachweis des
+Erlöses. Ein Prüfhaken auf Gleichheit würde jeden echten Auftrag ablehnen. Gerundet wird
+kaufmännisch (`ROUND_HALF_UP`) und der Satz wird **nicht** vorher gerundet: 797,30 mal
+33,333333 % sind 265,77, mit gerundetem Satz 265,73.
+
+**Der Auftrag trägt nur netto.** `steuer`, `brutto`, `steuersatz` und `steuerkategorie`
+sind `UNBEKANNTES_FELD`; die Steuer entsteht hier aus `customers.ust_status`
+(`regelbesteuert` -> S / 7 %, `kleinunternehmer` -> E / 0 %).
+
+**Partner-Zuordnung:** `gutschriften[].beteiligter.partner_id` ist exakt `customers.id`
+(UUID), dieselbe Kennung wie die Schnittstellen-ID in der Kunden-UI (#66). Unbekannt heißt
+`PARTNER_ID_UNBEKANNT`, und der Auftrag wirkt **gar nicht**: nie teilweise.
+
+**Idempotenz:** `uebergabe_eingaenge` merkt `beleg_id` **und** `beleg_sha256`, und zwar nur
+von **angenommenen** Belegen. Derselbe Beleg noch einmal ist keine Ablehnung, sondern
+dieselbe Auskunft noch einmal; dieselbe Kennung mit anderem Inhalt ist
+`BELEG_ID_WIDERSPRUCH`. Ein abgelehnter Beleg wird nicht gemerkt und darf erneut vorgelegt
+werden, sobald der Grund behoben ist.
+
+#### Was am Entwurf feststeht
+
+`services/belegsperre.py`, wirksam im Server und nicht nur im Formular:
+
+| Was | Bearbeitbar | Warum |
+|---|---|---|
+| Steuersatz, Steuerkategorie | ja | gehört abgehakt, entsteht aus dem Kundenstatus |
+| Bezeichnungen, Freitexte | ja | ändern keine Zahl |
+| Netto-Beträge der Positionen | nein | stammen aus dem signierten Beleg |
+| Beteiligter, Leistungszeitraum | nein | dasselbe |
+
+Ist ein Netto-Betrag falsch, ist der **Beleg** falsch: dann wird er abgelehnt und die
+Gegenseite erzeugt einen neuen. Im Formular sind die gesperrten Felder als „aus dem Beleg
+übernommen" gekennzeichnet, nicht bloß grau.
+
+#### Protokollfassung (#72)
+
+`app/services/protokoll.py` führt `PROTOKOLL_VERSION`, die akzeptierten Fassungen, die
+Befundcodes und das Feldverzeichnis. Maßgeblich ist `protokoll.json` im Ordner der
+Übergabepapiere, nicht dieser Quelltext; ein Test hält beides gegeneinander. Gleicher
+major heißt annehmen, auch bei höherem minor; höherer major heißt
+`FASSUNG_UNVERTRAEGLICH`. Es gibt **keine** Aushandlung zur Laufzeit.
+
+Die Vektoren liegen außerhalb dieses Repositoriums und werden nicht mitgeliefert. Pfad aus
+`UEBERGABE_VEKTOREN`, **ohne Vorgabe**: Name und Vorgabepfad, die das Papier dafür nennt,
+tragen den Namen des Betreibers, und dieses Repositorium ist öffentlich. Ist die Variable
+nicht gesetzt, sammelt `tests/vektoren/` nichts ein (kein Skip, der wäre hier ein
+Fehlschlag), und pytest schreibt am Ende jedes Laufs eine rote Zeile
+`formatvektoren: NICHT GEMESSEN`. `backend/run-tests.sh` reicht den Ordner read-only in den
+Container.
 
 #### Ketten-Testinstanz (nicht Live)
 
@@ -844,16 +917,16 @@ docker compose -p abgehakt-test \
 Compose-Mounts in der Testinstanz: Wegwerf-`storage-integration`, `${UEBERGABEN_ORDNER}` nach
 `/uebergaben`, `backend/schluessel` nach `/app/schluessel` (nur oeffentliche Schluessel).
 
-#### Import aus der Testinstanz
+#### Belege in der Testinstanz ansehen
 
 ```bash
-# Nach Auftrag von tantiemen in .../tantiemen-app-nach-abgehakt/
+# Nach Auftrag der Gegenseite in .../tantiemen-app-nach-abgehakt/
 docker compose -p abgehakt-test exec app python scripts/uebergabe_einlesen.py
 ```
 
-`UEBERGABEN_ORDNER` ist im Container `/uebergaben` gesetzt; das Skript liest
-`tantiemen-app-nach-abgehakt/*.json`, überspringt bereits verarbeitete `beleg_id`, committet
-neue Entwürfe. Entwürfe danach im GUI prüfen und nur in der Testinstanz finalisieren.
+Das Skript **liest nur** und meldet je Beleg den Befund; es legt nichts an. Entwürfe
+entstehen ausschließlich über den Knopf ALS RECHNUNG ANLEGEN in der Oberfläche (Port 3001),
+und finalisiert wird nur dort, nie in der Live-Installation.
 
 **Sichtbarkeit ohne Broker:** Kettenstand optional mit einem Belegmonitor-Werkzeug
 (liest denselben Belegordner, keine Signaturpruefung).

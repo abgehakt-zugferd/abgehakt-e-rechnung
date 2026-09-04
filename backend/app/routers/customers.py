@@ -20,6 +20,7 @@ from app.services.ust_id_pruefung import (
     speichern as ust_speichern,
     zuruecksetzen as ust_zuruecksetzen,
 )
+from app.services.abrechnungsauftrag_wirkung import STEUER_AUS_STATUS
 from app.services.adresse import bereinige_adresszeile2
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
@@ -73,6 +74,16 @@ def _bank_speichern(customer: Customer, felder: dict) -> None:
     customer.bank_iban = normalisiere_iban(felder.get("bank_iban"))
     customer.bank_bic = normalisiere_bic(felder.get("bank_bic"))
     customer.bank_name = (felder.get("bank_name") or "").strip() or None
+
+
+def _ust_status(roh: str) -> str:
+    """Geschlossener Wertevorrat, sonst der Regelfall.
+
+    Ein erfundenes Wort waere hier still und faellt erst auf, wenn aus einem
+    Beleg eine Gutschrift entstehen soll und die Steuer nicht abzuleiten ist.
+    """
+    gewaehlt = (roh or "").strip()
+    return gewaehlt if gewaehlt in STEUER_AUS_STATUS else "regelbesteuert"
 
 
 def _number_taken(db: Session, number: str, exclude_id=None) -> bool:
@@ -141,6 +152,7 @@ def create_customer(
     city: str = Form(...),
     country: str = Form("DE"),
     vat_id: str = Form(""),
+    ust_status: str = Form("regelbesteuert"),
     email: str = Form(""),
     cc_emails: str = Form(""),
     phone: str = Form(""),
@@ -155,7 +167,8 @@ def create_customer(
     values = {
         "customer_number": number, "name": name, "address_line1": address_line1,
         "address_line2": address_line2, "zip_code": zip_code, "city": city,
-        "country": country, "vat_id": vat_id, "email": email, "phone": phone, "notes": notes,
+        "country": country, "vat_id": vat_id, "ust_status": _ust_status(ust_status),
+        "email": email, "phone": phone, "notes": notes,
         "cc_emails": cc_emails,
     }
     bank_felder, bank_fehler = _bank_felder(bank_iban, bank_bic, bank_name)
@@ -181,6 +194,7 @@ def create_customer(
         cc_emails=empfaenger.normalisiere(cc_emails) or None,
         phone=phone.strip() or None,
         notes=notes.strip() or None,
+        ust_status=_ust_status(ust_status),
         is_active=(is_active == "1"),
     )
     _bank_speichern(customer, bank_felder)
@@ -224,6 +238,7 @@ def update_customer(
     city: str = Form(...),
     country: str = Form("DE"),
     vat_id: str = Form(""),
+    ust_status: str = Form("regelbesteuert"),
     email: str = Form(""),
     cc_emails: str = Form(""),
     phone: str = Form(""),
@@ -259,6 +274,7 @@ def update_customer(
     customer.cc_emails = empfaenger.normalisiere(cc_emails) or None
     customer.phone = phone.strip() or None
     customer.notes = notes.strip() or None
+    customer.ust_status = _ust_status(ust_status)
     customer.is_active = (is_active == "1")
     _bank_speichern(customer, bank_felder)
     _, ust_fehler = _ust_id_verarbeiten(customer, vat_id)

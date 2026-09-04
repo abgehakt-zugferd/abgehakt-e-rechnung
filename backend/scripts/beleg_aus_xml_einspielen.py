@@ -170,7 +170,7 @@ def _parse(xml_path: Path) -> dict:
     }
 
 
-def einspielen(nummern: list[str]) -> None:
+def einspielen(nummern: list[str], *, aus_altem_system: bool = False) -> None:
     settings = get_settings()
     xml_dir = settings.storage_path / "xml"
     pdf_dir = settings.storage_path / "pdfs"
@@ -222,10 +222,23 @@ def einspielen(nummern: list[str]) -> None:
                 db.add(InvoiceItem(invoice_id=inv.id, **row))
             db.commit()
             print(f"eingespielt: {num} → Kunde {customer.name} ({customer.customer_number})")
+            if aus_altem_system:
+                from scripts.beleg_migration_nachziehen import nachziehen
+                nachziehen([num])
     finally:
         db.close()
 
 
 if __name__ == "__main__":
-    nums = sys.argv[1:] or ["Z-2026-002", "Z-2026-004"]
-    einspielen(nums)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Finalisierte Belege aus XML/PDF einspielen")
+    parser.add_argument("nummern", nargs="*", help="Rechnungsnummern (z. B. Z-2026-002)")
+    parser.add_argument(
+        "--alt-system",
+        action="store_true",
+        help="Versand und Bezahlt aus altem Abgehakt nachziehen (Migration)",
+    )
+    args = parser.parse_args()
+    nums = args.nummern or ["Z-2026-002", "Z-2026-004"]
+    einspielen(nums, aus_altem_system=args.alt_system)

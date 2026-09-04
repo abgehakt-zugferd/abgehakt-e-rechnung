@@ -1,7 +1,7 @@
 # Ketten-Testinstanz — parallel zur Live-Installation, ohne Kollision.
 #
 # Start:
-#   cp integration.env.example integration.env   # Werte eintragen
+#   cp integration-env.example integration.env   # Werte eintragen
 #   docker compose -p abgehakt-test \
 #     -f docker-compose.yml -f docker-compose.integration.yml \
 #     --env-file integration.env up -d --build

@@ -24,6 +24,15 @@ class AppConfig(Base):
     smtp_from: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     smtp_use_tls: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True, default=True)
 
+    # Beleg-Integration (#22). VOREINSTELLUNG AUS, und das ist keine Bequemlichkeit:
+    # abgehakt ist die einzige der beteiligten Anwendungen, die AUSGELIEFERT wird.
+    # Ein Menue fuer eine Belegkette, von der ein fremder Installateur nie gehoert
+    # hat, ist dort kein Angebot, sondern Verwirrung. Solange der Schalter aus ist,
+    # gibt es weder das Menue noch die Schnittstellen-ID noch die Protokollfassung.
+    beleg_integration_aktiv: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false",
+    )
+
     # DATEV Configuration
     datev_bcc_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 

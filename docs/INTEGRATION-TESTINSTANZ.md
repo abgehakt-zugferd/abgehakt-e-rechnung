@@ -30,6 +30,38 @@ docker compose -p abgehakt-test \
 
 Öffnen: http://127.0.0.1:3001
 
+## Nach dem Start: der Klon bekommt Probe-Kunden, keine Livedaten
+
+**Klon der Anwendung, nicht der Daten.** Die Live-Datenbank hierher zu kopieren hieße,
+Steuernummern, Anschriften und Bankverbindungen der Beteiligten ein zweites Mal abzulegen,
+für eine Probe, die sie nicht braucht. Der Klon startet leer und bekommt von Hand
+Probe-Kunden, deren **Schnittstellen-ID** genau die `partner_id` aus den Auftragsvektoren
+ist. Wenn eine Probe doch echte Stammdaten braucht, ist das eine Entscheidung und keine
+Nebenwirkung.
+
+Reihenfolge, und die erste Zeile vergisst man genau einmal:
+
+1. **Einstellungen, Beleg-Integration einschalten.** Ohne den Schalter gibt es weder den
+   Menüpunkt BELEGE noch die Schnittstellen-ID, und `/uebergaben` antwortet mit 404.
+2. Firmendaten ausfüllen (Ersteinrichtung), sonst entsteht keine formgerechte Gutschrift.
+3. Je Beteiligtem einen Kunden anlegen. Danach beim Kunden die **Schnittstellen-ID**
+   ablesen und die Gegenseite darauf zeigen lassen; für die gelieferten Auftragsvektoren
+   muss umgekehrt die ID des Probe-Kunden auf die `partner_id` des Vektors gesetzt werden.
+4. Umsatzsteuerlichen Status je Kunde setzen (regelbesteuert oder Kleinunternehmer). Er
+   entscheidet über die Steuer auf der Gutschrift; der Auftrag trägt sie nicht.
+5. Beleg in `~/uebergaben-test/tantiemen-app-nach-abgehakt/` legen, im Menü **BELEGE**
+   ansehen, Befund lesen, erst dann **ALS RECHNUNG ANLEGEN**.
+
+Ansehen ändert nichts: keine Zeile in der Datenbank, und in den Belegordner schreibt diese
+Anwendung nie. Erst der Knopf legt Entwürfe an und merkt den Beleg als verarbeitet.
+
+## Finalisieren nur hier
+
+Ein Entwurf aus einem Beleg wird in der Testinstanz geprüft und, wenn überhaupt, hier
+finalisiert. Die gesperrten Felder (Netto-Beträge, Beteiligter, Leistungszeitraum) sind im
+Formular als „aus dem Beleg übernommen" gekennzeichnet; ist ein Betrag falsch, ist der
+Beleg falsch, und die Gegenseite erzeugt einen neuen.
+
 ## Wegwerfen
 
 ```bash

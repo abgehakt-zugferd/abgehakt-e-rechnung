@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -16,6 +18,13 @@ from app.services.ust_id_pruefung import (
     zuruecksetzen as ust_zuruecksetzen,
 )
 from app.services.adresse import bereinige_adresszeile2
+from app.services.protokoll import PROTOKOLL_VERSION
+from app.services.steuer_ruecklage import (
+    gewerbe_hebesatz as ruecklage_hebesatz,
+    kst_satz_percent as ruecklage_kst,
+    pruefe_eingaben as pruefe_steuer_ruecklage,
+    soli_auf_kst_percent as ruecklage_soli,
+)
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
 
@@ -60,6 +69,14 @@ def settings_page(request: Request, db: Session = Depends(get_db), saved: bool =
         "config": config,
         "effective": effective,
         "cfg": cfg,
+        "protokoll_version": PROTOKOLL_VERSION,
+        # Geltende Ruecklage-Saetze statt der rohen Spalten: eine Firmenzeile ohne
+        # Werte wuerde sonst `None` in die Felder schreiben.
+        "ruecklage": {
+            "kst": ruecklage_kst(company),
+            "soli": ruecklage_soli(company),
+            "hebesatz": ruecklage_hebesatz(company),
+        },
         "saved": saved,
         "error": error,
     })
@@ -85,6 +102,9 @@ def save_company(
     invoice_prefix: str = Form("RE"),
     invoice_year_in_number: str = Form("on"),
     payment_terms_default: str = Form(""),
+    kst_satz_percent: str = Form("15"),
+    soli_auf_kst_percent: str = Form("5.5"),
+    gewerbe_hebesatz: str = Form("400"),
     db: Session = Depends(get_db),
 ):
     # ZUERST prüfen, dann erst etwas setzen: der Präfix wird Teil des Dateinamens
@@ -93,6 +113,8 @@ def save_company(
     # sagt. Würde erst am Ende geprüft, hingen die übrigen Zuweisungen bereits in
     # der Sitzung und ein späterer Commit an anderer Stelle nähme sie mit.
     if (meldung := pruefe_praefix(invoice_prefix)):
+        return settings_page(request, db, saved=False, error=meldung)
+    if (meldung := pruefe_steuer_ruecklage(kst_satz_percent, soli_auf_kst_percent, gewerbe_hebesatz)):
         return settings_page(request, db, saved=False, error=meldung)
 
     company = _get_or_create_company(db)
@@ -125,6 +147,9 @@ def save_company(
     company.invoice_prefix = invoice_prefix.strip() or "RE"
     company.invoice_year_in_number = invoice_year_in_number == "on"
     company.payment_terms_default = payment_terms_default.strip() or "Zahlbar innerhalb von 14 Tagen nach Rechnungseingang ohne Abzug."
+    company.kst_satz_percent = Decimal(kst_satz_percent.replace(",", ".").strip())
+    company.soli_auf_kst_percent = Decimal(soli_auf_kst_percent.replace(",", ".").strip())
+    company.gewerbe_hebesatz = int(gewerbe_hebesatz.strip())
     db.commit()
     return RedirectResponse(url="/settings?saved=true", status_code=303)
 
@@ -152,6 +177,16 @@ def pruefe_company_ust_id(
     ust_speichern(company, ergebnis)
     db.commit()
     return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/beleg-integration")
+def speichere_beleg_integration(aktiv: str = Form(default=""), db: Session = Depends(get_db)):
+    """Der Schalter (#22). Ohne Haken kommt das Feld gar nicht mit - genau das
+    ist "aus"; ein fehlendes Formularfeld darf hier nicht "unveraendert" heissen."""
+    config = _get_or_create_app_config(db)
+    config.beleg_integration_aktiv = aktiv == "1"
+    db.commit()
+    return RedirectResponse(url="/settings/?saved=true", status_code=303)
 
 
 @router.post("/smtp")

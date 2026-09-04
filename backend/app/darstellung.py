@@ -17,6 +17,8 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi.templating import Jinja2Templates
 
+from app.services.beleg_status import badge_klasse, etikett
+
 # Ein Zwischenzeichen, das in keiner der beiden Rollen vorkommt: Erst wird der
 # englische Tausenderpunkt geparkt, dann der Dezimalpunkt zum Komma, dann der
 # geparkte Trenner zum Punkt. Ohne den Umweg überschreibt der zweite Austausch
@@ -85,3 +87,5 @@ def registriere_darstellungsfilter(templates: Jinja2Templates) -> None:
     templates.env.filters["euro"] = euro
     templates.env.filters["betrag"] = betrag
     templates.env.filters["menge"] = menge
+    templates.env.filters["beleg_etikett"] = etikett
+    templates.env.filters["beleg_badge"] = badge_klasse

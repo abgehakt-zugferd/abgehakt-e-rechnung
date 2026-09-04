@@ -4,7 +4,7 @@ Suchfilter) und GET /invoices/{id} (Detail) waren ungetestet — ein Template-/
 Query-Bruch dort fiel bisher durch kein Netz. pg_session, echtes Rendering.
 """
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
@@ -57,6 +57,20 @@ def test_list_invoices_status_filter(pg_session):
     assert r.status_code == 200
     assert "RE-2026-778" in r.text
     assert "RE-2026-777" not in r.text
+
+
+def test_liste_zeigt_versandstatus_fuer_issued(pg_session):
+    """issued ohne Versand ≠ issued mit Versand — beides muss in der Liste lesbar sein."""
+    offen = _invoice(pg_session, number="RE-2026-880", status="issued")
+    versendet = _invoice(pg_session, number="RE-2026-881", status="issued")
+    versendet.datev_sent_at = datetime(2026, 9, 2, 13, 0, tzinfo=timezone.utc)
+    pg_session.commit()
+
+    html = _client(pg_session).get("/invoices/").text
+    assert "Nicht versendet" in html
+    assert "Versendet" in html
+    assert offen.invoice_number in html
+    assert versendet.invoice_number in html
 
 
 def test_invoice_detail_renders(pg_session):

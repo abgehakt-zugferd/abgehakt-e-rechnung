@@ -165,9 +165,9 @@ def test_jede_jinja_umgebung_kennt_die_filter():
     assert len(instanzen) >= 5, f"zu wenige Environments gefunden: {list(instanzen)}"
 
     ohne = {
-        name: sorted({"euro", "menge", "betrag"} - set(t.env.filters))
+        name: sorted({"euro", "menge", "betrag", "beleg_etikett", "beleg_badge"} - set(t.env.filters))
         for name, t in instanzen.items()
-        if not {"euro", "menge", "betrag"} <= set(t.env.filters)
+        if not {"euro", "menge", "betrag", "beleg_etikett", "beleg_badge"} <= set(t.env.filters)
     }
     assert not ohne, f"Filter fehlen in: {ohne}"
 

@@ -11,7 +11,14 @@ from typing import Optional
 
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
+from app.installation import is_testinstanz
+
 _WURZEL = Path(__file__).resolve().parents[2] / "schluessel"
+
+# Ein Probeschluessel ist am NAMEN erkennbar und gilt nur in einer Testinstanz.
+# Am Namen und nicht an einer Angabe im Beiblatt: das Beiblatt liegt beim
+# Empfaenger und kann verrutschen, der Name steht in jedem signierten Beleg.
+PROBE_KENNZEICHEN = "-probe-"
 
 
 class SchluesselUnbekannt(LookupError):
@@ -20,6 +27,14 @@ class SchluesselUnbekannt(LookupError):
 
 class SchluesselNichtGueltig(ValueError):
     """Der Schlüssel gibt es, er galt zu diesem Zeitpunkt aber nicht."""
+
+
+class ProbeschluesselImEchtlauf(SchluesselUnbekannt):
+    """Ein Probeschlüssel, und diese Installation ist keine Testinstanz.
+
+    Eine Kettenprobe darf nie den echten Bestand berühren, und ein
+    Probeschlüssel, der im Echtlauf gälte, hebt genau diese Trennung auf.
+    """
 
 
 def _zeit(wert: Optional[str]) -> Optional[datetime]:
@@ -35,6 +50,11 @@ def schluessel_laden(
     wurzel: Optional[Path] = None,
 ):
     """Öffentlicher Schlüssel für den Erzeugungszeitpunkt des Belegs."""
+    if PROBE_KENNZEICHEN in schluessel_id and not is_testinstanz():
+        raise ProbeschluesselImEchtlauf(
+            f"{schluessel_id} ist ein Probeschlüssel und gilt nur in der Testinstanz"
+        )
+
     ordner = Path(wurzel) if wurzel else _WURZEL
     pem = ordner / absender / f"{schluessel_id}.pub"
     beiblatt = ordner / absender / f"{schluessel_id}.json"

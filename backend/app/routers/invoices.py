@@ -14,6 +14,7 @@ from app.database import get_db
 from app.models.customer import Customer
 from app.models.company import Company
 from app.models.invoice import Invoice, InvoiceItem, ValidationResult, InvoiceSendLog
+from app.services import belegsperre
 from app.services.leistungszeit import parse_leistungszeit_from_form
 from app.models.app_config import AppConfig
 from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
@@ -328,6 +329,28 @@ def edit_invoice_form(invoice_id: uuid.UUID, request: Request, db: Session = Dep
     })
 
 
+def _bearbeiten_mit_fehler(request: Request, db: Session, invoice: Invoice, meldung: str):
+    """Das Formular noch einmal, mit Meldung. 400, weil nichts gespeichert wurde."""
+    db.rollback()
+    customers = (
+        db.query(Customer)
+        .filter(Customer.deleted_at.is_(None), Customer.is_active == True)  # noqa: E712
+        .order_by(Customer.name)
+        .all()
+    )
+    company = db.query(Company).filter(Company.id == 1).first()
+    return templates.TemplateResponse("invoices/form.html", {
+        "request": request,
+        "invoice": invoice,
+        "items_json": _items_as_json(invoice),
+        "customers": customers,
+        "company": company,
+        "today": date.today().isoformat(),
+        "due_default": invoice.due_date.isoformat(),
+        "error": meldung,
+    }, status_code=400)
+
+
 @router.post("/{invoice_id}/bearbeiten")
 async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
     invoice = _get_draft(db, invoice_id)
@@ -338,18 +361,29 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
 
     # Unveränderlich bleiben `invoice_number`, `id`, `status` und `created_at` —
     # sie tauchen hier bewusst nicht auf.
-    invoice.customer_id = _kunde_id(form)
+    rohe_positionen = json.loads(form.get("items_json", "[]"))
+    aus_beleg = belegsperre.gilt(invoice)
+    if aus_beleg:
+        # Was aus dem signierten Beleg stammt, kommt aus dem Bestand und nicht
+        # aus dem Formular (services/belegsperre.py).
+        try:
+            rohe_positionen = belegsperre.positionen_binden(invoice, rohe_positionen)
+        except belegsperre.BelegsperreVerletzt as fehler:
+            return _bearbeiten_mit_fehler(request, db, invoice, str(fehler))
+    else:
+        invoice.customer_id = _kunde_id(form)
+        invoice.service_period_start = service_period_start
+        invoice.service_period_end = service_period_end
+
     invoice.issue_date = date.fromisoformat(form.get("issue_date"))
     invoice.due_date = date.fromisoformat(form.get("due_date"))
     invoice.delivery_date = delivery_date
-    invoice.service_period_start = service_period_start
-    invoice.service_period_end = service_period_end
     invoice.tax_category = form.get("tax_category", "S").strip() or "S"
     invoice.payment_terms = form.get("payment_terms", "").strip() or company.payment_terms_default
     invoice.buyer_reference = form.get("buyer_reference", "").strip() or None
     invoice.notes = form.get("notes", "").strip() or None
 
-    net_total, tax_total = _replace_items(db, invoice, json.loads(form.get("items_json", "[]")))
+    net_total, tax_total = _replace_items(db, invoice, rohe_positionen)
     _apply_totals(invoice, net_total, tax_total)
 
     # Nachprüfen mit den NEUEN Positionen: `_replace_items` hat sie erst in die Session

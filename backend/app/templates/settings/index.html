@@ -67,6 +67,28 @@
             </div>
 
             <div style="border-top:1px solid var(--border); padding-top:16px;">
+                <h3 style="margin-bottom:6px;">STEUER-RÜCKLAGE (ÜBERSICHT)</h3>
+                <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:14px;">
+                    Pauschale GmbH-Schätzung für die Kennzahl „Gesch. Steuerabgaben“ — Körperschaftsteuer, Solidaritätszuschlag und Gewerbesteuer auf den Nettoumsatz (ohne Ausgaben = Gewinn-Schätzung).
+                </p>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="label">Körperschaftsteuer %</label>
+                        <input type="text" name="kst_satz_percent" value="{{ ruecklage.kst|betrag(1) }}" class="input font-mono" style="max-width:120px;">
+                    </div>
+                    <div>
+                        <label class="label">Solidaritätszuschlag auf KSt %</label>
+                        <input type="text" name="soli_auf_kst_percent" value="{{ ruecklage.soli|betrag(1) }}" class="input font-mono" style="max-width:120px;">
+                    </div>
+                    <div>
+                        <label class="label">Gewerbehebesatz %</label>
+                        <input type="number" name="gewerbe_hebesatz" value="{{ ruecklage.hebesatz }}" min="200" max="900" step="1" class="input font-mono" style="max-width:120px;">
+                        <p class="label" style="margin-top:6px; text-transform:none;">Messzahl 3,5 % × Hebesatz ÷ 100 = Gewerbesteuer auf Gewinn.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div style="border-top:1px solid var(--border); padding-top:16px;">
                 <h3 style="margin-bottom:14px;">KONTAKT</h3>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
@@ -227,6 +249,69 @@
             <button type="submit" class="btn-primary">DATEV SPEICHERN</button>
         </div>
     </form>
+
+    <!-- Beleg-Integration (#22): Voreinstellung aus -->
+    <form method="post" action="/settings/beleg-integration" class="card" style="margin-top:24px;">
+        <h2 style="margin-bottom:6px;">BELEG-INTEGRATION</h2>
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:16px;">
+            Rechnungsentwürfe aus signierten Übergabebelegen eines vorgelagerten Systems.
+            Ausgeschaltet ändert sich nichts an diesem Programm: kein Menü, keine
+            Schnittstellen-ID, kein Zugriff auf einen Belegordner.
+        </p>
+
+        <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer;">
+            <input type="checkbox" name="aktiv" value="1" style="margin-top:4px;"
+                   {% if config.beleg_integration_aktiv %}checked{% endif %}>
+            <span style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text);">
+                Beleg-Integration einschalten
+            </span>
+        </label>
+
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-top:14px;">
+            Eingeschaltet erscheint der Menüpunkt <strong style="color:var(--text);">BELEGE</strong>, und beim
+            Kunden wird die <strong style="color:var(--text);">Schnittstellen-ID</strong> sichtbar. Sie ist die
+            Kennung, unter der das vorgelagerte System auf diesen Kunden zeigt; wer die Kette einrichtet,
+            braucht sie und findet sie ohne den Schalter nicht.
+            Gelesen wird nur: in den Belegordner schreibt dieses Programm nie, und aus einem Beleg entsteht
+            immer erst ein Entwurf, den ein Mensch prüft.
+        </p>
+
+        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+            <button type="submit" class="btn-primary">SPEICHERN</button>
+        </div>
+    </form>
+
+    <!-- Fassungen (#72): Programm und Uebergabeprotokoll nebeneinander -->
+    <div class="card" style="margin-top:24px;">
+        <h2 style="margin-bottom:6px;">FASSUNGEN</h2>
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:16px;">
+            {% if config.beleg_integration_aktiv %}Wann dieses Programm gebaut wurde, und nach welchen Regeln
+            es Übergabebelege liest. Zwei verschiedene Angaben: die eine sagt über die andere nichts.
+            {% else %}Der Stand dieses Programms.{% endif %}
+        </p>
+
+        <div style="display:flex; gap:40px; flex-wrap:wrap;">
+            <div>
+                <label class="label">Programmfassung</label>
+                <p class="font-mono" style="font-size:var(--fs-gross); color:var(--text);">{{ cfg.app_version }}</p>
+            </div>
+            {% if config.beleg_integration_aktiv %}
+            <div>
+                <label class="label">Protokollfassung</label>
+                <p class="font-mono" style="font-size:var(--fs-gross); color:var(--text);">{{ protokoll_version }}</p>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if config.beleg_integration_aktiv %}
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-top:16px;">
+            Die Protokollfassung ist die <strong style="color:var(--text);">format_version</strong>, die dieses
+            Programm beherrscht. Ein Beleg mit höherer Hauptfassung wird abgelehnt
+            (<strong style="color:var(--text);">FASSUNG_UNVERTRAEGLICH</strong>), eine höhere Nebenfassung
+            wird angenommen. Wer eine Ablehnung untersucht, sieht hier zuerst nach.
+        </p>
+        {% endif %}
+    </div>
 
 </div>
 {% endblock %}

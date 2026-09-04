@@ -26,7 +26,7 @@
 
 
     <!-- Kennzahlen -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
 
         <!-- Rechnungen gesamt -->
         <div class="card card-hover">
@@ -87,6 +87,41 @@
                 </div>
             </div>
         </div>
+
+        <!-- Schuldige Umsatzsteuer -->
+        <div class="card card-hover">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="kpi__beschriftung">SCHULDIGE UMSATZSTEUER</p>
+                    <p class="kpi__wert">{{ vat_liability_ytd|betrag(0) }}<span class="kpi__einheit">€</span></p>
+                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:4px;">Ausgewiesene USt lfd. Jahr</p>
+                </div>
+                <div style="width:40px; height:40px; background:rgba(255,171,0,0.07); border:2px solid rgba(255,171,0,0.35); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    <svg style="width:20px;height:20px;color:var(--amber);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5 3a2.5 2.5 0 100-5 2.5 2.5 0 000 5zm0 0v3m6-3v3m-11 3h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Geschätzte Steuerabgaben -->
+        <div class="card card-hover">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="kpi__beschriftung">GESCH. STEUERABGABEN</p>
+                    <p class="kpi__wert">{{ estimated_tax_ytd|betrag(0) }}<span class="kpi__einheit">€</span></p>
+                    <div style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:6px; line-height:1.5;">
+                        <div>USt {{ vat_liability_ytd|betrag(0) }}&nbsp;€</div>
+                        <div>+ KSt/GewSt {{ steuer_ruecklage_ytd|betrag(0) }}&nbsp;€ ({{ steuer_ruecklage_anteil_prozent|betrag(1) }}&nbsp;% Netto)</div>
+                    </div>
+                </div>
+                <div style="width:40px; height:40px; background:rgba(255,77,124,0.07); border:2px solid rgba(255,77,124,0.3); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    <svg style="width:20px;height:20px;color:var(--pink);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 1.343-3 3v1H8a2 2 0 00-2 2v5a2 2 0 002 2h8a2 2 0 002-2v-5a2 2 0 00-2-2h-1V11c0-1.657-1.343-3-3-3zm0 0V6m0 2V6m0 0a2 2 0 100-4 2 2 0 000 4z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Letzte Rechnungen -->
@@ -128,7 +163,7 @@
                         <td style="padding:10px 14px; color:var(--text-dim); white-space:nowrap;">{{ inv.issue_date.strftime('%d.%m.%Y') }}</td>
                         <td style="padding:10px 14px; text-align:right; color:var(--text-hi); font-family:'Share Tech Mono',monospace;">{{ inv.gross_total|euro }}</td>
                         <td style="padding:10px 14px;">
-                            <span class="badge badge-{{ inv.status }}">{{ {'draft':'Entwurf','issued':'Gestellt','paid':'Bezahlt','cancelled':'Storniert'}[inv.status] }}</span>
+                            <span class="badge badge-{{ inv.status|beleg_badge(inv.datev_sent_at) }}">{{ inv.status|beleg_etikett(inv.datev_sent_at) }}</span>
                         </td>
                     </tr>
                     {% endfor %}
