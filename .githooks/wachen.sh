@@ -97,7 +97,7 @@ fi
 
 # Geteilte Belegordner: dieselbe Gruppenkennung wie in den anderen Stacks (SYSTEMLANDSCHAFT § 8).
 if ! grep -q 'EXTRA_GROUP_GID=2000' backend/Dockerfile || \
-   ! grep -q 'zemp-belege' backend/Dockerfile; then
+   ! grep -q 'EXTRA_GROUP_NAME=belegordner' backend/Dockerfile; then
   {
     echo ""
     echo "gruppe: ROT - backend/Dockerfile fehlt die gemeinsame Gruppe (GID 2000)."
