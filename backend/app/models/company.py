@@ -1,5 +1,6 @@
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, Integer, func
+from decimal import Decimal
+from sqlalchemy import String, Boolean, DateTime, Integer, Numeric, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -46,6 +47,16 @@ class Company(Base):
         nullable=False,
         default="Zahlbar innerhalb von 14 Tagen nach Rechnungseingang ohne Abzug.",
         server_default="Zahlbar innerhalb von 14 Tagen nach Rechnungseingang ohne Abzug.",
+    )
+    # Pauschale GmbH-Ruecklage fuer Kennzahl „Geschaetzte Steuerabgaben“ (Uebersicht).
+    kst_satz_percent: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, default=Decimal("15.00"), server_default="15.00",
+    )
+    soli_auf_kst_percent: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, default=Decimal("5.50"), server_default="5.50",
+    )
+    gewerbe_hebesatz: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=400, server_default="400",
     )
     # Ersteinrichtung abgeschlossen — ein Zustand, keine Heuristik auf Feldinhalten
     # (#99 §4.0). NULL heißt: die Nutzerin war noch nie im Einrichtungsschritt.

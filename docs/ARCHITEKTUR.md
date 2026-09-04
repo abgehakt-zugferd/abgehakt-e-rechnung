@@ -80,6 +80,9 @@ backend/app/
 │   ├── gobd_export.py        # ZIP-Export (CSV + Belege + Audit-Log)
 │   ├── datev_email.py        # SMTP-Versand + DATEV-BCC
 │   ├── crypto.py             # verschlüsselt Secrets in der Datenbank (SMTP-Passwort)
+│   ├── dashboard_kennzahlen.py # USt- und Steuer-Rücklagen-Kennzahlen für die Übersicht
+│   ├── steuer_ruecklage.py   # konfigurierbare GmbH-Pauschale (KSt/GewSt) für Rücklagen
+│   ├── beleg_status.py       # Status-Etiketten Versendet / Nicht versendet in der UI
 │   ├── secret_key.py         # Schlüssel dafür, als Datei im storage-Volume
 │   ├── update_check.py       # Versionsabruf, ausschließlich auf Klick
 │   └── update_banner.py      # was daraus im Seitenkopf erscheint, rein und testbar
@@ -314,6 +317,20 @@ abweicht, bekommt das dort rot; ein „das ist bei uns immer rot" gibt es nicht.
 
 Die Owner-Rolle legt der Entrypoint beim Start selbst an (`scripts/bootstrap_owner.py`), bevor
 Alembic läuft. Von Hand ist dafür nichts zu tun.
+
+## Migrationsskripte (Betriebsumzug)
+
+Unter `backend/scripts/` liegen Werkzeuge für den Umzug aus einer früheren Installation.
+**Kein** Teil der laufenden Web-Oberfläche, nur für den Administrator im Container:
+
+| Skript | Zweck |
+|---|---|
+| `beleg_aus_xml_einspielen.py` | Liest `storage/xml/{nummer}.xml` und `storage/pdfs/{nummer}.pdf`, legt finalisierte Belege in der DB an (Kunde per USt-IdNr.). Option `--alt-system` ruft danach `beleg_migration_nachziehen` auf. |
+| `beleg_migration_nachziehen.py` | Setzt für bereits eingespielte Belege Versandnachweis (`datev_sent_at`), Status **bezahlt**, Versandprotokoll und historischen Bezahlt-Zeitpunkt, ohne erneuten E-Mail-Versand. |
+
+Ablauf und Grenzen: [ANWENDUNG.md § Migration](ANWENDUNG.md#migration-aus-altem-abgehakt).
+Im Entwicklungsstack sind die Skripte über `docker-compose.dev.yml` gemountet; im
+Auslieferungsstack liegen sie im Image (`backend/Dockerfile` kopiert `scripts/`).
 
 ## Tests
 

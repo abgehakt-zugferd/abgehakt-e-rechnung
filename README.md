@@ -24,6 +24,15 @@ lesbar und für die Buchhaltungssoftware des Empfängers auswertbar, in einer Da
 - **Versand** per E-Mail an den Kunden, optional mit Kopie an die Kanzlei und Blindkopie an die
   DATEV-Upload-Adresse, über Ihren eigenen Mailserver.
 - **GoBD-Export:** Prüferpaket mit Belegen, Stammdaten und Änderungsprotokoll für einen Zeitraum.
+- **Übersicht mit Kennzahlen:** Rechnungen gesamt, offene Posten, Bezahlt diesen Monat,
+  Umsatz im laufenden Jahr, **schuldige Umsatzsteuer** (ausgewiesene USt auf gestellten Belegen)
+  und **geschätzte Steuerabgaben** (USt plus pauschale GmbH-Rücklage auf den Nettoumsatz für
+  Rücklagenplanung). Die Steuersätze sind unter Einstellungen konfigurierbar.
+- **Versandstatus in der Liste:** Finalisierte Belege zeigen **Versendet** oder **Nicht versendet**;
+  bezahlte Belege zeigen **Bezahlt**.
+- **Migration aus altem Abgehakt:** Finalisierte Belege (XML + PDF) aus einer früheren Installation
+  einspielen und Versand/Bezahlung aus dem alten System nachziehen (Skripte, siehe
+  [docs/ANWENDUNG.md](docs/ANWENDUNG.md#migration-aus-altem-abgehakt)).
 - **Änderungsprotokoll** für Rechnungen, Kunden und Firmendaten; keine nachträgliche Bearbeitung
   von Positionen an gestellten Belegen.
 - **Update-Prüfung:** optional, nur auf Klick und nach einmaliger Bestätigung; ohne Übertragung
@@ -250,9 +259,10 @@ fehlerhaft.
 ## Tägliche Arbeit
 
 Wie mit dem Programm gearbeitet wird, steht in [docs/ANWENDUNG.md](docs/ANWENDUNG.md): der
-Lebenslauf eines Belegs vom Entwurf bis zum Archiv, Stammdaten, **USt-IdNr. bei VIES prüfen**,
-Gutschriften mit Auszahlung an Beteiligte, und ausführlich der Fall, der die meisten
-Rückfragen erzeugt, nämlich die **Korrektur einer bereits gestellten Rechnung**. Kurz gefasst:
+Lebenslauf eines Belegs vom Entwurf bis zum Archiv, Stammdaten, **Übersicht und Kennzahlen**,
+**USt-IdNr. bei VIES prüfen**, Gutschriften mit Auszahlung an Beteiligte, **Migration aus
+altem Abgehakt**, und ausführlich der Fall, der die meisten Rückfragen erzeugt, nämlich die
+**Korrektur einer bereits gestellten Rechnung**. Kurz gefasst:
 Ein gestellter Beleg wird nie geändert, sondern durch eine Gutschrift aufgehoben und
 gegebenenfalls neu geschrieben.
 

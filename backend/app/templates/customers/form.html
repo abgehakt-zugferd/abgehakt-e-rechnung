@@ -45,7 +45,7 @@
 
         <div class="card space-y-4">
             <h2>STAMMDATEN</h2>
-            {% if customer %}
+            {% if customer and request.state.beleg_integration %}
             {% import "partials/schnittstellen_id.html" as schnittstelle %}
             {{ schnittstelle.feld(customer.id) }}
             {% endif %}
@@ -100,6 +100,22 @@
         <div class="card space-y-4">
             <h2>STEUER &amp; KONTAKT</h2>
             <div>
+                {% set status = customer.ust_status if customer else values.get('ust_status', 'regelbesteuert') %}
+                <label class="label">Umsatzsteuerlicher Status</label>
+                <select name="ust_status" class="input">
+                    <option value="regelbesteuert" {% if status != 'kleinunternehmer' %}selected{% endif %}>Regelbesteuert</option>
+                    <option value="kleinunternehmer" {% if status == 'kleinunternehmer' %}selected{% endif %}>Kleinunternehmer (§ 19 UStG)</option>
+                </select>
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                    Gilt für Gutschriften, die dieses Programm für diesen Beteiligten ausstellt
+                    (Gutschriftverfahren nach § 14 Abs. 2 UStG). Bei Kleinunternehmern wird keine
+                    Umsatzsteuer ausgewiesen: ausgewiesene Steuer würde er nach § 14c Abs. 2 UStG
+                    schulden, auf einem Beleg, den er selbst nicht geschrieben hat.
+                </p>
+            </div>
+
+            <div>
+
                 <label class="label">USt-IdNr. (empfohlen für B2B)</label>
                 <input type="text" name="vat_id" value="{{ (customer.vat_id if customer else values.get('vat_id','')) or '' }}" placeholder="DE und neun Ziffern" class="input font-mono">
                 <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Bei B2B-Rechnungen ueber 10.000 EUR wird die Angabe empfohlen. Existenz und Gueltigkeit nur per Button „Jetzt bei VIES pruefen" (mit Einwilligung, keine Verbindung beim Speichern).</p>

@@ -49,6 +49,13 @@ class Settings(BaseSettings):
     # `uv sync --locked`, weil uv.lock den Projekteintrag mit Version führt (rc=1).
     app_version: str = ""
 
+    # Beleg-Integration (#22). Beide leer heisst "nicht eingerichtet": ohne
+    # Ordner zeigt die Ansicht einen Hinweis statt einer leeren Tabelle, und
+    # ohne eigenen Schluesselpfad gilt der eingebaute (`uebergabe_schluessel`).
+    # Der Ordner wird ausschliesslich GELESEN.
+    uebergaben_ordner: str = ""
+    schluessel_pfad: str = ""
+
     storage_path: Path = Path("/app/storage")
     mustang_jar: Path = Path("/app/lib/Mustang-CLI.jar")
 

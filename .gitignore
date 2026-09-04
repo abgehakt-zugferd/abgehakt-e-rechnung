@@ -3,6 +3,11 @@
 *.env.local
 integration.env
 
+# Probeschluessel der Ketten-Testinstanz (kommen aus den Uebergabepapieren,
+# gehoeren nicht ins Repo und erst recht nicht ins Auslieferungsabbild).
+schluessel-integration/*
+!schluessel-integration/README.md
+
 # DSGVO – Echte Rechnungsdaten (niemals in Git!)
 # storage/ ist ein LAUFZEIT-Volume, kein Repo-Inhalt: Belege (pdfs/xml), der
 # selbstverwaltete `secret.key` (#99 §5.4) und das Firmenlogo der jeweiligen

@@ -26,6 +26,17 @@ class Customer(Base):
     vat_id_vies_name: Mapped[str | None] = mapped_column(String(500))
     vat_id_name_match: Mapped[str | None] = mapped_column(String(20))
     email: Mapped[str | None] = mapped_column(String(255))
+    # Umsatzsteuerlicher Status (#22). Er entscheidet, welche Steuer auf einer
+    # Gutschrift im Gutschriftverfahren steht: `regelbesteuert` -> 7 % nach
+    # § 12 Abs. 2 Nr. 7c UStG (Nutzungsrechte), `kleinunternehmer` -> kein
+    # Ausweis nach § 19 UStG. Die Angabe steht HIER und kommt nie ueber den
+    # Draht: wer als Kleinunternehmer Umsatzsteuer ausgewiesen bekommt,
+    # schuldet sie nach § 14c Abs. 2 UStG, und zwar auf einem Beleg, den er
+    # selbst nicht geschrieben hat.
+    ust_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="regelbesteuert",
+        server_default="regelbesteuert",
+    )
     # Kommagetrennte Liste (#58), gepflegt über `services/empfaenger.py`. Sie steht
     # hier und nicht in `app_config`, weil sie zu DIESEM Kunden gehört: die globale
     # Voreinstellung ginge sonst an jeden anderen Kunden mit in Kopie.

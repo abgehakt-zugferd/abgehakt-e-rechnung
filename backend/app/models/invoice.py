@@ -56,6 +56,13 @@ class Invoice(Base):
     # P7: TypeCode für ZUGFeRD (380=Rechnung, 381=Gutschrift/Storno, 384=Korrektur, 389=Gutschriftverfahren)
     # Wird in zugferd_xml.py verwendet, um den richtigen TypeCode zu setzen
     invoice_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
+    # Herkunft aus einem signierten Uebergabebeleg (#22). Gesetzt heisst: die
+    # Betraege, der Beteiligte und der Leistungszeitraum stammen aus einem Beleg,
+    # der acht Jahre lang die Autoritaet ist. Sie sind deshalb auch im Entwurf
+    # gesperrt: eine Rechnung, die auf einen Beleg zeigt, den sie nicht mehr
+    # wiedergibt, ist schlimmer als eine falsche Rechnung, denn sie sieht belegt aus.
+    uebergabe_beleg_id: Mapped[Optional[str]] = mapped_column(String(64))
+    uebergabe_beleg_sha256: Mapped[Optional[str]] = mapped_column(String(64))
     zugferd_xml: Mapped[Optional[str]] = mapped_column(Text)
     pdf_filename: Mapped[Optional[str]] = mapped_column(String(255))
     datev_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

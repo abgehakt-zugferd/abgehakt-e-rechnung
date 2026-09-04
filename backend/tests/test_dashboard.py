@@ -22,28 +22,36 @@ def _request() -> Request:
     })
 
 
-def _inv(pg_session, status, gross, issue=date.today()):
+def _inv(pg_session, status, gross, issue=date.today(), net=None, tax=None):
     c = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Kunde",
                  address_line1="Weg 1", zip_code="80331", city="München", country="DE")
     pg_session.add(c)
     pg_session.flush()
+    if net is None:
+        net = Decimal(gross) if gross else Decimal("0")
+    if tax is None:
+        tax = Decimal("0")
     inv = Invoice(invoice_number=f"RE-{uuid.uuid4().hex[:6]}", customer_id=c.id,
                   issue_date=issue, due_date=issue, currency="EUR",
-                  net_total=Decimal("0"), tax_total=Decimal("0"),
+                  net_total=net, tax_total=tax,
                   gross_total=Decimal(gross), status=status)
     pg_session.add(inv)
     pg_session.commit()
     return inv
 
 
-def _gutschrift(pg_session, status, gross, issue=date.today()):
+def _gutschrift(pg_session, status, gross, issue=date.today(), net=None, tax=None):
     c = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Kunde",
                  address_line1="Weg 1", zip_code="80331", city="München", country="DE")
     pg_session.add(c)
     pg_session.flush()
+    if net is None:
+        net = Decimal(gross) if gross else Decimal("0")
+    if tax is None:
+        tax = Decimal("0")
     inv = Invoice(invoice_number=f"GS-{uuid.uuid4().hex[:6]}", customer_id=c.id,
                   issue_date=issue, due_date=issue, currency="EUR",
-                  net_total=Decimal("0"), tax_total=Decimal("0"),
+                  net_total=net, tax_total=tax,
                   gross_total=Decimal(gross), status=status,
                   invoice_type="credit_note")
     pg_session.add(inv)
@@ -110,6 +118,45 @@ def test_dashboard_http_zeigt_kennzahlen(client, pg_session):
     assert r.status_code == 200
     assert ">1<" in r.text or "1</p>" in r.text
     assert "100" in r.text
+    assert "SCHULDIGE UMSATZSTEUER" in r.text
+    assert "GESCH. STEUERABGABEN" in r.text
+
+
+def test_dashboard_steuer_kennzahlen_im_kontext(pg_session):
+    from app.models.company import Company
+
+    company = pg_session.get(Company, 1)
+    company.kst_satz_percent = Decimal("15.00")
+    company.soli_auf_kst_percent = Decimal("5.50")
+    company.gewerbe_hebesatz = 400
+    pg_session.commit()
+
+    _inv(
+        pg_session, "issued", "119.00",
+        net=Decimal("100.00"), tax=Decimal("19.00"),
+    )
+    ctx = main.dashboard(_request(), pg_session).context
+    assert Decimal(ctx["vat_liability_ytd"]) == Decimal("19.00")
+    assert Decimal(ctx["steuer_ruecklage_ytd"]) == Decimal("29.83")
+    assert Decimal(ctx["estimated_tax_ytd"]) == Decimal("48.83")  # 19 + 29,825 % von 100
+
+
+def test_dashboard_steuer_kennzahlen_nutzt_einstellungen(pg_session):
+    from app.models.company import Company
+
+    company = pg_session.get(Company, 1)
+    company.kst_satz_percent = Decimal("15.00")
+    company.soli_auf_kst_percent = Decimal("5.50")
+    company.gewerbe_hebesatz = 490
+    pg_session.commit()
+
+    _inv(
+        pg_session, "issued", "119.00",
+        net=Decimal("100.00"), tax=Decimal("19.00"),
+    )
+    ctx = main.dashboard(_request(), pg_session).context
+    # 19 + 100 * 0,32975 = 52,975
+    assert Decimal(ctx["estimated_tax_ytd"]) == Decimal("51.98")
 
 
 def test_dashboard_ytd_ignoriert_gutschriften(pg_session):

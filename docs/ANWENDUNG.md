@@ -50,6 +50,74 @@ Die Firmendaten (Name, Anschrift, Steuernummer oder USt-IdNr., Bankverbindung f�
 **Eingänge**) stehen unter **Einstellungen**. Ohne vollständige Firmendaten bleibt die
 Rechnungserstellung gesperrt.
 
+Unter **Steuer-Rücklage (Übersicht)** legen Sie die pauschale GmbH-Schätzung für die Kennzahl
+**Gesch. Steuerabgaben** fest: Körperschaftsteuer, Solidaritätszuschlag auf die KSt und
+Gewerbehebesatz. Die Übersicht addiert daraus einen Anteil auf den Nettoumsatz (ohne
+Betriebsausgaben im System = Gewinn-Schätzung). Das ist Planungshilfe, keine Steuerberatung.
+
+---
+
+<a id="uebersicht-kennzahlen"></a>
+
+## Übersicht und Kennzahlen
+
+Die Startseite **Übersicht** fasst den Stand zusammen:
+
+| Kennzahl | Bedeutung |
+|---|---|
+| Rechnungen gesamt | Alle Belege in der Datenbank (jeden Status) |
+| Offene Rechnungen | Finalisiert (`gestellt`), noch nicht bezahlt, ohne Gutschriften |
+| Bezahlt diesen Monat | Brutto-Summe der Rechnungen, die **in diesem Kalendermonat** als bezahlt vermerkt wurden (nicht Ausstellungsdatum) |
+| Umsatz lfd. Jahr | Brutto-Umsatz gestellter und bezahlter Rechnungen seit Jahresanfang (ohne Gutschriften) |
+| Schuldige Umsatzsteuer | Summe der auf gestellten Belegen **ausgewiesenen USt** im laufenden Jahr, abzüglich Gutschriften, **ohne Vorsteuerabzug** (das Programm kennt keine Eingangsrechnungen) |
+| Gesch. Steuerabgaben | Schuldige USt plus pauschale **KSt/GewSt-Rücklage** auf den Nettoumsatz (Anteil in den Einstellungen) |
+
+In der Rechnungsliste und auf der Detailseite unterscheidet der Status **Versendet** und
+**Nicht versendet** bei finalisierten Belegen. **Bezahlt** bleibt der Endzustag nach Zahlungseingang.
+
+---
+
+<a id="migration-aus-altem-abgehakt"></a>
+
+## Migration aus altem Abgehakt
+
+Wer von einer früheren Abgehakt-Installation umzieht, braucht pro finalisiertem Beleg die
+**XML** und das **ZUGFeRD-PDF** im Archiv (`storage/xml/` und `storage/pdfs/`). Die
+Datenbank allein reicht nicht: die Dateien sind der GoBD-Beleg.
+
+### Einspielen neuer Belege
+
+Im Container (Entwicklungsstack mit gemountetem `backend/scripts/`):
+
+```bash
+docker exec abgehakt_app python scripts/beleg_aus_xml_einspielen.py Z-2026-002 Z-2026-004
+```
+
+Mit `--alt-system` werden nach dem Einspielen automatisch **Versand** und **Bezahlt** aus dem
+alten System nachgezogen (siehe unten). Der Kunde muss bereits im Stamm stehen (Abgleich über
+die USt-IdNr. aus der XML).
+
+### Nachziehen bei bereits importierten Belegen
+
+Der XML-Import legt Belege nur als **gestellt** an. Wer im alten Tool schon versendet und
+bezahlt hat, nutzt:
+
+```bash
+docker exec abgehakt_app python scripts/beleg_migration_nachziehen.py Z-2026-002 Z-2026-004
+```
+
+Das Skript setzt, sofern noch leer:
+
+- `datev_sent_at` auf das **Rechnungsdatum** (Erstversand),
+- den Status **bezahlt** (falls noch `gestellt`),
+- einen Eintrag im **Versandprotokoll** (Hinweis: historischer Versand, kein erneuter Mailversand),
+- den Bezahlt-Zeitpunkt (`updated_at`) auf das **Fälligkeitsdatum**, damit „Bezahlt diesen Monat“
+  nicht fälschlich den Umzugmonat zeigt.
+
+Exakte Versand- oder Zahlungsdaten aus dem alten System können nur per Skript-Anpassung oder
+direkter Datenbankkorrektur gesetzt werden; die Standard-Schätzung ist bewusst aus
+Rechnungs- und Fälligkeitsdatum.
+
 ---
 
 <a id="ust-idnr-bei-vies-prufen"></a>

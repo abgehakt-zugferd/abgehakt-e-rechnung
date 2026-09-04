@@ -1,8 +1,14 @@
-"""Kunden-UI: Schnittstellen-ID (UUID) fuer Abrechnungsauftrag — #66."""
+"""Kunden-UI: Schnittstellen-ID (UUID) fuer Abrechnungsauftrag - #66.
+
+Seit #22 haengt die Anzeige am Schalter der Beleg-Integration: ohne ihn gibt es
+sie nicht. Diese Tests schalten ihn deshalb ein; dass er ausgeschaltet wirkt,
+misst tests/test_beleg_integration_schalter.py.
+"""
 import uuid
 
 from app.database import get_db
 from app.main import app
+from app.models.app_config import AppConfig
 from app.models.customer import Customer
 from fastapi.testclient import TestClient
 
@@ -13,6 +19,12 @@ def teardown_function():
 
 def _client(pg_session):
     app.dependency_overrides[get_db] = lambda: pg_session
+    cfg = pg_session.query(AppConfig).filter(AppConfig.id == 1).first()
+    if cfg is None:
+        cfg = AppConfig(id=1)
+        pg_session.add(cfg)
+    cfg.beleg_integration_aktiv = True
+    pg_session.commit()
     return TestClient(app, follow_redirects=False)
 
 

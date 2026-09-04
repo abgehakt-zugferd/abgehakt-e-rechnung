@@ -65,7 +65,7 @@
                         <th class="table-header" style="padding:10px 14px; text-align:left;">FÄLLIGKEIT</th>
                         <th class="table-header" style="padding:10px 14px; text-align:right;">BRUTTO</th>
                         <th class="table-header" style="padding:10px 14px; text-align:left;">STATUS</th>
-                        <th class="table-header" style="padding:10px 14px; text-align:left;">DATEV</th>
+                        <th class="table-header" style="padding:10px 14px; text-align:left;">VERSAND</th>
                         <th class="table-header" style="padding:10px 14px; text-align:right;"></th>
                     </tr>
                 </thead>
@@ -87,7 +87,7 @@
                         <td style="padding:10px 14px;">
                             {# .get statt [..]: ein unbekannter Status wirft sonst KeyError
                                und nimmt die ganze Seite mit, nicht nur das Etikett. #}
-                            <span class="badge badge-{{ inv.status }}">{{ {'draft':'Entwurf','issued':'Gestellt','paid':'Bezahlt','cancelled':'Storniert','discarded':'Verworfen'}.get(inv.status, inv.status) }}</span>
+                            <span class="badge badge-{{ inv.status|beleg_badge(inv.datev_sent_at) }}">{{ inv.status|beleg_etikett(inv.datev_sent_at) }}</span>
                         </td>
                         <td style="padding:10px 14px;">
                             {% if inv.datev_sent_at %}

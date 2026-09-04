@@ -53,6 +53,20 @@
     </div>
     {% endif %}
 
+    {% set aus_beleg = invoice and invoice.uebergabe_beleg_sha256 %}
+    {% if aus_beleg %}
+    <div style="margin-bottom:16px; padding:12px 16px; background:rgba(0,229,255,0.05); border:2px solid rgba(0,229,255,0.25);">
+        <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--cyan); margin-bottom:8px;">AUS EINEM SIGNIERTEN BELEG</p>
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); line-height:1.5;">
+            Die mit <strong style="color:var(--cyan);">aus dem Beleg</strong> gekennzeichneten Felder
+            sind übernommen und deshalb gesperrt: Beteiligter, Leistungszeitraum und die
+            Netto-Beträge der Positionen. Steuer, Beschreibungen und Freitexte lassen sich ändern.
+            Ist ein Netto-Betrag falsch, ist der Beleg falsch: dann wird er abgelehnt und der
+            Absender erzeugt einen neuen.
+        </p>
+    </div>
+    {% endif %}
+
     <form {% if not invoice %}id="rechnung-anlegen" {% endif %}method="post"
           action="{% if invoice %}/invoices/{{ invoice.id }}/bearbeiten{% else %}/invoices/neu{% endif %}"
           @submit="prepareSubmit">
@@ -72,12 +86,18 @@
                            Formular gar nicht erst abschicken und die getippte Arbeit wäre
                            beim Wegklicken verloren. Pflicht wird der Kunde beim
                            Finalisieren (BUYER_MISSING), und dort ist es fail-closed. #}
-                        <select name="customer_id" class="input" @change="updateCustomerEmail($event)">
+                        <select name="customer_id" class="input" @change="updateCustomerEmail($event)"
+                                {% if aus_beleg %}disabled title="aus dem Beleg übernommen"{% endif %}>
                             <option value="">– noch offen –</option>
                             {% for c in customers %}
                             <option value="{{ c.id }}" data-email="{{ c.email or '' }}" {% if invoice and c.id == invoice.customer_id %}selected{% endif %}>{{ c.name }} ({{ c.customer_number }})</option>
                             {% endfor %}
                         </select>
+                        {% if aus_beleg %}
+                        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--cyan); margin-top:6px;">
+                            aus dem Beleg übernommen: die Kennung des Beteiligten steht im signierten Dokument.
+                        </p>
+                        {% endif %}
                         <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); line-height:1.5; margin-top:6px;">
                             Kann nachgetragen werden. Zum Finalisieren wird der Kunde
                             gebraucht, für den Entwurf nicht. Noch nicht im Stamm?
@@ -130,7 +150,8 @@
                                             <label class="label">Menge *</label>
                                             <input type="number" x-model="item.quantity" min="0" step="any" required
                                                    class="input" style="font-size:var(--fs-gross); padding:6px 8px; text-align:right;"
-                                                   @input="calcLine(idx)">
+                                                   @input="calcLine(idx)"
+                                                   {% if aus_beleg %}readonly title="aus dem Beleg übernommen"{% endif %}>
                                         </div>
                                         <div>
                                             <label class="label">Einheit</label>
@@ -146,8 +167,10 @@
                                         </div>
                                         <div>
                                             <label class="label">Preis (netto) *</label>
+                                            {% if aus_beleg %}<span style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--cyan);">aus dem Beleg</span>{% endif %}
                                             <input type="number" x-model="item.unit_price" min="0" step="any" required
                                                    class="input" style="font-size:var(--fs-gross); padding:6px 8px; text-align:right;"
+                                                   {% if aus_beleg %}readonly title="aus dem Beleg übernommen"{% endif %}
                                                    @input="calcLine(idx)">
                                         </div>
                                         <div>
@@ -236,11 +259,15 @@
                     </div>
                     <div>
                         <label class="label">Leistungszeitraum von</label>
-                        <input type="date" name="service_period_start" value="{{ invoice.service_period_start.isoformat() if invoice and invoice.service_period_start else '' }}" class="input">
+                        <input type="date" name="service_period_start" value="{{ invoice.service_period_start.isoformat() if invoice and invoice.service_period_start else '' }}" class="input"
+                               {% if aus_beleg %}readonly title="aus dem Beleg übernommen"{% endif %}>
+                        {% if aus_beleg %}<p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--cyan);">aus dem Beleg übernommen</p>{% endif %}
                     </div>
                     <div>
                         <label class="label">Leistungszeitraum bis</label>
-                        <input type="date" name="service_period_end" value="{{ invoice.service_period_end.isoformat() if invoice and invoice.service_period_end else '' }}" class="input">
+                        <input type="date" name="service_period_end" value="{{ invoice.service_period_end.isoformat() if invoice and invoice.service_period_end else '' }}" class="input"
+                               {% if aus_beleg %}readonly title="aus dem Beleg übernommen"{% endif %}>
+                        {% if aus_beleg %}<p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--cyan);">aus dem Beleg übernommen</p>{% endif %}
                         <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Für Quartalsabrechnungen und Tantiemen: von und bis gemeinsam setzen. Ersetzt das Einzeldatum für die Pflichtangabe.</p>
                     </div>
                     <div>

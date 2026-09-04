@@ -20,9 +20,10 @@ from app.services.customer_guard import CustomerDeleteError
 from app.services.invoice_guard import InvoiceStateError
 from app.routers import (
     customers, invoices, settings as settings_router, export, setup,
-    updates, archive,
+    updates, archive, uebergaben,
 )
 from app.dependencies.herkunft import pruefe_herkunft
+from app.dependencies.beleg_integration_dep import lade_beleg_integration
 from app.dependencies.update_banner_dep import load_update_banner
 from app.config import get_settings
 from app.installation import is_testinstanz, testinstanz_mail_to
@@ -31,6 +32,13 @@ from app.services.customer_guard import register_customer_guard
 from app.services.invoice_guard import register_invoice_guard
 from app.branding import PRODUCT_NAME, register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
+from app.services.dashboard_kennzahlen import (
+    geschaetzte_steuerabgaben,
+    gmbh_ruecklage_ytd,
+    nettoumsatz_ytd,
+    schuldige_umsatzsteuer_ytd,
+)
+from app.services.steuer_ruecklage import steuerruecklage_anteil_prozent
 
 # GoBD: Statusmaschinen-Guards + Audit-Log — Registrierung beim App-Import,
 # damit ausnahmslos jede Session (Web, Skripte) erfasst wird.
@@ -87,7 +95,11 @@ app = FastAPI(
     # `pruefe_herkunft` ZUERST: sie weist eine fremde Anfrage ab, bevor
     # irgendeine Route nachsieht, ob es den angefragten Datensatz gibt — sonst
     # verriete schon die Antwort (403 gegen 404), welche Kennungen vergeben sind.
-    dependencies=[Depends(pruefe_herkunft), Depends(load_update_banner)],
+    dependencies=[
+        Depends(pruefe_herkunft),
+        Depends(load_update_banner),
+        Depends(lade_beleg_integration),
+    ],
 )
 templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
@@ -116,6 +128,7 @@ app.include_router(export.router, prefix="/export", tags=["GoBD-Export"])
 app.include_router(archive.router, tags=["Archiv"])
 app.include_router(updates.router, prefix="/updates", tags=["Updates"])
 app.include_router(setup.router, prefix="/setup", tags=["Ersteinrichtung"])
+app.include_router(uebergaben.router, prefix="/uebergaben", tags=["Beleg-Integration"])
 
 
 # Überschrift und Ersatztext je Statuscode. Starlette setzt ohne eigenen Text die
@@ -257,6 +270,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     today = date.today()
     first_of_month = today.replace(day=1)
     month_start = datetime(first_of_month.year, first_of_month.month, 1, tzinfo=timezone.utc)
+    year_start = today.replace(month=1, day=1)
 
     total_invoices = db.query(func.count(Invoice.id)).scalar() or 0
     standard = Invoice.invoice_type.is_(None)
@@ -282,9 +296,14 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     revenue_ytd = (
         db.query(func.coalesce(func.sum(Invoice.gross_total), 0))
         .filter(Invoice.status.in_(["issued", "paid"]), standard,
-                Invoice.issue_date >= today.replace(month=1, day=1))
+                Invoice.issue_date >= year_start)
         .scalar()
     ) or Decimal("0")
+
+    vat_liability_ytd = schuldige_umsatzsteuer_ytd(db, year_start)
+    net_revenue_ytd = nettoumsatz_ytd(db, year_start)
+    steuer_ruecklage_ytd = gmbh_ruecklage_ytd(net_revenue_ytd, company)
+    estimated_tax_ytd = geschaetzte_steuerabgaben(vat_liability_ytd, net_revenue_ytd, company)
 
     recent_invoices = (
         db.query(Invoice)
@@ -302,5 +321,9 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         "draft_count": draft_count,
         "paid_this_month": paid_this_month,
         "revenue_ytd": revenue_ytd,
+        "vat_liability_ytd": vat_liability_ytd,
+        "steuer_ruecklage_ytd": steuer_ruecklage_ytd,
+        "estimated_tax_ytd": estimated_tax_ytd,
+        "steuer_ruecklage_anteil_prozent": steuerruecklage_anteil_prozent(company),
         "recent_invoices": recent_invoices,
     })

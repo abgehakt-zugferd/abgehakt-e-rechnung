@@ -47,6 +47,19 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
+# Formatvektoren (abgehakt#72): der Ordner liegt ausserhalb dieses Repositoriums und
+# wird nicht mitgeliefert. Pfad aus UEBERGABE_VEKTOREN; ohne die Variable wird nicht
+# gemessen, und tests/vektoren/ sammelt nichts ein - kein Skip, denn ein fehlender
+# Ordner ist kein fehlgeschlagener Test, und der Skip-Guard wuerde sonst jeden Lauf
+# blockieren. Dass nicht gemessen wurde, sagt pytest am Ende jedes Laufs.
+vektor_args=()
+if [ -n "${UEBERGABE_VEKTOREN:-}" ] && [ -f "${UEBERGABE_VEKTOREN}/protokoll.json" ]; then
+  echo ">> Formatvektoren gefunden, read-only gemountet."
+  vektor_args=(-v "$(cd "${UEBERGABE_VEKTOREN}" && pwd):/vektoren:ro" -e UEBERGABE_VEKTOREN=/vektoren)
+else
+  echo ">> Formatvektoren nicht gesetzt (UEBERGABE_VEKTOREN): tests/vektoren/ laeuft nicht."
+fi
+
 echo ">> Läuft Suite im Container (Working-Tree app/ + tests/ gemountet, read-only) ..."
 # -rs zeigt Skip-Gründe: im Container sollte NICHTS wegen fehlendem Mustang/GS/Postgres skippen.
 docker run --rm \
@@ -59,4 +72,5 @@ docker run --rm \
   -e DB_APP_PASSWORD="test-app-passwort-nur-fuer-testlauf" \
   -v "$(pwd)/app:/app/app:ro" \
   -v "$(pwd)/tests:/app/tests:ro" \
+  ${vektor_args[@]+"${vektor_args[@]}"} \
   "${IMAGE}" python -m pytest -q -rs "$@"

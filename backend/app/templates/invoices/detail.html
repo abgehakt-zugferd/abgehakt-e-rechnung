@@ -21,8 +21,8 @@
                 <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">{{ invoice.customer.name if invoice.customer else '–' }}</p>
             </div>
         </div>
-        <span class="badge badge-{{ invoice.status }}" style="font-size:var(--fs-klein); padding:5px 10px;">
-            {{ {'draft':'Entwurf','issued':'Gestellt','paid':'Bezahlt','cancelled':'Storniert','discarded':'Verworfen'}.get(invoice.status, invoice.status) }}
+        <span class="badge badge-{{ invoice.status|beleg_badge(invoice.datev_sent_at) }}" style="font-size:var(--fs-klein); padding:5px 10px;">
+            {{ invoice.status|beleg_etikett(invoice.datev_sent_at) }}
         </span>
     </div>
 
@@ -188,7 +188,7 @@
                         <p style="color:var(--text-hi);">{{ invoice.archive_until.strftime('%d.%m.%Y') if invoice.archive_until else '–' }}</p>
                     </div>
                     <div>
-                        <p class="label">DATEV gesendet</p>
+                        <p class="label">Versendet am</p>
                         <p style="color:{% if invoice.datev_sent_at %}var(--green){% else %}var(--text-dim){% endif %};">{{ invoice.datev_sent_at.strftime('%d.%m.%Y %H:%M') if invoice.datev_sent_at else '–' }}</p>
                     </div>
                 </div>
