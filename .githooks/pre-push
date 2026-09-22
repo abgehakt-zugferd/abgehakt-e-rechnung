@@ -4,6 +4,20 @@
 # der Host hat keine App-Dependencies. Siehe CONTRIBUTING.md.
 set -uo pipefail
 
+# Git startet Hooks mit gesetzten Repo-Variablen. Im verlinkten Worktree ist
+# GIT_DIR absolut und zeigt aufs Eltern-Repo. Geerbt zeigt dann das REPOSITORY
+# (Objekte, Refs, Index) aufs Eltern-Repo, waehrend der ARBEITSBAUM der
+# richtige bleibt: ohne GIT_WORK_TREE ist das cwd. Schreibbefehle landen
+# deshalb im fremden Repo — so entstehen Fremd-Commits mit dem Inhalt des
+# eigenen Arbeitsbaums. Lesebefehle scheitern nicht, sie luegen: aus der Wurzel
+# stimmt `rev-parse --show-toplevel` versehentlich, aus einem Unterordner
+# antwortet es mit dem Unterordner. Betroffen ist JEDER git-Aufruf unterhalb
+# des Hooks — die Testskripte ebenso wie die Werkzeuge, die von sich aus git
+# rufen (composer, npm). Herkunft und Messprotokoll: Repo
+# claude-global-skills, Skill tdd.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
+      GIT_COMMON_DIR GIT_NAMESPACE GIT_QUARANTINE_PATH
+
 cd "$(git rev-parse --show-toplevel)"
 
 # Datenwache (#49): nur neu hinzukommende Zeilen der gepushten Commits. Liest stdin
