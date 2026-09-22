@@ -18,7 +18,14 @@ set -uo pipefail
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
       GIT_COMMON_DIR GIT_NAMESPACE GIT_QUARANTINE_PATH
 
-cd "$(git rev-parse --show-toplevel)"
+# Zwei Schritte, nicht einer: `cd "$(git rev-parse ...)"` sieht aus wie ein
+# Waechter, ist aber keiner. Scheitert rev-parse, ist die Ersetzung leer, und
+# `cd ""` liefert in bash Exit 0 — geprueft wird der Ausgang von cd, nicht der
+# von rev-parse. Der Hook lief dann im Aufrufverzeichnis weiter und startete
+# Datenwache und Wachen dort (gemessen 2026-09-22, test_pre_push_waechter.sh).
+wurzel="$(git rev-parse --show-toplevel)" || exit 1
+[ -n "$wurzel" ] || { echo "pre-push: Repo-Wurzel nicht bestimmbar." >&2; exit 1; }
+cd "$wurzel" || exit 1
 
 # Datenwache (#49): nur neu hinzukommende Zeilen der gepushten Commits. Liest stdin
 # (pre-push-Refs); nichts anderes darf stdin vorher verbrauchen.

@@ -28,6 +28,9 @@ jobs:
       - name: Datenwache (Charakterisierungstests)
         run: .githooks/test_datenwache.sh
 
+      - name: Pre-Push-Waechter (Wurzelaufloesung)
+        run: .githooks/test_pre_push_waechter.sh
+
   test:
     runs-on: ubuntu-latest
     steps:
