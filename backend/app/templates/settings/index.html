@@ -46,7 +46,8 @@
             </div>
             <div>
                 <label class="label">Land</label>
-                <input type="text" name="country" value="{{ company.country }}" class="input" style="max-width:80px;">
+                {% import "partials/land_auswahl.html" as land_auswahl %}
+                {{ land_auswahl.land_auswahl('country', company.country) }}
             </div>
 
             <div style="border-top:1px solid var(--border); padding-top:16px;">

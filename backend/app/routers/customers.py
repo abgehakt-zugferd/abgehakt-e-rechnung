@@ -24,11 +24,13 @@ from app.services.abrechnungsauftrag_wirkung import STEUER_AUS_STATUS
 from app.services.adresse import bereinige_adresszeile2
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
+from app.laender import registriere_laender_globals
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
 registriere_darstellungsfilter(templates)
+registriere_laender_globals(templates)
 
 
 def _render_form(request: Request, customer, suggested_number: str, values: dict, error: str | None,

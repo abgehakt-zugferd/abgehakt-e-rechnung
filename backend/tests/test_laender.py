@@ -1,0 +1,243 @@
+"""Laenderliste fuer die Landesauswahl in den Formularen (#75).
+
+Bisher kannten die Formulare nur DE, AT, CH und US — ein Kunde in Finnland
+liess sich ueber die Oberflaeche nicht anlegen. Die Liste steht seitdem genau
+einmal, in `app/laender.py`, und wird als Jinja-Global in die drei Router
+gegeben, die ein Landfeld rendern (Kunden, Einstellungen, Einrichtung).
+
+Griechenland traegt zwei Codes, und das ist kein Fehler: gespeichert und in
+der ZUGFeRD-XML steht `GR` (ISO 3166-1), VIES kennt Griechenland als `EL`.
+Die Abbildung lebt in `services/ust_id_pruefung._VIES_LAENDER` und wird hier
+nur festgehalten, nicht verdoppelt.
+"""
+import re
+import uuid
+from datetime import date
+from decimal import Decimal
+
+import pytest
+from fastapi.templating import Jinja2Templates
+
+from app.laender import EU_LAENDER, LAENDER, ist_eu, registriere_laender_globals
+from app.models.customer import Customer
+from app.services import mustang, pdfa
+from app.services.ust_id_pruefung import aufteilen_ust_id
+
+
+def _faltung(name: str) -> str:
+    """Sortierschluessel nach deutscher Alphabet-Ordnung (Umlaut = Grundbuchstabe)."""
+    return (
+        name.casefold()
+        .replace("ä", "a")
+        .replace("ö", "o")
+        .replace("ü", "u")
+    )
+
+
+def test_liste_hat_genau_47_eintraege():
+    assert len(LAENDER) == 47
+
+
+def test_deutschland_steht_an_erster_stelle():
+    assert LAENDER[0] == ("DE", "Deutschland")
+
+
+def test_danach_alphabetisch_nach_deutschem_namen():
+    namen = [name for _, name in LAENDER[1:]]
+    assert namen == sorted(namen, key=_faltung)
+
+
+def test_codes_sind_eindeutig_und_iso_alpha2():
+    codes = [code for code, _ in LAENDER]
+    assert len(codes) == len(set(codes))
+    for code in codes:
+        assert len(code) == 2 and code.isalpha() and code.isupper()
+
+
+def test_finnland_und_griechenland_sind_enthalten():
+    codes = {code for code, _ in LAENDER}
+    assert "FI" in codes
+    assert "GR" in codes
+
+
+def test_ist_eu():
+    assert ist_eu("FI") is True
+    assert ist_eu("GR") is True
+    assert ist_eu("CH") is False
+    assert ist_eu("US") is False
+
+
+def test_eu_laender_sind_die_27_mitgliedstaaten():
+    assert len(EU_LAENDER) == 27
+    assert EU_LAENDER <= {code for code, _ in LAENDER}
+
+
+def test_griechenland_gr_gespeichert_vies_liefert_el():
+    """GR ist der gespeicherte ISO-Code; die VIES-Abbildung bildet danach EL."""
+    assert ist_eu("GR") is True
+    assert ("GR", "Griechenland") in LAENDER
+    land, nummer = aufteilen_ust_id("GR123456789")
+    assert land == "EL"
+    assert nummer == "123456789"
+
+
+def test_registriere_laender_globals_setzt_globals_je_instanz():
+    """Jeder Router haelt sein eigenes Jinja-Environment — die Globals muessen
+    je Instanz gesetzt werden (dieselbe Lage wie bei branding/darstellung)."""
+    templates = Jinja2Templates(directory="app/templates")
+    registriere_laender_globals(templates)
+    assert templates.env.globals["LAENDER"] is LAENDER
+    assert templates.env.globals["ist_eu"] is ist_eu
+
+
+def _render_makro(gewaehlt: str) -> str:
+    templates = Jinja2Templates(directory="app/templates")
+    registriere_laender_globals(templates)
+    return templates.env.get_template("partials/land_auswahl.html").module.land_auswahl(
+        "country", gewaehlt
+    )
+
+
+def test_makro_rendert_volle_liste():
+    html = _render_makro("DE")
+    assert html.count("<option") == 47
+    assert 'value="FI"' in html
+
+
+def test_makro_markiert_das_gewaehlte_land():
+    html = _render_makro("FI")
+    assert '<option value="FI" selected>Finnland (FI)</option>' in html
+    assert html.count("selected") == 1
+
+
+def test_makro_laesst_umlaut_namen_unbeschaedigt():
+    html = _render_makro("DE")
+    assert "Österreich" in html
+    assert "Türkei" in html
+
+
+# ------------------------------------------------------- Formulare (HTTP)
+
+def _land_select(html: str) -> str:
+    """Den <select name="country">-Block aus einer gerenderten Antwort holen."""
+    treffer = re.search(r'<select name="country".*?</select>', html, re.S)
+    assert treffer, "kein <select name=\"country\"> in der Antwort"
+    return treffer.group(0)
+
+
+def test_kundenformular_zeigt_die_volle_laenderliste(client):
+    r = client.get("/customers/neu")
+    assert r.status_code == 200
+    block = _land_select(r.text)
+    assert block.count("<option") == 47
+    assert 'value="FI"' in block
+    # Vorgabe fuer einen neuen Kunden bleibt Deutschland.
+    assert '<option value="DE" selected>' in block
+
+
+def test_einstellungen_zeigen_die_volle_laenderliste(client):
+    r = client.get("/settings/")
+    assert r.status_code == 200
+    block = _land_select(r.text)
+    assert block.count("<option") == 47
+    assert 'value="FI"' in block
+
+
+def test_umlaut_name_kommt_unbeschaedigt_durch_die_antwort(client):
+    """Ein Umlaut-Name muss unbeschaedigt durch Vorlage UND HTTP-Antwort —
+    eine reine Code-Pruefung wuerde ein kaputtes Encoding nicht fangen."""
+    r = client.get("/settings/")
+    assert r.status_code == 200
+    assert "Österreich" in r.text
+    assert "Türkei" in r.text
+
+
+def test_einrichtung_zeigt_die_volle_laenderliste(client):
+    r = client.get("/setup")
+    assert r.status_code == 200
+    block = _land_select(r.text)
+    assert block.count("<option") == 47
+    assert 'value="FI"' in block
+
+
+def test_unbekannter_gespeicherter_code_bleibt_ausgewaehlt(client, pg_session):
+    """Rueckfall fuer Bestandsdaten: steht im Datensatz ein Code, den LAENDER
+    nicht kennt, rendert das Makro ihn als zusaetzliche ausgewaehlte Option.
+    Ohne den Rueckfall setzte ein Speichern des Formulars den Kunden
+    stillschweigend auf den ersten Listeneintrag."""
+    kunde = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Bestand AG",
+                     address_line1="Weg 1", zip_code="10115", city="Berlin",
+                     country="JP")
+    pg_session.add(kunde)
+    pg_session.commit()
+
+    r = client.get(f"/customers/{kunde.id}/bearbeiten")
+    assert r.status_code == 200
+    block = _land_select(r.text)
+    assert '<option value="JP" selected>JP</option>' in block
+
+    pg_session.expire_all()
+    assert pg_session.get(Customer, kunde.id).country == "JP"
+
+
+# ------------------------------------------- End-to-End bis in die XML
+
+@pytest.mark.skipif(
+    not (mustang.jar_available() and pdfa.gs_available()),
+    reason="Mustang-JAR oder Ghostscript nicht verfügbar",
+)
+def test_finnischer_kunde_landet_als_fi_in_der_kaeufer_xml(pg_session):
+    """#75: der gespeicherte Code laeuft unveraendert in ram:CountryID des
+    Kaeufers — ein Kunde in Finnland erzeugt eine Rechnung mit FI, nicht mit
+    einem Ersatzland. Echte Pipeline (draft → pruefen → finalisieren) gegen
+    echtes Postgres, wie in test_finalize_e2e.py."""
+    from fastapi.testclient import TestClient
+
+    from app.config import get_settings
+    from app.database import get_db
+    from app.main import app
+    from app.models.invoice import Invoice, InvoiceItem
+
+    kunde = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}",
+                     name="Helsinki Oy", address_line1="Mannerheimintie 1",
+                     zip_code="00100", city="Helsinki", country="FI")
+    pg_session.add(kunde)
+    pg_session.flush()
+    netto = Decimal("200.00")
+    steuer = Decimal("38.00")
+    nummer = f"RE-FI-{uuid.uuid4().hex[:6]}"
+    rechnung = Invoice(invoice_number=nummer, customer_id=kunde.id,
+                       issue_date=date(2026, 9, 23), delivery_date=date(2026, 9, 23),
+                       due_date=date(2026, 10, 7), currency="EUR",
+                       net_total=netto, tax_total=steuer, gross_total=netto + steuer,
+                       tax_category="S", status="draft",
+                       payment_terms="Zahlbar innerhalb 14 Tagen.")
+    rechnung.items = [InvoiceItem(position=1, description="Beratungsleistung",
+                                  unit="Std", quantity=Decimal("2"),
+                                  unit_price=Decimal("100.00"), tax_rate=Decimal("19"),
+                                  net_amount=netto, tax_amount=steuer,
+                                  gross_amount=netto + steuer)]
+    pg_session.add(rechnung)
+    pg_session.commit()
+
+    app.dependency_overrides[get_db] = lambda: pg_session
+    try:
+        client = TestClient(app, follow_redirects=False)
+        assert client.post(f"/invoices/{rechnung.id}/pruefen").status_code == 303
+        assert client.post(f"/invoices/{rechnung.id}/finalisieren").status_code == 303
+    finally:
+        app.dependency_overrides.clear()
+
+    pg_session.expire_all()
+    satz = pg_session.get(Invoice, rechnung.id)
+    assert satz.status == "issued"
+    kaeufer = re.search(
+        r"<ram:BuyerTradeParty>.*?</ram:BuyerTradeParty>", satz.zugferd_xml, re.S
+    )
+    assert kaeufer, "kein BuyerTradeParty in der erzeugten XML"
+    assert "<ram:CountryID>FI</ram:CountryID>" in kaeufer.group(0)
+
+    einstellungen = get_settings()
+    (einstellungen.storage_path / "pdfs" / f"{nummer}.pdf").unlink(missing_ok=True)
+    (einstellungen.storage_path / "pdfs" / f"{nummer}_visual.pdf").unlink(missing_ok=True)
+    (einstellungen.storage_path / "xml" / f"{nummer}.xml").unlink(missing_ok=True)

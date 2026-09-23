@@ -79,12 +79,8 @@
             <div>
                 <label class="label">Land</label>
                 {% set sel_country = customer.country if customer else (values.get('country') or 'DE') %}
-                <select name="country" class="input">
-                    <option value="DE" {% if sel_country == 'DE' %}selected{% endif %}>Deutschland (DE)</option>
-                    <option value="AT" {% if sel_country == 'AT' %}selected{% endif %}>Österreich (AT)</option>
-                    <option value="CH" {% if sel_country == 'CH' %}selected{% endif %}>Schweiz (CH)</option>
-                    <option value="US" {% if sel_country == 'US' %}selected{% endif %}>USA (US)</option>
-                </select>
+                {% import "partials/land_auswahl.html" as land_auswahl %}
+                {{ land_auswahl.land_auswahl('country', sel_country) }}
             </div>
             <div>
                 <label class="label">Status</label>

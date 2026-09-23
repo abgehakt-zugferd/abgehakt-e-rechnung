@@ -1,0 +1,26 @@
+{#
+  Landesauswahl fuer alle Formulare mit Landfeld (#75).
+
+  Die Liste kommt aus dem Jinja-Global LAENDER (app/laender.py), das jeder
+  Router mit Landfeld einzeln registriert — jeder Router haelt in diesem
+  Projekt sein eigenes Jinja-Environment (dieselbe Lage wie bei
+  branding/darstellung). Fehlt die Registrierung, faellt das nicht beim
+  Start auf, sondern erst beim Aufruf der Seite.
+
+  Wache: tests/test_laender.py
+#}
+{% macro land_auswahl(name, gewaehlt) %}
+{% set bekannte_codes = LAENDER | map(attribute=0) | list %}
+<select name="{{ name }}" class="input">
+    {% for code, bezeichnung in LAENDER %}
+    <option value="{{ code }}" {% if gewaehlt == code %}selected{% endif %}>{{ bezeichnung }} ({{ code }})</option>
+    {% endfor %}
+    {# Rueckfall fuer Bestandsdaten: ein gespeicherter Code, den LAENDER nicht
+       kennt, bekommt eine zusaetzliche ausgewaehlte Option mit dem Code als
+       Beschriftung. Ohne ihn setzte ein Speichern des Formulars den
+       Datensatz stillschweigend auf den ersten Listeneintrag. #}
+    {% if gewaehlt and gewaehlt not in bekannte_codes %}
+    <option value="{{ gewaehlt }}" selected>{{ gewaehlt }}</option>
+    {% endif %}
+</select>
+{% endmacro %}
