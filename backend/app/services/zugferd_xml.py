@@ -31,7 +31,7 @@ class NonCompliantProfileError(ValueError):
 # (BT-120 Text oder BT-121 Code). Fachlich verlangt § 14 Abs. 4 Nr. 8 UStG
 # denselben Hinweis auf dem Beleg. Kein Eintrag hier ⇒ keine Rechnung.
 EXEMPTION_REASONS = {
-    "AE": "Steuerschuldnerschaft des Leistungsempfängers gemäß § 13b UStG (Reverse Charge). Die Umsatzsteuer ist vom Leistungsempfänger zu entrichten.",
+    "AE": "Steuerschuldnerschaft des Leistungsempfängers / reverse charge, Art. 196 Council Directive 2006/112/EC",
     "E": "Kein Ausweis von Umsatzsteuer, da Kleinunternehmer gemäß § 19 UStG.",
     "K": "Steuerfreie innergemeinschaftliche Lieferung gemäß § 4 Nr. 1b UStG i.V.m. § 6a UStG.",
     "O": "Nicht im Steuergebiet des Ausstellers steuerbar gemäß § 3a Abs. 2 UStG.",
