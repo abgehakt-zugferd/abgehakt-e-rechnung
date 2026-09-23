@@ -69,19 +69,10 @@ LAENDER: tuple[tuple[str, str], ...] = (
     ("CY", "Zypern"),
 )
 
-EU_LAENDER: frozenset[str] = frozenset({
-    "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "GR", "HR",
-    "HU", "IE", "IT", "LT", "LU", "LV", "MT", "NL", "AT", "PL", "PT", "RO",
-    "SE", "SI", "SK",
-})
-
-
-def ist_eu(code: str) -> bool:
-    return code in EU_LAENDER
 
 
 def registriere_laender_globals(templates: Jinja2Templates) -> None:
-    """Macht `LAENDER` und `ist_eu` in einem Jinja-Environment verfügbar.
+    """Macht `LAENDER` in einem Jinja-Environment verfügbar.
 
     Muss JEDE Instanz einzeln bekommen, die ein Landfeld rendert (Kunden,
     Einstellungen, Einrichtung) — dieselbe Lage wie bei
@@ -89,4 +80,3 @@ def registriere_laender_globals(templates: Jinja2Templates) -> None:
     nicht beim Start auf, sondern erst beim Aufruf seiner Seite.
     """
     templates.env.globals["LAENDER"] = LAENDER
-    templates.env.globals["ist_eu"] = ist_eu
