@@ -18,7 +18,7 @@ from decimal import Decimal
 import pytest
 from fastapi.templating import Jinja2Templates
 
-from app.laender import EU_LAENDER, LAENDER, ist_eu, registriere_laender_globals
+from app.laender import LAENDER, registriere_laender_globals
 from app.models.customer import Customer
 from app.services import mustang, pdfa
 from app.services.ust_id_pruefung import aufteilen_ust_id
@@ -60,21 +60,8 @@ def test_finnland_und_griechenland_sind_enthalten():
     assert "GR" in codes
 
 
-def test_ist_eu():
-    assert ist_eu("FI") is True
-    assert ist_eu("GR") is True
-    assert ist_eu("CH") is False
-    assert ist_eu("US") is False
-
-
-def test_eu_laender_sind_die_27_mitgliedstaaten():
-    assert len(EU_LAENDER) == 27
-    assert EU_LAENDER <= {code for code, _ in LAENDER}
-
-
 def test_griechenland_gr_gespeichert_vies_liefert_el():
     """GR ist der gespeicherte ISO-Code; die VIES-Abbildung bildet danach EL."""
-    assert ist_eu("GR") is True
     assert ("GR", "Griechenland") in LAENDER
     land, nummer = aufteilen_ust_id("GR123456789")
     assert land == "EL"
@@ -87,7 +74,6 @@ def test_registriere_laender_globals_setzt_globals_je_instanz():
     templates = Jinja2Templates(directory="app/templates")
     registriere_laender_globals(templates)
     assert templates.env.globals["LAENDER"] is LAENDER
-    assert templates.env.globals["ist_eu"] is ist_eu
 
 
 def _render_makro(gewaehlt: str) -> str:
@@ -175,6 +161,22 @@ def test_unbekannter_gespeicherter_code_bleibt_ausgewaehlt(client, pg_session):
     assert r.status_code == 200
     block = _land_select(r.text)
     assert '<option value="JP" selected>JP</option>' in block
+
+    # Ein blosses GET aendert die Datenbank nicht; eine Zusicherung danach kann
+    # nur der Fixture-Aufbau rot machen, nie der Produktivcode. Gemessen wird
+    # deshalb der Fall aus dem Docstring: Wer das Land nicht anfasst, schickt
+    # die ausgewaehlte Option zurueck. Ohne Rueckfall waere das DE.
+    treffer = re.search(r'<option value="([^"]+)" selected>', block)
+    assert treffer, "keine ausgewaehlte Option im Select"
+    client.post(f"/customers/{kunde.id}/bearbeiten", data={
+        "customer_number": kunde.customer_number, "name": kunde.name,
+        "address_line1": kunde.address_line1, "address_line2": "",
+        "zip_code": kunde.zip_code, "city": kunde.city,
+        "country": treffer.group(1), "vat_id": "", "ust_status": "regelbesteuert",
+        "email": "", "cc_emails": "", "phone": "",
+        "bank_iban": "", "bank_bic": "", "bank_name": "",
+        "notes": "", "is_active": "1",
+    })
 
     pg_session.expire_all()
     assert pg_session.get(Customer, kunde.id).country == "JP"

@@ -33,11 +33,17 @@ def _ae_option(html: str) -> str:
 def test_das_formular_nennt_bei_eu_b2b_den_richtigen_rechtsgrund(pg_session):
     option = _ae_option(_formular_html(pg_session))
     assert "13b" not in option
-    assert "196" in option
+    assert "Art. 196" in option
 
 
 def test_formularlabel_und_befreiungsgrund_nennen_dieselbe_norm(pg_session):
     """Sonst wählt der Nutzer nach einer Norm und der Beleg trägt eine andere."""
     option = _ae_option(_formular_html(pg_session))
+    grund = EXEMPTION_REASONS["AE"]
 
-    assert "196" in option and "196" in EXEMPTION_REASONS["AE"]
+    # "196" allein genuegt nicht: ein Text wie "Vermerk 196" traegt die Ziffer
+    # ohne die Norm und liesse beide Zusicherungen gruen (gemessen 2026-09-23).
+    assert "Art. 196" in option
+    assert "Art. 196" in grund
+    assert "13b" not in option
+    assert "13b" not in grund
