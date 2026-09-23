@@ -27,11 +27,13 @@ from app.services.steuer_ruecklage import (
 )
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
+from app.laender import registriere_laender_globals
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
 registriere_darstellungsfilter(templates)
+registriere_laender_globals(templates)
 
 
 def _get_or_create_company(db: Session) -> Company:
