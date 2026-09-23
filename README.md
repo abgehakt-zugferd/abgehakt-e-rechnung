@@ -374,6 +374,43 @@ erst zurücksichern: die Sicherung verweist auf die Datenbankrollen (`abgehakt_a
 Eigentümerrolle), und die entstehen beim ersten Start. Mit anderen Namen in der `.env` findet
 die Rücksicherung sie nicht.
 
+### Wenn der ganze Stack weg ist, nicht nur die Daten
+
+Es gibt einen Fall, in dem die Schritte oben nicht greifen: Es ist keine Datenbank mehr da,
+die man verwerfen könnte. Container, Images und Volumes sind gleichzeitig verschwunden,
+typischerweise, weil an den Ressourcen-Einstellungen von Docker Desktop etwas geändert wurde.
+Der Hergang und wie man ihn erkennt, steht in `docs/docker-issues.md`.
+
+Das ist weniger schlimm, als es aussieht, denn `backups/` und `storage/` liegen im
+Projektordner und nicht in Docker. Sie sind unversehrt. Fehlt nur die Datenbank, ist die
+Reihenfolge:
+
+```bash
+set -a; . ./.env; set +a
+
+docker compose up -d --build app    # legt die Rollen an, migriert das leere Schema
+docker compose stop app             # niemand schreibt hinein, während wir einspielen
+
+docker compose exec -T db dropdb   -U "$DB_BOOTSTRAP_USER" "$DB_NAME"
+docker compose exec -T db createdb -U "$DB_BOOTSTRAP_USER" "$DB_NAME"
+gunzip -c backups/last/abgehakt-latest.sql.gz \
+  | docker compose exec -T db psql -q -v ON_ERROR_STOP=1 -U "$DB_BOOTSTRAP_USER" -d "$DB_NAME"
+
+docker compose up -d                # App und Sicherungsdienst wieder starten
+```
+
+Der App-Start **vor** dem Einspielen ist der entscheidende Schritt, und er ist nicht
+offensichtlich: Die Sicherung vergibt Rechte an `abgehakt_admin` und `abgehakt_app`, legt
+diese Rollen aber nicht selbst an. In einer frischen Datenbank existieren sie nicht, und das
+Einspielen bricht bei der ersten `GRANT`-Zeile ab.
+
+Danach nachzählen, dieselbe Abfrage wie in der Probe oben, und stichprobenhaft prüfen, ob zu
+den Rechnungsnummern die Dateien in `storage/pdfs/` liegen.
+
+Zuletzt: **Läuft der Sicherungsdienst wieder?** `docker compose ps` muss drei Dienste zeigen,
+nicht zwei. Wer nur `docker compose up -d app` aufruft, startet `db-backup` nicht mit und steht
+ohne Sicherung da, ohne es zu merken.
+
 ## Drittkomponenten
 
 | Komponente | Lizenz | Bezug |
