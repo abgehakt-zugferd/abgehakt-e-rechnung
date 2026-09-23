@@ -5,7 +5,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e5975500
 RUN apt-get update && apt-get install -y --no-install-recommends \
         default-jre-headless=2:1.21-76 \
         ghostscript=10.05.1~dfsg-1+deb13u1 \
-        curl=8.14.1-2+deb13u4 \
+        curl=8.14.1-2+deb13u5 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
