@@ -649,7 +649,8 @@ class TestTaxCategories:
             NS,
         )
         assert reason is not None
-        assert "13b UStG" in reason.text
+        assert "Art. 196" in reason.text
+        assert "13b" not in reason.text
 
     def test_ae_category_code_in_tax_summary(self):
         inv = _invoice(
@@ -684,7 +685,8 @@ class TestTaxCategories:
             NS,
         )
         assert reason is not None
-        assert "13b UStG" in reason.text
+        assert "Art. 196" in reason.text
+        assert "13b" not in reason.text
 
     def test_k_category_code_and_exemption_reason(self):
         item = _item(
