@@ -688,6 +688,33 @@ class TestTaxCategories:
         assert "Art. 196" in reason.text
         assert "13b" not in reason.text
 
+    def test_ae_exemption_reason_code_vatex_eu_ae_in_tax_summary(self):
+        """BT-121: VATEX-EU-AE neben dem Freitext (BT-120), nur Belegebene."""
+        inv = _invoice(
+            tax_category="AE",
+            items=[self._ae_item()],
+            net_total=Decimal("500.00"),
+            tax_total=Decimal("0.00"),
+            gross_total=Decimal("500.00"),
+        )
+        root = ET.fromstring(generate_xml(inv, _company()))
+        code = root.find(
+            ".//ram:ApplicableHeaderTradeSettlement"
+            "/ram:ApplicableTradeTax"
+            "/ram:ExemptionReasonCode",
+            NS,
+        )
+        assert code is not None
+        assert code.text == "VATEX-EU-AE"
+        # Positionsblock traegt den Code nicht: BT-121 sitzt in BG-23 (Belegebene).
+        line_code = root.find(
+            ".//ram:IncludedSupplyChainTradeLineItem"
+            "//ram:ApplicableTradeTax"
+            "/ram:ExemptionReasonCode",
+            NS,
+        )
+        assert line_code is None
+
     def test_k_category_code_and_exemption_reason(self):
         item = _item(
             tax_rate=Decimal("0.00"),

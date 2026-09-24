@@ -104,3 +104,41 @@ def test_reverse_charge_with_nonzero_rate_flagged():
 def test_reverse_charge_zero_rate_ok():
     inv = _invoice([_item(1, "1", "100.00", "0")], tax_category="AE")
     assert "TAX_CATEGORY_RATE_MISMATCH" not in _codes(inv)
+
+
+def test_ae_zwei_cent_steuerbetrag_wird_abgelehnt():
+    """Bei AE greift keine 0,02-€-Toleranz: Steuerbetrag muss exakt null sein."""
+    item = _item(1, "1", "100.00", "0")
+    item.tax_amount = Decimal("0.02")
+    item.gross_amount = item.net_amount + item.tax_amount
+    inv = _invoice([item], tax_category="AE",
+                   tax=Decimal("0.02"), gross=item.gross_amount)
+    codes = _codes(inv)
+    assert "TAX_AMOUNT_MUST_BE_ZERO" in codes
+    assert "ITEM_TAX_MISMATCH" not in codes  # globale Toleranz wuerde 0,02 durchlassen
+
+
+def test_ae_exakt_null_steuerbetrag_ist_zulaessig():
+    inv = _invoice([_item(1, "1", "100.00", "0")], tax_category="AE")
+    assert "TAX_AMOUNT_MUST_BE_ZERO" not in _codes(inv)
+
+
+def test_k_zwei_cent_steuerbetrag_wird_abgelehnt():
+    item = _item(1, "1", "100.00", "0")
+    item.tax_amount = Decimal("0.02")
+    item.gross_amount = item.net_amount + item.tax_amount
+    inv = _invoice([item], tax_category="K",
+                   tax=Decimal("0.02"), gross=item.gross_amount,
+                   delivery_date=date(2026, 6, 1))
+    assert "TAX_AMOUNT_MUST_BE_ZERO" in _codes(inv)
+
+
+def test_ae_steuersumme_zwei_cent_wird_abgelehnt():
+    """Position exakt null, Summe um zwei Cent verdorben: eigene Regel greift."""
+    item = _item(1, "1", "100.00", "0")
+    inv = _invoice([item], tax_category="AE")
+    inv.tax_total = Decimal("0.02")
+    inv.gross_total = inv.net_total + inv.tax_total
+    codes = _codes(inv)
+    assert "TAX_AMOUNT_MUST_BE_ZERO" in codes
+    assert "TAX_TOTAL_MISMATCH" not in codes  # 0,02 waere innerhalb der Toleranz

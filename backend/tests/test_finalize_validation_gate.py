@@ -220,3 +220,48 @@ def test_finalize_allowed_ig_lieferung_mit_leistungsdatum(pg_session):
         assert pg_session.get(Invoice, inv.id).status == "issued"
     finally:
         cleanup(number)
+
+
+def _firma_ohne_ust_id(pg_session):
+    from app.models.company import Company
+    firma = pg_session.get(Company, 1)
+    firma.vat_id = None
+    pg_session.commit()
+    return firma
+
+
+def test_finalize_ae_ohne_verkaeufer_ust_id_wird_abgewiesen(pg_session):
+    """§ 14a Abs. 1 Satz 3 UStG: AE ohne USt-IdNr. des Leistenden bleibt Draft."""
+    _firma_ohne_ust_id(pg_session)
+    kunde = _customer(pg_session, country="AT", city="Wien", zip_code="1010",
+                      vat_id="ATU12345678")
+    inv = _draft(pg_session, with_items=True, tax_category="AE", kunde=kunde,
+                 net=Decimal("200.00"), tax=Decimal("0.00"), gross=Decimal("200.00"))
+
+    with patch("app.routers.invoices.pdf_generator.generate_pdf") as erzeuge:
+        r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
+
+    assert r.status_code == 400, r.text
+    # Ohne Gate wuerde die Pipeline an Mustang scheitern (ebenfalls 400).
+    # Gefordert ist, dass es gar nicht erst so weit kommt.
+    erzeuge.assert_not_called()
+    assert "USt-IdNr" in r.text
+    assert "14a" in r.text
+    pg_session.expire_all()
+    row = pg_session.get(Invoice, inv.id)
+    assert row.status == "draft"
+    assert row.zugferd_xml is None
+
+
+def test_finalize_inland_mit_blosser_steuernummer_bleibt_moeglich(pg_session):
+    """Gegenprobe zur Verschaerfung: Kategorie S ohne Firmen-USt-IdNr. finalisiert."""
+    _firma_ohne_ust_id(pg_session)
+    inv = _draft(pg_session, with_items=True, tax_category="S")
+    number = inv.invoice_number
+    try:
+        r = finalize_with_fake_pipeline(pg_session, inv.id)
+        assert r.status_code == 303, r.text
+        pg_session.expire_all()
+        assert pg_session.get(Invoice, inv.id).status == "issued"
+    finally:
+        cleanup(number)
