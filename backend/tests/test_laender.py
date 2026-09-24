@@ -12,7 +12,6 @@ Die Abbildung lebt in `services/ust_id_pruefung._VIES_LAENDER` und wird hier
 nur festgehalten, nicht verdoppelt.
 """
 import re
-import unicodedata
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -20,36 +19,13 @@ from decimal import Decimal
 import pytest
 from fastapi.templating import Jinja2Templates
 
-from app.laender import ISO_LAENDER, LAENDER, registriere_laender_globals
+from app.laender import (ISO_LAENDER, LAENDER, registriere_laender_globals,
+                         sortierschluessel as _faltung)
 from app.models.customer import Customer
 from app.services import mustang, pdfa
 from app.services.ust_id_pruefung import aufteilen_ust_id
 
 
-def _faltung(name: str) -> str:
-    """Sortierschluessel nach deutscher Alphabet-Ordnung (Umlaut = Grundbuchstabe).
-
-    Zwei Schritte, und der zweite fehlte: Erst die deutschen Sonderzeichen nach
-    DIN 5007-1 (ae wie a, ss wie ss), dann alle uebrigen diakritischen Zeichen
-    ueber die Zerlegung. Ohne den zweiten landete Ålandinseln hinter Zypern,
-    weil `å` in Unicode hinter `z` liegt. Buchstaben, die keine Zerlegung
-    haben, brauchen eine eigene Zeile: æ, ø, đ, ð, þ, ł.
-    """
-    gefaltet = (
-        name.casefold()
-        .replace("ä", "a")
-        .replace("ö", "o")
-        .replace("ü", "u")
-        .replace("ß", "ss")
-        .replace("æ", "ae")
-        .replace("ø", "o")
-        .replace("đ", "d")
-        .replace("ð", "d")
-        .replace("þ", "th")
-        .replace("ł", "l")
-    )
-    zerlegt = unicodedata.normalize("NFD", gefaltet)
-    return "".join(z for z in zerlegt if not unicodedata.combining(z))
 
 
 def test_liste_hat_genau_47_eintraege():
