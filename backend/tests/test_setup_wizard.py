@@ -18,6 +18,7 @@ from app.database import get_db
 from app.main import app
 from app.models.company import Company
 from app.models.invoice import Invoice
+from tests.probe_daten import STEUER_PROBE_ELF
 
 
 def _client(pg_session):
@@ -49,7 +50,7 @@ FORMULAR = {
     "zip_code": "80331",
     "city": "München",
     "country": "DE",
-    "tax_number": "143/123/45678",
+    "tax_number": STEUER_PROBE_ELF,
     "vat_id": "",
 }
 
