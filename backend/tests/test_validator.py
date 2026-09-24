@@ -707,11 +707,11 @@ class TestTaxCategory:
         assert "SELLER_VAT_ID_REQUIRED" in _codes(errors)
         issue = next(e for e in errors if e.code == "SELLER_VAT_ID_REQUIRED")
         assert issue.field == "company.vat_id"
-        assert "14a" in issue.message
+        assert "§ 14a Abs. 1 Satz 3" in issue.message
         assert "USt-IdNr" in issue.message
 
     def test_steuerkategorie_k_verlangt_verkaeufer_ust_id(self):
-        """§ 14a Abs. 1 Satz 3 UStG: dasselbe bei innergemeinschaftlicher Lieferung."""
+        """§ 14a Abs. 3 Satz 2 UStG: bei K reicht die Steuernummer des Leistenden nicht."""
         item = _item(tax_rate=Decimal("0.00"), net_amount=Decimal("200.00"),
                      tax_amount=Decimal("0.00"), gross_amount=Decimal("200.00"))
         inv = _invoice(
@@ -724,6 +724,10 @@ class TestTaxCategory:
         )
         errors, _ = validate_invoice(inv, _company(tax_number="12/345/67890", vat_id=None))
         assert "SELLER_VAT_ID_REQUIRED" in _codes(errors)
+        issue = next(e for e in errors if e.code == "SELLER_VAT_ID_REQUIRED")
+        assert issue.field == "company.vat_id"
+        assert "§ 14a Abs. 3 Satz 2" in issue.message
+        assert "USt-IdNr" in issue.message
 
     def test_inlandsrechnung_mit_blosser_steuernummer_ohne_seller_vat_id_required(self):
         """Gegenprobe: Kategorie S bleibt mit blosser Steuernummer zulässig."""

@@ -129,12 +129,20 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
             "genügt hier nicht.",
             "company.tax_number",
         ))
-    elif tax_category in {"AE", "K"} and not company.vat_id:
+    elif tax_category == "AE" and not company.vat_id:
         errors.append(Issue(
             "SELLER_VAT_ID_REQUIRED", "error",
-            "Bei Reverse Charge und innergemeinschaftlicher Lieferung (Kategorien AE/K) muss "
-            "die USt-IdNr. des Leistungserbringers in den Einstellungen hinterlegt sein "
-            "(§ 14a Abs. 1 Satz 3 UStG). Die Steuernummer allein genügt hier nicht.",
+            "Bei Reverse Charge (Kategorie AE) muss die USt-IdNr. des Leistungserbringers "
+            "in den Einstellungen hinterlegt sein (§ 14a Abs. 1 Satz 3 UStG). "
+            "Die Steuernummer allein genügt hier nicht.",
+            "company.vat_id",
+        ))
+    elif tax_category == "K" and not company.vat_id:
+        errors.append(Issue(
+            "SELLER_VAT_ID_REQUIRED", "error",
+            "Bei innergemeinschaftlicher Lieferung (Kategorie K) muss die USt-IdNr. des "
+            "Leistungserbringers in den Einstellungen hinterlegt sein "
+            "(§ 14a Abs. 3 Satz 2 UStG). Die Steuernummer allein genügt hier nicht.",
             "company.vat_id",
         ))
     if company.vat_id:
@@ -158,7 +166,8 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
 
         # Hoher Rechnungsbetrag ohne USt-IdNr. des Empfängers → Hinweis (kein harter Fehler).
         # § 14a Abs. 1 UStG verlangt die USt-IdNr. des Empfängers nur bei Leistungen i.S.d.
-        # § 3a Abs. 2 UStG (grenzüberschreitend/Reverse Charge, s. Kategorien AE/K weiter unten),
+        # § 3a Abs. 2 UStG (grenzüberschreitend/Reverse Charge, Kategorie AE) bzw.
+        # § 14a Abs. 3 UStG (innergemeinschaftliche Lieferung, Kategorie K),
         # nicht generell bei inländischen B2B-Rechnungen über 10.000 €. Eine inländische Rechnung
         # über 10.000 € an einen Kunden ohne USt-IdNr. ist zulässig und darf nicht blockiert werden.
         if gross > Decimal("10000") and not customer.vat_id:
