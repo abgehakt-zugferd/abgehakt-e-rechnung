@@ -19,6 +19,23 @@ _id_col = mapped_column(
 class Invoice(Base):
     __tablename__ = "invoices"
 
+    # Pro Original hoechstens eine nicht verworfene Gutschrift (#90). Die
+    # Vorabpruefung in create_storno nimmt keine Sperre; ohne diesen Index
+    # legen zwei ueberlappende Anfragen zwei Gutschriften an und mindern die
+    # Forderung doppelt. Verworfene Stornos (`discarded`) zaehlen nicht, sonst
+    # waere ein Fehlgriff endgueltig. Dieselbe Quelle wie Migration 013 und
+    # create_all in der Test-DB (alembic check).
+    __table_args__ = (
+        Index(
+            "uq_invoices_eine_aktive_gutschrift_pro_original",
+            "original_invoice_id",
+            unique=True,
+            postgresql_where=text(
+                "status <> 'discarded' AND original_invoice_id IS NOT NULL"
+            ),
+        ),
+    )
+
     id: Mapped[uuid.UUID] = _id_col
     invoice_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     # Nullable, weil ein Entwurf keinen Empfänger braucht: man tippt Positionen und

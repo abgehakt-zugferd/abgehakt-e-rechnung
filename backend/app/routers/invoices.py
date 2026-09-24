@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, Response
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models.customer import Customer
@@ -927,5 +928,28 @@ def create_storno(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
     from app.services.storno import build_storno
     storno = build_storno(original, number, date.today())
     db.add(storno)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Zweite Schicht (#90): der partielle Unique-Index faengt den Wettlauf,
+        # den die Vorabpruefung oben ohne Sperre nicht serialisiert. Rollback
+        # nimmt die in derselben Transaktion gezogene Nummer mit zurueck: keine
+        # Luecke ohne Datensatz. Die Meldung entspricht der Vorabpruefung.
+        db.rollback()
+        vorhandene = (
+            db.query(Invoice)
+            .filter(Invoice.original_invoice_id == invoice_id,
+                    Invoice.status != "discarded")
+            .order_by(Invoice.invoice_number)
+            .first()
+        )
+        nummer = vorhandene.invoice_number if vorhandene else "?"
+        raise HTTPException(
+            400,
+            f"Zu dieser Rechnung existiert bereits die Gutschrift "
+            f"{nummer}. Ein Beleg wird nur einmal storniert; "
+            "eine zweite Gutschrift würde die Forderung doppelt mindern. Ist die "
+            "vorhandene Gutschrift versehentlich entstanden, verwirf zuerst ihren "
+            "Entwurf.",
+        )
     return RedirectResponse(url=f"/invoices/{storno.id}", status_code=303)
