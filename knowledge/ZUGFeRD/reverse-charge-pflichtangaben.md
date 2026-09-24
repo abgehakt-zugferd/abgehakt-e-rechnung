@@ -103,13 +103,26 @@ BT-120 Vorrang.
 ## Was das fuer Abgehakt heisst
 
 Der Text in `EXEMPTION_REASONS["AE"]` (`backend/app/services/zugferd_xml.py`)
-entspricht Variante 2 und ist damit gedeckt. Zwei Punkte bleiben:
+entspricht Variante 2 und ist damit gedeckt. Zum Stand der Generator-Logik:
 
-- **BT-121 wird nicht gesetzt.** Das Werkzeug schreibt nur `ram:ExemptionReason`.
-  Kein Rechtsmangel, aber die vom Gutachten empfohlene parallele Uebermittlung
-  fehlt.
-- **Schreibweise.** Die Richtlinie und die Codelisten schreiben "Reverse charge"
-  gross. Kein Rechtsmangel, ausdruecklich als nicht belegt gefuehrt.
+- **Belegebene BG-23** (`ApplicableHeaderTradeSettlement` /
+  `ApplicableTradeTax`, Funktion `_tax_summaries_xml`): Bei Kategorie AE setzt
+  das Werkzeug BT-120 (`ram:ExemptionReason`) **und** BT-121
+  (`ram:ExemptionReasonCode` = `VATEX-EU-AE`). Die Schranke steht bei
+  `if inv_cat == "AE"` (ca. Zeile 157). Bei K, E und O steht auf dieser Ebene
+  nur BT-120 aus `EXEMPTION_REASONS`; BT-121 bleibt absichtlich leer
+  (Kommentar im Code: VATEX fuer K/E/O nicht Teil des bisherigen Auftrags).
+  Sachlich passender Code fuer K waere `VATEX-EU-IC`, fuer O `VATEX-EU-O`
+  (CEF-VATEX-Liste); `VATEX-EU-AE` gehoert ausschliesslich zu AE.
+- **Positionsebene** (`IncludedSupplyChainTradeLineItem` /
+  `ApplicableTradeTax`, Funktion `_line_items_xml`): Bei AE/K/E/O nur BT-120
+  (gleicher Freitext). BT-121 gehoert nach Modell zu BG-23 und wird auf der
+  Position **nicht** geschrieben.
+- **S und Z:** kein ExemptionReason und kein ExemptionReasonCode. Bei Z
+  verbietet BR-Z-10 beides.
+- **Schreibweise** im Freitext: Die Richtlinie und die Codelisten schreiben
+  "Reverse charge" gross. Kein Rechtsmangel, ausdruecklich als nicht belegt
+  gefuehrt.
 
 ---
 
