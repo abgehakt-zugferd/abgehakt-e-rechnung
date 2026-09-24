@@ -231,7 +231,7 @@ def test_kaufmaennisch_gerundet_nicht_bankers_rounding(schluessel):
 
 def test_ein_satz_mit_sechs_nachkommastellen_wird_nicht_vorher_gerundet(schluessel):
     """797.30 x 33.333333 % sind 265.77. Mit auf zwei Stellen gerundetem Satz
-    waeren es 265.73, und der gueltige Vektor flaege raus."""
+    waeren es 265.74, und der gueltige Vektor flaege raus."""
     nutzlast = _auftrag()
     gutschrift = nutzlast["gutschriften"][0]
     gutschrift["positionen"][0]["herleitung"] = {"basis_netto": "797.30", "satz": "33.333333"}

@@ -125,7 +125,7 @@ def _zahl(wert) -> Optional[Decimal]:
     Gerundet wird erst das Ergebnis der Herleitung. Wer den Satz vorher auf zwei
     Stellen zwingt, macht aus 33.333333 % eine 33.33 % und lehnt damit einen
     gueltigen Auftrag ab: gemessen am gueltigen Vektor, 797.30 x 33.333333 %
-    sind 265.77, mit gerundetem Satz 265.73.
+    sind 265.77, mit gerundetem Satz 265.74.
     """
     try:
         return Decimal(str(wert))
