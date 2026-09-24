@@ -27,6 +27,7 @@ from tests.probe_daten import (
     IBAN_BR_PROBE,
     IBAN_PROBE,
     IBAN_PROBE_SPACED,
+    STEUER_PROBE_ELF,
 )
 
 
@@ -202,7 +203,7 @@ def test_setup_lehnt_falsche_iban_ab_und_setzt_flag_nicht(pg_session):
             "zip_code": "80331",
             "city": "München",
             "country": "DE",
-            "tax_number": "123/456/78901",
+            "tax_number": STEUER_PROBE_ELF,
             "vat_id": "",
             "bank_iban": IBAN_AZ_FALSCHE_PZ,
         },

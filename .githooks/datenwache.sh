@@ -6,7 +6,7 @@
 # Was geprueft wird (nur NEU hinzukommende Zeilen der gepushten Commits):
 #   - private Schluessel (BEGIN ... PRIVATE KEY)
 #   - IBAN-Format (Registry-Laender, Laenge aus iban_laengen.tsv, MOD 97-10;
-#     Ausnahme: BBAN = PROBE + nur Nullen, Issue #93)
+#     Ausnahme: BBAN = PROBE + Nullen, optional eine Schlussziffer; Issue #93)
 #   - USt-IdNr-Format (DE + 9 Ziffern)
 #   - Steuernummer-Format (NNN/NNN/NNNNN)
 #   - neu hinzukommende .env-Dateien (ausser .env.example)
@@ -124,7 +124,9 @@ pruefe_iban_format() {
     fi
     treffer=""
     awk_ec=0
-    treffer=$(awk -v laengen_datei="$iban_laengen_tsv" '
+    # LC_ALL=C: byteweise. Sonst bricht macOS-awk an Umlauten/Paragraph mit
+    # "towc: multibyte conversion failure" ab (Exit 2). Muster sind rein ASCII.
+    treffer=$(LC_ALL=C awk -v laengen_datei="$iban_laengen_tsv" '
         BEGIN {
             while ((getline z < laengen_datei) > 0) {
                 if (z ~ /^#/ || z ~ /^[[:space:]]*$/) continue
@@ -155,8 +157,9 @@ pruefe_iban_format() {
             return rest == 1
         }
         function ist_probe_fixture(iban,    bban) {
+            # probe_daten: PROBE+Nullen, sowie FIRMA mit Schlussziffer (PROBE0+digit).
             bban = substr(iban, 5)
-            return bban ~ /^PROBE0+$/
+            return bban ~ /^PROBE0+[0-9]?$/
         }
         function versuche_ab(start,    j, ch, gesammelt, praefix, erl) {
             gesammelt = ""

@@ -22,3 +22,6 @@ IBAN_PROBE_SPACED = "DE60" + " PROBE " + "0000 0000 0000 0"
 IBAN_AZ_PROBE = "AZ" + "66" + "PROBE" + ("0" * 19)
 IBAN_AZ_FALSCHE_PZ = "AZ" + "65" + "PROBE" + ("0" * 19)
 IBAN_BR_PROBE = "BR" + "93" + "PROBE" + ("0" * 20)  # Registry ja, EPC-SCT nein
+# Steuernummer-Hausfixtures (#88): aufsteigend, Wache laesst sie durch.
+STEUER_PROBE_ZEHN = "12" + "/" + "345" + "/" + "67890"
+STEUER_PROBE_ELF = "123" + "/" + "456" + "/" + "78901"
