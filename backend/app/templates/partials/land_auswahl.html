@@ -1,24 +1,31 @@
 {#
-  Landesauswahl fuer alle Formulare mit Landfeld (#75).
+  Landesauswahl fuer alle Formulare mit Landfeld (#75, #81).
 
-  Die Liste kommt aus dem Jinja-Global LAENDER (app/laender.py), das jeder
-  Router mit Landfeld einzeln registriert — jeder Router haelt in diesem
-  Projekt sein eigenes Jinja-Environment (dieselbe Lage wie bei
-  branding/darstellung). Fehlt die Registrierung, faellt das nicht beim
-  Start auf, sondern erst beim Aufruf der Seite.
+  Die Listen kommen aus den Jinja-Globals LAENDER / ISO_LAENDER
+  (app/laender.py), die jeder Router mit Landfeld einzeln registriert —
+  jeder Router haelt in diesem Projekt sein eigenes Jinja-Environment
+  (dieselbe Lage wie bei branding/darstellung). Fehlt die Registrierung,
+  faellt das nicht beim Start auf, sondern erst beim Aufruf der Seite.
+
+  Parameter `liste` (Vorgabe LAENDER): ein Makro, zwei Listen. Kundenformular
+  bleibt bei der kuratierten 47er-Liste; Einrichtung und Einstellungen reichen
+  ISO_LAENDER. Zwei Makros waeren doppelter Rueckfall und doppelte Markup-
+  Pflege; ein Pflichtparameter an jedem Aufruf wuerde das Kundenformular
+  aendern, obwohl sich dort nichts aendert.
 
   Wache: tests/test_laender.py
 #}
-{% macro land_auswahl(name, gewaehlt) %}
-{% set bekannte_codes = LAENDER | map(attribute=0) | list %}
+{% macro land_auswahl(name, gewaehlt, liste=LAENDER) %}
+{% set bekannte_codes = liste | map(attribute=0) | list %}
 <select name="{{ name }}" class="input">
-    {% for code, bezeichnung in LAENDER %}
+    {% for code, bezeichnung in liste %}
     <option value="{{ code }}" {% if gewaehlt == code %}selected{% endif %}>{{ bezeichnung }} ({{ code }})</option>
     {% endfor %}
-    {# Rueckfall fuer Bestandsdaten: ein gespeicherter Code, den LAENDER nicht
-       kennt, bekommt eine zusaetzliche ausgewaehlte Option mit dem Code als
-       Beschriftung. Ohne ihn setzte ein Speichern des Formulars den
-       Datensatz stillschweigend auf den ersten Listeneintrag. #}
+    {# Rueckfall fuer Bestandsdaten: ein gespeicherter Code, den die uebergebene
+       Liste nicht kennt, bekommt eine zusaetzliche ausgewaehlte Option mit dem
+       Code als Beschriftung. Ohne ihn setzte ein Speichern des Formulars den
+       Datensatz stillschweigend auf den ersten Listeneintrag. Bleibt auch fuer
+       ISO_LAENDER noetig: die ISO-Liste aendert sich mit der Zeit. #}
     {% if gewaehlt and gewaehlt not in bekannte_codes %}
     <option value="{{ gewaehlt }}" selected>{{ gewaehlt }}</option>
     {% endif %}

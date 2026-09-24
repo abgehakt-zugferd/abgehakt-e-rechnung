@@ -47,7 +47,7 @@
             <div>
                 <label class="label">Land</label>
                 {% import "partials/land_auswahl.html" as land_auswahl %}
-                {{ land_auswahl.land_auswahl('country', company.country) }}
+                {{ land_auswahl.land_auswahl('country', company.country, liste=ISO_LAENDER) }}
             </div>
 
             <div style="border-top:1px solid var(--border); padding-top:16px;">

@@ -1,9 +1,10 @@
-"""Laenderliste fuer die Landesauswahl in den Formularen (#75).
+"""Laenderlisten fuer die Landesauswahl in den Formularen (#75, #81).
 
 Bisher kannten die Formulare nur DE, AT, CH und US — ein Kunde in Finnland
-liess sich ueber die Oberflaeche nicht anlegen. Die Liste steht seitdem genau
-einmal, in `app/laender.py`, und wird als Jinja-Global in die drei Router
-gegeben, die ein Landfeld rendern (Kunden, Einstellungen, Einrichtung).
+liess sich ueber die Oberflaeche nicht anlegen. Seit #75 steht die kuratierte
+Liste `LAENDER` (47) einmal in `app/laender.py` und wird als Jinja-Global in
+die drei Router gegeben. Seit #81 steht daneben `ISO_LAENDER` (249) fuer
+Einrichtung und Einstellungen; das Kundenformular bleibt bei den 47.
 
 Griechenland traegt zwei Codes, und das ist kein Fehler: gespeichert und in
 der ZUGFeRD-XML steht `GR` (ISO 3166-1), VIES kennt Griechenland als `EL`.
@@ -11,6 +12,7 @@ Die Abbildung lebt in `services/ust_id_pruefung._VIES_LAENDER` und wird hier
 nur festgehalten, nicht verdoppelt.
 """
 import re
+import unicodedata
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -18,40 +20,95 @@ from decimal import Decimal
 import pytest
 from fastapi.templating import Jinja2Templates
 
-from app.laender import LAENDER, registriere_laender_globals
+from app.laender import ISO_LAENDER, LAENDER, registriere_laender_globals
 from app.models.customer import Customer
 from app.services import mustang, pdfa
 from app.services.ust_id_pruefung import aufteilen_ust_id
 
 
 def _faltung(name: str) -> str:
-    """Sortierschluessel nach deutscher Alphabet-Ordnung (Umlaut = Grundbuchstabe)."""
-    return (
+    """Sortierschluessel nach deutscher Alphabet-Ordnung (Umlaut = Grundbuchstabe).
+
+    Zwei Schritte, und der zweite fehlte: Erst die deutschen Sonderzeichen nach
+    DIN 5007-1 (ae wie a, ss wie ss), dann alle uebrigen diakritischen Zeichen
+    ueber die Zerlegung. Ohne den zweiten landete Ålandinseln hinter Zypern,
+    weil `å` in Unicode hinter `z` liegt. Buchstaben, die keine Zerlegung
+    haben, brauchen eine eigene Zeile: æ, ø, đ, ð, þ, ł.
+    """
+    gefaltet = (
         name.casefold()
         .replace("ä", "a")
         .replace("ö", "o")
         .replace("ü", "u")
+        .replace("ß", "ss")
+        .replace("æ", "ae")
+        .replace("ø", "o")
+        .replace("đ", "d")
+        .replace("ð", "d")
+        .replace("þ", "th")
+        .replace("ł", "l")
     )
+    zerlegt = unicodedata.normalize("NFD", gefaltet)
+    return "".join(z for z in zerlegt if not unicodedata.combining(z))
 
 
 def test_liste_hat_genau_47_eintraege():
     assert len(LAENDER) == 47
 
 
+def test_iso_liste_hat_genau_249_eintraege():
+    """#81: volle ISO-3166-1-alpha-2-Liste (249 offiziell vergebene Codes).
+    Die Zahl folgt aus der Quelle, nicht aus einer Wunschvorgabe; ein
+    Vertauschen mit LAENDER (47) macht diesen Test und den Kundentest rot."""
+    assert len(ISO_LAENDER) == 249
+
+
+def test_japan_steht_in_der_iso_liste():
+    """Abnahme #81: Aussteller mit Sitz in Japan muss waehlbar sein."""
+    assert ("JP", "Japan") in ISO_LAENDER
+
+
+def test_jeder_laender_eintrag_steht_gleichnamig_in_iso_liste():
+    """Sonst driften die kuratierte und die volle Liste auseinander."""
+    iso = set(ISO_LAENDER)
+    for eintrag in LAENDER:
+        assert eintrag in iso, f"{eintrag!r} fehlt oder weicht in ISO_LAENDER ab"
+
+
 def test_deutschland_steht_an_erster_stelle():
     assert LAENDER[0] == ("DE", "Deutschland")
+    assert ISO_LAENDER[0] == ("DE", "Deutschland")
 
 
 def test_danach_alphabetisch_nach_deutschem_namen():
     namen = [name for _, name in LAENDER[1:]]
     assert namen == sorted(namen, key=_faltung)
+    iso_namen = [name for _, name in ISO_LAENDER[1:]]
+    assert iso_namen == sorted(iso_namen, key=_faltung)
+
+
+def test_diakritika_sortieren_wie_ihr_grundbuchstabe():
+    """Ålandinseln gehoert zwischen Ägypten und Albanien, nicht ans Listenende.
+
+    Diese Zusicherung nennt die Nachbarn beim Namen, statt mit `_faltung` zu
+    pruefen. Ein Test, der dieselbe Regel anwendet, mit der die Liste erzeugt
+    wurde, bestaetigt nur sich selbst: `å` lag hinter `z`, die Liste war
+    danach sortiert, und der Sortiertest blieb trotzdem gruen.
+    """
+    codes = [code for code, _ in ISO_LAENDER]
+    assert codes.index("EG") < codes.index("AX") < codes.index("AL"), (
+        "Ålandinseln steht an Position "
+        f"{codes.index('AX') + 1} von {len(codes)}, erwartet zwischen "
+        f"Ägypten ({codes.index('EG') + 1}) und Albanien ({codes.index('AL') + 1})"
+    )
 
 
 def test_codes_sind_eindeutig_und_iso_alpha2():
-    codes = [code for code, _ in LAENDER]
-    assert len(codes) == len(set(codes))
-    for code in codes:
-        assert len(code) == 2 and code.isalpha() and code.isupper()
+    for liste in (LAENDER, ISO_LAENDER):
+        codes = [code for code, _ in liste]
+        assert len(codes) == len(set(codes))
+        for code in codes:
+            assert len(code) == 2 and code.isalpha() and code.isupper()
 
 
 def test_finnland_und_griechenland_sind_enthalten():
@@ -74,20 +131,30 @@ def test_registriere_laender_globals_setzt_globals_je_instanz():
     templates = Jinja2Templates(directory="app/templates")
     registriere_laender_globals(templates)
     assert templates.env.globals["LAENDER"] is LAENDER
+    assert templates.env.globals["ISO_LAENDER"] is ISO_LAENDER
 
 
-def _render_makro(gewaehlt: str) -> str:
+def _render_makro(gewaehlt: str, liste=None) -> str:
     templates = Jinja2Templates(directory="app/templates")
     registriere_laender_globals(templates)
-    return templates.env.get_template("partials/land_auswahl.html").module.land_auswahl(
-        "country", gewaehlt
-    )
+    makro = templates.env.get_template("partials/land_auswahl.html").module.land_auswahl
+    if liste is None:
+        return makro("country", gewaehlt)
+    return makro("country", gewaehlt, liste=liste)
 
 
 def test_makro_rendert_volle_liste():
     html = _render_makro("DE")
     assert html.count("<option") == 47
     assert 'value="FI"' in html
+
+
+def test_makro_mit_iso_liste_rendert_249_eintraege_inkl_japan():
+    """#81: Einrichtung/Einstellungen reichen ISO_LAENDER; Vorgabe bleibt LAENDER."""
+    html = _render_makro("DE", liste=ISO_LAENDER)
+    assert html.count("<option") == 249
+    assert '<option value="JP"' in html
+    assert "Japan (JP)" in html
 
 
 def test_makro_markiert_das_gewaehlte_land():
@@ -102,6 +169,12 @@ def test_makro_laesst_umlaut_namen_unbeschaedigt():
     assert "Türkei" in html
 
 
+def test_makro_rueckfall_unbekannter_code_gegen_iso_liste():
+    """Auch die ISO-Liste aendert sich; unbekannte Codes duerfen nicht verschwinden."""
+    html = _render_makro("XX", liste=ISO_LAENDER)
+    assert '<option value="XX" selected>XX</option>' in html
+    assert html.count("selected") == 1
+
 # ------------------------------------------------------- Formulare (HTTP)
 
 def _land_select(html: str) -> str:
@@ -111,22 +184,26 @@ def _land_select(html: str) -> str:
     return treffer.group(0)
 
 
-def test_kundenformular_zeigt_die_volle_laenderliste(client):
+def test_kundenformular_zeigt_die_kuratierte_laenderliste(client):
+    """#81: Kunden bleiben bei 47; JP darf hier keine normale Option sein.
+    Vertauschen mit ISO_LAENDER macht option-Zahl und fehlendes JP rot."""
     r = client.get("/customers/neu")
     assert r.status_code == 200
     block = _land_select(r.text)
     assert block.count("<option") == 47
     assert 'value="FI"' in block
+    assert 'value="JP"' not in block
     # Vorgabe fuer einen neuen Kunden bleibt Deutschland.
     assert '<option value="DE" selected>' in block
 
 
-def test_einstellungen_zeigen_die_volle_laenderliste(client):
+def test_einstellungen_zeigen_die_iso_laenderliste(client):
     r = client.get("/settings/")
     assert r.status_code == 200
     block = _land_select(r.text)
-    assert block.count("<option") == 47
-    assert 'value="FI"' in block
+    assert block.count("<option") == 249
+    assert 'value="JP"' in block
+    assert "Japan (JP)" in block
 
 
 def test_umlaut_name_kommt_unbeschaedigt_durch_die_antwort(client):
@@ -138,12 +215,13 @@ def test_umlaut_name_kommt_unbeschaedigt_durch_die_antwort(client):
     assert "Türkei" in r.text
 
 
-def test_einrichtung_zeigt_die_volle_laenderliste(client):
+def test_einrichtung_zeigt_die_iso_laenderliste(client):
     r = client.get("/setup")
     assert r.status_code == 200
     block = _land_select(r.text)
-    assert block.count("<option") == 47
-    assert 'value="FI"' in block
+    assert block.count("<option") == 249
+    assert 'value="JP"' in block
+    assert "Japan (JP)" in block
 
 
 def test_unbekannter_gespeicherter_code_bleibt_ausgewaehlt(client, pg_session):
@@ -180,6 +258,32 @@ def test_unbekannter_gespeicherter_code_bleibt_ausgewaehlt(client, pg_session):
 
     pg_session.expire_all()
     assert pg_session.get(Customer, kunde.id).country == "JP"
+
+
+def test_einstellungen_rueckfall_fuer_code_ausserhalb_iso_liste(client, pg_session):
+    """#81: Rueckfall auch gegen ISO_LAENDER; XX ist kein offizieller Code."""
+    from app.models.company import Company
+
+    firma = pg_session.get(Company, 1)
+    firma.country = "XX"
+    pg_session.commit()
+
+    r = client.get("/settings/")
+    assert r.status_code == 200
+    block = _land_select(r.text)
+    assert '<option value="XX" selected>XX</option>' in block
+    treffer = re.search(r'<option value="([^"]+)" selected>', block)
+    assert treffer, "keine ausgewaehlte Option im Select"
+
+    client.post("/settings/firma", data={
+        "name": firma.name, "address_line1": firma.address_line1,
+        "address_line2": "", "zip_code": firma.zip_code, "city": firma.city,
+        "country": treffer.group(1), "tax_number": firma.tax_number or "",
+        "vat_id": firma.vat_id or "", "invoice_prefix": firma.invoice_prefix or "RE",
+    })
+
+    pg_session.expire_all()
+    assert pg_session.get(Company, 1).country == "XX"
 
 
 # ------------------------------------------- End-to-End bis in die XML
@@ -238,6 +342,96 @@ def test_finnischer_kunde_landet_als_fi_in_der_kaeufer_xml(pg_session):
     )
     assert kaeufer, "kein BuyerTradeParty in der erzeugten XML"
     assert "<ram:CountryID>FI</ram:CountryID>" in kaeufer.group(0)
+
+    einstellungen = get_settings()
+    (einstellungen.storage_path / "pdfs" / f"{nummer}.pdf").unlink(missing_ok=True)
+    (einstellungen.storage_path / "pdfs" / f"{nummer}_visual.pdf").unlink(missing_ok=True)
+    (einstellungen.storage_path / "xml" / f"{nummer}.xml").unlink(missing_ok=True)
+
+
+@pytest.mark.skipif(
+    not (mustang.jar_available() and pdfa.gs_available()),
+    reason="Mustang-JAR oder Ghostscript nicht verfügbar",
+)
+def test_japanischer_aussteller_landet_als_jp_in_der_verkaeufer_xml(pg_session):
+    """#81: Einrichtung mit JP, Einstellungen zeigen JP gewaehlt, finalisierte
+    Rechnung traegt JP in ram:CountryID der SellerTradeParty."""
+    from fastapi.testclient import TestClient
+
+    from app.config import get_settings
+    from app.database import get_db
+    from app.main import app
+    from app.models.company import Company
+    from app.models.invoice import Invoice, InvoiceItem
+
+    firma = pg_session.get(Company, 1)
+    firma.setup_completed_at = None
+    firma.name = ""
+    firma.address_line1 = ""
+    firma.zip_code = ""
+    firma.city = ""
+    firma.tax_number = None
+    firma.vat_id = None
+    firma.country = "DE"
+    pg_session.commit()
+
+    app.dependency_overrides[get_db] = lambda: pg_session
+    try:
+        client = TestClient(app, follow_redirects=False)
+        r = client.post("/setup", data={
+            "name": "Tokyo Trading KK",
+            "address_line1": "1-1 Chiyoda",
+            "zip_code": "100-0001",
+            "city": "Tokyo",
+            "country": "JP",
+            "tax_number": "T1234567890123",
+            "vat_id": "",
+        })
+        assert r.status_code == 303, r.text
+
+        pg_session.expire_all()
+        assert pg_session.get(Company, 1).country == "JP"
+
+        settings = client.get("/settings/")
+        assert settings.status_code == 200
+        block = _land_select(settings.text)
+        assert '<option value="JP" selected>Japan (JP)</option>' in block
+
+        kunde = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}",
+                         name="Berlin GmbH", address_line1="Weg 1",
+                         zip_code="10115", city="Berlin", country="DE")
+        pg_session.add(kunde)
+        pg_session.flush()
+        netto = Decimal("100.00")
+        steuer = Decimal("19.00")
+        nummer = f"RE-JP-{uuid.uuid4().hex[:6]}"
+        rechnung = Invoice(invoice_number=nummer, customer_id=kunde.id,
+                           issue_date=date(2026, 9, 23), delivery_date=date(2026, 9, 23),
+                           due_date=date(2026, 10, 7), currency="EUR",
+                           net_total=netto, tax_total=steuer, gross_total=netto + steuer,
+                           tax_category="S", status="draft",
+                           payment_terms="Zahlbar innerhalb 14 Tagen.")
+        rechnung.items = [InvoiceItem(position=1, description="Leistung",
+                                      unit="Stk", quantity=Decimal("1"),
+                                      unit_price=Decimal("100.00"), tax_rate=Decimal("19"),
+                                      net_amount=netto, tax_amount=steuer,
+                                      gross_amount=netto + steuer)]
+        pg_session.add(rechnung)
+        pg_session.commit()
+
+        assert client.post(f"/invoices/{rechnung.id}/pruefen").status_code == 303
+        assert client.post(f"/invoices/{rechnung.id}/finalisieren").status_code == 303
+    finally:
+        app.dependency_overrides.clear()
+
+    pg_session.expire_all()
+    satz = pg_session.get(Invoice, rechnung.id)
+    assert satz.status == "issued"
+    verkaeufer = re.search(
+        r"<ram:SellerTradeParty>.*?</ram:SellerTradeParty>", satz.zugferd_xml, re.S
+    )
+    assert verkaeufer, "kein SellerTradeParty in der erzeugten XML"
+    assert "<ram:CountryID>JP</ram:CountryID>" in verkaeufer.group(0)
 
     einstellungen = get_settings()
     (einstellungen.storage_path / "pdfs" / f"{nummer}.pdf").unlink(missing_ok=True)

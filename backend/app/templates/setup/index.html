@@ -35,7 +35,7 @@
                 <input type="text" name="city" value="{{ wert('city') }}" required class="input"></label><br><br>
             <label>Land<br>
                 {% import "partials/land_auswahl.html" as land_auswahl %}
-                {{ land_auswahl.land_auswahl('country', wert('country') or 'DE') }}</label>
+                {{ land_auswahl.land_auswahl('country', wert('country') or 'DE', liste=ISO_LAENDER) }}</label>
         </fieldset>
 
         <fieldset style="border:2px solid var(--border-hi); padding:16px; margin-bottom:20px;">
