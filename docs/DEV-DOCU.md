@@ -32,6 +32,7 @@
 | `pydantic-settings` | 2.6.1 | 2.14.2 | **+minor** | |
 | `jinja2` | 3.1.4 | **3.1.6** | **patch (Security)** | 3.1.5/3.1.6 schließen bekannte Template-Issues; **Priorität** |
 | `python-multipart` | 0.0.20 | 0.0.32 | patch | Form-Uploads |
+| `packaging` | 26.2 | 26.3 | patch | Versionsvergleich in `services/update_check.py` (Zeile ergänzt 2026-09-24) |
 | `aiofiles` | 24.1.0 | 25.1.0 | **Major-Jahr** | API meist kompatibel; kurz prüfen |
 | `reportlab` | 4.2.5 | **5.0.0** | **Major** | PDF-Pipeline + Font-/Table-Quirks; **nicht leichtfertig**, Branding-Tests |
 | `pypdf` | 5.1.0 | **6.14.2** | **Major** | Font-Embedding-Asserts in Tests können brechen |
@@ -40,6 +41,7 @@
 | `python-dotenv` | 1.0.1 | 1.2.2 | minor | |
 | `cryptography` | 44.0.0 | **49.0.0** | **Major** | Fernet/`SECRET_KEY` (Settings); OpenSSL-Bindings, vorsichtig |
 | `defusedxml` | 0.7.1 | 0.7.1 | aktuell | Pflicht für fremde/eingehende XML |
+| `qrcode` | 8.2 | 8.2 | aktuell | EPC-QR (Girocode) in `services/epc_qr.py` (Zeile ergänzt 2026-09-24) |
 | `pytest` | 8.3.4 | **9.1.1** | **Major** | Nur Test-Runner, aber Plugin-/Config-Brüche möglich |
 
 ### Dev-only: entfallen (#105 Phase 1)
@@ -199,9 +201,10 @@ es: `curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x<FPR>" 
   (je einzeln). Reihenfolge s. „Empfohlene Upgrade-Reihenfolge" oben.
 - Nach jeder Lock-Änderung: **Image rebuild + kanonische Suite** (`./run-tests.sh`), bei Mustang
   zusätzlich die ZUGFeRD-E2E.
-- CI-Gate: **`uv lock --check`** vor der Suite (schlägt fehl, wenn `pyproject.toml` und `uv.lock`
-  divergieren, verhindert „vergessenes Re-Lock"). Anders als `alembic check` ist das ein
-  **echtes** Gate.
+- Lock-Gate: **`uv sync --locked`** im Dockerfile bricht den Bau ab, wenn `pyproject.toml`
+  und `uv.lock` divergieren (verhindert „vergessenes Re-Lock"). `run-tests.sh` baut das
+  Abbild, die CI fährt `run-tests.sh`; einen separaten `uv lock --check`-Schritt gibt es
+  nicht. `alembic check` ist hier ebenfalls ein echtes Gate (s. `ARCHITEKTUR.md`).
 
 ### Betriebsregeln uv (seit #105 Phase 1)
 
@@ -284,8 +287,9 @@ Empfänger-/Prüfer-System ablehnen würde. Deshalb reicht `combine==True` NICHT
 - ⚠️ **Testfolge:** JEDER Finalize/Send-Test, der die Pipeline auf Erfolg mockt, muss
   zusätzlich `mustang.validate` mocken (`{"is_valid": True, "raw": "…XML:valid…"}`), sonst
   läuft der echte Validator gegen das Fake-PDF und fail-closed'et zu `400`. Vorbild:
-  `_valid_mustang()` in `test_finalize_fail_closed.py` / `test_datev_send.py`,
-  `_finalize_with_fake_pipeline` in `test_finalize_validation_gate.py`. Tests:
+  `valid_mustang()` und `finalize_with_fake_pipeline` in
+  `tests/helpers/finalize_pipeline.py` (genutzt von `test_finalize_fail_closed.py` und
+  `test_finalize_validation_gate.py`), `_valid_mustang()` in `test_datev_send.py`. Tests:
   `test_finalize_blocks_when_combined_pdf_*`, `test_send_refuses_pdf_without_embedded_xml`,
   `test_send_allows_real_zugferd_pdf`.
 
@@ -384,7 +388,7 @@ Rechnung und stellt sicher, dass die XML-Summen (Netto/Steuer/Brutto) auch im PD
 
 ### Struktur/Reihenfolge gehört in den Mustang-Schema-Test, nicht in Substring/XPath (#98 E5)
 
-`test_zugferd_xml.py` (58 Tests) prüft fachliche **WERTE** per XPath, aber XPath-`find()` ist
+`test_zugferd_xml.py` (61 Tests, Stand 2026-09-24) prüft fachliche **WERTE** per XPath, aber XPath-`find()` ist
 **ordnungsblind** und ein Substring-Match sieht keine Sequenzfehler. Der reale
 PostcodeCode-vor-LineOne-Bug (Mustang type 18) blieb dort unsichtbar. Die einzige harte
 Strukturprüfung ist `test_zugferd_xml_schema.py` (Mustang/XSD, `is_valid`).
@@ -524,8 +528,8 @@ Zu **Vorfall 2026-07-08** (Hard-Delete/TRUNCATE auf `invoices`, Ursache offen) k
 **Trigger-Modul:** `backend/app/db/immutability_triggers.py`
 
 Die Trigger sind Single Source of Truth für **beide**:
-- **Migration 019:** `backend/alembic/versions/019_add_gobd_db_layer_triggers.py` liest die
-  `INSTALL_SQL` aus dem Modul.
+- **Migration:** `backend/alembic/versions/001_initial_schema.py` liest die
+  `INSTALL_SQL` aus dem Modul und führt sie per `op.execute` aus.
 - **Test-DB-Erzeugung:** `conftest.py::pg_session` lädt die Tabellenschema per
   `create_all()`, dann das Trigger-SQL aus demselben Modul für eine konsistente Testumgebung.
 
@@ -544,7 +548,7 @@ Die Trigger sind Single Source of Truth für **beide**:
 - **BEFORE DELETE `FOR EACH ROW` feuert nur, wenn Zeilen vorhanden sind.** Eine DELETE auf eine
   leere Tabelle triggert nie den BEFORE-Delete-Trigger. DELETE-Tests müssen daher **eine Zeile
   seeden**, ein reiner Test ohne Seed ist ein No-op und könnte fälschlich grün sein. Beispiel:
-  `test_admin_delete_draft_invoice_fails` seeded erst `invoice_draft_2` vor der DELETE-Assertion.
+  `test_admin_delete_invoices_blocked` seeded erst über `_seed_draft` vor der DELETE-Assertion.
 - **TRUNCATE-Trigger sind immer `FOR EACH STATEMENT`** (nicht `FOR EACH ROW`). TRUNCATE führt
   *kein* Row-Level Logging, daher ist die Trigger-Semantik anders: statt eines Triggers pro
   Zeile ein einziger Trigger pro TRUNCATE-Statement.
@@ -931,7 +935,8 @@ und finalisiert wird nur dort, nie in der Live-Installation.
 **Sichtbarkeit ohne Broker:** Kettenstand optional mit einem Belegmonitor-Werkzeug
 (liest denselben Belegordner, keine Signaturpruefung).
 
-**Tests:** `tests/test_abrechnungsauftrag_import.py`, `tests/test_testinstanz.py`. Suite
+**Tests:** `tests/test_abrechnungsauftrag_wirkung.py`, `tests/test_uebergabe_befund.py`,
+`tests/test_testinstanz.py`. Suite
 wie üblich über `./run-tests.sh` (Wegwerf-Postgres im Container, nicht Live-DB).
 
 #### Kunden-Bankverbindung und Gutschrift-QR
@@ -1098,7 +1103,7 @@ interaktiv nach Credentials → Timeout nach 2 min, exit 143). Stattdessen über
 mit dem `gh`-Token löschen, läuft sofort durch:
 
 ```bash
-gh api -X DELETE repos/usingitformystuff/abgehakt/git/refs/heads/<branch>
+gh api -X DELETE repos/abgehakt-zugferd/abgehakt-e-rechnung/git/refs/heads/<branch>
 ```
 
 `git pull --ff-only origin main` und lokales `git branch -d` funktionieren normal; nur das
@@ -1283,7 +1288,7 @@ Eine fest verdrahtete Owner-Konstante an dieser Stelle bricht jede Installation 
 
 ### Drei Fallstricke, die Messungen gekostet haben
 
-1. **`uv.lock` führt die Projektversion** (Zeile 645-646). Eine Erhöhung von
+1. **`uv.lock` führt die Projektversion** (Zeile 6-7). Eine Erhöhung von
    `version` in `pyproject.toml` bricht `uv sync --locked` im Dockerfile
    (gemessen: `./uv.sh lock --check` → `rc=1`). Deshalb steht die Release-Version
    in `backend/VERSION`, und die Zahl in `pyproject.toml` bleibt stehen.
@@ -1360,7 +1365,7 @@ ungeschütztes `model_validate` wirft dann `pydantic.ValidationError`, und die i
 **kein** `UpdateCheckError`: Der Router fängt sie nicht, der Nutzer bekäme einen
 500 statt „Prüfung nicht möglich". Regel: Jede Validierung fremder Eingabe wird in
 den fachlichen Fehlertyp des Moduls übersetzt. Test:
-`test_update_fetch.py::test_schema_verstoss_wird_zu_updatecheckerror`.
+`test_update_fetch.py::test_ausreisser_im_release_kippen_die_pruefung_nicht`.
 
 ### `expire_all()` beweist keine Persistenz: `expunge_all()` schon
 
@@ -1370,7 +1375,8 @@ verwirft nur die *gemappten* Attribute; ein Attribut, das (noch) keine Spalte is
 überlebt als gewöhnliches Python-Attribut, der Test liest seine eigene Zuweisung
 zurück und ist auch ohne die Spalte grün. Für „überlebt den Commit"-Tests deshalb
 `expunge_all()` und zusätzlich `assert frisch is not alt`. Aufgefallen in der
-RED-Phase von Migration 020 (`test_update_columns.py`).
+RED-Phase der Update-Spalten (#120, `test_update_columns.py`; die Spalten stecken in
+diesem Repo in `001_initial_schema.py`).
 
 ### `except Exception` ohne `rollback()` vergiftet die ganze Anfrage (#150)
 
@@ -1453,7 +1459,7 @@ Drei Punkte, die dabei auffielen:
    verhinderte seit dem 08.07.2026, dass `E` beiläufig durchrutscht, und zwang zur
    Entscheidung. Beim Umsetzen war er der einzige rote Test, der eine echte
    Bestätigung verlangte. Solche Tests beim Erweitern **umschreiben, nicht löschen**:
-   `G` bleibt weiter gesperrt.
+   er heisst seitdem `test_tax_category_g_is_out_of_scope`, `G` bleibt weiter gesperrt.
 
 Derselbe Fehlertyp wie `BR-CO-26` (siehe oben): eine Feldkombination, die die
 Einrichtung zulässt, die aber keine Testrechnung je hatte.
