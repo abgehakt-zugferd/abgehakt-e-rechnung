@@ -251,8 +251,10 @@ def _ig_lieferung(**over):
 
     Bis auf das, was der einzelne Test wegnimmt, vollständig gültig: 0 % Steuer
     (sonst TAX_CATEGORY_RATE_MISMATCH) und USt-IdNr. des Käufers (sonst
-    BUYER_VAT_ID_REQUIRED). Ohne beides wäre ein Fehlerfall-Test grün, ohne dass
-    das Leistungsdatum je geprüft worden wäre.
+    BUYER_VAT_ID_REQUIRED). Die USt-IdNr. des Verkäufers setzt der Aufrufer
+    über `_company(vat_id=...)` (sonst SELLER_VAT_ID_REQUIRED). Ohne beides
+    wäre ein Fehlerfall-Test grün, ohne dass das Leistungsdatum je geprüft
+    worden wäre.
     """
     item = _item(quantity=Decimal("1.0000"), unit_price=Decimal("200.00"),
                  tax_rate=Decimal("0.00"), net_amount=Decimal("200.00"),
@@ -282,7 +284,11 @@ def test_ig_lieferung_verlangt_das_leistungsdatum_auch_beim_kleinbetrag():
 
 def test_ig_lieferung_mit_leistungsdatum_ist_fehlerfrei():
     """Gutfall: sonst wäre die Regel ununterscheidbar von „K geht nie durch"."""
-    errors, _ = validate_invoice(_ig_lieferung(), _company())
+    # § 14a Abs. 1 Satz 3 UStG: Verkaeufer-USt-IdNr. ist bei K Pflicht.
+    errors, _ = validate_invoice(
+        _ig_lieferung(),
+        _company(vat_id="DE123456789"),
+    )
 
     assert errors == [], [f.code for f in errors]
 
@@ -636,9 +642,10 @@ class TestTaxCategory:
             gross_total=Decimal("200.00"),
             customer=_customer(vat_id="FI12345678"),
         )
-        errors, _ = validate_invoice(inv, _company())
+        errors, _ = validate_invoice(inv, _company(vat_id="DE123456789"))
         assert "TAX_CATEGORY_RATE_MISMATCH" not in _codes(errors)
         assert "BUYER_VAT_ID_REQUIRED" not in _codes(errors)
+        assert "SELLER_VAT_ID_REQUIRED" not in _codes(errors)
         assert "TAX_CATEGORY_INVALID" not in _codes(errors)
 
     def test_tax_category_e_valid_no_errors(self):
@@ -683,6 +690,49 @@ class TestTaxCategory:
         )
         errors, _ = validate_invoice(inv, _company(tax_number=None, vat_id="DE123456789"))
         assert "SELLER_TAX_NUMBER_REQUIRED_FOR_O" in _codes(errors)
+
+    def test_steuerkategorie_ae_verlangt_verkaeufer_ust_id(self):
+        """§ 14a Abs. 1 Satz 3 UStG: bei AE reicht die Steuernummer des Leistenden nicht."""
+        item = _item(tax_rate=Decimal("0.00"), net_amount=Decimal("200.00"),
+                     tax_amount=Decimal("0.00"), gross_amount=Decimal("200.00"))
+        inv = _invoice(
+            tax_category="AE",
+            items=[item],
+            net_total=Decimal("200.00"),
+            tax_total=Decimal("0.00"),
+            gross_total=Decimal("200.00"),
+            customer=_customer(vat_id="FI12345678"),
+        )
+        errors, _ = validate_invoice(inv, _company(tax_number="12/345/67890", vat_id=None))
+        assert "SELLER_VAT_ID_REQUIRED" in _codes(errors)
+        issue = next(e for e in errors if e.code == "SELLER_VAT_ID_REQUIRED")
+        assert issue.field == "company.vat_id"
+        assert "14a" in issue.message
+        assert "USt-IdNr" in issue.message
+
+    def test_steuerkategorie_k_verlangt_verkaeufer_ust_id(self):
+        """§ 14a Abs. 1 Satz 3 UStG: dasselbe bei innergemeinschaftlicher Lieferung."""
+        item = _item(tax_rate=Decimal("0.00"), net_amount=Decimal("200.00"),
+                     tax_amount=Decimal("0.00"), gross_amount=Decimal("200.00"))
+        inv = _invoice(
+            tax_category="K",
+            items=[item],
+            net_total=Decimal("200.00"),
+            tax_total=Decimal("0.00"),
+            gross_total=Decimal("200.00"),
+            customer=_customer(vat_id="ATU12345678"),
+        )
+        errors, _ = validate_invoice(inv, _company(tax_number="12/345/67890", vat_id=None))
+        assert "SELLER_VAT_ID_REQUIRED" in _codes(errors)
+
+    def test_inlandsrechnung_mit_blosser_steuernummer_ohne_seller_vat_id_required(self):
+        """Gegenprobe: Kategorie S bleibt mit blosser Steuernummer zulässig."""
+        errors, _ = validate_invoice(
+            _invoice(tax_category="S"),
+            _company(tax_number="12/345/67890", vat_id=None),
+        )
+        assert "SELLER_VAT_ID_REQUIRED" not in _codes(errors)
+        assert "SELLER_TAX_ID_MISSING" not in _codes(errors)
 
 
 # ── Konsistenz invoice_type ↔ original_invoice_id (ROADMAP Punkt 3) ──────────

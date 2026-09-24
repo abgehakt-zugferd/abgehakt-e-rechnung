@@ -147,17 +147,26 @@ def _tax_summaries_xml(invoice: Invoice) -> str:
     for rate, totals in sorted(grouped.items()):
         tax_cat = _item_tax_category(rate, inv_cat)
         exemption_block = ""
+        code_block = ""
         if inv_cat in EXEMPTION_REASONS:
             grund = exemption_reason(invoice)
             if grund:
                 exemption_block = f"\n                <ram:ExemptionReason>{_esc(grund)}</ram:ExemptionReason>"
+            # BT-121: nur Belegebene (BG-23). Positionsblock hat BT-151/BT-152;
+            # VATEX-Codes fuer K/E/O sind nicht Teil dieses Auftrags.
+            if inv_cat == "AE":
+                code_block = (
+                    "\n                <ram:ExemptionReasonCode>VATEX-EU-AE"
+                    "</ram:ExemptionReasonCode>"
+                )
         rate_line = _rate_percent_xml(rate, inv_cat, "\n                ")
+        # CII-Sequenz: ExemptionReasonCode nach CategoryCode, vor RateApplicablePercent
         parts.append(f"""
             <ram:ApplicableTradeTax>
                 <ram:CalculatedAmount>{_fmt_amount(totals['tax'])}</ram:CalculatedAmount>
                 <ram:TypeCode>VAT</ram:TypeCode>{exemption_block}
                 <ram:BasisAmount>{_fmt_amount(totals['basis'])}</ram:BasisAmount>
-                <ram:CategoryCode>{tax_cat}</ram:CategoryCode>{rate_line}
+                <ram:CategoryCode>{tax_cat}</ram:CategoryCode>{code_block}{rate_line}
             </ram:ApplicableTradeTax>""")
     return "\n".join(parts)
 

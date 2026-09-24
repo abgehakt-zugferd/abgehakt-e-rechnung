@@ -42,6 +42,16 @@ knowledge/ZUGFeRD/**/*.docx
 knowledge/GoBD/*.pdf
 knowledge/**/*.docx
 
+# Quelldokumente der Wissensdatenbank bleiben lokal.
+# knowledge/ traegt Markdown: diffbar, im Pull Request lesbar, klein. Die
+# Originale (Gutachten, Exporte) liegen daneben und gehoeren nicht in die
+# Historie; ein 3 MB grosser Blob je Fassung macht jeden Klon teurer und
+# laesst sich trotzdem nicht gegenlesen.
+knowledge/*.docx
+knowledge/**/*.docx
+knowledge/*.pdf
+knowledge/**/*.pdf
+
 # Lokale Editorkonfiguration (nicht projektrelevant)
 .idea/
 .vscode/

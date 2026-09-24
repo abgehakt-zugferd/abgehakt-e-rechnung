@@ -129,6 +129,14 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
             "genügt hier nicht.",
             "company.tax_number",
         ))
+    elif tax_category in {"AE", "K"} and not company.vat_id:
+        errors.append(Issue(
+            "SELLER_VAT_ID_REQUIRED", "error",
+            "Bei Reverse Charge und innergemeinschaftlicher Lieferung (Kategorien AE/K) muss "
+            "die USt-IdNr. des Leistungserbringers in den Einstellungen hinterlegt sein "
+            "(§ 14a Abs. 1 Satz 3 UStG). Die Steuernummer allein genügt hier nicht.",
+            "company.vat_id",
+        ))
     if company.vat_id:
         _ust_id_validator_issues(
             company,
@@ -260,6 +268,14 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
                     f"Position {item.position}: Steuerbetrag {item.tax_amount} stimmt nicht (erwartet {expected_tax}).",
                     f"items[{item.position}].tax_amount"
                 ))
+            if tax_category in {"AE", "K"} and item.tax_amount != Decimal("0"):
+                errors.append(Issue(
+                    "TAX_AMOUNT_MUST_BE_ZERO", "error",
+                    f"Position {item.position}: Bei Reverse Charge / innergemeinschaftlicher "
+                    f"Lieferung muss der Steuerbetrag exakt 0,00 € betragen "
+                    f"(gefunden {item.tax_amount}).",
+                    f"items[{item.position}].tax_amount",
+                ))
 
     # Gesamtbeträge prüfen
     if invoice.items:
@@ -273,6 +289,13 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
             errors.append(Issue("TAX_TOTAL_MISMATCH", "error", f"Steuersumme {invoice.tax_total} stimmt nicht (erwartet {expected_tax_total}).", "tax_total"))
         if abs(invoice.gross_total - expected_gross) > Decimal("0.02"):
             errors.append(Issue("GROSS_TOTAL_MISMATCH", "error", f"Bruttosumme {invoice.gross_total} stimmt nicht (erwartet {expected_gross}).", "gross_total"))
+        if tax_category in {"AE", "K"} and invoice.tax_total != Decimal("0"):
+            errors.append(Issue(
+                "TAX_AMOUNT_MUST_BE_ZERO", "error",
+                f"Bei Reverse Charge / innergemeinschaftlicher Lieferung muss die "
+                f"Steuersumme exakt 0,00 € betragen (gefunden {invoice.tax_total}).",
+                "tax_total",
+            ))
 
     # MwSt.-Kategorie prüfen
     if tax_category not in VALID_TAX_CATEGORIES:

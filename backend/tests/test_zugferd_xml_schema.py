@@ -151,6 +151,37 @@ def test_reverse_charge_ae_is_schema_valid():
     )
 
 
+def test_ae_exemption_reason_code_steht_nach_category_code():
+    """CII-Sequenz: ExemptionReasonCode (BT-121) nach CategoryCode, vor RateApplicablePercent.
+
+    An der falschen Stelle (z. B. direkt hinter ExemptionReason) bricht die
+    Schema-Validierung bei Mustang, nicht beim Erzeugen.
+    """
+    import xml.etree.ElementTree as ET
+
+    cust = Customer(name="EU Kunde AG", address_line1="Ringstraße 12", zip_code="1010",
+                    city="Wien", country="AT", vat_id="ATU12345678")
+    inv = _multi_item_invoice([_item(1, "2", "100.00", "0")])
+    inv.customer = cust
+    inv.tax_category = "AE"
+    company = _company()
+    xml = zugferd_xml.generate_xml(inv, company)
+    root = ET.fromstring(xml)
+    ns = {"ram": "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"}
+    tax = root.find(".//ram:ApplicableHeaderTradeSettlement/ram:ApplicableTradeTax", ns)
+    assert tax is not None
+    namen = [kind.tag.split("}")[-1] for kind in list(tax)]
+    assert "ExemptionReasonCode" in namen, namen
+    assert namen.index("ExemptionReasonCode") == namen.index("CategoryCode") + 1, namen
+    assert namen.index("RateApplicablePercent") == namen.index("ExemptionReasonCode") + 1, namen
+    assert tax.find("ram:ExemptionReasonCode", ns).text == "VATEX-EU-AE"
+
+    result = _validate(inv, company)
+    assert result["is_valid"], (
+        f"AE mit VATEX-EU-AE nicht schema-valide:\n{result['errors']}\n{result['raw']}"
+    )
+
+
 @pytest.mark.parametrize("category,rate,vat_id,country", [
     ("K", "0", "ATU12345678", "AT"),
     ("O", "0", None, "US"),
