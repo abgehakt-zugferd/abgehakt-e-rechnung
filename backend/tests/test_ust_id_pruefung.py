@@ -78,6 +78,35 @@ def test_vies_ungueltig():
     assert ergebnis.gueltig is False
 
 
+def test_vies_valid_als_zeichenkette_false_ist_keine_auskunft():
+    """`bool("false")` ist wahr. Eine Zeichenkette ist keine Auskunft, sonst
+
+    wuerde ein abgelehnter Wert als geprueft-gueltig festgehalten.
+    """
+    ergebnis = pruefe_ust_id_vies("DE300", transport=_transport({"valid": "false"}))
+    assert not ergebnis.verfuegbar
+    assert ergebnis.gueltig is None
+    assert ergebnis.fehlercode == "INVALID_VALID_FIELD"
+
+
+def test_vies_valid_als_zeichenkette_true_ist_keine_auskunft():
+    """Auch die wohlmeinende Zeichenkette zaehlt nicht: gemessen wird der Typ,
+
+    nicht die Lesbarkeit. Sonst haengt die Steuerfreiheit an einer Textform.
+    """
+    ergebnis = pruefe_ust_id_vies("DE301", transport=_transport({"valid": "true"}))
+    assert not ergebnis.verfuegbar
+    assert ergebnis.gueltig is None
+    assert ergebnis.fehlercode == "INVALID_VALID_FIELD"
+
+
+def test_vies_ohne_valid_feld_ist_keine_auskunft():
+    ergebnis = pruefe_ust_id_vies("DE302", transport=_transport({"name": "Ohne Urteil"}))
+    assert not ergebnis.verfuegbar
+    assert ergebnis.gueltig is None
+    assert ergebnis.fehlercode == "INVALID_VALID_FIELD"
+
+
 def test_vies_nicht_erreichbar():
     def handler(request):
         return httpx.Response(503)

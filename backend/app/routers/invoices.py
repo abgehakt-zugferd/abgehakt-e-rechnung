@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, Response
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models.customer import Customer
@@ -606,7 +607,10 @@ def finalize_invoice(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
         )
 
     # 1. ZUGFeRD XML erzeugen
-    xml_content = zugferd_xml.generate_xml(invoice, company)
+    try:
+        xml_content = zugferd_xml.generate_xml(invoice, company)
+    except ValueError as fehler:
+        raise HTTPException(400, str(fehler)) from fehler
     invoice.zugferd_xml = xml_content
 
     # Die gesamte Belegerzeugung läuft in einem Wegwerf-Verzeichnis, NICHT im Archiv
@@ -621,7 +625,10 @@ def finalize_invoice(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
     try:
         # 2. Visuelles PDF erzeugen
         visual_pdf = arbeitsverzeichnis / f"{invoice.invoice_number}_visual.pdf"
-        pdf_generator.generate_pdf(invoice, company, visual_pdf)
+        try:
+            pdf_generator.generate_pdf(invoice, company, visual_pdf)
+        except ValueError as fehler:
+            raise HTTPException(400, str(fehler)) from fehler
 
         # 3. Mustang: XML in PDF einbetten → ZUGFeRD PDF
         xml_path = arbeitsverzeichnis / f"{invoice.invoice_number}.xml"
@@ -927,5 +934,28 @@ def create_storno(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
     from app.services.storno import build_storno
     storno = build_storno(original, number, date.today())
     db.add(storno)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Zweite Schicht (#90): der partielle Unique-Index faengt den Wettlauf,
+        # den die Vorabpruefung oben ohne Sperre nicht serialisiert. Rollback
+        # nimmt die in derselben Transaktion gezogene Nummer mit zurueck: keine
+        # Luecke ohne Datensatz. Die Meldung entspricht der Vorabpruefung.
+        db.rollback()
+        vorhandene = (
+            db.query(Invoice)
+            .filter(Invoice.original_invoice_id == invoice_id,
+                    Invoice.status != "discarded")
+            .order_by(Invoice.invoice_number)
+            .first()
+        )
+        nummer = vorhandene.invoice_number if vorhandene else "?"
+        raise HTTPException(
+            400,
+            f"Zu dieser Rechnung existiert bereits die Gutschrift "
+            f"{nummer}. Ein Beleg wird nur einmal storniert; "
+            "eine zweite Gutschrift würde die Forderung doppelt mindern. Ist die "
+            "vorhandene Gutschrift versehentlich entstanden, verwirf zuerst ihren "
+            "Entwurf.",
+        )
     return RedirectResponse(url=f"/invoices/{storno.id}", status_code=303)

@@ -44,9 +44,63 @@ befund() {
 }
 
 # Muster ohne IBAN-artige Literale in dieser Datei (sonst blockiert die Wache den Push).
-_iban_probe() {
+# Issue #93: zusammengesetzt; volle Zeichenfolge nur im Wegwerf-Commit.
+
+# Erfundene DE-Folge, Laenge 22, Pruefziffer absichtlich falsch (Rest != 1).
+# Heute blockiert die reine Formatwache; nach #93 muss sie durchlaufen.
+_iban_falsche_pruefziffer() {
     _p1="DE"; _p2="12"; _p3="3456 7890 1234 5678 90"
     printf 'probe %s%s %s\n' "$_p1" "$_p2" "$_p3"
+}
+
+# Erfundene NL-IBAN mit gueltiger MOD-97-Pruefziffer (kein PROBE-Sentinel).
+# Rechnung (knowledge/IBAN/pruefung.md): BBAN=XXXX0123456789, Land NL00,
+# umgestellt XXXX0123456789NL00, Ziffern 333333330123456789232100,
+# Rest 34, Pruefziffer 98-34=64. Gegenprobe Rest 1. Laenge 18 laut Registry.
+# Heute laeuft sie durch (nur-DE-Muster); nach #93 muss sie blockieren.
+_iban_nl_gueltig() {
+    _p1="NL"; _p2="64"; _p3="XXXX"; _p4="0123456789"
+    printf 'probe %s%s%s%s\n' "$_p1" "$_p2" "$_p3" "$_p4"
+}
+
+# Spec-Probe AZ66PROBE + 19 Nullen: Pruefziffer stimmt, Fixture-Form.
+# Muss trotz gueltiger Pruefziffer durchlaufen (Ausnahme konstruiert).
+_iban_az_probe_fixture() {
+    _p1="AZ"; _p2="66"; _p3="PROBE"; _p4="0000000000000000000"
+    printf 'probe %s%s%s%s\n' "$_p1" "$_p2" "$_p3" "$_p4"
+}
+
+# FIRMA-Probe aus probe_daten: PROBE + Nullen + Schlussziffer 1.
+# Ausnahme muss diese Form mit abdecken, sonst blockiert der echte Push #91.
+_iban_firma_probe_fixture() {
+    _p1="DE"; _p2="33"; _p3="PROBE"; _p4="000000000000"; _p5="1"
+    printf 'probe %s%s%s%s%s\n' "$_p1" "$_p2" "$_p3" "$_p4" "$_p5"
+}
+
+# Erfundene DE-IBAN, Laenge 22, Pruefziffer gueltig, kein PROBE-Sentinel.
+# BBAN=314159265358979323 (Pi-Ziffern, kein Konto). DE00+BBAN Rest 15,
+# Pruefziffer 98-15=83. Gegenprobe Rest 1. Bleibt blockiert.
+_iban_de_gueltig_echtartig() {
+    _p1="DE"; _p2="83"; _p3="314159265358979323"
+    printf 'probe %s%s%s\n' "$_p1" "$_p2" "$_p3"
+}
+
+# Alias fuer aeltere Aufrufe in diesem Skript (ueberstimmen, nur_neue_commits).
+_iban_probe() {
+    _iban_de_gueltig_echtartig
+}
+
+# Mehrbyte (Umlaute, Paragraph): reproduziert macOS-awk towc-Abbruch ohne LC_ALL=C.
+# IBAN zusammengesetzt; Trefferpruefung nutzt das ASCII-Fragment XXXX0123456789,
+# damit ein awk-Absturz-Befund nicht als echte Erkennung zaehlt.
+_iban_nl_in_umlautzeile() {
+    _p1="NL"; _p2="64"; _p3="XXXX"; _p4="0123456789"
+    printf 'Pr\303\274fung f\303\274r \303\226sterreich gem\303\244\303\237 \302\24714: %s%s%s%s\n' \
+        "$_p1" "$_p2" "$_p3" "$_p4"
+}
+
+_umlautzeile_ohne_iban() {
+    printf 'Pr\303\274fung f\303\274r \303\226sterreich gem\303\244\303\237 \302\24714: Betrag 24,30 Euro\n'
 }
 
 _ust_probe() {
@@ -96,9 +150,36 @@ _steuer_fixture_elf() {
     printf 'tax_number="%s/%s/%s"\n' "123" "456" "78901"
 }
 
-r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_iban_probe)")
+# Issue #93: IBAN laenderuebergreifend, Pruefziffer, konstruierte Ausnahme.
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_iban_falsche_pruefziffer)")
 lauf "$r" "$s" "$leer" /nicht/da
-befund "iban_wird_erkannt" 1 "IBAN-Format"
+befund "iban_falsche_pruefziffer_laeuft_durch" 0 ""
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_iban_nl_gueltig)")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "iban_nl_gueltig_wird_erkannt" 1 "IBAN-Format"
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_iban_az_probe_fixture)")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "iban_az_probe_fixture_laeuft_durch" 0 ""
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_iban_firma_probe_fixture)")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "iban_firma_probe_fixture_laeuft_durch" 0 ""
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_iban_de_gueltig_echtartig)")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "iban_de_gueltig_wird_erkannt" 1 "IBAN-Format"
+
+# Folgeschritt #93: Mehrbyte darf awk nicht abbrechen lassen.
+# Fragment XXXX0123456789: echte Erkennung, nicht "fehlgeschlagen".
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_iban_nl_in_umlautzeile)")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "iban_nl_in_umlautzeile_wird_erkannt" 1 "XXXX0123456789"
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_umlautzeile_ohne_iban)")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "umlautzeile_ohne_iban_laeuft_durch" 0 ""
 
 r=$(neues_repo); s=$(commit_mit "$r" a.txt "harmloser Text, Betrag 24,30 Euro, 2026-08-23")
 lauf "$r" "$s" "$leer" /nicht/da

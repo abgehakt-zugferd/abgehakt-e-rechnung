@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.services.adresse import bereinige_adresszeile2
+from app.services.bankverbindung import normalisiere_bic, normalisiere_iban, pruefe_bic, pruefe_iban
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
 from app.laender import registriere_laender_globals
@@ -65,6 +66,11 @@ async def speichern(request: Request, db: Session = Depends(get_db)):
         return _mit_fehler(request, db, werte,
                            "Steuernummer oder USt-IdNr. ist für § 14 UStG erforderlich.")
 
+    if (meldung := pruefe_iban(werte["bank_iban"])):
+        return _mit_fehler(request, db, werte, meldung)
+    if (meldung := pruefe_bic(werte["bank_bic"])):
+        return _mit_fehler(request, db, werte, meldung)
+
     company = _company(db)
     if company is None:
         # Migration 001 legt die Zeile an; fehlt sie trotzdem, ist die Einrichtung
@@ -73,8 +79,14 @@ async def speichern(request: Request, db: Session = Depends(get_db)):
         db.add(company)
     for feld, wert in werte.items():
         if feld == "address_line2":
-            wert = bereinige_adresszeile2(werte["name"], wert)
-        setattr(company, feld, wert or None)
+            wert = bereinige_adresszeile2(werte["name"], wert) or None
+        elif feld == "bank_iban":
+            wert = normalisiere_iban(wert)
+        elif feld == "bank_bic":
+            wert = normalisiere_bic(wert)
+        else:
+            wert = wert or None
+        setattr(company, feld, wert)
     company.country = werte["country"] or "DE"
     company.setup_completed_at = datetime.now(timezone.utc)
     db.commit()

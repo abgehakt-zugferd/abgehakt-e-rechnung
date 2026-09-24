@@ -234,7 +234,25 @@ def pruefe_ust_id_vies(
             geprueft_am=jetzt,
         )
 
-    gueltig = bool(data.get("valid"))
+    # `bool()` ist auf jeder nichtleeren Zeichenkette wahr: aus einem "false"
+    # wuerde damit ein geprueft-gueltiger Nachweis, an dem bei Reverse Charge die
+    # Steuerfreiheit haengt. Gemessen wird deshalb der Typ, nicht die Lesbarkeit.
+    # Was weder `true` noch `false` ist, ist keine Auskunft und wird wie ein
+    # nicht erreichbarer Dienst behandelt: dann steht an der Rechnung kein Urteil
+    # statt eines falschen.
+    roh_gueltig = data.get("valid")
+    if not isinstance(roh_gueltig, bool):
+        return UstIdPruefungErgebnis(
+            verfuegbar=False,
+            gueltig=None,
+            registrierter_name=None,
+            registrierte_adresse=None,
+            name_abgleich="unbekannt",
+            fehlercode="INVALID_VALID_FIELD",
+            geprueft_am=jetzt,
+        )
+
+    gueltig = roh_gueltig
     vies_name = vies_name_normalisiert((data.get("name") or "").strip() or None)
     vies_adresse = (data.get("address") or "").strip() or None
     trader_match = data.get("traderNameMatch")

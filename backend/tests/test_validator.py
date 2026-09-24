@@ -498,7 +498,7 @@ def test_missing_bank_iban_warning():
 
 def test_bank_iban_set_no_warning():
     """IBAN hinterlegt → kein NO_BANK_DETAILS."""
-    _, warnings = validate_invoice(_invoice(), _company(bank_iban="DE89370400440532013000"))
+    _, warnings = validate_invoice(_invoice(), _company(bank_iban="DE60PROBE0000000000000"))
     assert "NO_BANK_DETAILS" not in _codes(warnings)
 
 

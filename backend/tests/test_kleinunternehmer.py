@@ -49,7 +49,7 @@ def _company(**over) -> Company:
         zip_code="12345", city="Musterstadt", country="DE",
         email="anna@example.de", phone="+49 111",
         vat_id=None, tax_number="123/456/78901",
-        bank_iban="DE00123456780000000000", bank_bic="ABCDDEFF",
+        bank_iban="DE33PROBE0000000000001", bank_bic="ABCDDEFF",
         bank_name="Testbank",
     )
     kw.update(over)

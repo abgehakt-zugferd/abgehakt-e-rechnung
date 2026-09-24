@@ -295,17 +295,17 @@ def test_buyer_vat_id_bt48():
 
 def test_payment_means_sepa_with_iban_and_bic():
     """BT-81/84/85: SEPA TypeCode 58, IBAN und BIC."""
-    c = _company(bank_iban="DE89370400440532013000", bank_bic="COBADEFFXXX")
+    c = _company(bank_iban="DE60PROBE0000000000000", bank_bic="COBADEFFXXX")
     root = _parse(generate_xml(_invoice(), c))
     pm = ".//ram:ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementPaymentMeans"
     assert _text(root, f"{pm}/ram:TypeCode") == "58"
-    assert _text(root, f"{pm}/ram:PayeePartyCreditorFinancialAccount/ram:IBANID") == "DE89370400440532013000"
+    assert _text(root, f"{pm}/ram:PayeePartyCreditorFinancialAccount/ram:IBANID") == "DE60PROBE0000000000000"
     assert _text(root, f"{pm}/ram:PayeeSpecifiedCreditorFinancialInstitution/ram:BICID") == "COBADEFFXXX"
 
 
 def test_payment_means_sepa_iban_only_no_bic():
     """BT-84: Nur IBAN → kein BIC-Block."""
-    c = _company(bank_iban="DE89370400440532013000", bank_bic=None)
+    c = _company(bank_iban="DE60PROBE0000000000000", bank_bic=None)
     root = _parse(generate_xml(_invoice(), c))
     pm = ".//ram:ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementPaymentMeans"
     assert _text(root, f"{pm}/ram:IBANID") is None  # korrekt über tiefen Pfad
@@ -740,6 +740,22 @@ class TestTaxCategories:
         )
         assert cat is not None and cat.text == "K"
         assert reason is not None and "§ 4 Nr. 1b UStG" in reason.text
+        # BT-121 gehoert ausschliesslich zu AE (VATEX-EU-AE). K darf keinen
+        # ExemptionReasonCode tragen: sachlich passend waere VATEX-EU-IC, ob K
+        # einen Code bekommt, ist eine offene Spec-Entscheidung. Bis dahin:
+        # kein Code auf Belegebene (BG-23) und keiner im Positionsblock.
+        code = root.find(
+            ".//ram:ApplicableHeaderTradeSettlement/ram:ApplicableTradeTax/ram:ExemptionReasonCode",
+            NS,
+        )
+        assert code is None
+        line_code = root.find(
+            ".//ram:IncludedSupplyChainTradeLineItem"
+            "//ram:ApplicableTradeTax"
+            "/ram:ExemptionReasonCode",
+            NS,
+        )
+        assert line_code is None
 
     def test_o_category_code_and_exemption_reason(self):
         item = _item(
@@ -766,6 +782,21 @@ class TestTaxCategories:
         )
         assert cat is not None and cat.text == "O"
         assert reason is not None and "§ 3a Abs. 2 UStG" in reason.text
+        # BT-121 gehoert ausschliesslich zu AE (VATEX-EU-AE). O traegt keinen
+        # ExemptionReasonCode: weder auf Belegebene (BG-23) noch im
+        # Positionsblock (sachlich passend waere VATEX-EU-O, offene Spec-Frage).
+        code = root.find(
+            ".//ram:ApplicableHeaderTradeSettlement/ram:ApplicableTradeTax/ram:ExemptionReasonCode",
+            NS,
+        )
+        assert code is None
+        line_code = root.find(
+            ".//ram:IncludedSupplyChainTradeLineItem"
+            "//ram:ApplicableTradeTax"
+            "/ram:ExemptionReasonCode",
+            NS,
+        )
+        assert line_code is None
 
     def test_e_category_code_and_exemption_reason(self):
         """#31: Kleinunternehmer § 19 in XPath-Tests wie K/O."""
@@ -793,6 +824,22 @@ class TestTaxCategories:
         )
         assert cat is not None and cat.text == "E"
         assert reason is not None and "§ 19" in reason.text
+        # BT-121 gehoert ausschliesslich zu AE (VATEX-EU-AE). Fuer E (§ 19
+        # UStG) existiert kein sachlich passender VATEX-Code; E traegt keinen
+        # ExemptionReasonCode, weder auf Belegebene (BG-23) noch im
+        # Positionsblock.
+        code = root.find(
+            ".//ram:ApplicableHeaderTradeSettlement/ram:ApplicableTradeTax/ram:ExemptionReasonCode",
+            NS,
+        )
+        assert code is None
+        line_code = root.find(
+            ".//ram:IncludedSupplyChainTradeLineItem"
+            "//ram:ApplicableTradeTax"
+            "/ram:ExemptionReasonCode",
+            NS,
+        )
+        assert line_code is None
 
     def test_inland_zero_rate_uses_z_not_ae(self):
         item = _item(
