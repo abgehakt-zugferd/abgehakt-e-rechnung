@@ -38,7 +38,7 @@ def _company():
         address_line1="Musterstraße 1", zip_code="12345", city="Musterstadt",
         email="info@example.de", phone="+49 111",
         vat_id="DE123456789", tax_number="123/456/78901",
-        bank_iban="DE00123456780000000000", bank_bic="ABCDDEFF", bank_name="Testbank",
+        bank_iban="DE33PROBE0000000000001", bank_bic="ABCDDEFF", bank_name="Testbank",
     )
 
 

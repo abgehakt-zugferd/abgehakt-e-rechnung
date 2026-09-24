@@ -295,17 +295,17 @@ def test_buyer_vat_id_bt48():
 
 def test_payment_means_sepa_with_iban_and_bic():
     """BT-81/84/85: SEPA TypeCode 58, IBAN und BIC."""
-    c = _company(bank_iban="DE89370400440532013000", bank_bic="COBADEFFXXX")
+    c = _company(bank_iban="DE60PROBE0000000000000", bank_bic="COBADEFFXXX")
     root = _parse(generate_xml(_invoice(), c))
     pm = ".//ram:ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementPaymentMeans"
     assert _text(root, f"{pm}/ram:TypeCode") == "58"
-    assert _text(root, f"{pm}/ram:PayeePartyCreditorFinancialAccount/ram:IBANID") == "DE89370400440532013000"
+    assert _text(root, f"{pm}/ram:PayeePartyCreditorFinancialAccount/ram:IBANID") == "DE60PROBE0000000000000"
     assert _text(root, f"{pm}/ram:PayeeSpecifiedCreditorFinancialInstitution/ram:BICID") == "COBADEFFXXX"
 
 
 def test_payment_means_sepa_iban_only_no_bic():
     """BT-84: Nur IBAN → kein BIC-Block."""
-    c = _company(bank_iban="DE89370400440532013000", bank_bic=None)
+    c = _company(bank_iban="DE60PROBE0000000000000", bank_bic=None)
     root = _parse(generate_xml(_invoice(), c))
     pm = ".//ram:ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementPaymentMeans"
     assert _text(root, f"{pm}/ram:IBANID") is None  # korrekt über tiefen Pfad

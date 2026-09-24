@@ -8,6 +8,8 @@ from collections import defaultdict
 from app.models.invoice import Invoice
 from app.models.company import Company
 from app.services.adresse import bereinige_adresszeile2
+from app.services.bankverbindung import iban_fuer_ausgabe
+from app.services.iban import IbanProfil
 
 PROFILE_IDS = {
     # ZUGFeRD 2.5 / Factur-X 1.09 (gültig ab 30.06.2026): EN16931-ID vereinfacht
@@ -283,9 +285,10 @@ def _buyer_vat_xml(customer, tax_category: str) -> str:
     return ""
 
 
-def _payment_means_xml(iban: str, bic: str | None = None) -> str:
+def _payment_means_xml(iban: str, bic: str | None = None, *, wer: str) -> str:
     if not iban:
         return ""
+    iban_norm = iban_fuer_ausgabe(iban, wer=wer, profil=IbanProfil.REGISTRY)
     bic_block = ""
     if bic:
         bic_block = f"""
@@ -296,7 +299,7 @@ def _payment_means_xml(iban: str, bic: str | None = None) -> str:
             <ram:SpecifiedTradeSettlementPaymentMeans>
                 <ram:TypeCode>58</ram:TypeCode>
                 <ram:PayeePartyCreditorFinancialAccount>
-                    <ram:IBANID>{_esc(iban)}</ram:IBANID>
+                    <ram:IBANID>{_esc(iban_norm)}</ram:IBANID>
                 </ram:PayeePartyCreditorFinancialAccount>{bic_block}
             </ram:SpecifiedTradeSettlementPaymentMeans>"""
 
@@ -304,7 +307,7 @@ def _payment_means_xml(iban: str, bic: str | None = None) -> str:
 def _company_payment_means_xml(company: Company) -> str:
     if not company.bank_iban:
         return ""
-    return _payment_means_xml(company.bank_iban, company.bank_bic)
+    return _payment_means_xml(company.bank_iban, company.bank_bic, wer="Firma")
 
 
 def _gutschrift_zahlung_an_kunde(invoice: Invoice) -> bool:
@@ -334,7 +337,9 @@ def _settlement_payment_xml(invoice: Invoice, company: Company) -> str:
     customer = invoice.customer
     if _gutschrift_zahlung_an_kunde(invoice):
         if customer and customer.bank_iban:
-            return _payment_means_xml(customer.bank_iban, customer.bank_bic)
+            return _payment_means_xml(
+                customer.bank_iban, customer.bank_bic, wer="Kunde"
+            )
         return ""
     return _company_payment_means_xml(company)
 

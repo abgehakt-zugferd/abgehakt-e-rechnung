@@ -24,7 +24,9 @@ from app.models.invoice import Invoice
 from app.models.company import Company
 from app.services.adresse import bereinige_adresszeile2
 from app.services.pdf_fonts import register_fonts
+from app.services.bankverbindung import iban_fuer_ausgabe
 from app.services.epc_qr import build_epc_payload, qr_png_bytes
+from app.services.iban import IbanProfil
 from app.services.zugferd_xml import EXEMPTION_REASONS
 
 # ── Firmenlogo ───────────────────────────────────────────────────────────────
@@ -113,7 +115,11 @@ def _epc_qr_anhaengen(story, invoice, company, small) -> None:
     if not ziel:
         return
     name, iban, bic, bank_name = ziel
-    bank_parts = [f"IBAN: {iban}"]
+    wer = "Kunde" if _zahlung_an_kunde(invoice) else "Firma"
+    # Option A: Registry-ungueltige Bestands-IBAN bricht die Erzeugung ab
+    # (nicht still im Klartext weitergeben und nur den QR unterdruecken).
+    iban_norm = iban_fuer_ausgabe(iban, wer=wer, profil=IbanProfil.REGISTRY)
+    bank_parts = [f"IBAN: {iban_norm}"]
     if bic:
         bank_parts.append(f"BIC: {bic}")
     if bank_name:
@@ -123,7 +129,7 @@ def _epc_qr_anhaengen(story, invoice, company, small) -> None:
     try:
         payload = build_epc_payload(
             beneficiary_name=name,
-            iban=iban,
+            iban=iban_norm,
             bic=bic,
             amount=invoice.gross_total,
             currency=getattr(invoice, "currency", "EUR") or "EUR",
@@ -133,6 +139,7 @@ def _epc_qr_anhaengen(story, invoice, company, small) -> None:
         story.append(Image(io.BytesIO(qr_png_bytes(payload)), width=3.5 * cm, height=3.5 * cm))
         story.append(Paragraph("Zum Überweisen scannen.", small))
     except ValueError:
+        # EPC_SCT strenger als REGISTRY: kein falscher Girocode, Klartext bleibt.
         pass
 
 

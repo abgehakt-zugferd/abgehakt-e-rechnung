@@ -19,7 +19,7 @@ from tests.probe_daten import IBAN_FIRMA_PROBE, UST_DE_PROBE, UST_DE_PROBE_2
 COMPANY_STUB_FIELDS = (
     "name", "address_line1", "address_line2", "zip_code", "city", "country",
     "tax_number", "vat_id", "vat_id_checked_at", "vat_id_check_valid", "vat_id_vies_name", "vat_id_name_match",
-    "email", "phone", "contact_name", "bank_iban", "bank_bic",
+    "email", "phone", "contact_name", "bank_iban", "bank_bic", "bank_name",
 )
 CUSTOMER_STUB_FIELDS = (
     "name", "address_line1", "address_line2", "zip_code", "city", "country",
@@ -70,6 +70,7 @@ def company_stub(**kwargs):
         contact_name=None,
         bank_iban=None,
         bank_bic=None,
+        bank_name=None,
     ), **kwargs)
 
 

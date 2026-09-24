@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.company import Company
 from app.models.app_config import AppConfig
 from app.services import datev_email, empfaenger
+from app.services.bankverbindung import normalisiere_bic, normalisiere_iban, pruefe_bic, pruefe_iban
 from app.services.invoice_number import pruefe_praefix
 from app.services.ust_id_pruefung import (
     eingaben_fuer_pruefung,
@@ -118,6 +119,10 @@ def save_company(
         return settings_page(request, db, saved=False, error=meldung)
     if (meldung := pruefe_steuer_ruecklage(kst_satz_percent, soli_auf_kst_percent, gewerbe_hebesatz)):
         return settings_page(request, db, saved=False, error=meldung)
+    if (meldung := pruefe_iban(bank_iban)):
+        return settings_page(request, db, saved=False, error=meldung)
+    if (meldung := pruefe_bic(bank_bic)):
+        return settings_page(request, db, saved=False, error=meldung)
 
     company = _get_or_create_company(db)
     alt_vat = company.vat_id
@@ -143,8 +148,8 @@ def save_company(
     company.email = email.strip() or None
     company.phone = phone.strip() or None
     company.contact_name = contact_name.strip() or None
-    company.bank_iban = bank_iban.replace(" ", "").upper() or None
-    company.bank_bic = bank_bic.strip().upper() or None
+    company.bank_iban = normalisiere_iban(bank_iban)
+    company.bank_bic = normalisiere_bic(bank_bic)
     company.bank_name = bank_name.strip() or None
     company.invoice_prefix = invoice_prefix.strip() or "RE"
     company.invoice_year_in_number = invoice_year_in_number == "on"

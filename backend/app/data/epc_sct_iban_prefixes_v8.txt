@@ -1,0 +1,50 @@
+# EPC-SCT IBAN-Praefixe (Eingabeartefakt fuer gen_iban_daten.py)
+# Quelle: EPC409-09 Version 8.0, 24. Dezember 2025
+# Original-URL: https://www.europeanpaymentscouncil.eu/sites/default/files/kb/file/2025-12/EPC409-09%20EPC%20List%20of%20SEPA%20Scheme%20Countries%20v8.0.pdf
+# Herkunft: Spalte IBAN der Laender-/Gebietstabelle (Abschnitt 5), eindeutige Codes.
+#   PDF am 2026-09-24 geladen, SHA-256 der PDF-Datei: 852aba867990351a28f822d8d796f01371ed111e5024db3102290ccf2adb2f93
+# Inhalt-SHA-256 (nur Praefixzeilen): 37ea3ed5394c3ec9a37558543559afebe73e0784e84d9989081dc6b21edb0a0d
+# Format: ein ISO-3166-alpha-2-Praefix je Zeile, alphabetisch.
+#
+AD
+AL
+AT
+BE
+BG
+CH
+CY
+CZ
+DE
+DK
+EE
+ES
+FI
+FR
+GB
+GI
+GR
+HR
+HU
+IE
+IS
+IT
+LI
+LT
+LU
+LV
+MC
+MD
+ME
+MK
+MT
+NL
+NO
+PL
+PT
+RO
+RS
+SE
+SI
+SK
+SM
+VA

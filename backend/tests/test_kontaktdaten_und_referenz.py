@@ -55,7 +55,7 @@ def _company(**over) -> Company:
         email="info@example.de", phone="+49 111 222333",
         contact_name="Maria Muster",
         vat_id="DE123456789", tax_number="123/456/78901",
-        bank_iban="DE00123456780000000000", bank_bic="ABCDDEFF",
+        bank_iban="DE33PROBE0000000000001", bank_bic="ABCDDEFF",
         bank_name="Testbank",
     )
     kw.update(over)

@@ -607,7 +607,10 @@ def finalize_invoice(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
         )
 
     # 1. ZUGFeRD XML erzeugen
-    xml_content = zugferd_xml.generate_xml(invoice, company)
+    try:
+        xml_content = zugferd_xml.generate_xml(invoice, company)
+    except ValueError as fehler:
+        raise HTTPException(400, str(fehler)) from fehler
     invoice.zugferd_xml = xml_content
 
     # Die gesamte Belegerzeugung läuft in einem Wegwerf-Verzeichnis, NICHT im Archiv
@@ -622,7 +625,10 @@ def finalize_invoice(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
     try:
         # 2. Visuelles PDF erzeugen
         visual_pdf = arbeitsverzeichnis / f"{invoice.invoice_number}_visual.pdf"
-        pdf_generator.generate_pdf(invoice, company, visual_pdf)
+        try:
+            pdf_generator.generate_pdf(invoice, company, visual_pdf)
+        except ValueError as fehler:
+            raise HTTPException(400, str(fehler)) from fehler
 
         # 3. Mustang: XML in PDF einbetten → ZUGFeRD PDF
         xml_path = arbeitsverzeichnis / f"{invoice.invoice_number}.xml"

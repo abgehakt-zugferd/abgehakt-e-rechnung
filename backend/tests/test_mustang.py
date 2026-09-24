@@ -148,7 +148,7 @@ def test_extract_xml_roundtrip(tmp_path):
     company = Company(id=1, name="Muster Handwerk GmbH", address_line1="Musterstraße 1",
                       zip_code="12345", city="Musterstadt", country="DE",
                       tax_number="123/456/78901", vat_id="DE123456789",
-                      bank_iban="DE00123456780000000000")
+                      bank_iban="DE33PROBE0000000000001")
     customer = Customer(name="Muster Kunde GmbH", address_line1="Kundenweg 1",
                         zip_code="10115", city="Berlin", country="DE")
     inv = Invoice(invoice_number="RE-2026-XTR", issue_date=date(2026, 7, 8),

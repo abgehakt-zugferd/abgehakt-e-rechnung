@@ -11,15 +11,9 @@ from decimal import Decimal
 
 import qrcode
 
-_IBAN_RE = re.compile(r"^[A-Z]{2}[0-9A-Z]{13,32}$")
+from app.services.iban import IbanProfil, pruefe_iban
+
 _BIC_RE = re.compile(r"^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$")
-
-
-def _normalize_iban(iban: str) -> str:
-    cleaned = "".join(iban.split()).upper()
-    if not _IBAN_RE.match(cleaned):
-        raise ValueError("IBAN fehlt oder ist ungueltig.")
-    return cleaned
 
 
 def _normalize_bic(bic: str | None) -> str:
@@ -44,7 +38,9 @@ def build_epc_payload(
     name = (beneficiary_name or "").strip()[:70]
     if not name:
         raise ValueError("Name des Zahlungsempfaengers fehlt.")
-    iban_norm = _normalize_iban(iban)
+    iban_norm = pruefe_iban(iban, IbanProfil.EPC_SCT)
+    if iban_norm is None:
+        raise ValueError("IBAN fehlt oder ist ungueltig.")
     bic_norm = _normalize_bic(bic)
     cur = (currency or "EUR").upper()
     if cur != "EUR":

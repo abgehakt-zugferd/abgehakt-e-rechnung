@@ -26,7 +26,7 @@ def _company():
     return Company(id=1, name="Muster Handwerk GmbH", address_line1="Musterstraße 1",
                    address_line2=None, zip_code="12345", city="Musterstadt", country="DE",
                    tax_number="123/456/78901", vat_id=None, email=None, phone=None,
-                   bank_iban="DE00123456780000000000", bank_bic=None, bank_name=None)
+                   bank_iban="DE33PROBE0000000000001", bank_bic=None, bank_name=None)
 
 
 def _customer():

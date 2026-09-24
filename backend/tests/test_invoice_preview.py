@@ -45,7 +45,7 @@ def _company(pg_session):
     if not c:
         c = Company(id=1, name="Muster Handwerk GmbH", address_line1="Musterstraße 1",
                     zip_code="12345", city="Musterstadt", vat_id="DE123456789",
-                    tax_number="123/456/78901", bank_iban="DE00123456780000000000",
+                    tax_number="123/456/78901", bank_iban="DE33PROBE0000000000001",
                     bank_bic="ABCDDEFF", bank_name="Testbank")
         pg_session.add(c)
         pg_session.commit()
@@ -123,7 +123,7 @@ def test_finalisiertes_pdf_traegt_kein_wasserzeichen(tmp_path):
                              tax_amount=Decimal("19.00"), gross_amount=Decimal("119.00"))]
     comp = Company(id=1, name="Muster Handwerk GmbH", address_line1="Musterstraße 1",
                    zip_code="12345", city="Musterstadt", vat_id="DE123456789",
-                   tax_number="123/456/78901", bank_iban="DE001234567800",
+                   tax_number="123/456/78901", bank_iban="DE33PROBE0000000000001",
                    bank_bic="ABCDDEFF", bank_name="Testbank")
 
     out = tmp_path / "final.pdf"
