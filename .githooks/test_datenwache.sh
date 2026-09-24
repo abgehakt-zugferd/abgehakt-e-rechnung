@@ -50,7 +50,31 @@ _iban_probe() {
 }
 
 _ust_probe() {
+    # Echt aussehend (nicht konstruiert): bleibt geblockt.
+    _p1="DE"; _p2="815739204"
+    printf 'probe %s%s ende\n' "$_p1" "$_p2"
+}
+
+_ust_fixture() {
+    # Hausfixture: aufsteigend mit Umbruch erlaubt (Issue #88).
     _p1="DE"; _p2="123456789"
+    printf 'vat_id="%s%s"\n' "$_p1" "$_p2"
+}
+
+_ust_fixture_absteigend() {
+    _p1="DE"; _p2="987654321"
+    printf 'vat_id="%s%s"\n' "$_p1" "$_p2"
+}
+
+_ust_fixture_gleich() {
+    # Gleiche Ziffer = Schritt 0; ohne diesen Zweig faellt die Erkennung durch.
+    _p1="DE"; _p2="111111111"
+    printf 'vat_id="%s%s"\n' "$_p1" "$_p2"
+}
+
+_ust_ein_fehler() {
+    # Fast aufsteigend, ein Fehler am Ende: bleibt geblockt.
+    _p1="DE"; _p2="123456780"
     printf 'probe %s%s ende\n' "$_p1" "$_p2"
 }
 
@@ -60,7 +84,16 @@ _key_probe() {
 }
 
 _steuer_probe() {
-    printf 'probe %s/%s/%s ende\n' "12" "345" "67890"
+    # Echt aussehend (nicht konstruiert): bleibt geblockt.
+    printf 'probe %s/%s/%s ende\n' "21" "815" "00042"
+}
+
+_steuer_fixture_zehn() {
+    printf 'tax_number="%s/%s/%s"\n' "12" "345" "67890"
+}
+
+_steuer_fixture_elf() {
+    printf 'tax_number="%s/%s/%s"\n' "123" "456" "78901"
 }
 
 r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_iban_probe)")
@@ -91,6 +124,31 @@ befund "ust_idnr_wird_erkannt" 1 "USt-IdNr-Format"
 r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_steuer_probe)")
 lauf "$r" "$s" "$leer" /nicht/da
 befund "steuernummer_wird_erkannt" 1 "Steuernummer-Format"
+
+# Issue #88: konstruierte Fixture-Folgen (Umbruch 9->0) durchlassen.
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_ust_fixture)")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "ust_fixture_aufsteigend_laeuft_durch" 0 ""
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_ust_fixture_absteigend)")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "ust_fixture_absteigend_laeuft_durch" 0 ""
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_ust_fixture_gleich)")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "ust_fixture_gleich_laeuft_durch" 0 ""
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_steuer_fixture_zehn)")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "steuer_fixture_zehn_laeuft_durch" 0 ""
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_steuer_fixture_elf)")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "steuer_fixture_elf_laeuft_durch" 0 ""
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_ust_ein_fehler)")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "ust_ein_fehler_bleibt_geblockt" 1 "USt-IdNr-Format"
 
 r=$(neues_repo); s=$(commit_mit "$r" a.txt "$(_key_probe)")
 lauf "$r" "$s" "$leer" /nicht/da
