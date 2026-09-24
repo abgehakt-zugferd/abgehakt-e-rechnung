@@ -12,6 +12,7 @@ Die Abbildung lebt in `services/ust_id_pruefung._VIES_LAENDER` und wird hier
 nur festgehalten, nicht verdoppelt.
 """
 import re
+import unicodedata
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -26,13 +27,29 @@ from app.services.ust_id_pruefung import aufteilen_ust_id
 
 
 def _faltung(name: str) -> str:
-    """Sortierschluessel nach deutscher Alphabet-Ordnung (Umlaut = Grundbuchstabe)."""
-    return (
+    """Sortierschluessel nach deutscher Alphabet-Ordnung (Umlaut = Grundbuchstabe).
+
+    Zwei Schritte, und der zweite fehlte: Erst die deutschen Sonderzeichen nach
+    DIN 5007-1 (ae wie a, ss wie ss), dann alle uebrigen diakritischen Zeichen
+    ueber die Zerlegung. Ohne den zweiten landete Ålandinseln hinter Zypern,
+    weil `å` in Unicode hinter `z` liegt. Buchstaben, die keine Zerlegung
+    haben, brauchen eine eigene Zeile: æ, ø, đ, ð, þ, ł.
+    """
+    gefaltet = (
         name.casefold()
         .replace("ä", "a")
         .replace("ö", "o")
         .replace("ü", "u")
+        .replace("ß", "ss")
+        .replace("æ", "ae")
+        .replace("ø", "o")
+        .replace("đ", "d")
+        .replace("ð", "d")
+        .replace("þ", "th")
+        .replace("ł", "l")
     )
+    zerlegt = unicodedata.normalize("NFD", gefaltet)
+    return "".join(z for z in zerlegt if not unicodedata.combining(z))
 
 
 def test_liste_hat_genau_47_eintraege():
@@ -68,6 +85,22 @@ def test_danach_alphabetisch_nach_deutschem_namen():
     assert namen == sorted(namen, key=_faltung)
     iso_namen = [name for _, name in ISO_LAENDER[1:]]
     assert iso_namen == sorted(iso_namen, key=_faltung)
+
+
+def test_diakritika_sortieren_wie_ihr_grundbuchstabe():
+    """Ålandinseln gehoert zwischen Ägypten und Albanien, nicht ans Listenende.
+
+    Diese Zusicherung nennt die Nachbarn beim Namen, statt mit `_faltung` zu
+    pruefen. Ein Test, der dieselbe Regel anwendet, mit der die Liste erzeugt
+    wurde, bestaetigt nur sich selbst: `å` lag hinter `z`, die Liste war
+    danach sortiert, und der Sortiertest blieb trotzdem gruen.
+    """
+    codes = [code for code, _ in ISO_LAENDER]
+    assert codes.index("EG") < codes.index("AX") < codes.index("AL"), (
+        "Ålandinseln steht an Position "
+        f"{codes.index('AX') + 1} von {len(codes)}, erwartet zwischen "
+        f"Ägypten ({codes.index('EG') + 1}) und Albanien ({codes.index('AL') + 1})"
+    )
 
 
 def test_codes_sind_eindeutig_und_iso_alpha2():
