@@ -48,6 +48,8 @@ ueberschreiben, DE zuerst und Rest nach deutscher Faltung sortieren, dieses
 Tupel ersetzen. Die Zahl der Eintraege muss der Quelle folgen; der Test
 nennt sie.
 """
+import unicodedata
+
 from fastapi.templating import Jinja2Templates
 
 LAENDER: tuple[tuple[str, str], ...] = (
@@ -354,6 +356,32 @@ ISO_LAENDER: tuple[tuple[str, str], ...] = (
     ("CY", "Zypern"),
 )
 
+
+
+def sortierschluessel(name: str) -> str:
+    """Sortierschluessel nach deutscher Alphabet-Ordnung (Umlaut = Grundbuchstabe).
+
+    Zwei Schritte, und der zweite fehlte: Erst die deutschen Sonderzeichen nach
+    DIN 5007-1 (ae wie a, ss wie ss), dann alle uebrigen diakritischen Zeichen
+    ueber die Zerlegung. Ohne den zweiten landete Ålandinseln hinter Zypern,
+    weil `å` in Unicode hinter `z` liegt. Buchstaben, die keine Zerlegung
+    haben, brauchen eine eigene Zeile: æ, ø, đ, ð, þ, ł.
+    """
+    gefaltet = (
+        name.casefold()
+        .replace("ä", "a")
+        .replace("ö", "o")
+        .replace("ü", "u")
+        .replace("ß", "ss")
+        .replace("æ", "ae")
+        .replace("ø", "o")
+        .replace("đ", "d")
+        .replace("ð", "d")
+        .replace("þ", "th")
+        .replace("ł", "l")
+    )
+    zerlegt = unicodedata.normalize("NFD", gefaltet)
+    return "".join(z for z in zerlegt if not unicodedata.combining(z))
 
 
 def registriere_laender_globals(templates: Jinja2Templates) -> None:
