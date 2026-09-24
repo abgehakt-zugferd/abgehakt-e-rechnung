@@ -47,14 +47,18 @@ backend/app/
 ├── config.py                 # Einstellungen aus .env (pydantic-settings)
 ├── database.py               # SQLAlchemy-Engine + get_db()
 ├── branding.py               # AGPL-§13-Hinweis im Footer (nicht abschaltbar)
+├── darstellung.py            # Zahlenformat (Dezimalkomma), einmal für PDF und UI
+├── installation.py           # Installationstyp: Produktion vs. Ketten-Testinstanz
+├── laender.py                # LAENDER (kuratiert) und ISO_LAENDER für die Landesauswahl
 ├── db/
 │   ├── roles.py              # Owner-/App-Rolle provisionieren
 │   └── immutability_triggers.py  # GoBD-Trigger, einzige Quelle dieser DDL
 ├── models/                   # ORM-Modelle
 │   ├── company.py            # eigene Firma (Singleton id=1)
 │   ├── customer.py           # Kundenstamm
-│   ├── invoice.py            # Invoice, InvoiceItem, ValidationResult, AuditLog
-│   └── app_config.py         # Betriebseinstellungen (Singleton id=1)
+│   ├── invoice.py            # Invoice, InvoiceItem, ValidationResult, InvoiceSendLog, AuditLog
+│   ├── app_config.py         # Betriebseinstellungen (Singleton id=1)
+│   └── uebergabe_eingang.py  # Gedächtnis der Beleg-Integration (beleg_id + beleg_sha256)
 ├── routers/                  # HTTP-Handler
 │   ├── setup.py              # Ersteinrichtung, Tor vor allem anderen
 │   ├── customers.py
@@ -62,6 +66,7 @@ backend/app/
 │   ├── export.py             # GoBD-Datenexport (Z3)
 │   ├── archive.py            # Archivansicht storage/{pdfs,xml}
 │   ├── updates.py            # Update-Hinweis (nur auf Klick)
+│   ├── uebergaben.py         # Übergabebelege ansehen, als Entwurf anlegen (#22)
 │   └── settings.py           # Firmendaten, SMTP-Test
 ├── services/                 # Fachlogik, framework-unabhängig
 │   ├── zugferd_xml.py        # CII-XML nach EN 16931
@@ -84,10 +89,26 @@ backend/app/
 │   ├── steuer_ruecklage.py   # konfigurierbare GmbH-Pauschale (KSt/GewSt) für Rücklagen
 │   ├── beleg_status.py       # Status-Etiketten Versendet / Nicht versendet in der UI
 │   ├── secret_key.py         # Schlüssel dafür, als Datei im storage-Volume
+│   ├── epc_qr.py             # EPC-QR (Girocode) für Rechnung und Gutschrift
+│   ├── bankverbindung.py     # IBAN/BIC normalisieren und prüfen
+│   ├── adresse.py            # Adresszeilen für Beleg und XML
+│   ├── leistungszeit.py      # Leistungsdatum und -zeitraum (§ 14 Abs. 4 Nr. 6)
+│   ├── archive_frist.py      # archive_until = 31.12. des Ausstellungsjahrs + 8
+│   ├── empfaenger.py         # Kopie-Empfänger aus Kunde, Einstellungen, Sende-Dialog
+│   ├── ust_id_pruefung.py    # VIES-Prüfung, nur auf Klick mit Einwilligung
+│   ├── uebergabebeleg.py     # Übergabebelege lesen und prüfen (eigene RFC-8785-Kanonisierung)
+│   ├── uebergabe_schluessel.py  # öffentliche Schlüssel der Übergabe-Absender
+│   ├── uebergabe_befund.py   # ein Befund je Beleg, Lesen ohne Wirkung
+│   ├── uebergabe_eingang.py  # DB-Gedächtnis des Lesens (Idempotenz)
+│   ├── abrechnungsauftrag_wirkung.py  # Entwürfe aus angenommenem Beleg (TypeCode 389)
+│   ├── belegsperre.py        # was am Entwurf aus einem Beleg feststeht
+│   ├── protokoll.py          # Protokollfassung, Befundcodes, Feldverzeichnis
 │   ├── update_check.py       # Versionsabruf, ausschließlich auf Klick
 │   └── update_banner.py      # was daraus im Seitenkopf erscheint, rein und testbar
 ├── dependencies/             # was jede Route braucht
-│   └── update_banner_dep.py  # legt den Hinweis auf request.state, fängt jeden Fehler
+│   ├── update_banner_dep.py  # legt den Hinweis auf request.state, fängt jeden Fehler
+│   ├── beleg_integration_dep.py  # Schalter der Beleg-Integration, gleiche Zusagen
+│   └── herkunft.py           # Herkunftsprüfung: kein Schreiben von fremden Seiten
 ├── static/                   # Schriften und JavaScript, lokal ausgeliefert, kein CDN
 ├── assets/                   # Schriftdateien für das PDF
 └── templates/                # Jinja2
@@ -304,11 +325,11 @@ Der Entwicklungsstack ist hier Pflicht, nicht Geschmack: Nur er mountet `backend
 Arbeitsverzeichnis. Im Auslieferungsstack schreibt `--autogenerate` die neue Migration in das
 Dateisystem des Containers, und sie ist beim nächsten `up` verschwunden.
 
-**Es gibt genau eine Migration: `001_initial_schema.py`.** Sie ist aus den Modellen erzeugt
-und legt das vollständige Schema an, dazu die GoBD-Trigger (aus
+**`001_initial_schema.py` ist die Basis der Kette und wird nie editiert.** Sie ist aus den
+Modellen erzeugt und legt das Schema des Extraktionsstands an, dazu die GoBD-Trigger (aus
 `app/db/immutability_triggers.py`, deren einzige Quelle) und die beiden Singleton-Zeilen
 `company` und `app_config`. Ab hier gilt der normale Ablauf: jede weitere Änderung ist eine
-**neue** Migration, `001` wird nie editiert.
+**neue** Migration (derzeit `002` bis `012`).
 
 **`alembic check` ist hier ein echtes Gate** und muss grün bleiben. Modelle und Migrationen
 sind deckungsgleich, und `tests/test_migrationskette.py` prüft das bei jedem Lauf gegen eine

@@ -37,7 +37,10 @@
 **Hinweis:** Bewusst behalten, das Setup ist rein lokal. Beim Deployment-Upgrade entfernen.
 
 ### 8. DB-Port nach außen exponiert
-**Hinweis:** `5432:5432` bleibt für direkten `psql`-Zugriff (lokale Entwicklung). Kein Sicherheitsrisiko auf Localhost.
+**Stand 2026-09:** erledigt. Die DB hängt an `127.0.0.1:5432:5432`, also nur am Loopback;
+direkter `psql`-Zugriff vom Host bleibt unverändert möglich. Die Netzbindungs-Wache in
+`.githooks/wachen.sh` blockiert eine Port-Angabe ohne `127.0.0.1:` seither im Push und in
+der CI.
 
 ---
 
@@ -51,11 +54,11 @@ offensichtliche Punkte:
    `abgehakt_app`, `abgehakt_db_backup`). Ein zweiter `docker compose up` (auch mit
    anderem `-p <project>`) schlägt fehl, weil Docker Container-Namen global
    eindeutig sein müssen, unabhängig vom Compose-Projektnamen. `ports:` sind
-   ebenso fest (`3000:3000`, `5432:5432`) und kollidieren genauso.
+   ebenso fest (`127.0.0.1:3000:3000`, `127.0.0.1:5432:5432`) und kollidieren genauso.
 2. **`docker-compose.override.yml` merged Listen-Felder (`ports:`) additiv,
    nicht ersetzend.** `ports: []` in einem Override hebt eine bestehende
-   `ports: ["5432:5432"]` NICHT auf; sie werden zusammengeführt (Ergebnis:
-   der alte Port bleibt aktiv → `Bind for 0.0.0.0:5432 failed: port is
+   `ports: ["127.0.0.1:5432:5432"]` NICHT auf; sie werden zusammengeführt (Ergebnis:
+   der alte Port bleibt aktiv → `Bind for 127.0.0.1:5432 failed: port is
    already allocated`). Fix: `ports: !override [...]` (Compose-Spec-Tag,
    ab Compose v2.24 unterstützt) statt einer normalen YAML-Liste.
 3. **Compose erkennt „den bestehenden Container für Service X" über interne

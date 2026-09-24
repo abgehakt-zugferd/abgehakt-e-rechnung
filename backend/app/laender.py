@@ -42,10 +42,10 @@ aufblasen; die Codes aendern sich selten, die deutschen Namen noch seltener.
   dort kuratierte Name (z. B. MD = „Moldau“, nicht CLDR „Republik Moldau“),
   damit die beiden Listen nicht auseinanderlaufen. Der Drift-Test haelt das.
 
-Nachziehen: iso-codes-JSON und CLDR-territories.json laden, auf die
-Schnittmenge der 249 alpha-2-Codes einschraenken, `LAENDER`-Namen
-ueberschreiben, DE zuerst und Rest nach deutscher Faltung sortieren, dieses
-Tupel ersetzen. Die Zahl der Eintraege muss der Quelle folgen; der Test
+Nachziehen: `scripts/gen_laender_iso.py` erzeugt den Block aus pycountry
+(Codes) und babel (deutsche Namen), legt das `LAENDER`-Overlay drueber und
+sortiert mit `sortierschluessel`; `--pruefen` vergleicht den erzeugten gegen
+den Stand im Modul. Die Zahl der Eintraege muss der Quelle folgen; der Test
 nennt sie.
 """
 import unicodedata
