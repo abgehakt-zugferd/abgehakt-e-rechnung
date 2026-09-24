@@ -13,6 +13,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# shellcheck source=run-tests-aufraeumen.sh
+source ./run-tests-aufraeumen.sh
+
 IMAGE="abgehakt-backend:test"
 NETWORK="abgehakt-test-net-$$"
 PG_CONTAINER="abgehakt-test-db-$$"
@@ -33,10 +36,6 @@ docker run -d --name "${PG_CONTAINER}" --network "${NETWORK}" \
   -e POSTGRES_USER=abgehakt_admin -e POSTGRES_PASSWORD=changeme -e POSTGRES_DB=abgehakt \
   postgres:16-alpine >/dev/null
 
-cleanup() {
-  docker rm -f "${PG_CONTAINER}" >/dev/null 2>&1 || true
-  docker network rm "${NETWORK}" >/dev/null 2>&1 || true
-}
 trap cleanup EXIT
 
 echo ">> Warte auf Postgres ..."
