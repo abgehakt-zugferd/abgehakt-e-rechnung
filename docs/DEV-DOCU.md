@@ -8,6 +8,13 @@
 > Die fachlichen „niemals brechen"-Regeln (Aufbewahrung, Statusmaschine, fail-closed) stehen
 > nicht hier, sondern in [`ARCHITEKTUR.md`](ARCHITEKTUR.md). Faustregel: *warum die Software
 > etwas nicht tun darf* → ARCHITEKTUR; *warum ein Werkzeug sich unerwartet verhält* → hier.
+>
+> **Zu den Nummern im Text:** Kommentare und Tests verweisen an vierzehn Stellen auf
+> Nummern zwischen #98 und #154. Die gehören nicht in dieses Repository, dessen
+> Zählung bei 85 endet, sondern in das Vorgängerrepository, aus dem der Code
+> extrahiert wurde. Sie laufen hier ins Leere und werden trotzdem nicht ersetzt:
+> Der Inhalt daneben stimmt, und eine erfundene Zuordnung wäre schlechter als ein
+> Verweis, von dem man weiß, dass er woanders hinzeigt.
 
 ---
 
@@ -852,7 +859,7 @@ Summe grundlagen[].erloes_netto  <=  bemessung.erloes_netto
 Die letzte Zeile ist eine Falle: `grundlagen` ist ein **Auszug**, kein Nachweis des
 Erlöses. Ein Prüfhaken auf Gleichheit würde jeden echten Auftrag ablehnen. Gerundet wird
 kaufmännisch (`ROUND_HALF_UP`) und der Satz wird **nicht** vorher gerundet: 797,30 mal
-33,333333 % sind 265,77, mit gerundetem Satz 265,73.
+33,333333 % sind 265,77, mit gerundetem Satz 265,74.
 
 **Der Auftrag trägt nur netto.** `steuer`, `brutto`, `steuersatz` und `steuerkategorie`
 sind `UNBEKANNTES_FELD`; die Steuer entsteht hier aus `customers.ust_status`
