@@ -6,6 +6,7 @@ import os
 from datetime import date, timedelta, timezone, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
+from types import SimpleNamespace
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -23,6 +24,7 @@ from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
 from app.services.einheiten import (
     UnknownUnitError,
     formular_bezeichnungen,
+    unbekannte_bezeichnungen,
     resolve_einheit,
 )
 from app.services.invoice_number import generate_next_invoice_number
@@ -37,6 +39,25 @@ templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
 registriere_darstellungsfilter(templates)
 templates.env.globals["formular_bezeichnungen"] = formular_bezeichnungen
+
+
+def _ungueltige_einheiten(items_json: str | None) -> tuple[str, ...]:
+    """Einheiten der angezeigten Positionen, die der Katalog nicht kennt.
+
+    Quelle ist dasselbe `items_json`, aus dem das Formular die Positionen liest. Damit
+    gilt die Regel an jeder Stelle, die das Formular rendert, auch beim Vorbefuellen,
+    wo `invoice` per Vertrag None ist (docs/specs/kopieren.md, Invariante 2).
+    """
+    if not items_json:
+        return ()
+    try:
+        positionen = json.loads(items_json.replace("<\\/", "</"))
+    except (ValueError, AttributeError):
+        return ()
+    return unbekannte_bezeichnungen(p.get("unit") for p in positionen if isinstance(p, dict))
+
+
+templates.env.globals["ungueltige_einheiten"] = _ungueltige_einheiten
 settings = get_settings()
 
 
@@ -275,18 +296,71 @@ def list_invoices(
 
 
 @router.get("/neu", response_class=HTMLResponse)
-def new_invoice_form(request: Request, db: Session = Depends(get_db)):
+def new_invoice_form(
+    request: Request,
+    db: Session = Depends(get_db),
+    vorlage: str | None = None,
+):
     customers = db.query(Customer).filter(Customer.deleted_at.is_(None), Customer.is_active == True).order_by(Customer.name).all()
     company = db.query(Company).filter(Company.id == 1).first()
     today = date.today()
+    # invoice bleibt immer None: gesetzt wuerde das Formular auf die Vorlage speichern.
+    # Vorbelegung ist eine eigene Kontextgroesse (docs/specs/kopieren.md).
+    vorbelegung = None
+    items_json = None
+    error = None
+    kunde_hinweis = None
+
+    if vorlage:
+        try:
+            vorlage_id = uuid.UUID(vorlage)
+        except ValueError:
+            error = "Vorlage ungueltig"
+        else:
+            quelle = (
+                db.query(Invoice)
+                .options(joinedload(Invoice.items))
+                .filter(Invoice.id == vorlage_id)
+                .first()
+            )
+            if quelle is None:
+                error = "Vorlage nicht gefunden"
+            else:
+                waehlbare_ids = {c.id for c in customers}
+                kunde_id = quelle.customer_id if quelle.customer_id in waehlbare_ids else None
+                if quelle.customer_id is not None and kunde_id is None:
+                    kunde_hinweis = "Vorlagenkunde nicht waehlbar"
+                # Kein invoice_type, kein original_invoice_id, keine uebergabe_beleg_*:
+                # die gehoeren nicht in die Vorbelegung (Feldvertrag).
+                vorbelegung = SimpleNamespace(
+                    customer_id=kunde_id,
+                    tax_category=quelle.tax_category,
+                    buyer_reference=quelle.buyer_reference,
+                    buyer_order_reference=quelle.buyer_order_reference,
+                    service_period_start=quelle.service_period_start,
+                    service_period_end=quelle.service_period_end,
+                    delivery_date=quelle.delivery_date,
+                    payment_terms=quelle.payment_terms,
+                    notes=quelle.notes,
+                )
+                items_json = _items_as_json(quelle)
+
+    delivery_default = today.isoformat()
+    if vorbelegung and getattr(vorbelegung, "delivery_date", None):
+        delivery_default = vorbelegung.delivery_date.isoformat()
+
     response = templates.TemplateResponse("invoices/form.html", {
         "request": request,
         "invoice": None,
+        "vorbelegung": vorbelegung,
+        "items_json": items_json,
         "customers": customers,
         "company": company,
         "today": today.isoformat(),
         "due_default": (today + timedelta(days=14)).isoformat(),
-        "error": None,
+        "delivery_default": delivery_default,
+        "error": error,
+        "kunde_hinweis": kunde_hinweis,
     })
     # Nach dem Absenden liegt der History-Eintrag dieses Formulars direkt hinter der
     # Detailseite. Ohne `no-store` gibt der Browser ihn beim Zurück-Button gefüllt aus
@@ -351,11 +425,13 @@ def edit_invoice_form(invoice_id: uuid.UUID, request: Request, db: Session = Dep
     return templates.TemplateResponse("invoices/form.html", {
         "request": request,
         "invoice": invoice,
+        "vorbelegung": None,
         "items_json": _items_as_json(invoice),
         "customers": customers,
         "company": company,
         "today": date.today().isoformat(),
         "due_default": invoice.due_date.isoformat(),
+        "delivery_default": date.today().isoformat(),
         "error": None,
     })
 
@@ -373,11 +449,13 @@ def _bearbeiten_mit_fehler(request: Request, db: Session, invoice: Invoice, meld
     return templates.TemplateResponse("invoices/form.html", {
         "request": request,
         "invoice": invoice,
+        "vorbelegung": None,
         "items_json": _items_as_json(invoice),
         "customers": customers,
         "company": company,
         "today": date.today().isoformat(),
         "due_default": invoice.due_date.isoformat(),
+        "delivery_default": date.today().isoformat(),
         "error": meldung,
     }, status_code=400)
 

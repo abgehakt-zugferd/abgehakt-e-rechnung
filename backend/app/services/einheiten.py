@@ -6,6 +6,7 @@ Revision 11e (Peppol BIS Billing 3.0, Mai 2026): Person/Personen/Persons → IE.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 
@@ -56,3 +57,22 @@ def resolve_einheit(wert: str) -> Einheit:
         if nadel in einheit.bezeichnungen:
             return einheit
     raise UnknownUnitError(nadel)
+
+
+def unbekannte_bezeichnungen(werte: Iterable[str | None]) -> tuple[str, ...]:
+    """Die Werte, die der Katalog nicht kennt, ohne Dubletten, in Eingabereihenfolge.
+
+    Das Formular braucht sie als eigene Optionen: ein Altwert ohne Option geht beim
+    naechsten Absenden lautlos verloren, und "Stück" stillschweigend einzusetzen waere
+    die Umdeutung, die dieser Katalog gerade abstellt.
+    """
+    unbekannt: list[str] = []
+    for wert in werte:
+        nadel = (wert or "").strip()
+        if not nadel or nadel in unbekannt:
+            continue
+        try:
+            resolve_einheit(nadel)
+        except UnknownUnitError:
+            unbekannt.append(nadel)
+    return tuple(unbekannt)

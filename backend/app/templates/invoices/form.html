@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% block title %}{% if invoice %}Rechnung bearbeiten{% else %}Neue Rechnung{% endif %} – {{ PRODUCT_NAME }}{% endblock %}
 {% block content %}
+{# `invoice` bestimmt das Speicherziel (Bearbeiten vs. Neuanlage). Vorbelegung aus
+   einer Vorlage darf invoice nie setzen, sonst speichert POST auf die Vorlage.
+   Feldwerte bei Neuanlage kommen aus `vorbelegung`, sonst Defaults. #}
+{% set belegung = invoice if invoice else vorbelegung %}
 <div style="max-width:1100px;"
      x-data="invoiceForm()"
      x-init="init()">
@@ -9,8 +13,8 @@
        Anfuehrungszeichen aus einer Beschreibung das Attribut zerreissen. #}
     <script type="application/json" id="vorhandene-positionen">{{ items_json | default('[]', true) | safe }}</script>
     <script type="application/json" id="formular-vorgaben">{
-        "taxCategory": {{ (invoice.tax_category if invoice else 'S') | tojson }},
-        "paymentTerms": {{ ((invoice.payment_terms if invoice else None) or (company.payment_terms_default if company else '')) | tojson }}
+        "taxCategory": {{ (belegung.tax_category if belegung else 'S') | tojson }},
+        "paymentTerms": {{ ((belegung.payment_terms if belegung else None) or (company.payment_terms_default if company else '')) | tojson }}
     }</script>
 
     <div class="flex items-center gap-3 mb-6">
@@ -90,12 +94,17 @@
                                 {% if aus_beleg %}disabled title="aus dem Beleg übernommen"{% endif %}>
                             <option value="">– noch offen –</option>
                             {% for c in customers %}
-                            <option value="{{ c.id }}" data-email="{{ c.email or '' }}" {% if invoice and c.id == invoice.customer_id %}selected{% endif %}>{{ c.name }} ({{ c.customer_number }})</option>
+                            <option value="{{ c.id }}" data-email="{{ c.email or '' }}" {% if belegung and belegung.customer_id and c.id == belegung.customer_id %}selected{% endif %}>{{ c.name }} ({{ c.customer_number }})</option>
                             {% endfor %}
                         </select>
                         {% if aus_beleg %}
                         <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--cyan); margin-top:6px;">
                             aus dem Beleg übernommen: die Kennung des Beteiligten steht im signierten Dokument.
+                        </p>
+                        {% endif %}
+                        {% if kunde_hinweis %}
+                        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--amber); margin-top:6px;">
+                            {{ kunde_hinweis }}: der Kunde der Vorlage fehlt in der Auswahlliste (inaktiv oder geloescht). Positionen und uebrige Felder sind trotzdem vorbelegt.
                         </p>
                         {% endif %}
                         <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); line-height:1.5; margin-top:6px;">
@@ -156,15 +165,14 @@
                                         <div>
                                             <label class="label">Einheit</label>
                                             <select x-model="item.unit" class="input" style="font-size:var(--fs-gross); padding:6px 8px;">
-                                                {# Ungueltiger Bestand: sichtbar und waehlbar, nicht als Stück getarnt. #}
+                                                {# Ungueltiger Bestand: sichtbar und waehlbar, nicht als Stück getarnt.
+                                                   Quelle sind die angezeigten Positionen, nicht `invoice`: beim
+                                                   Vorbefuellen ist `invoice` per Vertrag None, und ohne Option ginge
+                                                   der Altwert beim Absenden lautlos verloren. #}
                                                 {% set _einheiten = formular_bezeichnungen() %}
-                                                {% if invoice %}
-                                                {% for pos in invoice.items %}
-                                                {% if pos.unit and pos.unit not in _einheiten %}
-                                                <option value="{{ pos.unit }}">{{ pos.unit }} (ungueltig)</option>
-                                                {% endif %}
+                                                {% for wert in ungueltige_einheiten(items_json) %}
+                                                <option value="{{ wert }}">{{ wert }} (ungueltig)</option>
                                                 {% endfor %}
-                                                {% endif %}
                                                 {% for bez in _einheiten %}
                                                 <option value="{{ bez }}">{{ bez }}</option>
                                                 {% endfor %}
@@ -218,7 +226,7 @@
                 <!-- Notes -->
                 <div class="card">
                     <label class="label">Notizen / Anmerkungen</label>
-                    <textarea name="notes" rows="3" class="input" placeholder="Erscheint auf der Rechnung">{{ (invoice.notes if invoice else '') or '' }}</textarea>
+                    <textarea name="notes" rows="3" class="input" placeholder="Erscheint auf der Rechnung">{{ (belegung.notes if belegung else '') or '' }}</textarea>
                 </div>
             </div>
 
@@ -256,7 +264,7 @@
                     </div>
                     <div>
                         <label class="label">Leistungsdatum</label>
-                        <input type="date" name="delivery_date" value="{{ (invoice.delivery_date.isoformat() if invoice.delivery_date else '') if invoice else today }}" class="input">
+                        <input type="date" name="delivery_date" value="{{ (invoice.delivery_date.isoformat() if invoice.delivery_date else '') if invoice else delivery_default }}" class="input">
                         <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Einzelner Leistungstag. Pflicht über 250 € (§ 14 Abs. 4 Nr. 6 UStG) oder als Zeitraum unten. Bis 250 € einschließlich freiwillig (§ 33 UStDV).</p>
                         <template x-if="taxCategory === 'K'">
                             <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--amber);">Bei innergemeinschaftlicher Lieferung immer Pflicht, auch unter 250 € (EN16931, BR-IC-11).</p>
@@ -264,25 +272,25 @@
                     </div>
                     <div>
                         <label class="label">Leistungszeitraum von</label>
-                        <input type="date" name="service_period_start" value="{{ invoice.service_period_start.isoformat() if invoice and invoice.service_period_start else '' }}" class="input"
+                        <input type="date" name="service_period_start" value="{{ belegung.service_period_start.isoformat() if belegung and belegung.service_period_start else '' }}" class="input"
                                {% if aus_beleg %}readonly title="aus dem Beleg übernommen"{% endif %}>
                         {% if aus_beleg %}<p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--cyan);">aus dem Beleg übernommen</p>{% endif %}
                     </div>
                     <div>
                         <label class="label">Leistungszeitraum bis</label>
-                        <input type="date" name="service_period_end" value="{{ invoice.service_period_end.isoformat() if invoice and invoice.service_period_end else '' }}" class="input"
+                        <input type="date" name="service_period_end" value="{{ belegung.service_period_end.isoformat() if belegung and belegung.service_period_end else '' }}" class="input"
                                {% if aus_beleg %}readonly title="aus dem Beleg übernommen"{% endif %}>
                         {% if aus_beleg %}<p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--cyan);">aus dem Beleg übernommen</p>{% endif %}
                         <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Für Quartalsabrechnungen und Tantiemen: von und bis gemeinsam setzen. Ersetzt das Einzeldatum für die Pflichtangabe.</p>
                     </div>
                     <div>
                         <label class="label">Referenz des Kunden</label>
-                        <input type="text" name="buyer_reference" value="{{ (invoice.buyer_reference if invoice else '') or '' }}" class="input" maxlength="100">
+                        <input type="text" name="buyer_reference" value="{{ (belegung.buyer_reference if belegung else '') or '' }}" class="input" maxlength="100">
                         <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Leitweg-ID bei Behörden, sonst eine vom Kunden vorgegebene Referenz (BT-10)</p>
                     </div>
                     <div>
                         <label class="label">Bestellnummer</label>
-                        <input type="text" name="buyer_order_reference" value="{{ (invoice.buyer_order_reference if invoice else '') or '' }}" class="input" maxlength="100">
+                        <input type="text" name="buyer_order_reference" value="{{ (belegung.buyer_order_reference if belegung else '') or '' }}" class="input" maxlength="100">
                         <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Nummer der Bestellung / Purchase Order des Kunden (BT-13)</p>
                     </div>
                 </div>
