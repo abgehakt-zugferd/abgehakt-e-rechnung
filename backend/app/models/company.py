@@ -48,6 +48,10 @@ class Company(Base):
         default="Zahlbar innerhalb von 14 Tagen nach Rechnungseingang ohne Abzug.",
         server_default="Zahlbar innerhalb von 14 Tagen nach Rechnungseingang ohne Abzug.",
     )
+    # Englische Vorgabe fuer Zahlungsbedingungen (docs/specs/belegsprache.md).
+    # Bestand bleibt leer; die Migration erfindet keinen Vertragstext. Pflicht
+    # erst beim Speichern der Einstellungen und vor englischen Belegen.
+    payment_terms_default_en: Mapped[str | None] = mapped_column(String(500))
     # Pauschale GmbH-Ruecklage fuer Kennzahl „Geschaetzte Steuerabgaben“ (Uebersicht).
     kst_satz_percent: Mapped[Decimal] = mapped_column(
         Numeric(5, 2), nullable=False, default=Decimal("15.00"), server_default="15.00",

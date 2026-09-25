@@ -79,6 +79,8 @@ def test_die_einstellungen_speichern_einen_unzulaessigen_praefix_nicht(pg_sessio
         "name": "Muster Handwerk GmbH", "address_line1": "Musterstraße 1",
         "zip_code": "12345", "city": "Musterstadt", "country": "DE",
         "tax_number": "12/345/67890", "invoice_prefix": "../entwischt",
+        "payment_terms_default": "Zahlbar innerhalb von 14 Tagen ohne Abzug.",
+        "payment_terms_default_en": "Payable within 14 days without deduction.",
     })
 
     assert antwort.status_code == 200, "Kein Redirect: die Seite muss den Fehler zeigen"
@@ -96,6 +98,8 @@ def test_ein_zulaessiger_praefix_wird_weiterhin_gespeichert(pg_session):
         "name": "Muster Handwerk GmbH", "address_line1": "Musterstraße 1",
         "zip_code": "12345", "city": "Musterstadt", "country": "DE",
         "tax_number": "12/345/67890", "invoice_prefix": "RG-2026",
+        "payment_terms_default": "Zahlbar innerhalb von 14 Tagen ohne Abzug.",
+        "payment_terms_default_en": "Payable within 14 days without deduction.",
     })
 
     assert antwort.status_code == 303, antwort.text

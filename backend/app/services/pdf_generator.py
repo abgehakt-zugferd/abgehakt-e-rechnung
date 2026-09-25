@@ -19,7 +19,6 @@ from reportlab.lib.enums import TA_RIGHT, TA_LEFT, TA_CENTER
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from app.config import get_settings
-from app.darstellung import euro, menge
 from app.models.invoice import Invoice
 from app.models.company import Company
 from app.services.adresse import bereinige_adresszeile2
@@ -29,6 +28,7 @@ from app.services.epc_qr import build_epc_payload, qr_png_bytes
 from app.services.iban import IbanProfil
 from app.services.zugferd_xml import EXEMPTION_REASONS
 from app.services.belegart import belegart
+from app.services.belegsprache import Belegdarstellung, darstellung, resolve_belegsprache
 
 # ── Firmenlogo ───────────────────────────────────────────────────────────────
 # Das Logo gehört der Nutzerin, nicht dem Auslieferungs-Image (#99 §4.3, L4):
@@ -63,17 +63,24 @@ def _logo_flowable():
         h = w * ih / iw
     return Image(str(path), width=w, height=h)
 
-# Derselbe Text wie in der XML, nicht eine Kopie davon: bis #152 standen hier
-# eigene Zeichenketten, und als die Kategorie "E" (§ 19 UStG) dazukam, fehlte der
-# gesetzlich vorgeschriebene Hinweis auf dem gedruckten Beleg — lautlos, weil das
-# PDF ohne Eintrag einfach nichts ausgibt. Ein Alias hat dieses Problem nicht.
-TAX_NOTICE = EXEMPTION_REASONS
+# PDF-Steuerhinweise kommen aus Belegdarstellung (sprachabhaengig fuer E/K/O;
+# AE immer zweisprachig). Ob eine Steuerzeile angezeigt wird, richtet sich weiter
+# nach den Kategorien in EXEMPTION_REASONS (XML-Tabelle), nicht nach dem Wortlaut.
+TAX_NOTICE_KATEGORIEN = frozenset(EXEMPTION_REASONS)
 
 GUTSCHRIFT_TYPEN = frozenset({"credit_note", "credit", "storno", "self_billing"})
 
 
 def _ist_gutschrift(invoice) -> bool:
     return getattr(invoice, "invoice_type", None) in GUTSCHRIFT_TYPEN
+
+
+def _belegdarstellung(invoice) -> Belegdarstellung:
+    """Sprache der Rechnung → Darstellung. Unbekannt = harter Fehler vor Ausgabe."""
+    roh = getattr(invoice, "document_language", None)
+    if roh is None:
+        roh = "de"
+    return darstellung(resolve_belegsprache(roh))
 
 
 def _zahlung_an_kunde(invoice) -> bool:
@@ -103,7 +110,7 @@ def _zahlungs_empfaenger(invoice, company):
     return None
 
 
-def _epc_qr_anhaengen(story, invoice, company, small) -> None:
+def _epc_qr_anhaengen(story, invoice, company, small, d: Belegdarstellung) -> None:
     ziel = _zahlungs_empfaenger(invoice, company)
     if not ziel:
         return
@@ -118,7 +125,9 @@ def _epc_qr_anhaengen(story, invoice, company, small) -> None:
     if bank_name:
         bank_parts.append(bank_name)
     story.append(Paragraph(" · ".join(bank_parts), small))
-    story.append(Paragraph(f"Verwendungszweck: {invoice.invoice_number}", small))
+    story.append(Paragraph(
+        f"{d.label_verwendungszweck} {invoice.invoice_number}", small,
+    ))
     try:
         payload = build_epc_payload(
             beneficiary_name=name,
@@ -130,18 +139,17 @@ def _epc_qr_anhaengen(story, invoice, company, small) -> None:
         )
         story.append(Spacer(1, 0.4 * cm))
         story.append(Image(io.BytesIO(qr_png_bytes(payload)), width=3.5 * cm, height=3.5 * cm))
-        story.append(Paragraph("Zum Überweisen scannen.", small))
+        story.append(Paragraph(d.label_scan_to_pay, small))
     except ValueError:
         # EPC_SCT strenger als REGISTRY: kein falscher Girocode, Klartext bleibt.
         pass
 
 
 def _document_title(invoice) -> str:
-    """Sichtbarer Belegtitel aus der fachlichen Belegartbeschreibung
-    (services/belegart.py) — dieselbe Quelle wie der BT-3-TypeCode der XML.
-    Unbekannte Typen werfen UnknownInvoiceTypeError statt still RECHNUNG
-    zu titeln (fail-closed, wie der XML-Generator)."""
-    return belegart(getattr(invoice, "invoice_type", None)).pdf_titel
+    """Sichtbarer Belegtitel aus Belegdarstellung zur Belegsprache.
+    Unbekannte Typen werfen UnknownInvoiceTypeError (fail-closed, wie XML)."""
+    art = belegart(getattr(invoice, "invoice_type", None))
+    return _belegdarstellung(invoice).titel(art.intern)
 
 
 INK = colors.HexColor("#1a1a2e")          # Fließtext/Überschriften
@@ -151,12 +159,8 @@ BORDER = colors.HexColor("#d9cfa6")       # warme, helle Rasterlinie
 TEXT_GRAY = colors.HexColor("#5b5b66")    # Sekundärtext, druckkontraststark
 
 
-# Die Regel steht jetzt in `app/darstellung.py` — dieselbe, die auch die
-# Oberfläche benutzt. Vorher war sie hier ausformuliert und in den Vorlagen ein
-# zweites Mal (dort falsch): Der Beleg schrieb 2.501,38 €, der Bildschirm
-# 2501.38 €. Der Alias bleibt, damit die Aufrufstellen im Modul unverändert
-# lesen; `tests/test_geldformat.py` prüft, dass es wirklich dieselbe Funktion ist.
-_money = euro
+# Die Geld-/Mengenformatierung liegt in Belegdarstellung (zustandslos je Sprache).
+# Vorher: Alias auf darstellung.euro — der blieb deutsch und war der S3-Risikopfad.
 
 
 def _pct(v: Decimal) -> str:
@@ -243,10 +247,10 @@ def _description_markup(text: str) -> str:
 def _zeigt_steuer(invoice: Invoice) -> bool:
     """Ob der Beleg überhaupt Umsatzsteuer ausweist.
 
-    Maßstab ist `TAX_NOTICE`: dieselbe Tabelle, die den Befreiungsgrund liefert
-    (AE, E, K, O). Wo ein Grund für die Steuerfreiheit steht, ist eine Steuerzeile
-    ein Widerspruch — die Rechnung sagte oben „hier wird keine Umsatzsteuer
-    ausgewiesen" und rechnete unten „zzgl. 0 % MwSt. — 0,00 €" vor.
+    Maßstab sind die Kategorien in EXEMPTION_REASONS: wo ein Befreiungsgrund
+    steht, ist eine Steuerzeile ein Widerspruch — die Rechnung sagte oben
+    „hier wird keine Umsatzsteuer ausgewiesen" und rechnete unten „zzgl. 0 %
+    MwSt. — 0,00 €" vor.
 
     Es geht dabei nicht um § 14c: ein Betrag von null ist kein unrichtiger
     Steuerausweis. Es geht um Verständlichkeit, und bei AE um mehr als das — der
@@ -254,19 +258,23 @@ def _zeigt_steuer(invoice: Invoice) -> bool:
     schuldet, und keine Zeile lesen, die einen Steuervorgang mit dem Ergebnis null
     nahelegt.
     """
-    return getattr(invoice, "tax_category", "S") not in TAX_NOTICE
+    return getattr(invoice, "tax_category", "S") not in TAX_NOTICE_KATEGORIEN
 
 
-def _build_item_rows(invoice: Invoice) -> list[list]:
+def _build_item_rows(invoice: Invoice, d: Belegdarstellung) -> list[list]:
     """Zeilen für die Positionstabelle. Die Beschreibung wird als Paragraph
     ausgegeben, damit sie in ihrer Spalte umbricht statt überzulaufen."""
     desc_style = _item_style()
     mit_steuer = _zeigt_steuer(invoice)
-    kopf = ["Pos.", "Beschreibung", "Menge", "Einheit", "Einzelpreis"]
+    kopf = [
+        d.label_pos, d.label_beschreibung, d.label_menge,
+        d.label_einheit, d.label_einzelpreis,
+    ]
     if mit_steuer:
-        kopf.append("MwSt.")
-    kopf.append("Betrag")
+        kopf.append(d.label_mwst)
+    kopf.append(d.label_betrag)
     rows = [kopf]
+    waehrung = getattr(invoice, "currency", "EUR") or "EUR"
     for item in invoice.items:
         zeile = [
             str(item.position),
@@ -274,19 +282,19 @@ def _build_item_rows(invoice: Invoice) -> list[list]:
             # NICHT `str(x.normalize())`: das kippt bei durch zehn teilbaren
             # Mengen in die Exponentialform — 120 Stunden stünden als "1.2E+2"
             # auf der Rechnung an den Kunden.
-            menge(item.quantity),
+            d.format_menge(item.quantity),
             item.unit,
-            _money(item.unit_price),
+            d.format_betrag(item.unit_price, waehrung),
         ]
         if mit_steuer:
             zeile.append(_pct(item.tax_rate))
-        zeile.append(_money(item.net_amount))
+        zeile.append(d.format_betrag(item.net_amount, waehrung))
         rows.append(zeile)
     return rows
 
 
-def _draft_watermark(font_name: str):
-    """`onPage`-Callback, der ein diagonales ENTWURF über die Seite legt.
+def _draft_watermark(font_name: str, text: str):
+    """`onPage`-Callback, der ein diagonales Stempelwort über die Seite legt.
 
     Der Text wird mit dem EINGEBETTETEN Body-Font gezeichnet, nicht mit einem
     Standard-14-Font. Für die Vorschau selbst ist das folgenlos (sie läuft nie durch
@@ -300,7 +308,7 @@ def _draft_watermark(font_name: str):
         canvas.setFillColor(colors.Color(0.55, 0.55, 0.62, alpha=0.20))
         canvas.translate(A4[0] / 2, A4[1] / 2)
         canvas.rotate(52)
-        canvas.drawCentredString(0, 0, "ENTWURF")
+        canvas.drawCentredString(0, 0, text)
         canvas.restoreState()
     return zeichne
 
@@ -314,6 +322,12 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         raise ValueError("Firmendaten dürfen nicht None sein")
     if not invoice.customer:
         raise ValueError("Rechnung hat keinen Kunden zugeordnet (customer_id fehlt)")
+
+    d = _belegdarstellung(invoice)
+    waehrung = getattr(invoice, "currency", "EUR") or "EUR"
+
+    def money(v):
+        return d.format_betrag(v, waehrung)
 
     fonts = register_fonts()
     BODY = fonts["body"]
@@ -331,7 +345,6 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         bottomMargin=2.5 * cm,
     )
 
-    # Create custom styles with explicit font names (all our registered embedded fonts)
     normal = ParagraphStyle("Normal", fontName=BODY, fontSize=9, leading=13, textColor=INK)
     small = ParagraphStyle("small", fontName=BODY, fontSize=8, textColor=TEXT_GRAY, leading=11)
     small_right = ParagraphStyle("small_right", fontName=BODY, fontSize=8, textColor=TEXT_GRAY, leading=11, alignment=TA_RIGHT)
@@ -340,9 +353,8 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     right_bold = ParagraphStyle("right_bold", fontName=BOLD, fontSize=10, alignment=TA_RIGHT, textColor=INK)
 
     story = []
-    W = A4[0] - 4 * cm  # Nutzbreite
+    W = A4[0] - 4 * cm
 
-    # ── Header ──────────────────────────────────────────────────────────────
     addr_lines = [company.name]
     if company.address_line1:
         addr_lines.append(company.address_line1)
@@ -357,15 +369,6 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
 
     contact_text = "<br/>".join(addr_lines)
 
-    tax_info = []
-    if company.vat_id:
-        tax_info.append(f"USt-IdNr.: {company.vat_id}")
-    if company.tax_number:
-        tax_info.append(f"Steuernummer: {company.tax_number}")
-
-    # Marken-Stempel: Logo (oben) + Firmenname in Pixelschrift (unten), gerahmt.
-    # Pixelschrift + Rahmen statt frei laufender 18pt-Überschrift, die bei langen
-    # lange Firmennamen ineinander umbrachen.
     PAD = 10
     brand_fontsize = 8
     brand_style = ParagraphStyle(
@@ -375,9 +378,6 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     brand_name = Paragraph(brand_text, brand_style)
 
     logo_img = _logo_flowable()
-    # Box eng an den Inhalt: Breite = max(Name, Logo) + Innenabstand, statt fixer
-    # Spaltenbreite mit viel Leerraum rechts. +2 Sicherheitspuffer gegen Umbruch
-    # bei exakter Textbreite.
     name_w = pdfmetrics.stringWidth(brand_text, PIXEL, brand_fontsize)
     logo_w = logo_img.drawWidth if logo_img is not None else 0
     BRAND_W = min(max(name_w, logo_w) + 2 * PAD + 2, W * 0.62)
@@ -394,7 +394,6 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     ]
     if logo_img is not None:
         brand_rows.append([logo_img])
-        # weniger Abstand zwischen Logo und Name
         brand_style_cmds.append(("BOTTOMPADDING", (0, 0), (0, 0), 4))
         brand_style_cmds.append(("TOPPADDING", (0, 1), (0, 1), 2))
     brand_rows.append([brand_name])
@@ -420,7 +419,6 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     story.append(HRFlowable(width=W, thickness=1.5, color=INK, spaceBefore=2, spaceAfter=1))
     story.append(HRFlowable(width=W, thickness=0.5, color=GOLD, spaceAfter=12))
 
-    # ── Adressblock Empfänger ────────────────────────────────────────────────
     customer = invoice.customer
     cust_addr = [customer.name]
     if customer.address_line1:
@@ -433,40 +431,33 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         cust_addr.append(customer.country)
 
     meta_rows = [
-        ("Rechnungsnummer:", invoice.invoice_number),
-        ("Rechnungsdatum:", invoice.issue_date.strftime("%d.%m.%Y")),
+        (d.label_rechnungsnummer, invoice.invoice_number),
+        (d.label_rechnungsdatum, d.format_datum(invoice.issue_date)),
     ]
     if invoice.delivery_date:
         meta_rows.append(
-            ("Leistungsdatum:", invoice.delivery_date.strftime("%d.%m.%Y"))
+            (d.label_leistungsdatum, d.format_datum(invoice.delivery_date))
         )
     if invoice.service_period_start and invoice.service_period_end:
         period_str = (
-            f"{invoice.service_period_start.strftime('%d.%m.%Y')} – "
-            f"{invoice.service_period_end.strftime('%d.%m.%Y')}"
+            f"{d.format_datum(invoice.service_period_start)} – "
+            f"{d.format_datum(invoice.service_period_end)}"
         )
-        # Bei der Anzahlungsrechnung (386) ist der Zeitraum der voraussichtliche,
-        # keine bereits erbrachte Leistung (Produktbegrenzung des ersten Schnitts,
-        # docs/specs/vorabrechnung.md — strenger als EN16931, keine Normpflicht).
         if belegart(getattr(invoice, "invoice_type", None)).intern == "prepayment":
-            meta_rows.append(("Voraussichtlicher Leistungszeitraum:", period_str))
+            meta_rows.append((d.label_vorauss_leistungszeitraum, period_str))
         else:
-            meta_rows.append(("Leistungszeitraum:", period_str))
-    meta_rows.append(("Fälligkeitsdatum:", invoice.due_date.strftime("%d.%m.%Y")))
+            meta_rows.append((d.label_leistungszeitraum, period_str))
+    meta_rows.append((d.label_faelligkeit, d.format_datum(invoice.due_date)))
     if getattr(customer, "customer_number", None):
-        meta_rows.append(("Kundennummer:", customer.customer_number))
-    # BT-10: sonstige Käuferreferenz / Leitweg-ID — getrennt von der Bestellnummer.
+        meta_rows.append((d.label_kundennummer, customer.customer_number))
     if getattr(invoice, "buyer_reference", None):
-        meta_rows.append(("Ihre Referenz:", invoice.buyer_reference))
-    # BT-13: Bestellnummer / Purchase Order (#101). Viele Empfänger lesen nur das PDF.
+        meta_rows.append((d.label_ihre_referenz, invoice.buyer_reference))
     if getattr(invoice, "buyer_order_reference", None):
-        meta_rows.append(("Bestellnummer:", invoice.buyer_order_reference))
+        meta_rows.append((d.label_bestellnummer, invoice.buyer_order_reference))
     if customer.vat_id:
-        meta_rows.append(("USt-IdNr. Kunde:", customer.vat_id))
+        meta_rows.append((d.label_ust_id_kunde, customer.vat_id))
 
-    meta_text = "".join(
-        f'<b>{k}</b> {v}<br/>' for k, v in meta_rows
-    )
+    meta_text = "".join(f"<b>{k}</b> {v}<br/>" for k, v in meta_rows)
 
     addr_meta = Table(
         [[Paragraph("<br/>".join(cust_addr), normal), Paragraph(meta_text, small_right)]],
@@ -482,21 +473,12 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     story.append(addr_meta)
     story.append(Spacer(1, 0.8 * cm))
 
-    # ── Belegtitel (Pixel) + Nummer (Retro) auf gemeinsamer Grundlinie ────────
     story.append(TitleBand(
         W, _document_title(invoice), invoice.invoice_number,
         title_font=PIXEL, number_font=RETRO,
     ))
     story.append(Spacer(1, 0.5 * cm))
 
-    # ── Positionen ───────────────────────────────────────────────────────────
-    # Spaltenbreiten summieren sich exakt auf die Nutzbreite W (17 cm), damit die
-    # Tabelle nicht über den rechten Rand hinausläuft. Die Beschreibung bekommt
-    # die Restbreite und bricht als Paragraph um (siehe _build_item_rows).
-    # Die Steuerspalte (1,4 cm) entfällt bei steuerfreien Belegen (_zeigt_steuer);
-    # ihre Breite geht an die Beschreibung. EINE Liste, aus der sich die Restbreite
-    # ergibt: zwei getrennte Listen (feste Spalten hier, Breiten dort) würden beim
-    # nächsten Eingriff auseinanderlaufen, und die Tabelle liefe stumm über den Rand.
     col_widths = [0.9 * cm, None, 1.3 * cm, 1.3 * cm, 2.3 * cm]
     if _zeigt_steuer(invoice):
         col_widths.append(1.4 * cm)
@@ -504,7 +486,7 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     col_widths[1] = W - sum(w for w in col_widths if w is not None)
     letzte = len(col_widths) - 1
 
-    item_rows = _build_item_rows(invoice)
+    item_rows = _build_item_rows(invoice, d)
 
     items_table = Table(item_rows, colWidths=col_widths, repeatRows=1)
     items_table.hAlign = "LEFT"
@@ -516,8 +498,6 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         ("FONTSIZE", (0, 0), (-1, -1), 8.5),
         ("ALIGN", (0, 0), (0, -1), "CENTER"),
         ("ALIGN", (2, 0), (2, -1), "RIGHT"),
-        # Bis zur LETZTEN Spalte, nicht bis zur festen 6: ohne Steuerspalte hat die
-        # Tabelle eine Spalte weniger, und eine feste Zahl zeigte dann ins Leere.
         ("ALIGN", (4, 0), (letzte, -1), "RIGHT"),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, GOLD_TINT]),
         ("GRID", (0, 0), (-1, -1), 0.3, BORDER),
@@ -530,9 +510,9 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     story.append(items_table)
     story.append(Spacer(1, 0.5 * cm))
 
-    # ── Gesetzlicher Steuerhinweis (bei nicht-Inland-Rechnungen) ─────────────
     tax_cat = getattr(invoice, "tax_category", "S")
-    if tax_cat in TAX_NOTICE:
+    hinweis = d.steuerhinweis(tax_cat)
+    if hinweis:
         notice_style = ParagraphStyle(
             "notice",
             fontName=ITALIC,
@@ -543,10 +523,9 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
             borderPadding=6,
             leading=12,
         )
-        story.append(Paragraph(TAX_NOTICE[tax_cat], notice_style))
+        story.append(Paragraph(hinweis, notice_style))
         story.append(Spacer(1, 0.3 * cm))
 
-    # ── Steueraufstellung + Summen ───────────────────────────────────────────
     from collections import defaultdict
     tax_groups: dict[Decimal, dict] = defaultdict(lambda: {"basis": Decimal("0"), "tax": Decimal("0")})
     for item in invoice.items:
@@ -554,21 +533,18 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         tax_groups[item.tax_rate]["tax"] += item.tax_amount
 
     totals_data = []
-    # Der Nettobetrag bleibt auch beim steuerfreien Beleg stehen: § 14 Abs. 4 Nr. 7
-    # UStG verlangt das Entgelt, und dass es hier zufällig dem Rechnungsbetrag
-    # entspricht, macht es nicht entbehrlich.
-    totals_data.append([Paragraph("Nettobetrag", small), Paragraph(_money(invoice.net_total), right)])
+    totals_data.append([Paragraph(d.label_netto, small), Paragraph(money(invoice.net_total), right)])
     if _zeigt_steuer(invoice):
         for rate in sorted(tax_groups.keys()):
             g = tax_groups[rate]
-            label = f"zzgl. {_pct(rate)} MwSt. auf {_money(g['basis'])}"
-            totals_data.append([Paragraph(label, small), Paragraph(_money(g["tax"]), right)])
+            label = d.steuerzeile(_pct(rate), money(g["basis"]))
+            totals_data.append([Paragraph(label, small), Paragraph(money(g["tax"]), right)])
+    summen_label = (
+        d.label_gutschriftbetrag if _ist_gutschrift(invoice) else d.label_rechnungsbetrag
+    )
     totals_data.append([
-        Paragraph(
-            "<b>Gutschriftbetrag</b>" if _ist_gutschrift(invoice) else "<b>Rechnungsbetrag</b>",
-            small_bold,
-        ),
-        Paragraph(f"<b>{_money(invoice.gross_total)}</b>", right_bold)
+        Paragraph(f"<b>{summen_label}</b>", small_bold),
+        Paragraph(f"<b>{money(invoice.gross_total)}</b>", right_bold)
     ])
 
     totals_col = W * 0.55
@@ -584,47 +560,43 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
 
     totals_wrap = Table([[None, totals_table]], colWidths=[totals_col * 0.1, W - totals_col * 0.1])
     totals_wrap.hAlign = "LEFT"
-    totals_wrap.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), BODY), ("ALIGN", (1, 0), (1, 0), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    totals_wrap.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), BODY),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
     story.append(totals_wrap)
 
-    # ── Zahlungshinweis ──────────────────────────────────────────────────────
     story.append(Spacer(1, 0.8 * cm))
     if _zahlung_an_kunde(invoice) and _zahlungs_empfaenger(invoice, company):
-        payment_text = invoice.payment_terms or (
-            "Bitte überweisen Sie den Gutschriftbetrag auf die unten genannte Bankverbindung."
-        )
+        payment_text = invoice.payment_terms or d.fallback_gutschrift_ueberweisung
     elif _ist_gutschrift(invoice):
-        payment_text = invoice.payment_terms or "Gutschrift ohne Zahlungsaufforderung."
+        payment_text = invoice.payment_terms or d.fallback_gutschrift_ohne
     else:
-        payment_text = invoice.payment_terms or "Zahlbar ohne Abzug."
+        payment_text = invoice.payment_terms or d.fallback_zahlbar
     story.append(Paragraph(payment_text, small))
-    _epc_qr_anhaengen(story, invoice, company, small)
+    _epc_qr_anhaengen(story, invoice, company, small, d)
 
-    # ── Freitext / Notiz ─────────────────────────────────────────────────────
     if invoice.notes:
         story.append(Spacer(1, 0.5 * cm))
         story.append(Paragraph(invoice.notes, small))
 
-    # ── Steuerinfo ───────────────────────────────────────────────────────────
     story.append(Spacer(1, 0.8 * cm))
     story.append(HRFlowable(width=W, thickness=0.5, color=BORDER, spaceAfter=6))
     footer_parts = []
     if company.vat_id:
-        footer_parts.append(f"USt-IdNr.: {company.vat_id}")
+        footer_parts.append(f"{d.label_ust_id} {company.vat_id}")
     if company.tax_number:
-        footer_parts.append(f"Steuernummer: {company.tax_number}")
+        footer_parts.append(f"{d.label_steuernummer} {company.tax_number}")
     if footer_parts:
         story.append(Paragraph("  ·  ".join(footer_parts), small))
 
-    # ReportLab setzt sonst den nicht eingebetteten Standard-14-Basisfont in die
-    # PDF-Präambel (verletzt PDF/A-3). Mit initialFontName=BODY startet der Canvas
-    # mit unserer eingebetteten Schrift, sodass kein Standard-14-Font entsteht.
     def _canvasmaker(*args, **kwargs):
         kwargs["initialFontName"] = BODY
         return Canvas(*args, **kwargs)
 
     if draft:
-        wasserzeichen = _draft_watermark(BODY)
+        wasserzeichen = _draft_watermark(BODY, d.stempel_entwurf)
         doc.build(story, canvasmaker=_canvasmaker,
                   onFirstPage=wasserzeichen, onLaterPages=wasserzeichen)
     else:

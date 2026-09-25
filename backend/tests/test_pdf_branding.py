@@ -199,8 +199,9 @@ def test_item_description_is_wrapping_paragraph():
     """Beschreibungen sind Paragraphs (umbruchfähig), keine rohen Strings —
     rohe Strings laufen in ReportLab über die Spalte hinaus."""
     from reportlab.platypus import Paragraph
+    from app.services.belegsprache import darstellung
     long_desc = "Workshop E-Rechnung / ZUGFeRD (Tagespauschale, inkl. Nachbereitung)"
-    rows = _build_item_rows(_invoice(description=long_desc))
+    rows = _build_item_rows(_invoice(description=long_desc), darstellung("de"))
     # rows[0] ist der Header; rows[1] die erste Position
     description_cell = rows[1][1]
     assert isinstance(description_cell, Paragraph), \

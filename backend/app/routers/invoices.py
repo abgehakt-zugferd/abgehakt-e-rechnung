@@ -24,6 +24,7 @@ from app.services.belegart import (
     manuelle_belegart,
     manuelle_belegarten,
 )
+from app.services.belegsprache import UnknownDocumentLanguageError, resolve_belegsprache
 from app.services.leistungszeit import parse_leistungszeit_from_form
 from app.models.app_config import AppConfig
 from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
@@ -78,6 +79,39 @@ def _get_company(db: Session) -> Company:
     if not c or c.setup_completed_at is None:
         raise HTTPException(400, "Firmendaten nicht konfiguriert. Bitte zuerst die Ersteinrichtung abschließen.")
     return c
+
+
+def _belegsprache_aus_form(form, *, fehlt: str = "de") -> str:
+    """Formularwert → de|en.
+
+    Fehlendes Feld: `fehlt` (Neuanlage: de zur Abwaertskompatibilitaet;
+    Bearbeiten: bisherige Sprache der Rechnung). Jeder andere Wert ist HTTP 400
+    vor Nummernvergabe. Der Resolver faellt nicht still auf Deutsch zurueck.
+    """
+    if "document_language" not in form:
+        return fehlt
+    roh = form.get("document_language")
+    try:
+        return resolve_belegsprache(roh if roh is not None else "")
+    except UnknownDocumentLanguageError as fehler:
+        raise HTTPException(400, str(fehler)) from fehler
+
+
+def _zahlungsbedingungen(form, company: Company, sprache: str) -> str:
+    """Leeres Feld → Vorgabe der gewaehlten Sprache. Englisch ohne Vorgabe: 400."""
+    eingabe = (form.get("payment_terms") or "").strip()
+    if eingabe:
+        return eingabe
+    if sprache == "en":
+        vorgabe = (company.payment_terms_default_en or "").strip()
+        if not vorgabe:
+            raise HTTPException(
+                400,
+                "Englische Standard-Zahlungsbedingungen fehlen in den Einstellungen. "
+                "Bitte zuerst unter Einstellungen hinterlegen.",
+            )
+        return vorgabe
+    return company.payment_terms_default
 
 
 def _calc_item(quantity: Decimal, unit_price: Decimal, tax_rate: Decimal) -> tuple[Decimal, Decimal, Decimal]:
@@ -360,6 +394,8 @@ def new_invoice_form(
                     kunde_hinweis = "Vorlagenkunde nicht waehlbar"
                 # Kein invoice_type, kein original_invoice_id, keine uebergabe_beleg_*:
                 # die gehoeren nicht in die Vorbelegung (Feldvertrag).
+                # document_language wird vererbt (docs/specs/belegsprache.md);
+                # invoice_type bleibt weiterhin nie geerbt.
                 vorbelegung = SimpleNamespace(
                     customer_id=kunde_id,
                     tax_category=quelle.tax_category,
@@ -370,6 +406,7 @@ def new_invoice_form(
                     delivery_date=quelle.delivery_date,
                     payment_terms=quelle.payment_terms,
                     notes=quelle.notes,
+                    document_language=getattr(quelle, "document_language", None) or "de",
                 )
                 items_json = _items_as_json(quelle)
 
@@ -429,6 +466,11 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
     except InvoiceTypeNotSelectable as fehler:
         raise HTTPException(400, str(fehler)) from fehler
 
+    # Sprache vor Nummernvergabe: ungueltiger Wert und fehlende englische
+    # Vorgabe duerfen den Zaehler nicht erhoehen (docs/specs/belegsprache.md S1/S7).
+    document_language = _belegsprache_aus_form(form)
+    payment_terms = _zahlungsbedingungen(form, company, document_language)
+
     items_json = form.get("items_json", "[]")
     raw_items = json.loads(items_json)
     # Vor Nummernvergabe: unbekannte Einheit darf weder Zaehler noch Zeile anfassen.
@@ -444,7 +486,7 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
         delivery_date=delivery_date,
         service_period_start=service_period_start,
         service_period_end=service_period_end,
-        payment_terms=form.get("payment_terms", "").strip() or company.payment_terms_default,
+        payment_terms=payment_terms,
         buyer_reference=form.get("buyer_reference", "").strip() or None,
         buyer_order_reference=form.get("buyer_order_reference", "").strip() or None,
         notes=form.get("notes", "").strip() or None,
@@ -452,6 +494,7 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
         zugferd_profile="EN16931",
         tax_category=tax_category,
         invoice_type=invoice_type,
+        document_language=document_language,
     )
     db.add(invoice)
     db.flush()
@@ -562,7 +605,15 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
     invoice.due_date = date.fromisoformat(form.get("due_date"))
     invoice.delivery_date = delivery_date
     invoice.tax_category = form.get("tax_category", "S").strip() or "S"
-    invoice.payment_terms = form.get("payment_terms", "").strip() or company.payment_terms_default
+    try:
+        invoice.document_language = _belegsprache_aus_form(
+            form, fehlt=invoice.document_language or "de",
+        )
+        invoice.payment_terms = _zahlungsbedingungen(
+            form, company, invoice.document_language,
+        )
+    except HTTPException as fehler:
+        return _bearbeiten_mit_fehler(request, db, invoice, fehler.detail)
     invoice.buyer_reference = form.get("buyer_reference", "").strip() or None
     invoice.buyer_order_reference = form.get("buyer_order_reference", "").strip() or None
     invoice.notes = form.get("notes", "").strip() or None

@@ -256,6 +256,8 @@ def test_einstellungen_rueckfall_fuer_code_ausserhalb_iso_liste(client, pg_sessi
         "address_line2": "", "zip_code": firma.zip_code, "city": firma.city,
         "country": treffer.group(1), "tax_number": firma.tax_number or "",
         "vat_id": firma.vat_id or "", "invoice_prefix": firma.invoice_prefix or "RE",
+        "payment_terms_default": firma.payment_terms_default or "Zahlbar.",
+        "payment_terms_default_en": "Payable within 14 days without deduction.",
     })
 
     pg_session.expire_all()

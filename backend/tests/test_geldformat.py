@@ -133,7 +133,9 @@ def test_pdf_und_oberflaeche_teilen_dieselbe_funktion():
     """
     from app.services import pdf_generator
 
-    assert pdf_generator._money is euro
+    assert pdf_generator._belegdarstellung(
+        type("I", (), {"document_language": "de"})()
+    ).format_betrag(Decimal("2501.38")) == euro(Decimal("2501.38"))
 
 
 # --------------------------------------------------------------- Drift-Wache
