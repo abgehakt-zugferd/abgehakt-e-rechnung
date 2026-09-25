@@ -105,6 +105,7 @@ def save_company(
     invoice_prefix: str = Form("RE"),
     invoice_year_in_number: str = Form("on"),
     payment_terms_default: str = Form(""),
+    payment_terms_default_en: str = Form(""),
     kst_satz_percent: str = Form("15"),
     soli_auf_kst_percent: str = Form("5.5"),
     gewerbe_hebesatz: str = Form("400"),
@@ -123,6 +124,14 @@ def save_company(
         return settings_page(request, db, saved=False, error=meldung)
     if (meldung := pruefe_bic(bank_bic)):
         return settings_page(request, db, saved=False, error=meldung)
+
+    de_terms = payment_terms_default.strip()
+    en_terms = payment_terms_default_en.strip()
+    if not de_terms or not en_terms:
+        return settings_page(
+            request, db, saved=False,
+            error="Deutsche und englische Standard-Zahlungsbedingungen sind Pflichtfelder.",
+        )
 
     company = _get_or_create_company(db)
     alt_vat = company.vat_id
@@ -153,7 +162,8 @@ def save_company(
     company.bank_name = bank_name.strip() or None
     company.invoice_prefix = invoice_prefix.strip() or "RE"
     company.invoice_year_in_number = invoice_year_in_number == "on"
-    company.payment_terms_default = payment_terms_default.strip() or "Zahlbar innerhalb von 14 Tagen nach Rechnungseingang ohne Abzug."
+    company.payment_terms_default = de_terms
+    company.payment_terms_default_en = en_terms
     company.kst_satz_percent = Decimal(kst_satz_percent.replace(",", ".").strip())
     company.soli_auf_kst_percent = Decimal(soli_auf_kst_percent.replace(",", ".").strip())
     company.gewerbe_hebesatz = int(gewerbe_hebesatz.strip())

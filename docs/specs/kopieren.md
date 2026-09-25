@@ -34,6 +34,7 @@ Die Naht liegt zwischen der gelesenen Vorlagenrechnung und den Vorbelegungswerte
 | Leistungsdatum (`delivery_date`) | ja, wenn gesetzt | Gehoert zu den Leistungsangaben; abweichend von Belegdatum und Faelligkeit. Fehlt es in der Vorlage, gilt das Neuanlage-Default (heute), wie `GET /neu` heute. |
 | Zahlungsbedingungen (`payment_terms`) | ja | Typischerweise unveraendert; sonst kurz aenderbar. |
 | Bemerkungen (`notes`) | ja | Oft Ratenhinweis; Nutzer streicht oder passt an. |
+| Belegsprache (`document_language`) | ja | Darstellungsabsicht des kopierten Entwurfs (docs/specs/belegsprache.md). Keine Storno-, Gutschrift- oder Anzahlungswirkung; deshalb vererbt, anders als `invoice_type`. |
 | Rechnungsdatum (`issue_date`) | nein | Heutiger Tag, wie reine Neuanlage (`today`). Ein geerbtes Altdatum wuerde den neuen Beleg falsch datieren. |
 | Faelligkeitsdatum (`due_date`) | nein | Aus heute wie bei Neuanlage (`due_default`, Bestand: heute + 14 Tage). |
 | Status | nein | Neuanlage ist Entwurf; Status ist kein Formularfeld der Neuanlage. |

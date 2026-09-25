@@ -181,12 +181,16 @@ class TestV5Typaufloesung:
         assert belegart("storno").intern == "credit_note"
         assert belegart("self-billing").intern == "self_billing"
 
-    def test_pdf_titel_aus_derselben_quelle(self):
-        assert belegart(None).pdf_titel == "RECHNUNG"
-        assert belegart("prepayment").pdf_titel == "ANZAHLUNGSRECHNUNG"
-        assert belegart("credit_note").pdf_titel == "GUTSCHRIFT"
-        assert belegart("correction").pdf_titel == "KORREKTURRECHNUNG"
-        assert belegart("self_billing").pdf_titel == "GUTSCHRIFT"
+    def test_pdf_titel_aus_belegdarstellung(self):
+        """Sichtbarer Titel liegt in Belegdarstellung, nicht mehr in belegart."""
+        from app.services.belegsprache import darstellung
+        de = darstellung("de")
+        assert de.titel(None) == "RECHNUNG"
+        assert de.titel("prepayment") == "ANZAHLUNGSRECHNUNG"
+        assert de.titel("credit_note") == "GUTSCHRIFT"
+        assert de.titel("correction") == "KORREKTURRECHNUNG"
+        assert de.titel("self_billing") == "GUTSCHRIFT"
+        assert not hasattr(belegart(None), "pdf_titel")
 
     def test_manuelle_waehlbarkeit(self):
         assert belegart(None).manuell_waehlbar

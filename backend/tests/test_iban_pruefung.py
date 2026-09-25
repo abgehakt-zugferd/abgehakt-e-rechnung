@@ -166,6 +166,8 @@ def _firma_form(**extra):
         "kst_satz_percent": "15",
         "soli_auf_kst_percent": "5,5",
         "gewerbe_hebesatz": "490",
+        "payment_terms_default": "Zahlbar innerhalb von 14 Tagen ohne Abzug.",
+        "payment_terms_default_en": "Payable within 14 days without deduction.",
     }
     data.update(extra)
     return data

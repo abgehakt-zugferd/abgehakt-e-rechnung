@@ -1,15 +1,17 @@
 """Fachliche Belegartbeschreibung (docs/specs/vorabrechnung.md, Option B).
 
-EINZIGE Quelle fuer interne Belegart-Werte, ihre Aliase, den BT-3-TypeCode,
-den PDF-Titel und die manuelle Waehlbarkeit. Die fruehere TYPE_CODE_MAP in
+EINZIGE Quelle fuer interne Belegart-Werte, ihre Aliase, den BT-3-TypeCode
+und die manuelle Waehlbarkeit. Der sichtbare PDF-Titel kommt aus
+Belegdarstellung (docs/specs/belegsprache.md). Die fruehere TYPE_CODE_MAP in
 zugferd_xml.py ist hierher umgezogen; ihre Aliase bleiben lesbar, und der
 Name wird als abgeleitete Sicht weitergereicht (kein zweites Mapping).
 
 Zwei reale Adapter lesen aus derselben Beschreibung: die XML schreibt BT-3,
-das PDF den sichtbaren Titel; das Formular hat zusaetzlich eine engere
-Auswahl (manuelle Waehlbarkeit). 381/384/389 sind allgemein gueltige Codes,
-aber keine manuelle Wahl: Gutschrift/Storno entsteht im Stornoweg, 389 im
-Integrationsweg aus signierten Uebergabebelegen, 384 ist systemreserviert.
+das PDF den Titel ueber Belegdarstellung.titel(intern); das Formular hat
+zusaetzlich eine engere Auswahl (manuelle Waehlbarkeit). 381/384/389 sind
+allgemein gueltige Codes, aber keine manuelle Wahl: Gutschrift/Storno entsteht
+im Stornoweg, 389 im Integrationsweg aus signierten Uebergabebelegen, 384 ist
+systemreserviert.
 """
 from __future__ import annotations
 
@@ -44,12 +46,12 @@ class InvoiceTypeNotSelectable(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class Belegart:
-    """Eine fachliche Belegart: kanonischer interner Wert, BT-3, PDF-Titel,
-    manuelle Waehlbarkeit. Keine Laufzeitkonfiguration."""
+    """Eine fachliche Belegart: kanonischer interner Wert, BT-3,
+    manuelle Waehlbarkeit. Der sichtbare PDF-Titel liegt in Belegdarstellung
+    (docs/specs/belegsprache.md), nicht hier."""
 
     intern: str | None        # kanonischer gespeicherter Wert (None = Standard)
     bt3: str                  # BT-3, Dokumenttypcode nach UNTDID 1001
-    pdf_titel: str            # sichtbarer Belegtitel im PDF
     manuell_waehlbar: bool    # im Formular an-/abwaehlbar?
     form_wert: str | None     # Wert im Formular-POST (None bei Systembelegen)
     label: str | None         # Formularbeschriftung
@@ -57,7 +59,7 @@ class Belegart:
 
 
 _STANDARD = Belegart(
-    intern=None, bt3="380", pdf_titel="RECHNUNG",
+    intern=None, bt3="380",
     manuell_waehlbar=True, form_wert="standard", label="Standardrechnung",
     braucht_original=False,
 )
@@ -69,22 +71,22 @@ _STANDARD = Belegart(
 # schreibt kein BT-113: fuer die unbezahlte Vorausforderung entspricht
 # DuePayableAmount dem eigenen Bruttobetrag.
 _ANZAHLUNG = Belegart(
-    intern="prepayment", bt3="386", pdf_titel="ANZAHLUNGSRECHNUNG",
+    intern="prepayment", bt3="386",
     manuell_waehlbar=True, form_wert="prepayment", label="Anzahlungsrechnung",
     braucht_original=False,
 )
 _GUTSCHRIFT = Belegart(
-    intern="credit_note", bt3="381", pdf_titel="GUTSCHRIFT",
+    intern="credit_note", bt3="381",
     manuell_waehlbar=False, form_wert=None, label=None,
     braucht_original=True,
 )
 _KORREKTUR = Belegart(
-    intern="correction", bt3="384", pdf_titel="KORREKTURRECHNUNG",
+    intern="correction", bt3="384",
     manuell_waehlbar=False, form_wert=None, label=None,
     braucht_original=True,
 )
 _SELF_BILLING = Belegart(
-    intern="self_billing", bt3="389", pdf_titel="GUTSCHRIFT",
+    intern="self_billing", bt3="389",
     manuell_waehlbar=False, form_wert=None, label=None,
     braucht_original=True,
 )

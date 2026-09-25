@@ -73,6 +73,12 @@ class Invoice(Base):
         String(20), nullable=False, default="EN16931", server_default="EN16931"
     )
     tax_category: Mapped[str] = mapped_column(String(5), nullable=False, default="S", server_default="S")
+    # Belegsprache steuert nur die menschliche Darstellung (PDF). Nicht aus Land,
+    # Adresse oder USt-IdNr. ableiten. Nach Finalisieren unveraenderlich
+    # (nicht in MUTABLE_AFTER_FINALIZE). docs/specs/belegsprache.md
+    document_language: Mapped[str] = mapped_column(
+        String(2), nullable=False, default="de", server_default="de"
+    )
     # P7: TypeCode für ZUGFeRD (380=Rechnung, 381=Gutschrift/Storno, 384=Korrektur, 389=Gutschriftverfahren)
     # Wird in zugferd_xml.py verwendet, um den richtigen TypeCode zu setzen
     invoice_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)

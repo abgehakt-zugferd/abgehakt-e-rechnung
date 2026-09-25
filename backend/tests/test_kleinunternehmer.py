@@ -158,11 +158,16 @@ def test_das_pdf_traegt_den_hinweis_auf_paragraf_19(tmp_path):
 
 
 def test_der_hinweis_im_pdf_ist_derselbe_wie_in_der_xml():
-    """Zwei Kopien desselben Rechtstextes driften auseinander, und die Kopie im
-    PDF fällt beim Erweitern zuerst hinten runter — genau so fehlte § 19 hier."""
-    from app.services import pdf_generator
+    """Deutsche PDF-Schablone und XML teilen denselben Rechtstext fuer E/AE/K/O.
+    Englisch aendert nur das PDF (E/K/O); AE bleibt in beiden Ausgaben zweisprachig."""
+    from app.services.belegsprache import darstellung
 
-    assert pdf_generator.TAX_NOTICE is zugferd_xml.EXEMPTION_REASONS
+    de = darstellung("de")
+    en = darstellung("en")
+    for kat in ("AE", "E", "K", "O"):
+        assert de.steuerhinweis(kat) == zugferd_xml.EXEMPTION_REASONS[kat]
+    assert en.steuerhinweis("AE") == zugferd_xml.EXEMPTION_REASONS["AE"]
+    assert en.steuerhinweis("E") != zugferd_xml.EXEMPTION_REASONS["E"]
 
 
 # ── Erreichbar sein heißt: im Auswahlfeld stehen ────────────────────────────

@@ -14,7 +14,10 @@
     <script type="application/json" id="vorhandene-positionen">{{ items_json | default('[]', true) | safe }}</script>
     <script type="application/json" id="formular-vorgaben">{
         "taxCategory": {{ (belegung.tax_category if belegung else 'S') | tojson }},
-        "paymentTerms": {{ ((belegung.payment_terms if belegung else None) or (company.payment_terms_default if company else '')) | tojson }}
+        "documentLanguage": {{ (belegung.document_language if belegung and belegung.document_language else 'de') | tojson }},
+        "paymentTerms": {{ ((belegung.payment_terms if belegung else None) or '') | tojson }},
+        "paymentTermsDe": {{ (company.payment_terms_default if company else '') | tojson }},
+        "paymentTermsEn": {{ ((company.payment_terms_default_en if company else None) or '') | tojson }}
     }</script>
 
     <div class="flex items-center gap-3 mb-6">
@@ -244,6 +247,22 @@
                 <div class="card space-y-4">
                     <h2>RECHNUNGSDATEN</h2>
 
+                    <div>
+                        <label class="label">Belegsprache</label>
+                        {% set aktuelle_sprache = (belegung.document_language if belegung and belegung.document_language else 'de') %}
+                        <select name="document_language" class="input"
+                                x-model="documentLanguage"
+                                @change="onDocumentLanguageChange()">
+                            <option value="de" {% if aktuelle_sprache == 'de' %}selected{% endif %}>Deutsch</option>
+                            <option value="en" {% if aktuelle_sprache == 'en' %}selected{% endif %}>Englisch</option>
+                        </select>
+                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+                            Steuert die Beschriftung und Zahlenformate im PDF.
+                            Positionsbeschreibungen und Zahlungsbedingungen werden nicht übersetzt.
+                            Nach dem Finalisieren unveränderlich.
+                        </p>
+                    </div>
+
                     {% if belegart_waehlbar %}
                     {# Belegart: nur die manuelle Teilmenge (Standard/Anzahlung).
                        Systembelege (381/384/389) bekommen kein Feld; die Sperre
@@ -348,6 +367,9 @@ function invoiceForm() {
     return {
         items: [],
         taxCategory: 'S',
+        documentLanguage: 'de',
+        paymentTermsDe: '',
+        paymentTermsEn: '',
         netTotal: 0,
         grossTotal: 0,
         taxSummary: {},
@@ -362,6 +384,9 @@ function invoiceForm() {
             const vorhandene = lies('vorhandene-positionen', []);
 
             this.taxCategory = vorgaben.taxCategory || 'S';
+            this.documentLanguage = vorgaben.documentLanguage || 'de';
+            this.paymentTermsDe = vorgaben.paymentTermsDe || '';
+            this.paymentTermsEn = vorgaben.paymentTermsEn || '';
 
             if (vorhandene.length) {
                 // Bearbeiten: gespeicherte Positionen laden und die Summen einmal
@@ -373,8 +398,27 @@ function invoiceForm() {
             }
 
             if (this.$refs.paymentTerms) {
-                this.$refs.paymentTerms.value = vorgaben.paymentTerms || '';
+                // Vorhandener Text (Vorlage/Entwurf) hat Vorrang. Sonst Vorgabe
+                // der gewaehlten Sprache. Sprachwechsel ueberschreibt nie.
+                const vorhanden = (vorgaben.paymentTerms || '').trim();
+                if (vorhanden) {
+                    this.$refs.paymentTerms.value = vorhanden;
+                } else {
+                    this.$refs.paymentTerms.value = this.documentLanguage === 'en'
+                        ? this.paymentTermsEn
+                        : this.paymentTermsDe;
+                }
             }
+        },
+
+        onDocumentLanguageChange() {
+            // Nur leeres Feld nachziehen. Vorhandene Nutzereingabe (auch aus
+            // Vorlage) bleibt unveraendert — keine stillschweigende Uebersetzung.
+            if (!this.$refs.paymentTerms) return;
+            if (this.$refs.paymentTerms.value.trim()) return;
+            this.$refs.paymentTerms.value = this.documentLanguage === 'en'
+                ? this.paymentTermsEn
+                : this.paymentTermsDe;
         },
 
         onTaxCategoryChange() {

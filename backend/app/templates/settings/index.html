@@ -144,8 +144,15 @@
             </div>
 
             <div>
-                <label class="label">Standard-Zahlungsbedingungen</label>
-                <textarea name="payment_terms_default" rows="2" class="input">{{ company.payment_terms_default }}</textarea>
+                <label class="label">Standard-Zahlungsbedingungen (Deutsch) *</label>
+                <textarea name="payment_terms_default" rows="2" class="input" required>{{ company.payment_terms_default }}</textarea>
+            </div>
+            <div>
+                <label class="label">Standard-Zahlungsbedingungen (Englisch) *</label>
+                <textarea name="payment_terms_default_en" rows="2" class="input" required>{{ company.payment_terms_default_en or '' }}</textarea>
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                    Pflicht. Ohne englische Vorgabe lassen sich keine englischen Belege anlegen.
+                </p>
             </div>
         </div>
         <button type="submit" class="btn-primary">FIRMENDATEN SPEICHERN</button>
