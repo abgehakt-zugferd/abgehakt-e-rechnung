@@ -24,6 +24,7 @@ from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
 from app.services.einheiten import (
     UnknownUnitError,
     formular_bezeichnungen,
+    unbekannte_bezeichnungen,
     resolve_einheit,
 )
 from app.services.invoice_number import generate_next_invoice_number
@@ -38,6 +39,25 @@ templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
 registriere_darstellungsfilter(templates)
 templates.env.globals["formular_bezeichnungen"] = formular_bezeichnungen
+
+
+def _ungueltige_einheiten(items_json: str | None) -> tuple[str, ...]:
+    """Einheiten der angezeigten Positionen, die der Katalog nicht kennt.
+
+    Quelle ist dasselbe `items_json`, aus dem das Formular die Positionen liest. Damit
+    gilt die Regel an jeder Stelle, die das Formular rendert, auch beim Vorbefuellen,
+    wo `invoice` per Vertrag None ist (docs/specs/kopieren.md, Invariante 2).
+    """
+    if not items_json:
+        return ()
+    try:
+        positionen = json.loads(items_json.replace("<\\/", "</"))
+    except (ValueError, AttributeError):
+        return ()
+    return unbekannte_bezeichnungen(p.get("unit") for p in positionen if isinstance(p, dict))
+
+
+templates.env.globals["ungueltige_einheiten"] = _ungueltige_einheiten
 settings = get_settings()
 
 

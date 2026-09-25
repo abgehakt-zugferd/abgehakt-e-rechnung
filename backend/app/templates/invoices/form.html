@@ -165,15 +165,14 @@
                                         <div>
                                             <label class="label">Einheit</label>
                                             <select x-model="item.unit" class="input" style="font-size:var(--fs-gross); padding:6px 8px;">
-                                                {# Ungueltiger Bestand: sichtbar und waehlbar, nicht als Stück getarnt. #}
+                                                {# Ungueltiger Bestand: sichtbar und waehlbar, nicht als Stück getarnt.
+                                                   Quelle sind die angezeigten Positionen, nicht `invoice`: beim
+                                                   Vorbefuellen ist `invoice` per Vertrag None, und ohne Option ginge
+                                                   der Altwert beim Absenden lautlos verloren. #}
                                                 {% set _einheiten = formular_bezeichnungen() %}
-                                                {% if invoice %}
-                                                {% for pos in invoice.items %}
-                                                {% if pos.unit and pos.unit not in _einheiten %}
-                                                <option value="{{ pos.unit }}">{{ pos.unit }} (ungueltig)</option>
-                                                {% endif %}
+                                                {% for wert in ungueltige_einheiten(items_json) %}
+                                                <option value="{{ wert }}">{{ wert }} (ungueltig)</option>
                                                 {% endfor %}
-                                                {% endif %}
                                                 {% for bez in _einheiten %}
                                                 <option value="{{ bez }}">{{ bez }}</option>
                                                 {% endfor %}

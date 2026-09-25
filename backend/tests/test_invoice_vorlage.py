@@ -371,7 +371,7 @@ def test_k5_gutschrift_als_vorlage_erbt_keinen_typ(pg_session):
         "tax_category": "S",
         "buyer_order_reference": _feldwert(html, "buyer_order_reference"),
         "items_json": json.dumps([{
-            "description": "X", "unit": "Stk", "quantity": "1",
+            "description": "X", "unit": "Stück", "quantity": "1",
             "unit_price": "10", "tax_rate": "19",
         }]),
     })
@@ -423,3 +423,30 @@ def test_vorlage_url_hat_no_store_und_zurueck_guard(pg_session):
                    "abgehakt:entwurf-formular-abgeschickt",
                    'id="rechnung-anlegen"', 'id="rechnung-anlegen-verbraucht"'):
         assert marker in html, f"Marker '{marker}' fehlt bei vorbefuellter URL"
+
+
+# --- Naht zwischen Vorbelegung und Einheitenkatalog ----------------------
+
+
+def test_ungueltige_einheit_der_vorlage_bleibt_im_formular_sichtbar(pg_session):
+    """Ein Altwert ausserhalb des Katalogs muss auch beim Vorbefuellen waehlbar bleiben.
+
+    docs/specs/einheiten.md, Punkt 5: "Ein unbekannter Altwert in einem neuen
+    Kopierentwurf bleibt sichtbar und blockiert dessen Finalisierung." Die Option
+    dafuer hing bisher an `invoice`, das beim Vorbefuellen per Vertrag None ist.
+    Ohne Option verliert Alpine den Wert beim ersten Absenden lautlos.
+    """
+    inv, _ = _vorlage(pg_session, status="draft", pdf_filename=None)
+    inv.items[0].unit = "Flasche"
+    pg_session.commit()
+
+    r = _client(pg_session).get(f"/invoices/neu?vorlage={inv.id}")
+    assert r.status_code == 200
+
+    block = re.search(r"<select[^>]*x-model=\"item\.unit\"[^>]*>(.*?)</select>", r.text, re.S)
+    assert block, "Einheiten-Auswahl nicht gefunden"
+    assert 'value="Flasche"' in block.group(1), (
+        "Der ungueltige Altwert der Vorlage hat keine Option, der Wert geht beim Absenden verloren"
+    )
+    assert "Flasche" in json.loads(re.search(
+        r'id="vorhandene-positionen">(.*?)</script>', r.text, re.S).group(1))[0]["unit"]
