@@ -273,7 +273,12 @@
                     <div>
                         <label class="label">Referenz des Kunden</label>
                         <input type="text" name="buyer_reference" value="{{ (invoice.buyer_reference if invoice else '') or '' }}" class="input" maxlength="100">
-                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Bestellnummer des Kunden, bei Behörden die Leitweg-ID</p>
+                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Leitweg-ID bei Behörden, sonst eine vom Kunden vorgegebene Referenz (BT-10)</p>
+                    </div>
+                    <div>
+                        <label class="label">Bestellnummer</label>
+                        <input type="text" name="buyer_order_reference" value="{{ (invoice.buyer_order_reference if invoice else '') or '' }}" class="input" maxlength="100">
+                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Nummer der Bestellung / Purchase Order des Kunden (BT-13)</p>
                     </div>
                 </div>
 

@@ -258,6 +258,26 @@ def _buyer_reference_xml(invoice: Invoice) -> str:
             <ram:BuyerReference>{_esc(referenz)}</ram:BuyerReference>"""
 
 
+def _buyer_order_reference_xml(invoice: Invoice) -> str:
+    """BT-13, Bestellnummer des Kunden (#101).
+
+    CII-Position in `ApplicableHeaderTradeAgreement` laut UN/CEFACT
+    `HeaderTradeAgreementType` / ZUGFeRD Technischer Anhang Profil EN16931:
+    BuyerReference, SellerTradeParty, BuyerTradeParty,
+    SellerTaxRepresentativeTradeParty, SellerOrderReferencedDocument,
+    **BuyerOrderReferencedDocument**, ContractReferencedDocument, …
+    Also NACH `BuyerTradeParty`. Ohne Wert kein Element (leeres Element wäre
+    ein Schemafehler und schlimmer als keines).
+    """
+    bestellnummer = (getattr(invoice, "buyer_order_reference", None) or "").strip()
+    if not bestellnummer:
+        return ""
+    return f"""
+            <ram:BuyerOrderReferencedDocument>
+                <ram:IssuerAssignedID>{_esc(bestellnummer)}</ram:IssuerAssignedID>
+            </ram:BuyerOrderReferencedDocument>"""
+
+
 def _seller_tax_xml(company: Company, tax_category: str) -> str:
     parts = []
     if company.tax_number:
@@ -410,7 +430,9 @@ def _reference_xml(invoice: Invoice) -> str:
 
     Wichtig: NICHT BuyerOrderReferencedDocument verwenden – das ist BT-13 (Bestellnummer);
     ein konformer Empfänger (DATEV) würde die Originalrechnungsnummer sonst als Bestellnummer
-    interpretieren und das Matching Storno↔Original bräche.
+    interpretieren und das Matching Storno↔Original bräche. BuyerOrderReferencedDocument
+    wird hier für die echte Bestellnummer genutzt (`_buyer_order_reference_xml`, #101),
+    nicht für die Referenz auf die vorausgegangene Rechnung.
 
     Der TypeCode (BT-3) der Storno-/Gutschriftrechnung wird separat über _get_type_code
     auf 381 gesetzt.
@@ -550,7 +572,7 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
                     <ram:CityName>{_esc(customer.city if customer else "")}</ram:CityName>
                     <ram:CountryID>{_esc(customer.country if customer else "DE")}</ram:CountryID>
                 </ram:PostalTradeAddress>{_electronic_address_xml(customer.email if customer else None)}{_buyer_vat_xml(customer, inv_cat)}
-            </ram:BuyerTradeParty>
+            </ram:BuyerTradeParty>{_buyer_order_reference_xml(invoice)}
         </ram:ApplicableHeaderTradeAgreement>
 {_delivery_xml(invoice)}
         <ram:ApplicableHeaderTradeSettlement>

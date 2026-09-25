@@ -167,6 +167,59 @@ def test_credit_note_references_original_via_invoice_referenced_document():
     assert _text(ref, "ram:FormattedIssueDateTime/qdt:DateTimeString") == "20260611"
 
 
+# ── BT-13: Bestellnummer (BuyerOrderReferencedDocument) ─────────────────────
+# Existenz und Position sind getrennte Zusicherungen: eine Mutation, die das
+# Element nur verschiebt, darf den Existenz-Test nicht berühren. Die echte
+# Schema-Gültigkeit der Position beweist test_zugferd_xml_schema.py mit
+# Bestellnummer; hier hält ein String-Index die CII-Reihenfolge fest, weil
+# XPath-find ordnungsblind ist (siehe Dateikopf).
+
+
+def test_bt13_bestellnummer_steht_in_buyer_order_referenced_document():
+    """BT-13: die Bestellnummer landet in ram:BuyerOrderReferencedDocument/IssuerAssignedID."""
+    xml = generate_xml(_invoice(buyer_order_reference="PO-445"), _company())
+    root = _parse(xml)
+    assert _text(
+        root,
+        ".//ram:ApplicableHeaderTradeAgreement/ram:BuyerOrderReferencedDocument/ram:IssuerAssignedID",
+    ) == "PO-445"
+
+
+def test_ohne_bestellnummer_kein_buyer_order_referenced_document():
+    """Ohne Bestellnummer entsteht kein leeres BuyerOrderReferencedDocument."""
+    xml = generate_xml(_invoice(buyer_order_reference=None), _company())
+    root = _parse(xml)
+    assert _find(root, ".//ram:BuyerOrderReferencedDocument") is None
+
+
+def test_bt10_und_bt13_stehen_nebeneinander():
+    """Käuferreferenz (BT-10) und Bestellnummer (BT-13) verdraengen sich nicht."""
+    xml = generate_xml(
+        _invoice(buyer_reference="LW-991", buyer_order_reference="PO-445"),
+        _company(),
+    )
+    root = _parse(xml)
+    assert _text(root, ".//ram:BuyerReference") == "LW-991"
+    assert _text(
+        root,
+        ".//ram:BuyerOrderReferencedDocument/ram:IssuerAssignedID",
+    ) == "PO-445"
+
+
+def test_bt13_steht_nach_buyer_trade_party():
+    """CII-Sequenz in ApplicableHeaderTradeAgreement (UN/CEFACT HeaderTradeAgreementType /
+    ZUGFeRD Technischer Anhang EN16931): BuyerReference, SellerTradeParty, BuyerTradeParty,
+    SellerTaxRepresentativeTradeParty, SellerOrderReferencedDocument,
+    BuyerOrderReferencedDocument, … — also BT-13 nach dem Käufer, nicht davor."""
+    xml = generate_xml(_invoice(buyer_order_reference="PO-445"), _company())
+    vereinbarung = xml.split("<ram:ApplicableHeaderTradeAgreement>")[1].split(
+        "</ram:ApplicableHeaderTradeAgreement>"
+    )[0]
+    assert vereinbarung.index("</ram:BuyerTradeParty>") < vereinbarung.index(
+        "<ram:BuyerOrderReferencedDocument>"
+    )
+
+
 def test_issue_date_bt2_format():
     """BT-2: Ausstellungsdatum im Format YYYYMMDD (ISO basic date)."""
     xml = generate_xml(_invoice(issue_date=date(2026, 3, 5)), _company())

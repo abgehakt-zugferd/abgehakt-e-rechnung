@@ -453,10 +453,12 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     meta_rows.append(("Fälligkeitsdatum:", invoice.due_date.strftime("%d.%m.%Y")))
     if getattr(customer, "customer_number", None):
         meta_rows.append(("Kundennummer:", customer.customer_number))
-    # BT-10: der Kunde ordnet die Rechnung genau hieran seiner Bestellung zu.
-    # Sie nur in die XML zu schreiben hieße, sie dem Menschen vorzuenthalten.
+    # BT-10: sonstige Käuferreferenz / Leitweg-ID — getrennt von der Bestellnummer.
     if getattr(invoice, "buyer_reference", None):
         meta_rows.append(("Ihre Referenz:", invoice.buyer_reference))
+    # BT-13: Bestellnummer / Purchase Order (#101). Viele Empfänger lesen nur das PDF.
+    if getattr(invoice, "buyer_order_reference", None):
+        meta_rows.append(("Bestellnummer:", invoice.buyer_order_reference))
     if customer.vat_id:
         meta_rows.append(("USt-IdNr. Kunde:", customer.vat_id))
 
