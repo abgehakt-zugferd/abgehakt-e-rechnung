@@ -32,6 +32,7 @@ def _original() -> Invoice:
         buyer_reference="BST-4711",
     )
     inv.id = uuid.uuid4()
+    inv.buyer_order_reference = "PO-445"
     inv.items = [
         InvoiceItem(
             position=1, description="Beratung", unit="Stunde",
@@ -58,6 +59,14 @@ def test_storno_uebernimmt_buyer_reference():
     original = _original()
     storno = build_storno(original, "RE-2026-002", date(2026, 7, 7))
     assert storno.buyer_reference == "BST-4711"
+
+
+def test_storno_uebernimmt_bestellnummer():
+    """#101: BT-13 ebenfalls, damit der Empfaenger die Gutschrift gegen dieselbe
+    Bestellung abgleichen kann."""
+    original = _original()
+    storno = build_storno(original, "RE-2026-002", date(2026, 7, 7))
+    assert storno.buyer_order_reference == "PO-445"
 
 
 def test_storno_copies_positive_amounts_and_items():

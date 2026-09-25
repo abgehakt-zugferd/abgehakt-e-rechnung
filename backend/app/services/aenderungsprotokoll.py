@@ -45,6 +45,7 @@ FELDNAMEN = {
     "service_period_end": "Leistungszeitraum bis",
     "payment_terms": "Zahlungsbedingungen",
     "buyer_reference": "Referenz des Kunden",
+    "buyer_order_reference": "Bestellnummer",
     "notes": "Anmerkungen",
     "net_total": "Nettobetrag",
     "tax_total": "Steuerbetrag",

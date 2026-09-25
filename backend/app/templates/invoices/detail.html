@@ -166,6 +166,12 @@
                         <p style="color:var(--text-hi);">{{ invoice.buyer_reference }}</p>
                     </div>
                     {% endif %}
+                    {% if invoice.buyer_order_reference %}
+                    <div>
+                        <p class="label">Bestellnummer</p>
+                        <p style="color:var(--text-hi);">{{ invoice.buyer_order_reference }}</p>
+                    </div>
+                    {% endif %}
                     {% if invoice.tax_category and invoice.tax_category != 'S' %}
                     <div>
                         <p class="label">Steuertyp</p>

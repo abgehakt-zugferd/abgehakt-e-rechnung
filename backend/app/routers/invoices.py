@@ -298,6 +298,7 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
         service_period_end=service_period_end,
         payment_terms=form.get("payment_terms", "").strip() or company.payment_terms_default,
         buyer_reference=form.get("buyer_reference", "").strip() or None,
+        buyer_order_reference=form.get("buyer_order_reference", "").strip() or None,
         notes=form.get("notes", "").strip() or None,
         currency="EUR",
         zugferd_profile="EN16931",
@@ -382,6 +383,7 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
     invoice.tax_category = form.get("tax_category", "S").strip() or "S"
     invoice.payment_terms = form.get("payment_terms", "").strip() or company.payment_terms_default
     invoice.buyer_reference = form.get("buyer_reference", "").strip() or None
+    invoice.buyer_order_reference = form.get("buyer_order_reference", "").strip() or None
     invoice.notes = form.get("notes", "").strip() or None
 
     net_total, tax_total = _replace_items(db, invoice, rohe_positionen)

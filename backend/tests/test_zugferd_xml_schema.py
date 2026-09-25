@@ -313,3 +313,23 @@ def test_leistungszeitraum_ohne_leistungsdatum_ist_schema_valid():
         f"{result['errors']}\n{result['raw'][-1500:]}"
     )
     assert "BillingSpecifiedPeriod" in zugferd_xml.generate_xml(inv, _company())
+
+
+def test_rechnung_mit_bestellnummer_ist_schema_valid():
+    """#101: BT-13 an der CII-Stelle muss Mustang gruen bleiben. Ohne Bestellnummer
+    im validierten Beleg beweist der Lauf nichts ueber das neue Element."""
+    cust = Customer(**CUSTOMER_VARIANTS["de_minimal"])
+    inv = _invoice(
+        cust,
+        buyer_reference="LW-991",
+        buyer_order_reference="PO-445",
+    )
+    xml = zugferd_xml.generate_xml(inv, _company())
+    assert "BuyerOrderReferencedDocument" in xml
+    assert "PO-445" in xml
+
+    result = _validate(inv, _company())
+    assert result["is_valid"], (
+        f"Rechnung mit Bestellnummer nicht schema-valide:\n"
+        f"{result['errors']}\n{result['raw'][-1500:]}"
+    )
