@@ -73,7 +73,9 @@ Schnittstelle als Spezifikation, nicht als auszufuehrender Code:
 
 **Normbefund:** Der Steuerbefreiungsgrund darf als Text in einer anderen Sprache vorliegen; die Peppol-Regel akzeptiert einen gleichwertigen Standardtext in anderer Sprache. Das bestaetigt die Lokalisierung des Freitextes, nicht einen neuen Sprachcode. [Peppol VAT exemption reason](https://docs.peppol.eu/poacc/billing/3.0/syntax/ubl-invoice/cac-TaxTotal/cac-TaxSubtotal/cac-TaxCategory/cbc-TaxExemptionReason/)
 
-**Auftraggeberentscheidung:** Fuer AE bleibt der oben zitierte zweisprachige Wortlaut in PDF und XML auch im englischen Modus. Der XML-Generator bekommt fuer E, K und O keine automatische Uebersetzung von Nutzertexten. Ob deren gesetzliche Befreiungstexte im englischen PDF zugleich in der XML englisch, deutsch oder zweisprachig stehen sollen, ist nicht entschieden: nur PDF-englisch laesst XML beim bisherigen deutschen Rechtstext; eine gemeinsame englische Fassung aendert auch die XML-Freitexte. Beide Wege sind normseitig nicht durch einen Sprachcode unterscheidbar und muessen vor Umsetzung vom Auftraggeber gewaehlt werden.
+**Auftraggeberentscheidung:** Fuer AE bleibt der oben zitierte zweisprachige Wortlaut in PDF und XML auch im englischen Modus. Der XML-Generator bekommt fuer E, K und O keine automatische Uebersetzung von Nutzertexten. Ob deren gesetzliche Befreiungstexte im englischen PDF zugleich in der XML englisch, deutsch oder zweisprachig stehen sollen, ist nicht entschieden: nur PDF-englisch laesst XML beim bisherigen deutschen Rechtstext; eine gemeinsame englische Fassung aendert auch die XML-Freitexte. Beide Wege sind normseitig nicht durch einen Sprachcode unterscheidbar.
+
+**Auftraggeberentscheidung, 25.09.2026:** Die XML behaelt fuer E, K und O den deutschen Rechtstext, auch wenn das PDF englisch ist. Begruendung: die XML liest eine Maschine, und der deutsche Wortlaut ist der, den eine Betriebspruefung erwartet. Der englische Modus aendert damit ausschliesslich das PDF. Praktisch beruehrt das den Anlassfall nicht, der auf AE laeuft; dort bleibt der Hinweis ohnehin in beiden Ausgaben zweisprachig.
 
 ## Migration, Unveraenderbarkeit und Archiv
 
@@ -110,4 +112,4 @@ Alle Kriterien sind Vorgaben fuer spaetere Tests. Datenbankwirkung wird mit `pg_
 
 Nicht ausgefuehrt: Suite, einzelne Tests, Docker, Datenbankabfragen mit `pg_session`, Migration, PDF-Erzeugung, Mustang, Archivzugriff und Mutationsproben. Nicht gemessen ist damit insbesondere, ob der bestehende CII/Mustang-Pfad englische E-, K- und O-Befreiungstexte annimmt. Der spaetere Containerlauf dafuer lautet `backend/run-tests.sh`, oder im gestarteten Entwicklungsstack `docker compose exec -T app python -m pytest tests/ < /dev/null`.
 
-Nicht geprueft: reale Bestandsbelege und deren Freitexte, Akzeptanz durch die finnische Empfaengerbuchhaltung, die fachlich verbindliche englische Fassung der E-, K- und O-Befreiungstexte sowie die offene Auftraggeberentscheidung zur XML-Fassung dieser drei Texte. Die Abnahme S1 bis S10 ersetzt keine Empfaenger- oder Steuerberatung.
+Nicht geprueft: reale Bestandsbelege und deren Freitexte, Akzeptanz durch die finnische Empfaengerbuchhaltung, die fachlich verbindliche englische Fassung der E-, K- und O-Befreiungstexte. Die Abnahme S1 bis S10 ersetzt keine Empfaenger- oder Steuerberatung.
