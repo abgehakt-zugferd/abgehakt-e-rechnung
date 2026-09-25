@@ -31,6 +31,9 @@ jobs:
       - name: Pre-Push-Waechter (Wurzelaufloesung)
         run: .githooks/test_pre_push_waechter.sh
 
+      - name: run-tests Aufraeumen (anonymes Volume)
+        run: .githooks/test_run_tests_aufraeumen.sh
+
   test:
     runs-on: ubuntu-latest
     steps:
