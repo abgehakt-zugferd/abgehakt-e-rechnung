@@ -1518,7 +1518,13 @@ SpecifiedTaxRegistration
 Also: der Ansprechpartner (BG-6) **vor** die Anschrift, die elektronische Adresse
 (BT-34/BT-49) **zwischen** Anschrift und Steuernummern. In
 `ApplicableHeaderTradeAgreement` steht `BuyerReference` (BT-10) **vor**
-`SellerTradeParty`.
+`SellerTradeParty`. Die Bestellnummer (BT-13, #101) kommt als
+`BuyerOrderReferencedDocument` **nach** `BuyerTradeParty` (CII-Sequenz
+`HeaderTradeAgreementType` / ZUGFeRD Technischer Anhang EN16931: nach optionalem
+`SellerTaxRepresentativeTradeParty` und `SellerOrderReferencedDocument`). Ein
+XPath-`find()` sieht das Element auch an der falschen Stelle; die Position halten
+`test_bt13_steht_nach_buyer_trade_party` und ein Mustang-Lauf mit gesetzter
+Bestellnummer. BT-14 und BT-12 sind bewusst nicht umgesetzt.
 
 Zwei Fallen dabei:
 
