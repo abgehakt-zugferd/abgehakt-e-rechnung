@@ -481,12 +481,13 @@ def test_unit_code_mapping():
         assert qty_el.get("unitCode") == expected_code, f"{unit_de} → {qty_el.get('unitCode')!r}, erwartet {expected_code!r}"
 
 
-def test_unknown_unit_falls_back_to_c62():
-    """Unbekannte Einheit → Fallback C62 (Stück)."""
+def test_unknown_unit_raises_instead_of_c62_fallback():
+    """Unbekannte Einheit darf nicht still zu C62 (Stück) werden."""
+    from app.services.einheiten import UnknownUnitError
+
     item = _item(unit="Flasche")
-    root = _parse(generate_xml(_invoice(items=[item]), _company()))
-    qty_el = _find(root, ".//ram:BilledQuantity")
-    assert qty_el.get("unitCode") == "C62"
+    with pytest.raises(UnknownUnitError):
+        generate_xml(_invoice(items=[item]), _company())
 
 
 def test_tax_category_s_for_positive_rate():

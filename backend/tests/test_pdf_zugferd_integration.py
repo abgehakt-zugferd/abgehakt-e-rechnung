@@ -23,7 +23,7 @@ def _invoice():
     cust = Customer(name="Muster Kunde GmbH", address_line1="Kundenweg 1",
                     zip_code="10115", city="Berlin", country="DE")
     item = InvoiceItem(position=1, description="Beratungsleistung", quantity=Decimal("2"),
-                       unit="Std", unit_price=Decimal("100.00"), tax_rate=Decimal("19"),
+                       unit="Stunde", unit_price=Decimal("100.00"), tax_rate=Decimal("19"),
                        net_amount=Decimal("200.00"), tax_amount=Decimal("38.00"))
     inv = Invoice(invoice_number="RE-2026-778", issue_date=date(2026, 7, 8),
                   delivery_date=date(2026, 7, 8), due_date=date(2026, 7, 22),

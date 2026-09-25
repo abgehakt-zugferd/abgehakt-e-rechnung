@@ -143,7 +143,7 @@ def test_das_anlegen_erscheint_nicht_als_bearbeitung(pg_session):
         "issue_date": "2026-08-10",
         "due_date": "2026-08-24",
         "tax_category": "S",
-        "items_json": '[{"description":"Leistung","unit":"Std","quantity":"1",'
+        "items_json": '[{"description":"Leistung","unit":"Stunde","quantity":"1",'
                       '"unit_price":"100.00","tax_rate":"19"}]',
     })
     rechnung_id = antwort.headers["location"].rsplit("/", 1)[1]

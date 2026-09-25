@@ -53,7 +53,7 @@ def _invoice():
     )
     inv.customer = Customer(name="Muster Kunde GmbH", address_line1="Kundenweg 1",
                             zip_code="10115", city="Berlin", country="DE")
-    inv.items = [InvoiceItem(position=1, description="Beratung", unit="Std",
+    inv.items = [InvoiceItem(position=1, description="Beratung", unit="Stunde",
                              quantity=Decimal("1"), unit_price=Decimal("300.11"),
                              tax_rate=Decimal("19"), net_amount=Decimal("300.11"),
                              tax_amount=Decimal("57.02"), gross_amount=Decimal("357.13"))]
@@ -108,11 +108,11 @@ def _invoice_mixed_rates():
     inv.customer = Customer(name="Muster Kunde GmbH", address_line1="Kundenweg 1",
                             zip_code="10115", city="Berlin", country="DE")
     inv.items = [
-        InvoiceItem(position=1, description="Standard", unit="Std",
+        InvoiceItem(position=1, description="Standard", unit="Stunde",
                     quantity=Decimal("2"), unit_price=Decimal("100.00"),
                     tax_rate=Decimal("19"), net_amount=Decimal("200.00"),
                     tax_amount=Decimal("38.00"), gross_amount=Decimal("238.00")),
-        InvoiceItem(position=2, description="Ermaessigt", unit="Stk",
+        InvoiceItem(position=2, description="Ermaessigt", unit="Stück",
                     quantity=Decimal("1"), unit_price=Decimal("50.00"),
                     tax_rate=Decimal("7"), net_amount=Decimal("50.00"),
                     tax_amount=Decimal("3.50"), gross_amount=Decimal("53.50")),

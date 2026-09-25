@@ -45,7 +45,7 @@ def _company():
 def _invoice(description):
     item = InvoiceItem(
         position=1, description=description, quantity=Decimal("2"),
-        unit="Std", unit_price=Decimal("100.00"), tax_rate=Decimal("19"),
+        unit="Stunde", unit_price=Decimal("100.00"), tax_rate=Decimal("19"),
         net_amount=Decimal("200.00"), tax_amount=Decimal("38.00"),
         gross_amount=Decimal("238.00"),
     )

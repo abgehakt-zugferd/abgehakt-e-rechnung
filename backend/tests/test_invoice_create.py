@@ -92,7 +92,7 @@ def test_create_assigns_sequential_invoice_number(pg_session):
     data = {
         "customer_id": str(cust.id), "issue_date": "2026-06-11",
         "due_date": "2026-06-25", "tax_category": "S",
-        "items_json": json.dumps([{"description": "X", "unit": "Stk",
+        "items_json": json.dumps([{"description": "X", "unit": "Stück",
                                    "quantity": "1", "unit_price": "10", "tax_rate": "19"}]),
     }
     client.post("/invoices/neu", data=data)
@@ -113,7 +113,7 @@ def test_rechnungsnummer_jahr_aus_ausstellungsdatum_beim_anlegen(pg_session):
         "issue_date": "2027-01-02",
         "due_date": "2027-01-16",
         "tax_category": "S",
-        "items_json": json.dumps([{"description": "X", "unit": "Stk",
+        "items_json": json.dumps([{"description": "X", "unit": "Stück",
                                    "quantity": "1", "unit_price": "10", "tax_rate": "19"}]),
     })
     assert r.status_code == 303
@@ -131,7 +131,7 @@ def test_rechnungsnummer_bleibt_nach_umdatieren_des_ausstellungsdatums(pg_sessio
         "issue_date": "2027-01-02",
         "due_date": "2027-01-16",
         "tax_category": "S",
-        "items_json": json.dumps([{"description": "X", "unit": "Stk",
+        "items_json": json.dumps([{"description": "X", "unit": "Stück",
                                    "quantity": "1", "unit_price": "10", "tax_rate": "19"}]),
     })
     assert r.status_code == 303
@@ -145,7 +145,7 @@ def test_rechnungsnummer_bleibt_nach_umdatieren_des_ausstellungsdatums(pg_sessio
         "issue_date": "2026-06-11",
         "due_date": "2026-06-25",
         "tax_category": "S",
-        "items_json": json.dumps([{"description": "X", "unit": "Stk",
+        "items_json": json.dumps([{"description": "X", "unit": "Stück",
                                    "quantity": "1", "unit_price": "10", "tax_rate": "19"}]),
     })
     assert r2.status_code == 303

@@ -54,7 +54,7 @@ def _draft(pg_session, *, with_items, delivery_date=date(2026, 7, 8), profile="E
                   tax_total=tax if with_items else Decimal("0"),
                   gross_total=gross if with_items else Decimal("0"))
     if with_items:
-        inv.items = [InvoiceItem(position=1, description="Beratung", unit="Std",
+        inv.items = [InvoiceItem(position=1, description="Beratung", unit="Stunde",
                                  quantity=Decimal("1"), unit_price=net,
                                  tax_rate=Decimal("19") if tax else Decimal("0"),
                                  net_amount=net,

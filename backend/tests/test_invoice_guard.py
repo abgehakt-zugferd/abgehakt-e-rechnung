@@ -243,7 +243,7 @@ def _item(**kw) -> InvoiceItem:
     return InvoiceItem(
         position=kw.pop("position", 1),
         description=kw.pop("description", "Beratung"),
-        unit=kw.pop("unit", "Std"),
+        unit=kw.pop("unit", "Stunde"),
         quantity=kw.pop("quantity", Decimal("10")),
         unit_price=kw.pop("unit_price", Decimal("100.00")),
         tax_rate=kw.pop("tax_rate", Decimal("19")),

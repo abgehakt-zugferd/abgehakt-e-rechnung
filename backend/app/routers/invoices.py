@@ -20,6 +20,11 @@ from app.services.leistungszeit import parse_leistungszeit_from_form
 from app.models.app_config import AppConfig
 from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
                           datev_email, aenderungsprotokoll)
+from app.services.einheiten import (
+    UnknownUnitError,
+    formular_bezeichnungen,
+    resolve_einheit,
+)
 from app.services.invoice_number import generate_next_invoice_number
 from app.services import empfaenger
 from app.services.archive_frist import berechne_archive_until
@@ -31,6 +36,7 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
 registriere_darstellungsfilter(templates)
+templates.env.globals["formular_bezeichnungen"] = formular_bezeichnungen
 settings = get_settings()
 
 
@@ -70,6 +76,25 @@ def _normalize_description(raw) -> str:
     return str(raw or "").replace("\r\n", "\n").replace("\r", "\n").strip()
 
 
+def _pruefe_einheiten(raw_items) -> None:
+    """Serverseitig vor Nummernvergabe bzw. vor Speichern: unbekannte Einheit → 400.
+
+    Trim aussen, danach exakter Katalogvergleich. Kein Default fuer leer/unbekannt.
+    """
+    for i, raw in enumerate(raw_items, 1):
+        roh = raw.get("unit")
+        if roh is None:
+            roh = ""
+        wert = str(roh).strip()
+        try:
+            resolve_einheit(wert)
+        except UnknownUnitError:
+            raise HTTPException(
+                400,
+                f"Position {i}: unbekannte Einheit {wert!r}.",
+            ) from None
+
+
 def _replace_items(db: Session, invoice: Invoice, raw_items) -> tuple[Decimal, Decimal]:
     """Positionen der Rechnung durch `raw_items` ersetzen (Position 1..n, lückenlos),
     liefert Netto- und Steuersumme.
@@ -92,11 +117,13 @@ def _replace_items(db: Session, invoice: Invoice, raw_items) -> tuple[Decimal, D
         price = Decimal(str(raw["unit_price"]))
         tax_rate = Decimal(str(raw["tax_rate"]))
         net, tax, gross = _calc_item(qty, price, tax_rate)
+        # Nach _pruefe_einheiten: getrimmter Katalogwert, kein Default auf Stück.
+        unit = str(raw.get("unit") or "").strip()
         db.add(InvoiceItem(
             invoice_id=invoice.id,
             position=i,
             description=_normalize_description(raw["description"]),
-            unit=raw.get("unit", "Stück"),
+            unit=unit,
             quantity=qty,
             unit_price=price,
             tax_rate=tax_rate,
@@ -285,6 +312,8 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
 
     items_json = form.get("items_json", "[]")
     raw_items = json.loads(items_json)
+    # Vor Nummernvergabe: unbekannte Einheit darf weder Zaehler noch Zeile anfassen.
+    _pruefe_einheiten(raw_items)
 
     invoice_number = generate_next_invoice_number(db, issue_date=issue_date)
 
@@ -376,6 +405,11 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
         invoice.customer_id = _kunde_id(form)
         invoice.service_period_start = service_period_start
         invoice.service_period_end = service_period_end
+
+    try:
+        _pruefe_einheiten(rohe_positionen)
+    except HTTPException as fehler:
+        return _bearbeiten_mit_fehler(request, db, invoice, fehler.detail)
 
     invoice.issue_date = date.fromisoformat(form.get("issue_date"))
     invoice.due_date = date.fromisoformat(form.get("due_date"))
@@ -469,13 +503,17 @@ def preview_page(invoice_id: uuid.UUID, request: Request, db: Session = Depends(
     invoice = _get_draft_for_preview(db, invoice_id)
     # Ohne Verkäuferdaten wäre die Vorschau irreführend.
     company = _get_company(db)
+    try:
+        xml = zugferd_xml.generate_xml(invoice, company)
+    except (UnknownUnitError, ValueError) as fehler:
+        raise HTTPException(400, str(fehler)) from fehler
     return templates.TemplateResponse("invoices/preview.html", {
         "request": request,
         "invoice": invoice,
         "company": company,
         # NUR ans Template — nicht an `invoice.zugferd_xml`. Die Vorschau erzeugt
         # keinen Beleg, sie zeigt nur, was beim Finalisieren entstünde.
-        "xml": zugferd_xml.generate_xml(invoice, company),
+        "xml": xml,
     })
 
 

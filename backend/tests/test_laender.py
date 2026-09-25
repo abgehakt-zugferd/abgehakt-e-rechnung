@@ -295,7 +295,7 @@ def test_finnischer_kunde_landet_als_fi_in_der_kaeufer_xml(pg_session):
                        tax_category="S", status="draft",
                        payment_terms="Zahlbar innerhalb 14 Tagen.")
     rechnung.items = [InvoiceItem(position=1, description="Beratungsleistung",
-                                  unit="Std", quantity=Decimal("2"),
+                                  unit="Stunde", quantity=Decimal("2"),
                                   unit_price=Decimal("100.00"), tax_rate=Decimal("19"),
                                   net_amount=netto, tax_amount=steuer,
                                   gross_amount=netto + steuer)]
@@ -388,7 +388,7 @@ def test_japanischer_aussteller_landet_als_jp_in_der_verkaeufer_xml(pg_session):
                            tax_category="S", status="draft",
                            payment_terms="Zahlbar innerhalb 14 Tagen.")
         rechnung.items = [InvoiceItem(position=1, description="Leistung",
-                                      unit="Stk", quantity=Decimal("1"),
+                                      unit="Stück", quantity=Decimal("1"),
                                       unit_price=Decimal("100.00"), tax_rate=Decimal("19"),
                                       net_amount=netto, tax_amount=steuer,
                                       gross_amount=netto + steuer)]
