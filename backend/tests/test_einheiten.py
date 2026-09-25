@@ -546,3 +546,44 @@ def test_e7_archivierte_xml_pdf_bleiben_nach_katalogerweiterung(pg_session, tmp_
     finally:
         pdf_path.unlink(missing_ok=True)
         xml_path.unlink(missing_ok=True)
+
+
+# --- Hinweis zu den Schreibweisen ----------------------------------------
+
+HINWEIS = "Singular, Plural und englische Schreibweise sind dieselbe Einheit"
+
+
+def test_formular_erklaert_die_doppelten_schreibweisen(pg_session):
+    """Drei Eintraege fuer Personen sehen im Ausklappmenue aus wie drei Einheiten.
+
+    Person, Personen und Persons tragen denselben Code IE; die Wahl bestimmt nur
+    den Text auf dem Beleg. Ohne diesen Satz sieht es aus, als koenne man sich
+    zwischen ihnen vertun. Dasselbe gilt fuer Stunde/Stunden, Tag/Tage,
+    Monat/Monate und Pauschal/Pauschale.
+    """
+    r = _client(pg_session).get("/invoices/neu")
+    assert r.status_code == 200
+    assert HINWEIS in r.text, "Das Anlegeformular erklaert die Schreibweisen nicht"
+
+
+def test_der_hinweis_steht_ausserhalb_der_positionsschleife(pg_session):
+    """Der Satz gehoert neben die Ueberschrift, nicht in die Positionsschleife.
+
+    Innerhalb von `x-for` erschiene er im Browser einmal je Position. Gezaehlt
+    werden kann das nicht: `x-for` ist Alpine, der Server rendert den Block genau
+    einmal und vervielfaeltigt ihn nie. Ein Test auf `count == 1` waere deshalb
+    tautologisch, er bliebe auch bei falscher Platzierung gruen. Gemessen wird
+    daher die Stelle: der Hinweis muss vor dem Schleifenblock stehen.
+    """
+    cust = _customer(pg_session)
+    inv = _draft(pg_session, cust)
+    r = _client(pg_session).get(f"/invoices/{inv.id}/bearbeiten")
+    assert r.status_code == 200
+
+    schleife = r.text.find('x-for="(item, idx) in items"')
+    assert schleife != -1, "Positionsschleife nicht gefunden"
+    stelle = r.text.find(HINWEIS)
+    assert stelle != -1, "Hinweis nicht gefunden"
+    assert stelle < schleife, (
+        "Der Hinweis steht in der Positionsschleife und erschiene je Position"
+    )
