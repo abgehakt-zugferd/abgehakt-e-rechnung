@@ -266,7 +266,9 @@ def test_s2_englisches_pdf_ohne_deutsche_schablone(pg_session, tmp_path):
     assert "Invoice total" in text
     assert "plus" in text and "VAT on" in text
     assert "1.050,00 €" not in text
-    assert "RECHNUNG" not in text or "INVOICE" in text
+    # Nicht als Alternative zu "INVOICE": die stand zwei Zeilen darueber schon
+    # zu, und ein `or` mit erfuelltem rechten Zweig kann nie fallen.
+    assert "RECHNUNG" not in text
     assert "Rechnungsnummer" not in text
     assert "Nettobetrag" not in text
     assert "zzgl." not in text
