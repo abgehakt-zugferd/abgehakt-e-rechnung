@@ -336,7 +336,10 @@ def new_invoice_form(
     error = None
     kunde_hinweis = None
 
-    if vorlage:
+    # `is not None`, nicht `if vorlage`: `?vorlage=` ist eine gestellte Frage mit
+    # unbrauchbarer Kennung, kein fehlender Parameter. Sie lief bisher als stille
+    # Neuanlage durch (docs/specs/kopieren.md verlangt einen sichtbaren Hinweis).
+    if vorlage is not None:
         try:
             vorlage_id = uuid.UUID(vorlage)
         except ValueError:
@@ -374,6 +377,9 @@ def new_invoice_form(
     if vorbelegung and getattr(vorbelegung, "delivery_date", None):
         delivery_default = vorbelegung.delivery_date.isoformat()
 
+    # Die Spec verlangt 404 oder Redirect mit Fehlertext. Ein 200 auf eine
+    # ungueltige Vorlagenkennung sagt dem Aufrufer, es sei alles in Ordnung; das
+    # Formular ist dann leer, und niemand weiss, warum.
     response = templates.TemplateResponse("invoices/form.html", {
         "request": request,
         "invoice": None,
@@ -390,7 +396,7 @@ def new_invoice_form(
         "belegart_waehlbar": True,
         "error": error,
         "kunde_hinweis": kunde_hinweis,
-    })
+    }, status_code=404 if error else 200)
     # Nach dem Absenden liegt der History-Eintrag dieses Formulars direkt hinter der
     # Detailseite. Ohne `no-store` gibt der Browser ihn beim Zurück-Button gefüllt aus
     # dem Cache zurück — er sähe aus wie ein Editor für den gerade gespeicherten
@@ -681,7 +687,13 @@ def preview_pdf(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
     os.close(fd)
     tmp_path = Path(tmp_name)
     try:
-        pdf_generator.generate_pdf(invoice, company, tmp_path, draft=True)
+        # Der Generator loest Belegart und Einheiten selbst auf und wirft bei
+        # unbekannten Werten. Ohne diesen Zweig antwortet die Vorschau mit 500,
+        # waehrend HTML- und XML-Vorschau denselben Fall als 400 melden.
+        try:
+            pdf_generator.generate_pdf(invoice, company, tmp_path, draft=True)
+        except (UnknownInvoiceTypeError, UnknownUnitError) as fehler:
+            raise HTTPException(400, str(fehler)) from None
         daten = tmp_path.read_bytes()
     finally:
         tmp_path.unlink(missing_ok=True)
@@ -1111,6 +1123,26 @@ def create_storno(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
         )
 
     _get_company(db)  # stellt sicher, dass Firmendaten konfiguriert sind (sonst 400)
+
+    # Vor der Nummernvergabe: traegt der Beleg eine Einheit, die der Katalog nicht
+    # kennt, dann erbt die Gutschrift sie (storno.py) und ist danach weder
+    # finalisierbar (UNIT_UNKNOWN) noch bearbeitbar (der Stornoeditor ist gesperrt,
+    # weil eine Gutschrift die Betraege des Originals unveraendert uebernimmt).
+    # Das waere eine Sackgasse mit verbrauchter Rechnungsnummer. Lieber hier absagen
+    # und den Wert benennen, als einen Entwurf anzulegen, der nie fertig wird.
+    for pos in sorted(original.items, key=lambda i: i.position):
+        try:
+            resolve_einheit(pos.unit if pos.unit is not None else "")
+        except UnknownUnitError:
+            raise HTTPException(
+                400,
+                f"Position {pos.position} dieses Belegs traegt die Einheit "
+                f"{(pos.unit or '')!r}, die der Einheitenkatalog nicht kennt. Eine "
+                "Gutschrift uebernimmt die Angaben des Originals unveraendert und "
+                "waere damit nicht finalisierbar. Der Wert muss zuerst im Beleg "
+                "berichtigt werden; das geht nicht im Stornoweg.",
+            ) from None
+
     number = generate_next_invoice_number(db)
     from app.services.storno import build_storno
     storno = build_storno(original, number, date.today())
