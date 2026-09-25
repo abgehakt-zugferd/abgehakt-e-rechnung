@@ -57,7 +57,7 @@ def _gutschrift(
         InvoiceItem(
             position=1,
             description="Storno",
-            unit="Std",
+            unit="Stunde",
             quantity=Decimal("1"),
             unit_price=net_total,
             tax_rate=Decimal("19"),

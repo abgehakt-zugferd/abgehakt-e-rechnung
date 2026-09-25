@@ -51,7 +51,7 @@ def _sample_customer():
 def _sample_invoice(customer, invoice_type=None, original_invoice_id=None):
     item = InvoiceItem(
         position=1, description="Beratungsleistung", quantity=Decimal("2"),
-        unit="Std", unit_price=Decimal("100.00"), tax_rate=Decimal("19"),
+        unit="Stunde", unit_price=Decimal("100.00"), tax_rate=Decimal("19"),
         net_amount=Decimal("200.00"), tax_amount=Decimal("38.00"),
     )
     inv = Invoice(

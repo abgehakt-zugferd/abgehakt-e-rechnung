@@ -15,6 +15,7 @@ from app.services.leistungszeit import (
 from app.services.ust_id_pruefung import vies_name_vergleichbar
 from app.models.invoice import Invoice
 from app.models.company import Company
+from app.services.einheiten import UnknownUnitError, resolve_einheit
 from app.services.zugferd_xml import TYPE_CODE_MAP, COMPLIANT_PROFILES
 
 
@@ -248,6 +249,14 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
                 errors.append(Issue(
                     "ITEM_QUANTITY_INVALID", "error",
                     f"Position {item.position}: Menge muss größer als 0 sein.", f"items[{item.position}].quantity"
+                ))
+            try:
+                resolve_einheit(item.unit if item.unit is not None else "")
+            except UnknownUnitError:
+                errors.append(Issue(
+                    "UNIT_UNKNOWN", "error",
+                    f"Position {item.position}: unbekannte Einheit {(item.unit or '')!r}.",
+                    f"items[{item.position}].unit",
                 ))
             if item.unit_price < 0:
                 errors.append(Issue(

@@ -9,6 +9,7 @@ from app.models.invoice import Invoice
 from app.models.company import Company
 from app.services.adresse import bereinige_adresszeile2
 from app.services.bankverbindung import iban_fuer_ausgabe
+from app.services.einheiten import resolve_einheit
 from app.services.iban import IbanProfil
 
 PROFILE_IDS = {
@@ -54,23 +55,6 @@ def exemption_reason(invoice: Invoice) -> str | None:
         return EXEMPTION_SELF_BILLING_E
     return EXEMPTION_REASONS[cat]
 
-UN_UNIT_CODES = {
-    "Stück": "C62",
-    "Stunde": "HUR",
-    "Stunden": "HUR",
-    "Tag": "DAY",
-    "Tage": "DAY",
-    "Monat": "MON",
-    "Monate": "MON",
-    "Kilometer": "KMT",
-    "Meter": "MTR",
-    "kg": "KGM",
-    "Liter": "LTR",
-    "Pauschal": "LS",
-    "Pauschale": "LS",
-}
-
-
 def _fmt_date(d) -> str:
     return d.strftime("%Y%m%d")
 
@@ -80,7 +64,8 @@ def _fmt_amount(v: Decimal) -> str:
 
 
 def _unit_code(unit: str) -> str:
-    return UN_UNIT_CODES.get(unit, "C62")
+    """UN/ECE-Code aus dem zentralen Katalog. Unbekannt → UnknownUnitError, kein C62-Fallback."""
+    return resolve_einheit(unit).un_code
 
 
 def _item_tax_category(rate: Decimal, invoice_tax_category: str) -> str:

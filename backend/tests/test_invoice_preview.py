@@ -117,7 +117,7 @@ def test_finalisiertes_pdf_traegt_kein_wasserzeichen(tmp_path):
                   tax_total=Decimal("19.00"), gross_total=Decimal("119.00"),
                   tax_category="S", payment_terms="Zahlbar in 14 Tagen.", notes="")
     inv.customer = cust
-    inv.items = [InvoiceItem(position=1, description="Beratung", unit="Std",
+    inv.items = [InvoiceItem(position=1, description="Beratung", unit="Stunde",
                              quantity=Decimal("1"), unit_price=Decimal("100.00"),
                              tax_rate=Decimal("19"), net_amount=Decimal("100.00"),
                              tax_amount=Decimal("19.00"), gross_amount=Decimal("119.00"))]

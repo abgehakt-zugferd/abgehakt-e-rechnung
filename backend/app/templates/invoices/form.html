@@ -156,13 +156,18 @@
                                         <div>
                                             <label class="label">Einheit</label>
                                             <select x-model="item.unit" class="input" style="font-size:var(--fs-gross); padding:6px 8px;">
-                                                <option>Stück</option>
-                                                <option>Stunde</option>
-                                                <option>Stunden</option>
-                                                <option>Tag</option>
-                                                <option>Tage</option>
-                                                <option>Monat</option>
-                                                <option>Pauschale</option>
+                                                {# Ungueltiger Bestand: sichtbar und waehlbar, nicht als Stück getarnt. #}
+                                                {% set _einheiten = formular_bezeichnungen() %}
+                                                {% if invoice %}
+                                                {% for pos in invoice.items %}
+                                                {% if pos.unit and pos.unit not in _einheiten %}
+                                                <option value="{{ pos.unit }}">{{ pos.unit }} (ungueltig)</option>
+                                                {% endif %}
+                                                {% endfor %}
+                                                {% endif %}
+                                                {% for bez in _einheiten %}
+                                                <option value="{{ bez }}">{{ bez }}</option>
+                                                {% endfor %}
                                             </select>
                                         </div>
                                         <div>

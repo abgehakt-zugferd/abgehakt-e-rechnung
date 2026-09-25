@@ -45,7 +45,7 @@ def _draft_original(pg_session):
                   tax_category="S", status="draft", payment_terms="Zahlbar in 14 Tagen.",
                   net_total=Decimal("200.00"), tax_total=Decimal("38.00"),
                   gross_total=Decimal("238.00"))
-    inv.items = [InvoiceItem(position=1, description="Beratungsleistung", unit="Std",
+    inv.items = [InvoiceItem(position=1, description="Beratungsleistung", unit="Stunde",
                              quantity=Decimal("2"), unit_price=Decimal("100.00"),
                              tax_rate=Decimal("19"), net_amount=Decimal("200.00"),
                              tax_amount=Decimal("38.00"), gross_amount=Decimal("238.00"))]

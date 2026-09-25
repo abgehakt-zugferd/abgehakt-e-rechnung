@@ -157,7 +157,7 @@ def test_extract_xml_roundtrip(tmp_path):
                   gross_total=Decimal("238.00"), tax_category="S",
                   payment_terms="Zahlbar in 14 Tagen.")
     inv.customer = customer
-    inv.items = [InvoiceItem(position=1, description="Beratung", unit="Std",
+    inv.items = [InvoiceItem(position=1, description="Beratung", unit="Stunde",
                              quantity=Decimal("2"), unit_price=Decimal("100.00"),
                              tax_rate=Decimal("19"), net_amount=Decimal("200.00"),
                              tax_amount=Decimal("38.00"), gross_amount=Decimal("238.00"))]

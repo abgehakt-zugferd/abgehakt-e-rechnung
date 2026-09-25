@@ -48,7 +48,7 @@ def _invoice(kategorie: str, satz: str):
     )
     inv.customer = Customer(name="Kirchner Immobilien GmbH", address_line1="Hauptstraße 12",
                             zip_code="12345", city="Musterstadt", country="DE")
-    inv.items = [InvoiceItem(position=1, description="Beratung Bauantrag", unit="Std",
+    inv.items = [InvoiceItem(position=1, description="Beratung Bauantrag", unit="Stunde",
                              quantity=Decimal("6"), unit_price=Decimal("85.00"),
                              tax_rate=Decimal(satz), net_amount=netto,
                              tax_amount=steuer, gross_amount=netto + steuer)]

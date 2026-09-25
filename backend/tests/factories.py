@@ -199,7 +199,7 @@ def orm_customer(**over) -> Customer:
     return Customer(**kw)
 
 
-def orm_item(pos, qty, price, rate, *, unit="Stk", description="Leistung"):
+def orm_item(pos, qty, price, rate, *, unit="Stück", description="Leistung"):
     net = (Decimal(qty) * Decimal(price)).quantize(Decimal("0.01"), ROUND_HALF_UP)
     tax = (net * Decimal(rate) / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
     return InvoiceItem(
@@ -238,7 +238,7 @@ def orm_invoice(items, *, net=None, tax=None, gross=None, tax_category="S", **ov
 
 
 def orm_invoice_for(customer: Customer, **over) -> Invoice:
-    item = orm_item(1, "2", "100.00", "19", unit="Std", description="Beratungsleistung")
+    item = orm_item(1, "2", "100.00", "19", unit="Stunde", description="Beratungsleistung")
     kw = dict(
         invoice_number="RE-2026-778",
         issue_date=date(2026, 7, 8),
