@@ -195,6 +195,7 @@ def test_gross_total_immutable_after_finalize(pg_session, status):
         ("notes", "nachträglich geändert"),
         ("zugferd_xml", "<fake/>"),
         ("pdf_filename", "andere.pdf"),
+        ("buyer_order_reference", "PO-HACK"),
     ],
 )
 def test_content_fields_immutable_on_issued(pg_session, field, value):

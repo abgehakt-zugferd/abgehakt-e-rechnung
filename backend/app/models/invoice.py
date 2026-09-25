@@ -53,10 +53,13 @@ class Invoice(Base):
     service_period_start: Mapped[Optional[date]] = mapped_column(Date)
     service_period_end: Mapped[Optional[date]] = mapped_column(Date)
     payment_terms: Mapped[Optional[str]] = mapped_column(String(500))
-    # BT-10, die Referenz des Käufers (#153): im B2B seine Bestellnummer, gegenüber
-    # Behörden die Leitweg-ID. Gehört zur Rechnung, nicht zum Kunden — sie ändert
-    # sich pro Auftrag.
+    # BT-10, die Referenz des Käufers (#153): gegenüber Behörden die Leitweg-ID,
+    # sonst eine vom Kunden vorgegebene Referenz. Die Bestellnummer / Purchase
+    # Order gehört nicht hierher — dafür ist buyer_order_reference (BT-13, #101).
     buyer_reference: Mapped[Optional[str]] = mapped_column(String(100))
+    # BT-13, Bestellnummer des Kunden (#101): eigene Spalte neben buyer_reference,
+    # damit Leitweg-ID und Purchase-Order gleichzeitig getragen werden können.
+    buyer_order_reference: Mapped[Optional[str]] = mapped_column(String(100))
     notes: Mapped[Optional[str]] = mapped_column(Text)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="EUR", server_default="EUR")
     net_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")

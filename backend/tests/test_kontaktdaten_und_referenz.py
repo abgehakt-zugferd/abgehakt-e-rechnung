@@ -11,8 +11,8 @@ Formalien:
 * `BR-DE-2`  BG-6, Verkäuferkontakt. Wen ruft der Empfänger bei Rückfragen an?
 * `PEPPOL-EN16931-R020`  BT-34, elektronische Adresse des Verkäufers.
 * `PEPPOL-EN16931-R010`  BT-49, elektronische Adresse des Käufers.
-* `BR-DE-15`  BT-10, Käuferreferenz. Im B2B die Bestellnummer des Kunden, gegenüber
-  Behörden die Leitweg-ID.
+* `BR-DE-15`  BT-10, Käuferreferenz. Gegenüber Behörden die Leitweg-ID, sonst
+  eine vom Kunden vorgegebene Referenz. Die Bestellnummer steht separat in BT-13.
 
 Zwei bleiben bewusst offen, siehe `test_die_beiden_offenen_hinweise_bleiben_offen`.
 
