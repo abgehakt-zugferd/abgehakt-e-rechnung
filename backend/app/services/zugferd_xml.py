@@ -9,6 +9,16 @@ from app.models.invoice import Invoice
 from app.models.company import Company
 from app.services.adresse import bereinige_adresszeile2
 from app.services.bankverbindung import iban_fuer_ausgabe
+# P7: Die Zuordnung Rechnungstyp → ZUGFeRD/UN-CEFACT TypeCode lebt in
+# services/belegart.py als EINZIGE fachliche Quelle (mit PDF-Titel und
+# manueller Waehlbarkeit). TYPE_CODE_MAP und UnknownInvoiceTypeError werden
+# hier nur re-exportiert, damit Bestandsleser ihre Importstelle behalten —
+# es gibt kein zweites Mapping.
+from app.services.belegart import (  # noqa: F401
+    TYPE_CODE_MAP,
+    UnknownInvoiceTypeError,
+    belegart,
+)
 from app.services.einheiten import resolve_einheit
 from app.services.iban import IbanProfil
 
@@ -447,41 +457,21 @@ def _notes_xml(invoice: Invoice) -> str:
         </ram:IncludedNote>"""
 
 
-# P7: Zuordnung Rechnungstyp → ZUGFeRD/UN-CEFACT TypeCode. EINZIGE Quelle der Wahrheit,
-# von zugferd_xml UND validator genutzt (Konsistenz-Guard).
-# 380=Rechnung, 381=Gutschrift/Storno, 384=Rechnungskorrektur, 389=Gutschrift im Gutschriftverfahren.
-TYPE_CODE_MAP: dict[str | None, str] = {
-    None: "380",  # Standard (kein invoice_type gesetzt)
-    "standard": "380",
-    "invoice": "380",
-    "credit_note": "381",
-    "credit": "381",
-    "storno": "381",
-    "correction": "384",
-    "self_billing": "389",
-    "self-billing": "389",
-}
-
-
-class UnknownInvoiceTypeError(ValueError):
-    """invoice_type ist weder None noch ein bekannter Typ — fail-closed statt stillem
-    Fallback auf 380 (Standardrechnung), der einen Storno/Korrektur mislabeln würde."""
+# P7: Zuordnung Rechnungstyp → ZUGFeRD/UN-CEFACT TypeCode: services/belegart.py
+# (380=Rechnung, 381=Gutschrift/Storno, 384=Rechnungskorrektur,
+# 386=Anzahlungsrechnung, 389=Gutschrift im Gutschriftverfahren).
 
 
 def _get_type_code(invoice: Invoice) -> str:
     """Gibt den ZUGFeRD TypeCode (BT-3) für invoice.invoice_type zurück.
 
-    Fail-closed (#98 E10): ein unbekannter Typ wird NICHT still auf 380 gemappt —
-    sonst trüge die XML einen falschen Dokumenttyp (z. B. ein vertippter Storno als
-    Standardrechnung). None = kein Typ gesetzt = 380 (legitimer Default). Der Validator
-    (INVOICE_TYPE_INVALID) blockt zusätzlich die Finalisierung.
+    Fail-closed (#98 E10) über `belegart()`: ein unbekannter Typ wird NICHT
+    still auf 380 gemappt — sonst trüge die XML einen falschen Dokumenttyp
+    (z. B. ein vertippter Storno als Standardrechnung). None = kein Typ
+    gesetzt = 380 (legitimer Default). Der Validator (INVOICE_TYPE_INVALID)
+    blockt zusätzlich die Finalisierung.
     """
-    if invoice.invoice_type not in TYPE_CODE_MAP:
-        raise UnknownInvoiceTypeError(
-            f"Unbekannter Rechnungstyp {invoice.invoice_type!r}. "
-            f"Erlaubt: {', '.join(sorted(k for k in TYPE_CODE_MAP if k))} (oder None)."
-        )
-    return TYPE_CODE_MAP[invoice.invoice_type]
+    return belegart(invoice.invoice_type).bt3
 
 
 def generate_xml(invoice: Invoice, company: Company) -> str:

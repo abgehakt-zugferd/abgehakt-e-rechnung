@@ -28,6 +28,7 @@ from app.services.bankverbindung import iban_fuer_ausgabe
 from app.services.epc_qr import build_epc_payload, qr_png_bytes
 from app.services.iban import IbanProfil
 from app.services.zugferd_xml import EXEMPTION_REASONS
+from app.services.belegart import belegart
 
 # ── Firmenlogo ───────────────────────────────────────────────────────────────
 # Das Logo gehört der Nutzerin, nicht dem Auslieferungs-Image (#99 §4.3, L4):
@@ -67,14 +68,6 @@ def _logo_flowable():
 # gesetzlich vorgeschriebene Hinweis auf dem gedruckten Beleg — lautlos, weil das
 # PDF ohne Eintrag einfach nichts ausgibt. Ein Alias hat dieses Problem nicht.
 TAX_NOTICE = EXEMPTION_REASONS
-
-DOCUMENT_TITLES = {
-    "credit_note": "GUTSCHRIFT",
-    "credit": "GUTSCHRIFT",
-    "storno": "GUTSCHRIFT",
-    "correction": "KORREKTURRECHNUNG",
-    "self_billing": "GUTSCHRIFT",
-}
 
 GUTSCHRIFT_TYPEN = frozenset({"credit_note", "credit", "storno", "self_billing"})
 
@@ -144,8 +137,11 @@ def _epc_qr_anhaengen(story, invoice, company, small) -> None:
 
 
 def _document_title(invoice) -> str:
-    """Sichtbarer Belegtitel passend zum invoice_type (Default: RECHNUNG)."""
-    return DOCUMENT_TITLES.get(getattr(invoice, "invoice_type", None), "RECHNUNG")
+    """Sichtbarer Belegtitel aus der fachlichen Belegartbeschreibung
+    (services/belegart.py) — dieselbe Quelle wie der BT-3-TypeCode der XML.
+    Unbekannte Typen werfen UnknownInvoiceTypeError statt still RECHNUNG
+    zu titeln (fail-closed, wie der XML-Generator)."""
+    return belegart(getattr(invoice, "invoice_type", None)).pdf_titel
 
 
 INK = colors.HexColor("#1a1a2e")          # Fließtext/Überschriften
@@ -449,7 +445,13 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
             f"{invoice.service_period_start.strftime('%d.%m.%Y')} – "
             f"{invoice.service_period_end.strftime('%d.%m.%Y')}"
         )
-        meta_rows.append(("Leistungszeitraum:", period_str))
+        # Bei der Anzahlungsrechnung (386) ist der Zeitraum der voraussichtliche,
+        # keine bereits erbrachte Leistung (Produktbegrenzung des ersten Schnitts,
+        # docs/specs/vorabrechnung.md — strenger als EN16931, keine Normpflicht).
+        if belegart(getattr(invoice, "invoice_type", None)).intern == "prepayment":
+            meta_rows.append(("Voraussichtlicher Leistungszeitraum:", period_str))
+        else:
+            meta_rows.append(("Leistungszeitraum:", period_str))
     meta_rows.append(("Fälligkeitsdatum:", invoice.due_date.strftime("%d.%m.%Y")))
     if getattr(customer, "customer_number", None):
         meta_rows.append(("Kundennummer:", customer.customer_number))

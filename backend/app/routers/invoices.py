@@ -17,6 +17,13 @@ from app.models.customer import Customer
 from app.models.company import Company
 from app.models.invoice import Invoice, InvoiceItem, ValidationResult, InvoiceSendLog
 from app.services import belegsperre
+from app.services.belegart import (
+    InvoiceTypeNotSelectable,
+    UnknownInvoiceTypeError,
+    belegart,
+    manuelle_belegart,
+    manuelle_belegarten,
+)
 from app.services.leistungszeit import parse_leistungszeit_from_form
 from app.models.app_config import AppConfig
 from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
@@ -39,6 +46,7 @@ templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
 registriere_darstellungsfilter(templates)
 templates.env.globals["formular_bezeichnungen"] = formular_bezeichnungen
+templates.env.globals["manuelle_belegarten"] = manuelle_belegarten
 
 
 def _ungueltige_einheiten(items_json: str | None) -> tuple[str, ...]:
@@ -194,6 +202,23 @@ def _run_validation(db: Session, invoice: Invoice, company: Company) -> Validati
     )
     db.add(vr)
     return vr
+
+
+def _belegart_waehlbar(invoice: Invoice | None) -> bool:
+    """Ob das Formular ein Belegart-Feld anbietet (Spec vorabrechnung.md, Option B).
+
+    Nur fuer manuell waehlbare Arten (Standard/Anzahlung). Systembelege
+    (381/384/389) bekommen kein editierbares Typfeld; ein unbekannter
+    gespeicherter Typ wird fail-closed wie ein Systembeleg behandelt.
+    Die Sperre steht serverseitig in den POST-Handlern — das fehlende Feld
+    im HTML ist nur die ehrliche Anzeige davon, keine Sperre.
+    """
+    if invoice is None:
+        return True
+    try:
+        return belegart(invoice.invoice_type).manuell_waehlbar
+    except UnknownInvoiceTypeError:
+        return False
 
 
 def _get_draft(db: Session, invoice_id: uuid.UUID) -> Invoice:
@@ -359,6 +384,10 @@ def new_invoice_form(
         "today": today.isoformat(),
         "due_default": (today + timedelta(days=14)).isoformat(),
         "delivery_default": delivery_default,
+        # Belegart-Feld: Neuanlage bietet immer die manuelle Auswahl; die
+        # Vorbelegung traegt die Belegart der Vorlage nie (Feldvertrag
+        # docs/specs/kopieren.md) — das Formular startet bei Standard.
+        "belegart_waehlbar": True,
         "error": error,
         "kunde_hinweis": kunde_hinweis,
     })
@@ -384,6 +413,16 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
     delivery_date, service_period_start, service_period_end = parse_leistungszeit_from_form(form)
     tax_category = form.get("tax_category", "S").strip() or "S"
 
+    # Belegart vor Feldregeln und Nummernvergabe (Spec: Reihenfolge beim
+    # Schreiben). Eine abgelehnte Wahl darf weder Zaehler noch Zeile anfassen.
+    # Fehlendes Feld = Standard (abwaertskompatibel); die Waehlbarkeitspruefung
+    # ist eigener Schritt, nicht Mitgliedschaft in der Typtabelle (381/389
+    # waeren sonst waehlbar).
+    try:
+        invoice_type = manuelle_belegart(form.get("invoice_type"))
+    except InvoiceTypeNotSelectable as fehler:
+        raise HTTPException(400, str(fehler)) from fehler
+
     items_json = form.get("items_json", "[]")
     raw_items = json.loads(items_json)
     # Vor Nummernvergabe: unbekannte Einheit darf weder Zaehler noch Zeile anfassen.
@@ -406,6 +445,7 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
         currency="EUR",
         zugferd_profile="EN16931",
         tax_category=tax_category,
+        invoice_type=invoice_type,
     )
     db.add(invoice)
     db.flush()
@@ -432,6 +472,7 @@ def edit_invoice_form(invoice_id: uuid.UUID, request: Request, db: Session = Dep
         "today": date.today().isoformat(),
         "due_default": invoice.due_date.isoformat(),
         "delivery_default": date.today().isoformat(),
+        "belegart_waehlbar": _belegart_waehlbar(invoice),
         "error": None,
     })
 
@@ -456,6 +497,7 @@ def _bearbeiten_mit_fehler(request: Request, db: Session, invoice: Invoice, meld
         "today": date.today().isoformat(),
         "due_default": invoice.due_date.isoformat(),
         "delivery_default": date.today().isoformat(),
+        "belegart_waehlbar": _belegart_waehlbar(invoice),
         "error": meldung,
     }, status_code=400)
 
@@ -467,6 +509,27 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
     form = await request.form()
 
     delivery_date, service_period_start, service_period_end = parse_leistungszeit_from_form(form)
+
+    # Belegart: vor jeder Feld- oder Positionsaenderung entscheiden (Spec:
+    # Reihenfolge beim Schreiben). Ein normaler Entwurf darf zwischen Standard
+    # und Anzahlung wechseln. Ein Systembeleg (381/384/389) behaelt seine Art:
+    # fehlendes Feld heisst "unveraendert", ein mitgesendetes Feld wird
+    # abgelehnt, nicht ignoriert — das Formular bietet dort kein Typfeld, also
+    # ist ein mitgesendeter Wert immer ein manipulierter POST.
+    typ_manuell_waehlbar = _belegart_waehlbar(invoice)
+    roh_typ = form.get("invoice_type")
+    if roh_typ is not None:
+        if not typ_manuell_waehlbar:
+            return _bearbeiten_mit_fehler(
+                request, db, invoice,
+                "INVOICE_TYPE_NOT_SELECTABLE: Die Belegart dieses Entwurfs "
+                f"({invoice.invoice_type}) steht nicht zur manuellen Wahl; "
+                "sie entsteht auf ihrem eigenen Weg und bleibt unveraendert.",
+            )
+        try:
+            invoice.invoice_type = manuelle_belegart(roh_typ)
+        except InvoiceTypeNotSelectable as fehler:
+            return _bearbeiten_mit_fehler(request, db, invoice, str(fehler))
 
     # Unveränderlich bleiben `invoice_number`, `id`, `status` und `created_at` —
     # sie tauchen hier bewusst nicht auf.

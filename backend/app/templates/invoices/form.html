@@ -235,6 +235,30 @@
                 <div class="card space-y-4">
                     <h2>RECHNUNGSDATEN</h2>
 
+                    {% if belegart_waehlbar %}
+                    {# Belegart: nur die manuelle Teilmenge (Standard/Anzahlung).
+                       Systembelege (381/384/389) bekommen kein Feld; die Sperre
+                       steht serverseitig, dieses Feld ist nur ihre Anzeige.
+                       Bei Neuanlage aus Vorlage startet die Auswahl immer bei
+                       Standard: die Belegart der Vorlage wird nie vererbt. #}
+                    {% set aktuelle_belegart = ((invoice.invoice_type if invoice else None) or "standard") %}
+                    <div>
+                        <label class="label">Belegart</label>
+                        <select name="invoice_type" class="input">
+                            {% for art in manuelle_belegarten() %}
+                            <option value="{{ art.form_wert }}" {% if aktuelle_belegart == art.form_wert %}selected{% endif %}>{{ art.label }}</option>
+                            {% endfor %}
+                        </select>
+                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+                            Anzahlungsrechnung: fordert eine Zahlung vor der Leistung an.
+                            Nur für noch nicht bezahlte Vorausforderungen mit bekanntem
+                            geplantem Leistungszeitraum: Leistungszeitraum von/bis wird
+                            dann zur Pflichtangabe, ein Leistungsdatum entfällt.
+                            Standard bleibt die Standardrechnung.
+                        </p>
+                    </div>
+                    {% endif %}
+
                     <div>
                         <label class="label">Steuertyp *</label>
                         <select name="tax_category" class="input" x-model="taxCategory" @change="onTaxCategoryChange()">
