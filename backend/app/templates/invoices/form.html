@@ -119,6 +119,15 @@
                 <!-- Line items -->
                 <div class="card space-y-4">
                     <h2>POSITIONEN</h2>
+                    {# Der Katalog fuehrt mehrere Schreibweisen je Einheit (Person/Personen/
+                       Persons, Stunde/Stunden, ...). Sie tragen denselben UN/ECE-Code; im
+                       Ausklappmenue sehen sie aber aus wie verschiedene Einheiten, zwischen
+                       denen man sich vertun koennte. Der Satz steht hier und nicht in der
+                       Positionsschleife, sonst erschiene er einmal je Position. #}
+                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5; margin:0;">
+                        Einheiten: Singular, Plural und englische Schreibweise sind dieselbe Einheit.
+                        Die Wahl bestimmt nur den Text auf dem Beleg, nicht den Code in der E-Rechnung.
+                    </p>
 
                     <div class="space-y-3">
                         <template x-for="(item, idx) in items" :key="idx">
