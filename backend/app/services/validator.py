@@ -16,7 +16,12 @@ from app.services.ust_id_pruefung import vies_name_vergleichbar
 from app.models.invoice import Invoice
 from app.models.company import Company
 from app.services.einheiten import UnknownUnitError, resolve_einheit
-from app.services.zugferd_xml import TYPE_CODE_MAP, COMPLIANT_PROFILES
+from app.services.belegart import (
+    TYPE_CODE_MAP,
+    UnknownInvoiceTypeError,
+    belegart,
+)
+from app.services.zugferd_xml import COMPLIANT_PROFILES
 
 
 VALID_TAX_RATES = {Decimal("0"), Decimal("7"), Decimal("19")}
@@ -97,6 +102,14 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
 
     gross = invoice.gross_total
     tax_category = getattr(invoice, "tax_category", "S")
+    # Belegart einmal aufloesen: sie steuert die Datumspruefungen (386 unten)
+    # und die Originalbezug-Konsistenz (weiter unten). Unbekannte Typen werden
+    # nicht hier, sondern als INVOICE_TYPE_INVALID gemeldet.
+    invoice_type = getattr(invoice, "invoice_type", None)
+    try:
+        art = belegart(invoice_type)
+    except UnknownInvoiceTypeError:
+        art = None
     # „nicht uebersteigt" (§ 33 UStDV) heisst bis EINSCHLIESSLICH 250 €. Mit `<`
     # verlangte die Pruefung bei genau 250,00 € brutto ein Leistungsdatum und wies
     # die Finalisierung ab, fuer eine Rechnung, die das Gesetz davon befreit (#23).
@@ -224,7 +237,33 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
             "Leistungszeitraum ungültig: das von-Datum liegt nach dem bis-Datum.",
             "service_period",
         ))
-    if not hat_leistungszeitpunkt(invoice) and (not simplified or innergemeinschaftlich):
+    if art is not None and art.intern == "prepayment":
+        # Produktbegrenzung des ersten 386-Schnitts (docs/specs/vorabrechnung.md):
+        # nur die noch nicht bezahlte Vorausforderung mit bekanntem geplantem
+        # Leistungszeitraum. Das ist STRENGER als EN16931 — die Norm kennt diese
+        # Pflicht nicht — und ist eine Produktentscheidung, keine Normpflicht.
+        # Ein noch nicht eingetretenes Ereignis darf nicht als tatsaechliche
+        # Lieferung ausgegeben werden; das Rechnungsdatum wird nie als Lieferung
+        # eingesetzt. Teilzeitraum und falsche Reihenfolge melden die bestehenden
+        # Pruefungen oben (SERVICE_PERIOD_INCOMPLETE / _INVALID).
+        if invoice.delivery_date:
+            errors.append(Issue(
+                "PREPAYMENT_ACTUAL_DELIVERY", "error",
+                "Anzahlungsrechnung mit tatsaechlichem Leistungsdatum: dieser Schnitt "
+                "bildet nur die noch nicht bezahlte Vorausforderung mit geplantem "
+                "Zeitraum ab. Leistungsdatum leeren und stattdessen den "
+                "voraussichtlichen Leistungszeitraum (von und bis) setzen.",
+                "delivery_date",
+            ))
+        if not invoice.service_period_start and not invoice.service_period_end:
+            errors.append(Issue(
+                "PREPAYMENT_PERIOD_REQUIRED", "error",
+                "Anzahlungsrechnung braucht den voraussichtlichen Leistungszeitraum "
+                "(von und bis). Er ersetzt hier das Leistungsdatum, unabhaengig "
+                "vom Rechnungsbetrag.",
+                "service_period",
+            ))
+    elif not hat_leistungszeitpunkt(invoice) and (not simplified or innergemeinschaftlich):
         errors.append(Issue(
             "DELIVERY_DATE_MISSING", "error",
             "Zeitpunkt der Leistungserbringung fehlt. Bei einer innergemeinschaftlichen "
@@ -341,11 +380,11 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
             ))
 
     # Konsistenz Rechnungstyp ↔ Originalbezug (ROADMAP Punkt 3).
-    # invoice_type muss bekannt sein; Gutschrift/Storno/Korrektur (TypeCode != 380)
-    # verlangen eine Originalreferenz, eine Standardrechnung (380/None) darf keine haben.
-    invoice_type = getattr(invoice, "invoice_type", None)
+    # invoice_type muss bekannt sein; Folgebelege (Gutschrift/Storno/Korrektur/
+    # Gutschriftverfahren) verlangen eine Originalreferenz, eine eigenstaendige
+    # Rechnung (380 und die Anzahlungsrechnung 386) darf keine haben.
     original_ref = getattr(invoice, "original_invoice_id", None)
-    if invoice_type not in TYPE_CODE_MAP:
+    if art is None:
         errors.append(Issue(
             "INVOICE_TYPE_INVALID", "error",
             f"Unbekannter Rechnungstyp '{invoice_type}'. "
@@ -353,7 +392,7 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
             "invoice_type"
         ))
     else:
-        requires_reference = TYPE_CODE_MAP[invoice_type] != "380"
+        requires_reference = art.braucht_original
         if requires_reference and not original_ref:
             errors.append(Issue(
                 "ORIGINAL_INVOICE_REQUIRED", "error",

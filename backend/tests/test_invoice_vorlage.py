@@ -229,7 +229,10 @@ def test_k2_speichern_legt_neuen_entwurf_an_vorlage_unveraendert(pg_session):
     html = get.text
     assert 'action="/invoices/neu"' in html
     assert _feldwert(html, "buyer_order_reference") == "PO-RATEN-42"
-    assert 'name="invoice_type"' not in html
+    # Seit der Belegart-Wahl (vorabrechnung.md, Option B) hat das Anlegeformular
+    # ein Typfeld; der Feldvertrag gilt weiter: die Art der Vorlage wird nie
+    # vererbt, die Auswahl steht auf Standard.
+    assert _feldwert(html, "invoice_type") == "standard"
 
     heute = date.today()
     r = client.post("/invoices/neu", data={
@@ -360,7 +363,10 @@ def test_k5_gutschrift_als_vorlage_erbt_keinen_typ(pg_session):
     assert r.status_code == 200
     html = r.text
     assert _feldwert(html, "buyer_order_reference") == "PO-RATEN-42"
-    assert 'name="invoice_type"' not in html
+    # Das Typfeld existiert seit Option B (vorabrechnung.md); die Gutschrift
+    # der Vorlage wird nicht vererbt: Auswahl steht auf Standard, credit_note
+    # ist keine manuelle Option.
+    assert _feldwert(html, "invoice_type") == "standard"
     assert 'value="credit_note"' not in html
     assert "NEUE RECHNUNG" in html
 
