@@ -11,8 +11,22 @@ lesbar und für die Buchhaltungssoftware des Empfängers auswertbar, in einer Da
 
 - **E-Rechnungen nach EN 16931** als PDF/A-3 mit eingebetteter ZUGFeRD/Factur-X-XML. Vor dem
   Archivieren prüft Mustang Schema und Schematron; scheitert die Prüfung, bleibt der Beleg Entwurf.
+- **Einheiten aus einem festen Katalog:** Formular, Prüfung und XML nutzen dieselbe Liste
+  (unter anderem Stück, Person/Personen/Persons, Stunde/Stunden, Pauschal/Pauschale). Unbekannte
+  Einheiten werden nicht stillschweigend zu Stück umgedeutet.
 - **Unveränderliches Archiv:** gestellte Rechnungen lassen sich nicht ändern und nicht löschen.
   Korrekturen laufen über eine Gutschrift, nicht über eine Bearbeitung des Originals.
+- **Vorlage aus bestehender Rechnung:** Aus einer vorhandenen Rechnung öffnet sich eine neue
+  Neuanlage mit vorbelegten Feldern. Beim Öffnen entsteht kein neuer Datensatz.
+- **Belegart mit Anzahlungsrechnung:** Bei neuen Entwürfen ist neben der Standardrechnung auch
+  eine Anzahlungsrechnung wählbar (TypeCode 386 in der XML). Diese Auswahl macht den Beleg nicht
+  automatisch steuerlich richtig; eine Abrechnung von Anzahlungen gegen eine Schlussrechnung
+  enthält das Programm nicht.
+- **Bestellnummer des Kunden als BT-13:** Die Bestellnummer kann in der Rechnung gepflegt werden
+  und wird in der XML als `BuyerOrderReferencedDocument` ausgegeben.
+- **Belegsprache Deutsch oder Englisch:** Die Sprache steuert die maschinell erzeugte
+  menschenlesbare Darstellung im PDF, inklusive Überschriften sowie Zahlen- und Datumsformat.
+  Eigene Texte wie Positionsbeschreibungen und Zahlungsbedingungen werden nicht übersetzt.
 - **Kundenstamm** mit Schnittstellen-ID für Kettenimport, CC-Adressen pro Kunde und optionaler
   Bankverbindung des Beteiligten für Auszahlungen (siehe unten).
 - **USt-IdNr. bei VIES prüfen:** Existenz und Gültigkeit einer USt-IdNr. gegen die offizielle
@@ -265,6 +279,14 @@ altem Abgehakt**, und ausführlich der Fall, der die meisten Rückfragen erzeugt
 **Korrektur einer bereits gestellten Rechnung**. Kurz gefasst:
 Ein gestellter Beleg wird nie geändert, sondern durch eine Gutschrift aufgehoben und
 gegebenenfalls neu geschrieben.
+
+Neu im Ablauf: In der Detailansicht führt **ALS VORLAGE** in eine neue Neuanlage mit den
+übernommenen Feldern der Vorlage; gespeichert wird erst mit **ALS ENTWURF SPEICHERN**.
+
+Für Entwürfe gibt es im Formular die Felder **Belegsprache**, **Belegart** und **Bestellnummer**.
+Zur Auswahl stehen bei der Belegart nur Standardrechnung und Anzahlungsrechnung. Die
+Anzahlungsrechnung ist für Vorausforderungen mit geplantem Leistungszeitraum gedacht; sie ist
+kein Automatismus für die steuerliche Einordnung und kein Schlussrechnungsmodul.
 
 ## Tests
 
