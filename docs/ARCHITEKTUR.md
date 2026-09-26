@@ -272,8 +272,13 @@ Entwurfs-Vorschau nichts schreibt.
 des Belegs (PDF-Titel, Labels, Zahlen- und Datumsformat). Sie hängt weder am Kundenland noch
 an einer globalen Laufzeiteinstellung. Unbekannte Werte fallen nicht still auf Deutsch
 zurück (`resolve_belegsprache`). Nach dem Finalisieren ist das Feld unveränderlich (nicht in
-`MUTABLE_AFTER_FINALIZE`). Die CII-XML bleibt davon unberührt: kein Sprachattribut und keine
-automatische Übersetzung von Codes oder Nutzereingaben.
+`MUTABLE_AFTER_FINALIZE`). Die CII-XML trägt **kein** Sprachattribut, und übersetzt wird dort
+nichts: weder Codes noch Nutzereingaben. Eine mittelbare Wirkung gibt es trotzdem, und sie ist
+gewollt: Bleibt das Feld Zahlungsbedingungen leer, setzt `_zahlungsbedingungen` die Vorgabe der
+gewählten Sprache (`payment_terms_default_en` bei `en`), und dieser gespeicherte Text steht
+anschließend in `SpecifiedTradePaymentTerms/Description`. Die Sprache wählt also den Text aus,
+sie übersetzt ihn nicht. Fehlt die englische Vorgabe, weist das Speichern mit 400 ab, statt
+still Deutsch in einen englischen Beleg zu schreiben.
 
 ### Einheiten kommen aus einem Katalog und werden nie umgedeutet
 

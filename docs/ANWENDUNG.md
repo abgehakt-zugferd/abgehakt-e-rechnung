@@ -26,6 +26,11 @@ prüffähig ins PDF einbetten, bleibt die Rechnung Entwurf, und es entsteht kein
 PDF ohne eingebettete XML ist seit 2025 keine gültige Rechnung, und das Programm legt
 lieber nichts ab als etwas Unbrauchbares.
 
+Solange ein Beleg Entwurf ist, können Sie unter **Belegart** zwischen
+**Standardrechnung** und **Anzahlungsrechnung** wählen und unter **Belegsprache** zwischen
+Deutsch und Englisch. Beides wird mit dem Entwurf gespeichert. Nach dem Finalisieren sind
+Art und Sprache wie der übrige Beleginhalt nicht mehr änderbar.
+
 ---
 
 ## Stammdaten: Kunden und Firma
@@ -199,6 +204,109 @@ Bei einer **Gutschrift** oder **Abrechnungsgutschrift** (389) zahlt **Sie** an d
 Ohne Kunden-IBAN entsteht die Gutschrift ohne QR-Code; beim Finalisieren erscheint eine
 **Warnung**, dass keine Bankverbindung des Kunden hinterlegt ist. Die Gutschrift ist dennoch
 möglich, wenn alle Pflichtangaben stimmen.
+
+---
+
+## Einheiten in Positionen
+
+Wenn Sie eine Position anlegen oder einen Entwurf ändern, wählen Sie unter **Einheit** die
+Mengenbezeichnung. Der Katalog enthält Stück, Person, Personen, Persons, Stunde, Stunden,
+Tag, Tage, Monat, Monate, Kilometer, Meter, kg, Liter, Pauschal und Pauschale. Singular,
+Plural und die englische Schreibweise können dieselbe fachliche Einheit meinen. Die Auswahl
+bestimmt den sichtbaren Text der Position, der technische Einheitencode der E-Rechnung wird
+aus dem Katalog bestimmt.
+
+Für eine neue Position ist **Stück** vorausgewählt. Eigene Bezeichnungen oder frei
+eingegebene Codes bietet das Programm nicht an. Einen leeren oder unbekannten Einheitenwert
+weist es beim Speichern zurück, bevor eine Rechnungsnummer vergeben oder eine Position
+geändert wird. Beim Prüfen ist eine unbekannte Einheit ebenfalls ein Fehler und sperrt das
+Finalisieren; die XML-Erzeugung deutet sie nicht als Stück um.
+
+Ein älterer Entwurf mit einer nicht mehr bekannten Einheit zeigt diesen Wert im Auswahlfeld
+als ungültig. Wählen Sie ausdrücklich eine Katalogeinheit, wenn Sie ihn korrigieren wollen.
+Ein bereits gestellter Beleg bleibt unverändert mit seiner bisherigen Einheit erhalten; das
+Programm schreibt seine PDF oder XML nicht wegen eines späteren Katalogstands um.
+
+---
+
+## Bestehende Rechnung als Vorlage verwenden
+
+Wenn eine weitere Rechnung weitgehend dieselben Angaben braucht, öffnen Sie die vorhandene
+Rechnung und wählen **ALS VORLAGE**. Das Programm öffnet das Formular **Neue Rechnung** mit
+vorbelegtem Kunden, Positionen, Steuerkategorie, Kundenreferenz, Bestellnummer,
+Leistungsangaben, Zahlungsbedingungen, Bemerkungen und Belegsprache. Beschreibung, Menge,
+Einheit, Preis und Steuersatz der Positionen sind dabei nur Vorschläge und können geändert
+werden.
+
+Rechnungsdatum und Fälligkeitsdatum beginnen wie bei einer neuen Rechnung. Die Belegart wird
+nicht übernommen und steht zunächst auf **Standardrechnung**. Prüfen Sie deshalb besonders
+bei einer Vorlage für eine Anzahlung alle Belegdaten, bevor Sie speichern. Erst **ALS ENTWURF
+SPEICHERN** legt eine neue Rechnung mit neuer Nummer an. Das bloße Öffnen der Vorlage legt
+keinen Datensatz an, vergibt keine Nummer und ändert die Vorlage nicht.
+
+Ist der Kunde der Vorlage inaktiv oder nicht mehr auswählbar, bleiben die übrigen Angaben
+vorbelegt, der Kunde bleibt aber leer und das Formular weist darauf hin. Für eine ungültige
+oder nicht vorhandene Vorlage zeigt das Programm einen Fehler statt eines still leeren
+Neuanlageformulars.
+
+---
+
+## Anzahlungsrechnung
+
+Wählen Sie beim Entwurf unter **Belegart** die **Anzahlungsrechnung**, wenn Sie eine Zahlung
+vor der Leistung anfordern. Der Beleg erhält beim Finalisieren TypeCode 386 und im PDF den
+Titel **ANZAHLUNGSRECHNUNG**, bei englischer Belegsprache **PREPAYMENT INVOICE**. Eine
+Standardrechnung erhält weiterhin TypeCode 380.
+
+Für eine Anzahlungsrechnung müssen Sie den geplanten Leistungszeitraum mit Beginn und Ende
+angeben. Ein einzelner geplanter Tag wird in beide Felder eingetragen. Ein tatsächliches
+Leistungsdatum darf nicht zugleich gesetzt sein. Fehlende, nur halb ausgefüllte oder zeitlich
+verkehrte Zeiträume sperren das Finalisieren. Die Anzeige nennt den Zeitraum dann
+voraussichtlich, sie behauptet keine bereits erbrachte Leistung.
+
+Die Belegart ist eine Kennzeichnung, keine Rechenhilfe. Das Programm halbiert keine Preise,
+berechnet keine Raten und zieht eine Anzahlung nicht von einer späteren Schlussrechnung ab.
+Es führt dafür auch keinen Zahlungsabzug in der E-Rechnung. Gutschriften, Korrekturen und
+Abrechnungsgutschriften entstehen auf ihren jeweiligen eigenen Wegen und lassen sich nicht
+über diese Auswahl erzeugen.
+
+---
+
+## Bestellnummer des Kunden
+
+Tragen Sie im Rechnungsformular unter **Bestellnummer** die Nummer der Bestellung oder
+Purchase Order Ihres Kunden ein, wenn der Auftrag eine solche Referenz verlangt. Das Feld
+ist die Bestellnummer des Kunden, nicht Ihre Rechnungsnummer und nicht die
+**Referenz des Kunden** für eine Leitweg-ID oder andere Käuferreferenz.
+
+Die Bestellnummer wird mit dem Entwurf gespeichert, auf dem PDF unter **Bestellnummer**
+beziehungsweise **Purchase order number** angezeigt und als BT-13 in die E-Rechnungs-XML
+geschrieben. Bleibt das Feld leer, fügt das Programm diese Referenz nicht in PDF oder XML
+ein. Beim Arbeiten mit einer Vorlage wird die Bestellnummer mit vorbelegt; Sie können sie
+vor dem Speichern der neuen Rechnung ändern oder löschen.
+
+---
+
+## Belegsprache
+
+Wählen Sie im Rechnungsformular unter **Belegsprache** für jede einzelne Rechnung
+**Deutsch** oder **Englisch**. Neue Rechnungen beginnen auf Deutsch. Die Wahl gehört zum
+Beleg, nicht zum Kundenland, zur Adresse oder zur USt-IdNr.; es gibt dafür keine globale
+Einstellung. Eine Vorlage und eine Stornorechnung übernehmen die Sprache ihres Ausgangsbelegs,
+eine aus Vorlage angelegte Rechnung kann sie vor dem Speichern noch ändern.
+
+Die Belegsprache steuert nur die menschenlesbare Darstellung im PDF: Belegtitel,
+Beschriftungen, Zahlen und Datumsformate sowie die vom Programm erzeugten Hinweise. Sie
+übersetzt weder Positionsbeschreibungen noch selbst eingegebene Zahlungsbedingungen. Die
+Sprachkennzeichnung selbst wird nicht in die E-Rechnungs-XML geschrieben. Bleiben die
+Zahlungsbedingungen leer, übernimmt das Programm jedoch die Standard-Zahlungsbedingungen
+der gewählten Sprache und schreibt diesen Text auch in die XML. Wählen Sie eine englische
+Rechnung ohne eigene Zahlungsbedingungen, braucht die Firma in den Einstellungen englische
+Standard-Zahlungsbedingungen; fehlen sie, weist das Programm das Speichern zurück.
+
+Nach dem Finalisieren ist die Sprache unveränderlich. Ein fremder oder manipulierter
+Sprachwert wird ebenfalls vor der Nummernvergabe zurückgewiesen, statt still auf Deutsch
+zurückzufallen.
 
 ---
 
