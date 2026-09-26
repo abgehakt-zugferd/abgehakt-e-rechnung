@@ -47,7 +47,7 @@ backend/app/
 ├── config.py                 # Einstellungen aus .env (pydantic-settings)
 ├── database.py               # SQLAlchemy-Engine + get_db()
 ├── branding.py               # AGPL-§13-Hinweis im Footer (nicht abschaltbar)
-├── darstellung.py            # Zahlenformat (Dezimalkomma), einmal für PDF und UI
+├── darstellung.py            # Zahlenformat der Oberfläche; Beleg-PDF über belegsprache.py
 ├── installation.py           # Installationstyp: Produktion vs. Ketten-Testinstanz
 ├── laender.py                # LAENDER (kuratiert) und ISO_LAENDER für die Landesauswahl
 ├── db/
@@ -75,6 +75,9 @@ backend/app/
 │   ├── pdfa.py               # PDF/A-3 via Ghostscript
 │   ├── mustang.py            # Mustang-CLI als Subprozess
 │   ├── validator.py          # § 14 UStG, regelbasiert
+│   ├── einheiten.py          # fester Einheitenkatalog für Formular, Validator und CII
+│   ├── belegart.py           # Belegart → BT-3 TypeCode, manuelle Wählbarkeit
+│   ├── belegsprache.py       # Belegsprache de|en → PDF-Darstellung
 │   ├── invoice_number.py     # fortlaufende Nummern
 │   ├── customer_number.py    # Vorschlag für Kundennummern, überschreibbar
 │   ├── storno.py             # Gutschrift zum Original (TypeCode 381), reine Logik
@@ -253,6 +256,43 @@ nicht mehr zu unterscheiden. Das PDF entsteht in einer Wegwerf-Datei und trägt 
 `ENTWURF`-Wasserzeichen: es hat schon die endgültige Nummer, aber keine eingebettete XML
 (§-14c-Risiko, falls es jemand weitergibt).
 
+### Das Vorbefüllen aus einer Vorlage schreibt nichts
+
+`GET /invoices/neu?vorlage=…` öffnet dasselbe Anlegeformular vorbefüllt. `invoice` bleibt
+dabei **immer** `None`; die Vorbelegung läuft über eine eigene Kontextgröße. Würde die
+Vorlage als `invoice` übergeben, speicherte das Formular auf sie
+(`POST /invoices/{id}/bearbeiten`). Der Aufruf ändert nichts: keinen Nummernzähler, keinen
+Protokoll- oder Audit-Eintrag, keine Datei, kein `updated_at` der Vorlage. Persistenz und
+Nummernvergabe bleiben ausschließlich bei `POST /invoices/neu`, genau wie die
+Entwurfs-Vorschau nichts schreibt.
+
+### Die Belegsprache gehört an die Rechnung
+
+`invoices.document_language` ist `de` oder `en` und steuert nur die menschliche Darstellung
+des Belegs (PDF-Titel, Labels, Zahlen- und Datumsformat). Sie hängt weder am Kundenland noch
+an einer globalen Laufzeiteinstellung. Unbekannte Werte fallen nicht still auf Deutsch
+zurück (`resolve_belegsprache`). Nach dem Finalisieren ist das Feld unveränderlich (nicht in
+`MUTABLE_AFTER_FINALIZE`). Die CII-XML bleibt davon unberührt: kein Sprachattribut und keine
+automatische Übersetzung von Codes oder Nutzereingaben.
+
+### Einheiten kommen aus einem Katalog und werden nie umgedeutet
+
+Formular, Validator und CII-Generator lösen Einheiten über dieselbe Quelle
+(`services/einheiten.py`). Unbekannte, leere oder nur aus Leerzeichen bestehende Werte
+werden abgelehnt (`UnknownUnitError`, `UNIT_UNKNOWN`, HTTP 400), niemals zu Stück (`C62`)
+umgedeutet. Gestellte Belege behalten ihren gespeicherten Einheitentext, weil Positionen
+finalisierter Rechnungen unveränderlich sind und Archiv-PDF/XML beim Lesen nicht neu
+erzeugt werden. Ein ungültiger Altbestand in einem Entwurf bleibt sichtbar und blockiert das
+Finalisieren; er wird nicht still repariert.
+
+### Die Belegart steht nach dem Finalisieren fest
+
+`invoice_type` bestimmt den BT-3-TypeCode und den sichtbaren Belegtitel. Manuell wählbar
+sind nur Standardrechnung (`None` → 380) und Anzahlungsrechnung (`prepayment` → 386);
+Gutschrift, Korrektur und Gutschriftverfahren entstehen auf ihren eigenen Wegen. Ein
+normaler Entwurf darf zwischen den manuellen Arten wechseln. Nach `issued`/`paid`/
+`cancelled` ist die Art unveränderlich (nicht in `MUTABLE_AFTER_FINALIZE`).
+
 ### Solange etwas nicht bearbeitbar ist, darf der Zurück-Button es nicht vortäuschen
 
 `GET /invoices/neu` liefert `Cache-Control: no-store`, und das Makro
@@ -329,7 +369,7 @@ Dateisystem des Containers, und sie ist beim nächsten `up` verschwunden.
 Modellen erzeugt und legt das Schema des Extraktionsstands an, dazu die GoBD-Trigger (aus
 `app/db/immutability_triggers.py`, deren einzige Quelle) und die beiden Singleton-Zeilen
 `company` und `app_config`. Ab hier gilt der normale Ablauf: jede weitere Änderung ist eine
-**neue** Migration (derzeit `002` bis `012`).
+**neue** Migration (derzeit `002` bis `015`).
 
 **`alembic check` ist hier ein echtes Gate** und muss grün bleiben. Modelle und Migrationen
 sind deckungsgleich, und `tests/test_migrationskette.py` prüft das bei jedem Lauf gegen eine
