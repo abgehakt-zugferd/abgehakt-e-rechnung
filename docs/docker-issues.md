@@ -36,6 +36,12 @@
 ### 7. `--reload` in CMD
 **Hinweis:** Bewusst behalten, das Setup ist rein lokal. Beim Deployment-Upgrade entfernen.
 
+**Nachtrag 26.09.2026: erledigt.** Der Auslieferungs-CMD ist nur noch
+`["/app/entrypoint.sh"]` (`backend/Dockerfile`), und der Entrypoint startet ohne Reload.
+`--reload` kommt ausschließlich aus dem Entwicklungs-Override `docker-compose.dev.yml`.
+Die Erinnerung bleibt stehen, weil der Weg dorthin in DEV-DOCU unter „Auslieferung und
+Entwicklung" nachgelesen werden kann.
+
 ### 8. DB-Port nach außen exponiert
 **Stand 2026-09:** erledigt. Die DB hängt an `127.0.0.1:5432:5432`, also nur am Loopback;
 direkter `psql`-Zugriff vom Host bleibt unverändert möglich. Die Netzbindungs-Wache in

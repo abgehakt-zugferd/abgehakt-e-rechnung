@@ -164,11 +164,19 @@ Rollen und ihre Aufgaben: siehe [`DEV-DOCU.md`](DEV-DOCU.md), Abschnitt „Rolle
 Ein rechtswidriger Entwurf kommt so nicht ins Archiv.
 
 Danach gilt: `issued` wird **nur** gesetzt, wenn die ZUGFeRD-XML wirklich ins PDF eingebettet
-werden konnte (PDF/A-3 über Ghostscript **und** `mustang.combine` erfolgreich). Schlägt das
-fehl, bleibt die Rechnung `draft`, es gibt `400`, alle Zwischen-PDFs werden entfernt und die
-Transaktion wird zurückgerollt. **Es gibt keinen Rückfall auf ein reines Sicht-PDF.** Das
-würde eine unvollständige E-Rechnung zementieren. Als zusätzliche Absicherung verweigert
-`POST /datev-senden` jedes `*_visual.pdf`.
+werden konnte. Das Gate ist mehrstufig und fail-closed:
+
+1. `validator.validate_invoice`: harte §-14-Fehler führen sofort zu `400`.
+2. Pipeline im Arbeitsverzeichnis: sichtbares PDF, dann PDF/A-3, dann `mustang.combine`.
+3. Danach Pflichtprüfung des **kombinierten** PDFs mit `mustang.validate(zugferd_pdf)`.
+4. `issued` nur bei `result["is_valid"]` **und** `XML:valid` im Mustang-Rohbericht.
+
+Scheitert eine der Stufen 2 bis 4, bleibt die Rechnung `draft`, es gibt `400`,
+`db.rollback()` läuft, und das Arbeitsverzeichnis samt Zwischenartefakten wird gelöscht.
+Im Archiv landet nichts, und es gibt keinen Rückfall auf ein reines Sicht-PDF. Das würde
+eine unvollständige E-Rechnung zementieren. Als zusätzliche Absicherung verweigert
+`POST /datev-senden` jedes `*_visual.pdf` und jedes PDF ohne positives Mustang-Ergebnis
+(`is_valid` plus `XML:valid`).
 
 ### ZUGFeRD
 

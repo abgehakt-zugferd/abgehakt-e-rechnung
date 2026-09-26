@@ -46,6 +46,8 @@ Schnittstelle, als Vertrag:
 - `manuelle_belegart(form_value: str | None) -> str | None`, sonst `InvoiceTypeNotSelectable`.
 - `Belegart` liefert kanonischen internen Wert, BT-3, PDF-Titel und manuelle Waehlbarkeit. Keine Laufzeitkonfiguration.
 
+**Nachtrag 26.09.2026, Abweichung der Umsetzung:** Den PDF-Titel liefert `Belegart` nicht. Die Dataclass hat kein `titel`-Feld; der sichtbare Titel wird sprachabhaengig ueber `Belegdarstellung.titel(belegart_intern)` in `backend/app/services/belegsprache.py` aufgeloest. Das ist die Folge der spaeter gelandeten Belegsprache: ein Titel je Belegart haette in `belegart.py` gestanden, ein Titel je Belegart **und** Sprache gehoert dorthin, wo die Sprache liegt. Wer diese Zeile als Beschreibung des Ist-Zustands liest, sucht den Titel am falschen Ort. Unabhaengig belegt von zwei Sichtungen am 26.09.2026.
+
 Die vorhandene `TYPE_CODE_MAP` kann dazu in eine fachliche Quelle umziehen; ihre bestehenden Aliase bleiben lesbar. Es soll kein zweites Mapping parallel entstehen. **Loeschtest:** Entfernt man diese Beschreibung, muessen Formular, PDF und XML getrennt ueber Typ, Titel und Auswahlrechte entscheiden. Entfernt man dagegen einen isolierten `prepayment_service`, der nur 386 zurueckgibt, verschwindet Komplexitaet. Einen solchen Durchreicher gibt es nicht.
 
 **Zwei reale Adapter:** PDF-Titel und XML-BT-3 sind verschiedene Ausgaben derselben fachlichen Art; das Formular hat zusaetzlich eine engere Auswahl. Diese Variation besteht bereits bei 381 und 389. Es braucht keine hypothetischen austauschbaren Rechnungsanbieter, keine Repository-Abstraktion und keinen allgemeinen Workflow-Interpreter.

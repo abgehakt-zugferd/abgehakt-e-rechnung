@@ -26,10 +26,12 @@ prüffähig ins PDF einbetten, bleibt die Rechnung Entwurf, und es entsteht kein
 PDF ohne eingebettete XML ist seit 2025 keine gültige Rechnung, und das Programm legt
 lieber nichts ab als etwas Unbrauchbares.
 
-Solange ein Beleg Entwurf ist, können Sie unter **Belegart** zwischen
-**Standardrechnung** und **Anzahlungsrechnung** wählen und unter **Belegsprache** zwischen
-Deutsch und Englisch. Beides wird mit dem Entwurf gespeichert. Nach dem Finalisieren sind
-Art und Sprache wie der übrige Beleginhalt nicht mehr änderbar.
+Bei einem manuell angelegten Entwurf können Sie unter **Belegart** zwischen
+**Standardrechnung** und **Anzahlungsrechnung** wählen. Gutschriften, Korrekturen und
+Abrechnungsgutschriften entstehen auf ihren eigenen Wegen; bei ihnen zeigt das Formular
+dieses Feld nicht, und ein mitgeschickter Wert wird abgelehnt. Die **Belegsprache**, Deutsch
+oder Englisch, wählen Sie bei jedem Entwurf. Beides wird mit dem Entwurf gespeichert. Nach
+dem Finalisieren sind Art und Sprache wie der übrige Beleginhalt nicht mehr änderbar.
 
 ---
 
@@ -259,10 +261,13 @@ Titel **ANZAHLUNGSRECHNUNG**, bei englischer Belegsprache **PREPAYMENT INVOICE**
 Standardrechnung erhält weiterhin TypeCode 380.
 
 Für eine Anzahlungsrechnung müssen Sie den geplanten Leistungszeitraum mit Beginn und Ende
-angeben. Ein einzelner geplanter Tag wird in beide Felder eingetragen. Ein tatsächliches
-Leistungsdatum darf nicht zugleich gesetzt sein. Fehlende, nur halb ausgefüllte oder zeitlich
-verkehrte Zeiträume sperren das Finalisieren. Die Anzeige nennt den Zeitraum dann
-voraussichtlich, sie behauptet keine bereits erbrachte Leistung.
+angeben. Einen einzelnen geplanten Tag tragen Sie in beide Felder ein; das Programm füllt
+das zweite nicht von selbst. Ein tatsächliches Leistungsdatum darf nicht zugleich gesetzt
+sein. Fehlende, nur halb ausgefüllte oder zeitlich verkehrte Zeiträume sperren das
+Finalisieren. Im PDF heißt der Zeitraum bei einer Anzahlungsrechnung **Voraussichtlicher
+Leistungszeitraum**, auf Englisch **Expected period of supply**; er behauptet damit keine
+bereits erbrachte Leistung. Die Detailseite im Programm schreibt unabhängig von der Belegart
+**Leistungszeitraum**.
 
 Die Belegart ist eine Kennzeichnung, keine Rechenhilfe. Das Programm halbiert keine Preise,
 berechnet keine Raten und zieht eine Anzahlung nicht von einer späteren Schlussrechnung ab.

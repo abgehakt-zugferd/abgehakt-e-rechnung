@@ -70,7 +70,7 @@ Unverträglichkeit mit der funktions-scoped `pg_session`-Fixture).
 | **Mustang CLI** | `Dockerfile` → `ARG MUSTANG_VERSION` + `MUSTANG_SHA256` (aktuell 2.24.0) | 2.24.0 | aktuell | Upgrade = Nummer **und** SHA-256 im Dockerfile, Rebuild, volle Mustang-E2E (`test_finalize_e2e`, Schema, Storno). CLI-Flags (`--format zf`, `--no-additional-attachments`) vorab gegen die Release notes prüfen. Rezept + Fallstricke: unten. |
 | Python-Basis | `python:3.11-slim` | 3.11 weiterhin; 3.12/3.13 verfügbar | Image-Tag floatet Patch | Major-Python-Sprung separat entscheiden |
 | PostgreSQL | `postgres:16-alpine` | 16.x (Tag floatet) | Patch via Image-Pull | Major 17 = eigene Migration |
-| Ghostscript | apt `ghostscript=10.05.1~dfsg-1+deb13u1` | n/a | Pin | PDF/A-3-Pfad; beim nächsten Debian-Point-Release laut brechen (zusammen mit Base-Digest anheben) |
+| Ghostscript | apt `ghostscript=10.05.1~dfsg-1+deb13u2` | n/a | Pin | PDF/A-3-Pfad; beim nächsten Debian-Point-Release laut brechen (zusammen mit Base-Digest anheben) |
 | JRE | apt `default-jre-headless=2:1.21-76` | n/a | Pin | nur für Mustang; beim nächsten Debian-Point-Release laut brechen |
 | DB-Backup-Image | `prodrigestivill/postgres-backup-local:16-alpine` | an PG 16 gekoppelt | | |
 
@@ -502,9 +502,10 @@ Nicht wegen § 14c: ein Betrag von null ist kein unrichtiger Steuerausweis. Der 
 Verständlichkeit, und bei Reverse Charge mehr als das, denn dort muss der Empfänger
 erkennen, dass ER die Steuer schuldet.
 
-Maßstab im Code ist `TAX_NOTICE` (`pdf_generator._zeigt_steuer`): dieselbe Tabelle, die
-den Befreiungsgrund liefert, entscheidet über das Weglassen. Wer eine neue steuerfreie
-Kategorie ergänzt, bekommt beides automatisch und kann es nicht halb vergessen.
+Maßstab im Code sind die aus `EXEMPTION_REASONS` abgeleiteten steuerfreien Kategorien
+(`pdf_generator._zeigt_steuer`); sie entscheiden über das Weglassen. Der Steuerhinweistext
+kommt sprachabhängig aus `Belegdarstellung`. Wer eine neue steuerfreie Kategorie ergänzt,
+muss Kategorie, XML-Befreiungsgrund und Belegdarstellung zusammen prüfen.
 
 ---
 
@@ -546,7 +547,7 @@ Die Trigger sind Single Source of Truth für **beide**:
 
 - **`gen_random_uuid()` seit PG13 Core.** Keine Extension, kein Superuser nötig, läuft auch
   auf Least-Privilege.
-- **plpgsql ist *trusted*.** Owner `abgehakt_db` (NOSUPERUSER) darf `CREATE FUNCTION` und
+- **plpgsql ist *trusted*.** Owner `abgehakt_admin` (NOSUPERUSER) darf `CREATE FUNCTION` und
   `CREATE TRIGGER` anlegen, Superuser-Eingabe ist nicht nötig. Ein FUNCTION AS LANGUAGE C
   wäre nicht-trusted und würde scheitern; plpgsql ist aber Standard und vertrauenswürdig.
 - **`CREATE OR REPLACE TRIGGER` seit PG14** (wir nutzen 16). Idempotent: eine zweimalige
@@ -561,7 +562,7 @@ Die Trigger sind Single Source of Truth für **beide**:
   Zeile ein einziger Trigger pro TRUNCATE-Statement.
 - **Prüf-Reihenfolge: Rechte VOR Trigger.** Die App verbindet als `abgehakt_app`, die hat kein
   DELETE/TRUNCATE auf den geschützten Tabellen. Postgres prüft **zuerst die Rechte** → `42501`
-  (permission denied) sieht die App lange vor dem Trigger. Owner `abgehakt_db` HAT DELETE-Recht,
+  (permission denied) sieht die App lange vor dem Trigger. Owner `abgehakt_admin` HAT DELETE-Recht,
   läuft also am Rechte-Check vorbei und trifft dann den Trigger → `P0001` (trigger error). Die
   Fehler sind _nicht_ dasselbe (42501 vs P0001), testweise aber beide blockierend. Diese
   Reihenfolge ist dokumentierte Architektur.
@@ -617,7 +618,7 @@ abgehakt_app         (Runtime-Rolle, least-privilege, kein DELETE/TRUNCATE auf S
 
 - App-Rolle kann reguläre CRUD-Operationen (`INSERT`, `SELECT`, `UPDATE`) ausführen.
 - App-Rolle sieht `42501` (permission denied) bei DELETE/TRUNCATE auf geschützten Tabellen.
-- Owner-Rolle (`abgehakt_db`, NOSUPERUSER) sieht `P0001` (trigger violated) bei derselben Operation.
+- Owner-Rolle (`abgehakt_admin`, NOSUPERUSER) sieht `P0001` (trigger violated) bei derselben Operation.
 - Triggers bleibt grün nach DB-Reload (Idempotenz).
 - Test-Cleanup funktioniert, Trigger-State leck zwischen Tests nicht über.
 
@@ -1456,7 +1457,9 @@ Drei Punkte, die dabei auffielen:
    Rechtstexte. Die XML wäre nach der Erweiterung korrekt gewesen und das gedruckte
    PDF hätte den nach § 14 Abs. 4 Nr. 8 UStG vorgeschriebenen Hinweis lautlos
    weggelassen, weil ein fehlender Eintrag dort einfach nichts ausgibt.
-   `TAX_NOTICE` ist jetzt ein Alias, kein Duplikat; ein Test hält das fest.
+   Nachtrag 26.09.2026: `TAX_NOTICE` existiert nicht mehr. Die PDF-Steuerhinweise
+   liegen sprachabhängig in `Belegdarstellung`; `TAX_NOTICE_KATEGORIEN` leitet nur
+   die Menge der steuerfreien Kategorien aus `EXEMPTION_REASONS` ab.
 2. **`E` ist hier ausdrücklich nur § 19.** Der hinterlegte Text nennt den Paragrafen.
    Andere Befreiungen nach § 4 UStG (Heilbehandlung, Versicherung) tragen dieselbe
    EN-16931-Kategorie, brauchen aber einen anderen Grund. Sie mitzunutzen würde eine
@@ -1504,7 +1507,7 @@ vermissen. Ein gruener Lauf unter diesen Umstaenden beweist nichts. Deshalb gilt
 in diesem Repo: **immer nur ein Testlauf gleichzeitig**, und nach einem Abbruch
 zuerst aufraeumen, dann von vorn.
 
-### Reihenfolge in der CII: wo BT-10, BG-6 und BT-34/49 stehen muessen (#153)
+### Reihenfolge in der CII: wo BT-3, BT-10, BG-6 und BT-34/49 stehen muessen (#153)
 
 `TradePartyType` ist eine geordnete Sequenz, und ein Element an der falschen Stelle
 ist ein Schemafehler, kein Schoenheitsfehler:
@@ -1524,7 +1527,13 @@ Also: der Ansprechpartner (BG-6) **vor** die Anschrift, die elektronische Adress
 `SellerTaxRepresentativeTradeParty` und `SellerOrderReferencedDocument`). Ein
 XPath-`find()` sieht das Element auch an der falschen Stelle; die Position halten
 `test_bt13_steht_nach_buyer_trade_party` und ein Mustang-Lauf mit gesetzter
-Bestellnummer. BT-14 und BT-12 sind bewusst nicht umgesetzt.
+Bestellnummer. BT-3 steht als `ram:TypeCode` in `rsm:ExchangedDocument` nach
+`ram:ID` und vor `ram:IssueDateTime`; die Anzahlungsrechnung verwendet dort den Wert
+`386`. Der Einheitenkatalog liefert den UN/ECE-Code für
+`ram:BilledQuantity/@unitCode` in
+`IncludedSupplyChainTradeLineItem` / `SpecifiedLineTradeDelivery`; dieses Element
+steht nach `SpecifiedLineTradeAgreement` und vor `SpecifiedLineTradeSettlement`.
+BT-14 und BT-12 sind bewusst nicht umgesetzt.
 
 Zwei Fallen dabei:
 
