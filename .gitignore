@@ -82,3 +82,6 @@ venv/
 
 # Lokale Entwicklungs-Override (Ports), nie committen
 docker-compose.override.yml
+
+# Docker-Betriebsnotizen: gelten nur fuer diesen Rechner, nicht fuer das oeffentliche Projekt
+docs/docker-issues.md

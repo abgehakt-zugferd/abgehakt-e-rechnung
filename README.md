@@ -401,7 +401,11 @@ die Rücksicherung sie nicht.
 Es gibt einen Fall, in dem die Schritte oben nicht greifen: Es ist keine Datenbank mehr da,
 die man verwerfen könnte. Container, Images und Volumes sind gleichzeitig verschwunden,
 typischerweise, weil an den Ressourcen-Einstellungen von Docker Desktop etwas geändert wurde.
-Der Hergang und wie man ihn erkennt, steht in `docs/docker-issues.md`.
+Wird dort die Größe des Disk-Images verkleinert, legt Docker Desktop es neu an, statt es zu
+verkleinern: ohne Sicherung, ohne Fehlerdialog, und über alle Projekte auf dem Rechner
+hinweg. Erkennen lässt sich das daran, dass die scheinbare und die tatsächlich belegte Größe
+des Disk-Images weit auseinanderliegen. Ein leeres `docker ps -a` allein beweist es nicht,
+das kann auch ein vertauschter Docker-Context oder ein zweiter Daemon sein.
 
 Das ist weniger schlimm, als es aussieht, denn `backups/` und `storage/` liegen im
 Projektordner und nicht in Docker. Sie sind unversehrt. Fehlt nur die Datenbank, ist die

@@ -13,7 +13,9 @@
 # GUI: http://127.0.0.1:3001  (Live bleibt :3000)
 # DB:  127.0.0.1:5433         (Live bleibt :5432)
 #
-# Wichtig: `-p abgehakt-test` — anderer Projektname, siehe docs/docker-issues.md.
+# Wichtig: `-p abgehakt-test`, ein eigener Projektname. Er allein genuegt nicht:
+# container_name und ports stehen in docker-compose.yml fest, und Container-Namen sind
+# rechnerweit eindeutig. Deshalb ueberschreibt diese Datei beides.
 
 services:
   db:
