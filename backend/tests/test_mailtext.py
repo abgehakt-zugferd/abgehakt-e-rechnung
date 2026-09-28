@@ -96,9 +96,9 @@ def test_betrag_und_datum_folgen_der_sprache():
         _firma(),
         _config(mail_text_en="{betrag} on {faellig_am}"),
     )
-    assert "1.234,56" in de.rumpf
+    assert "1.234,56 €" in de.rumpf
     assert "28.09.2026" in de.rumpf
-    assert "1,234.56" in en.rumpf
+    assert "EUR 1,234.56" in en.rumpf
     assert "2026-09-28" in en.rumpf
     assert de.rumpf != en.rumpf
 

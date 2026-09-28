@@ -68,6 +68,15 @@ class UnbekannterPlatzhalterError(ValueError):
         super().__init__(f"Unbekannter Platzhalter: {{{name}}}")
 
 
+class BetreffMitZeilenumbruchError(ValueError):
+    """Betreff enthaelt Zeilenumbruch; Mail-Header wuerden sonst scheitern."""
+
+    def __init__(self):
+        super().__init__(
+            "Der Betreff der Rechnungsmail darf keinen Zeilenumbruch enthalten."
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class Schablone:
     betreff: str
@@ -89,6 +98,12 @@ def pruefe_schablone(text: str) -> None:
         name = treffer.group(1)
         if name not in PLATZHALTER:
             raise UnbekannterPlatzhalterError(name)
+
+
+def pruefe_betreff(text: str) -> None:
+    """Betreff darf keinen Zeilenumbruch tragen. Fuer den Rumpf gilt das nicht."""
+    if text and ("\n" in text or "\r" in text):
+        raise BetreffMitZeilenumbruchError()
 
 
 def _anschrift(company) -> str:
@@ -167,6 +182,7 @@ def rechnungsmail(invoice, company, config) -> Mailinhalt:
     schablone = _schablone_aus_config(config, sprache)
     werte = _werte(invoice, company, sprache)
     betreff = _ersetze(schablone.betreff, werte)
+    pruefe_betreff(betreff)
     rumpf = _ohne_leerzeilen_am_ende(_ersetze(schablone.rumpf, werte))
     rumpf = rumpf + _fuss(company, sprache) + "\n"
     return Mailinhalt(betreff=betreff, rumpf=rumpf)

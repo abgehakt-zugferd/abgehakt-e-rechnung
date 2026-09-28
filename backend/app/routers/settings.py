@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.company import Company
 from app.models.app_config import AppConfig
 from app.services import datev_email, empfaenger, mailtext
+from app.routers import settings_mailtext
 from app.services.bankverbindung import normalisiere_bic, normalisiere_iban, pruefe_bic, pruefe_iban
 from app.services.invoice_number import pruefe_praefix
 from app.services.ust_id_pruefung import (
@@ -73,13 +74,7 @@ def settings_page(
     # Effektive Konfiguration (DB überschreibt .env) – das Template zeigt genau die Werte,
     # die auch beim Versand verwendet werden, statt DB und .env inkonsistent zu mischen.
     effective = datev_email._get_effective_smtp_config(db)
-    if mail_werte is None:
-        mail_werte = {
-            "mail_betreff_de": config.mail_betreff_de or "",
-            "mail_text_de": config.mail_text_de or "",
-            "mail_betreff_en": config.mail_betreff_en or "",
-            "mail_text_en": config.mail_text_en or "",
-        }
+    mail_werte = settings_mailtext.mail_form_werte(config, mail_werte)
     return templates.TemplateResponse("settings/index.html", {
         "request": request,
         "company": company,
@@ -223,45 +218,6 @@ def speichere_beleg_integration(aktiv: str = Form(default=""), db: Session = Dep
     return RedirectResponse(url="/settings/?saved=true", status_code=303)
 
 
-@router.post("/mailtext")
-def save_mailtext(
-    request: Request,
-    mail_betreff_de: str = Form(""),
-    mail_text_de: str = Form(""),
-    mail_betreff_en: str = Form(""),
-    mail_text_en: str = Form(""),
-    db: Session = Depends(get_db),
-):
-    werte = {
-        "mail_betreff_de": mail_betreff_de,
-        "mail_text_de": mail_text_de,
-        "mail_betreff_en": mail_betreff_en,
-        "mail_text_en": mail_text_en,
-    }
-    fehler: dict[str, str] = {}
-    for feld, text in werte.items():
-        try:
-            mailtext.pruefe_schablone(text)
-        except mailtext.UnbekannterPlatzhalterError as e:
-            fehler[feld] = f"Unbekannter Platzhalter: {{{e.name}}}"
-    if fehler:
-        return settings_page(
-            request,
-            db,
-            saved=False,
-            error="Unbekannter Platzhalter in der Rechnungsmail.",
-            mail_werte=werte,
-            mail_fehler=fehler,
-        )
-    config = _get_or_create_app_config(db)
-    config.mail_betreff_de = mail_betreff_de.strip() or None
-    config.mail_text_de = mail_text_de.strip() or None
-    config.mail_betreff_en = mail_betreff_en.strip() or None
-    config.mail_text_en = mail_text_en.strip() or None
-    db.commit()
-    return RedirectResponse(url="/settings?saved=true", status_code=303)
-
-
 @router.post("/smtp")
 def save_smtp(
     smtp_host: str = Form(""),
@@ -317,3 +273,6 @@ def test_smtp(test_email: str = Form(...), db: Session = Depends(get_db)):
         return RedirectResponse(url="/settings?saved=true", status_code=303)
     except datev_email.EmailError as e:
         return RedirectResponse(url=f"/settings?error={str(e)}", status_code=303)
+
+
+settings_mailtext.register(router, settings_page, _get_or_create_app_config)

@@ -12,14 +12,25 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from app.models.app_config import AppConfig
-from app.models.company import Company
+from app.config import get_settings
+from app.main import app
 from app.services import datev_email, mailtext
+from tests.mailtext_fixtures import (
+    client_fuer,
+    config_setzen,
+    firma_setzen,
+    rechnung_anlegen,
+    smtp_doppel,
+)
 
 # Verboten ist hier der Name der SOFTWARE: die Mail benennt einen
 # datenschutzrechtlich Verantwortlichen, und das ist die Nutzerin, nie das
 # Werkzeug. (Im Quell-Repo stand hier der Name der Herstellerfirma.)
 VERBOTEN = ("Abgehakt", "abgehakt")
+
+
+def teardown_function():
+    app.dependency_overrides.clear()
 
 
 def _firma(**kw):
@@ -42,7 +53,7 @@ def _invoice(**kw):
     return SimpleNamespace(**werte)
 
 
-def _config():
+def _config_ns():
     return SimpleNamespace(
         mail_betreff_de=None,
         mail_text_de=None,
@@ -52,7 +63,7 @@ def _config():
 
 
 def test_mailtext_nennt_die_konfigurierte_firma():
-    inhalt = mailtext.rechnungsmail(_invoice(), _firma(), _config())
+    inhalt = mailtext.rechnungsmail(_invoice(), _firma(), _config_ns())
 
     assert "Kanzlei Musterfrau" in inhalt.rumpf
     assert "RE-2026-001" in inhalt.rumpf
@@ -63,7 +74,7 @@ def test_mailtext_nennt_die_konfigurierte_firma():
 def test_mailtext_nennt_die_firma_als_verantwortliche_mit_anschrift():
     """Die Verantwortlichen-Angabe ist der Teil mit Rechtswirkung — sie muss die
     Anschrift der Nutzerin tragen, nicht irgendeine."""
-    inhalt = mailtext.rechnungsmail(_invoice(), _firma(), _config())
+    inhalt = mailtext.rechnungsmail(_invoice(), _firma(), _config_ns())
 
     assert "Verantwortlich: Kanzlei Musterfrau, Musterweg 3, 80331 München" in inhalt.rumpf
 
@@ -71,7 +82,7 @@ def test_mailtext_nennt_die_firma_als_verantwortliche_mit_anschrift():
 def test_ohne_firma_nennt_der_mailtext_niemanden_als_verantwortlichen():
     """Lieber keine Angabe als eine falsche: ist keine Firma konfiguriert, wird
     kein Dritter benannt."""
-    inhalt = mailtext.rechnungsmail(_invoice(), None, _config())
+    inhalt = mailtext.rechnungsmail(_invoice(), None, _config_ns())
 
     assert "Verantwortlich" not in inhalt.rumpf
     for wort in VERBOTEN:
@@ -87,69 +98,30 @@ def test_testmail_traegt_keinen_fremden_absender():
         assert wort not in betreff, f"Fremder Absender im Testmail-Betreff: {wort}"
 
 
-def test_send_invoice_zieht_den_absender_aus_der_datenbank(pg_session, tmp_path):
-    """Integration: der Versandweg selbst (nicht nur der Textbaustein) benutzt die
-    Firma aus der DB. Break-and-Revert-fest — ein wieder hart kodierter Absender
-    fällt hier auf, auch wenn rechnungsmail korrekt bleibt."""
-    firma = pg_session.query(Company).filter(Company.id == 1).first()
-    firma.name = "Kanzlei Musterfrau"
-    firma.address_line1 = "Musterweg 3"
-    firma.zip_code = "80331"
-    firma.city = "München"
-    pg_session.commit()
-
-    cfg = pg_session.query(AppConfig).filter(AppConfig.id == 1).first()
-    if not cfg:
-        cfg = AppConfig(id=1)
-        pg_session.add(cfg)
-        pg_session.commit()
-
-    inhalt = mailtext.rechnungsmail(
-        SimpleNamespace(
-            invoice_number="RE-2026-001",
-            document_language="de",
-            gross_total=Decimal("119.00"),
-            currency="EUR",
-            due_date=date(2026, 6, 15),
-            customer=SimpleNamespace(name="Kunde GmbH"),
-        ),
-        firma,
-        cfg,
+def test_versandroute_zieht_den_absender_aus_der_firma(pg_session):
+    """HTTP-Route bis SMTP: Firma und Verantwortlichen-Fuss kommen aus der DB."""
+    firma_setzen(pg_session)
+    config_setzen(
+        pg_session,
+        smtp_host="smtp.test",
+        smtp_port=587,
+        smtp_from="rechnung@kanzlei.de",
+        smtp_use_tls=False,
     )
-
-    pdf = tmp_path / "RE-2026-001.pdf"
+    inv = rechnung_anlegen(pg_session)
+    pdf = get_settings().storage_path / "pdfs" / inv.pdf_filename
+    pdf.parent.mkdir(parents=True, exist_ok=True)
     pdf.write_bytes(b"%PDF-1.4\ntrailer<<>>\n%%EOF\n")
 
-    gesendet = {}
-
-    class _SMTP:
-        def __init__(self, *a, **k):
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def starttls(self, **k):
-            pass
-
-        def login(self, *a):
-            pass
-
-        def send_message(self, msg):
-            gesendet["body"] = msg.get_body(preferencelist=("plain",)).get_content()
-
-    with patch.object(datev_email, "_get_effective_smtp_config",
-                      return_value=SimpleNamespace(
-                          smtp_host="smtp.test", smtp_port=587, smtp_user="",
-                          smtp_password="", smtp_from="rechnung@kanzlei.de",
-                          smtp_use_tls=False, datev_bcc_email="")), \
-         patch("smtplib.SMTP", _SMTP):
-        datev_email.send_invoice("kunde@example.de", inhalt, pdf,
-                                 bcc_datev=False, db=pg_session)
-
+    gesendet, smtp_cls = smtp_doppel()
+    valid = {"is_valid": True, "raw": "Parsed PDF:valid\nXML:valid",
+             "errors": [], "warnings": []}
+    with patch("app.routers.invoices.mustang.jar_available", return_value=True), \
+         patch("app.routers.invoices.mustang.validate", return_value=valid), \
+         patch("smtplib.SMTP", smtp_cls):
+        r = client_fuer(pg_session).post(f"/invoices/{inv.id}/datev-senden")
+    assert r.status_code == 303
     assert "Kanzlei Musterfrau" in gesendet["body"]
+    assert "Verantwortlich: Kanzlei Musterfrau, Musterweg 3, 80331 München" in gesendet["body"]
     for wort in VERBOTEN:
         assert wort not in gesendet["body"], f"Fremder Absender in der Mail: {wort}"

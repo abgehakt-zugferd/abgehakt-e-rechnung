@@ -1015,16 +1015,21 @@ def send_to_datev(invoice_id: uuid.UUID, customer_email: str = Form(""),
             db=db,
             cc_email=cc,
         )
-    except UnknownDocumentLanguageError as e:
+    except (
+        UnknownDocumentLanguageError,
+        mailtext.BetreffMitZeilenumbruchError,
+        datev_email.EmailError,
+    ) as e:
         protokoll.success = False
         protokoll.error = str(e)
         db.commit()
-        raise HTTPException(400, str(e))
-    except datev_email.EmailError as e:
+        raise HTTPException(400, str(e)) from e
+    except Exception as e:
+        # Jede unerwartete Ausnahme schliesst den Nachweis; still schlucken waere schlimmer.
         protokoll.success = False
         protokoll.error = str(e)
         db.commit()
-        raise HTTPException(400, str(e))
+        raise
 
     protokoll.success = True
     # `datev_sent_at` ist der ERSTversand und bleibt unverfälscht: der invoice_guard
