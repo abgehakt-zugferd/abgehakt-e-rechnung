@@ -30,13 +30,22 @@
                 <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Storniert</option>
                 <option value="discarded" {% if status_filter == 'discarded' %}selected{% endif %}>Verworfen</option>
             </select>
+            <select name="art" class="input" style="width:180px;">
+                <option value="" {% if not art %}selected{% endif %}>Alle Arten</option>
+                <option value="rechnung" {% if art == 'rechnung' %}selected{% endif %}>Rechnung</option>
+                <option value="gutschrift" {% if art == 'gutschrift' %}selected{% endif %}>Gutschrift</option>
+            </select>
+            <select name="faellig" class="input" style="width:180px;">
+                <option value="" {% if not faellig %}selected{% endif %}>Alle Fristen</option>
+                <option value="ueberfaellig" {% if faellig == 'ueberfaellig' %}selected{% endif %}>Überfällig</option>
+            </select>
             <button type="submit" class="btn-secondary">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM16 10a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1h2a1 1 0 001-1v-2z"/>
                 </svg>
                 SUCHEN
             </button>
-            {% if q or status_filter %}
+            {% if q or status_filter or art or faellig %}
             <a href="/invoices" class="btn-secondary">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -118,7 +127,7 @@
         <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:16px; font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">
             <span>{{ gesamt }} Rechnung{{ '' if gesamt == 1 else 'en' }}{% if seiten > 1 %}, Seite {{ seite }} von {{ seiten }}{% endif %}</span>
             {% if seiten > 1 %}
-            {% set basis = '?' + ('status=' ~ status_filter ~ '&' if status_filter else '') + ('q=' ~ q ~ '&' if q else '') %}
+            {% set basis = '?' + ('status=' ~ status_filter ~ '&' if status_filter else '') + ('q=' ~ q ~ '&' if q else '') + ('art=' ~ art ~ '&' if art else '') + ('faellig=' ~ faellig ~ '&' if faellig else '') %}
             <span style="display:flex; gap:12px;">
                 {% if seite > 1 %}
                 <a href="{{ basis }}seite={{ seite - 1 }}" style="color:var(--gold);">← ZURÜCK</a>

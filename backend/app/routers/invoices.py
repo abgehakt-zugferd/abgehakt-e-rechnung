@@ -322,6 +322,8 @@ def list_invoices(
     status: str = "",
     q: str = "",
     seite: int = 1,
+    art: str = "",
+    faellig: str = "",
 ):
     # `outerjoin`, nicht `join`: die Verbindung dient nur der Suche nach dem
     # Kundennamen. Ein INNER JOIN wuerde jeden Entwurf ohne Kunden (#141) lautlos
@@ -335,6 +337,18 @@ def list_invoices(
         query = query.filter(Invoice.status != "discarded")
     if q:
         query = query.filter(Invoice.invoice_number.ilike(f"%{q}%") | Customer.name.ilike(f"%{q}%"))
+
+    if art == "rechnung":
+        query = query.filter(Invoice.invoice_type.is_(None))
+    elif art == "gutschrift":
+        query = query.filter(Invoice.invoice_type == "credit_note")
+    else:
+        art = ""
+
+    if faellig == "ueberfaellig":
+        query = query.filter(Invoice.due_date < date.today())
+    else:
+        faellig = ""
 
     # Gezählt wird in der Datenbank, geladen wird nur die Seite. Die Zahl unten
     # auf der geladenen Menge zu bilden, hieße das Problem zu verstecken statt es
@@ -350,6 +364,7 @@ def list_invoices(
                 .all())
     return templates.TemplateResponse("invoices/list.html", {
         "request": request, "invoices": invoices, "status_filter": status, "q": q,
+        "art": art, "faellig": faellig,
         "seite": seite, "seiten": seiten, "gesamt": gesamt,
     })
 

@@ -22,7 +22,7 @@ def _request() -> Request:
     })
 
 
-def _inv(pg_session, status, gross, issue=date.today(), net=None, tax=None):
+def _inv(pg_session, status, gross, issue=date.today(), net=None, tax=None, due=None):
     c = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Kunde",
                  address_line1="Weg 1", zip_code="80331", city="München", country="DE")
     pg_session.add(c)
@@ -32,7 +32,7 @@ def _inv(pg_session, status, gross, issue=date.today(), net=None, tax=None):
     if tax is None:
         tax = Decimal("0")
     inv = Invoice(invoice_number=f"RE-{uuid.uuid4().hex[:6]}", customer_id=c.id,
-                  issue_date=issue, due_date=issue, currency="EUR",
+                  issue_date=issue, due_date=due or issue, currency="EUR",
                   net_total=net, tax_total=tax,
                   gross_total=Decimal(gross), status=status)
     pg_session.add(inv)
@@ -40,7 +40,7 @@ def _inv(pg_session, status, gross, issue=date.today(), net=None, tax=None):
     return inv
 
 
-def _gutschrift(pg_session, status, gross, issue=date.today(), net=None, tax=None):
+def _gutschrift(pg_session, status, gross, issue=date.today(), net=None, tax=None, due=None):
     c = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Kunde",
                  address_line1="Weg 1", zip_code="80331", city="München", country="DE")
     pg_session.add(c)
@@ -50,7 +50,7 @@ def _gutschrift(pg_session, status, gross, issue=date.today(), net=None, tax=Non
     if tax is None:
         tax = Decimal("0")
     inv = Invoice(invoice_number=f"GS-{uuid.uuid4().hex[:6]}", customer_id=c.id,
-                  issue_date=issue, due_date=issue, currency="EUR",
+                  issue_date=issue, due_date=due or issue, currency="EUR",
                   net_total=net, tax_total=tax,
                   gross_total=Decimal(gross), status=status,
                   invoice_type="credit_note")
@@ -173,3 +173,80 @@ def test_dashboard_offene_posten_ignorieren_gutschriften(pg_session):
     _gutschrift(pg_session, "issued", "50.00")
     ctx = main.dashboard(_request(), pg_session).context
     assert ctx["open_invoices"] == 1
+
+
+def test_dashboard_liefert_offenen_betrag_und_ueberfaellig(pg_session):
+    heute = date.today()
+    _inv(pg_session, "issued", "100.00", due=heute.fromordinal(heute.toordinal() - 5))
+    _inv(pg_session, "issued", "50.00", due=heute)
+    ctx = main.dashboard(_request(), pg_session).context
+    assert Decimal(ctx["open_amount"]) == Decimal("150.00")
+    assert ctx["ueberfaellig"].anzahl == 1
+    assert Decimal(ctx["ueberfaellig"].betrag) == Decimal("100.00")
+    assert ctx["ueberfaellig"].aeltester_tage == 5
+
+
+def test_dashboard_vormonat_und_vorjahr_im_kontext(pg_session):
+    from datetime import datetime, timezone
+
+    heute = date.today()
+    year_start = heute.replace(month=1, day=1)
+    _inv(pg_session, "issued", "200.00", issue=heute)
+    _inv(pg_session, "issued", "80.00", issue=date(heute.year - 1, 1, 15))
+
+    bezahlt = _inv(pg_session, "paid", "30.00", issue=heute)
+    bezahlt.updated_at = datetime(heute.year, heute.month, 1, tzinfo=timezone.utc)
+    if heute.month == 1:
+        vormonat = datetime(heute.year - 1, 12, 15, tzinfo=timezone.utc)
+    else:
+        vormonat = datetime(heute.year, heute.month - 1, 15, tzinfo=timezone.utc)
+    alt = _inv(pg_session, "paid", "12.00", issue=heute)
+    alt.updated_at = vormonat
+    pg_session.commit()
+
+    ctx = main.dashboard(_request(), pg_session).context
+    assert Decimal(ctx["paid_previous_month"]) == Decimal("12.00")
+    assert Decimal(ctx["revenue_prev_ytd"]) == Decimal("80.00")
+    assert ctx["revenue_yoy_pct"] is not None
+    assert ctx["vat_quarter_label"].startswith("Q")
+    assert "nicht_versendet_anzahl" in ctx
+
+
+def test_dashboard_hinweisstreifen_fehlt_ohne_unversendete(pg_session, client):
+    from datetime import datetime, timezone
+
+    inv = _inv(pg_session, "issued", "100.00")
+    inv.datev_sent_at = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    pg_session.commit()
+    r = client.get("/dashboard")
+    assert r.status_code == 200
+    assert "ohne Versand" not in r.text
+
+
+def test_dashboard_hinweisstreifen_erscheint_bei_unversendeten(pg_session, client):
+    _inv(pg_session, "issued", "100.00")
+    r = client.get("/dashboard")
+    assert r.status_code == 200
+    assert "ohne Versand" in r.text
+    assert "/invoices?status=issued&art=rechnung" in r.text
+
+
+def test_dashboard_kachel_offene_stimmt_mit_liste_ueberein(pg_session, client):
+    """Wichtigster Test: Kachel und verlinkte Liste zaehlen dieselbe Menge."""
+    _inv(pg_session, "issued", "100.00")
+    _inv(pg_session, "issued", "50.00")
+    _gutschrift(pg_session, "issued", "25.00")
+    ctx = main.dashboard(_request(), pg_session).context
+    kachel = ctx["open_invoices"]
+    liste = client.get("/invoices/?status=issued&art=rechnung")
+    assert liste.status_code == 200
+    assert f"{kachel} Rechnung" in liste.text
+    assert kachel == 2
+
+
+def test_dashboard_zeigt_entwuerfe_unterzeile(pg_session, client):
+    _inv(pg_session, "draft", "0")
+    r = client.get("/dashboard")
+    assert r.status_code == 200
+    assert "/invoices?status=draft" in r.text
+    assert "Entwurf" in r.text
