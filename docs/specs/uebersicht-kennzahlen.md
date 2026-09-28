@@ -125,6 +125,8 @@ optionale Parameter hinzu:
 - `art`: `rechnung` filtert auf `invoice_type IS NULL`, `gutschrift` auf
   `invoice_type == "credit_note"`. Leer heisst wie bisher: beides.
 - `faellig`: `ueberfaellig` filtert auf `due_date < heute`. Leer heisst: keine Einschraenkung.
+- `versand`: `offen` filtert auf `datev_sent_at IS NULL`. Leer heisst: keine Einschraenkung. Die
+  Bedingung ist dieselbe wie in `services/beleg_status.py` und wird nicht zweimal formuliert.
 
 Ein unbekannter Wert in `art` oder `faellig` wird als leer behandelt und nicht als Fehler;
 die Liste ist keine Schnittstelle, an der ein vertippter Link eine Fehlerseite rechtfertigt.
@@ -148,7 +150,7 @@ Ziele der Links:
 | Unterzeile gestellt | `/invoices?status=issued` |
 | Unterzeile bezahlt | `/invoices?status=paid` |
 | Unterzeile storniert | `/invoices?status=cancelled` |
-| Hinweisstreifen | `/invoices?status=issued&art=rechnung` |
+| Hinweisstreifen | `/invoices?status=issued&art=rechnung&versand=offen` |
 
 Die vier Unterzeilen unter "Rechnungen gesamt" tragen bewusst **kein** `art`, weil sie den
 Gesamtbestand aufteilen und ihre Summe der Gesamtzahl entsprechen muss.
