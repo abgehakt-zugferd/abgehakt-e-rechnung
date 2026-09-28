@@ -189,10 +189,13 @@ def test_dashboard_liefert_offenen_betrag_und_ueberfaellig(pg_session):
 def test_dashboard_vormonat_und_vorjahr_im_kontext(pg_session):
     from datetime import datetime, timezone
 
+    from app.services.dashboard_kennzahlen import vorjahres_stichtag
+
     heute = date.today()
-    year_start = heute.replace(month=1, day=1)
+    # Vorjahresbeleg am Stichtag: liegt an jedem Kalendertag im Vergleichsfenster
+    # (auch am 1. Januar und am 31. Dezember, siehe test_vorjahresbeleg_am_jahresrand).
     _inv(pg_session, "issued", "200.00", issue=heute)
-    _inv(pg_session, "issued", "80.00", issue=date(heute.year - 1, 1, 15))
+    _inv(pg_session, "issued", "80.00", issue=vorjahres_stichtag(heute))
 
     bezahlt = _inv(pg_session, "paid", "30.00", issue=heute)
     bezahlt.updated_at = datetime(heute.year, heute.month, 1, tzinfo=timezone.utc)
@@ -207,9 +210,21 @@ def test_dashboard_vormonat_und_vorjahr_im_kontext(pg_session):
     ctx = main.dashboard(_request(), pg_session).context
     assert Decimal(ctx["paid_previous_month"]) == Decimal("12.00")
     assert Decimal(ctx["revenue_prev_ytd"]) == Decimal("80.00")
-    assert ctx["revenue_yoy_pct"] is not None
+    # YTD = 200 + 30 + 12 = 242; Vorjahr 80 → (242 - 80) / 80 * 100 = 202,5
+    assert ctx["revenue_yoy_pct"] == Decimal("202.5")
     assert ctx["vat_quarter_label"].startswith("Q")
     assert "nicht_versendet_anzahl" in ctx
+
+
+def test_vorjahresbeleg_am_jahresrand_liegt_im_fenster():
+    """Befund 5: Platzierung relativ zum Stichtag gilt am 1.1. und am 31.12."""
+    from app.services.dashboard_kennzahlen import vorjahres_stichtag
+
+    for heute in (date(2026, 1, 1), date(2026, 12, 31)):
+        beleg = vorjahres_stichtag(heute)
+        fenster_start = date(heute.year - 1, 1, 1)
+        fenster_ende = vorjahres_stichtag(heute)
+        assert fenster_start <= beleg <= fenster_ende, heute
 
 
 def test_dashboard_hinweisstreifen_fehlt_ohne_unversendete(pg_session, client):
@@ -223,25 +238,75 @@ def test_dashboard_hinweisstreifen_fehlt_ohne_unversendete(pg_session, client):
     assert "ohne Versand" not in r.text
 
 
-def test_dashboard_hinweisstreifen_erscheint_bei_unversendeten(pg_session, client):
-    _inv(pg_session, "issued", "100.00")
-    r = client.get("/dashboard")
-    assert r.status_code == 200
-    assert "ohne Versand" in r.text
-    assert "/invoices?status=issued&art=rechnung" in r.text
+def _href_fuer_kpi(html: str, kpi: str) -> str:
+    import re
+    m = re.search(rf'data-kpi="{re.escape(kpi)}"\s+href="([^"]+)"', html)
+    if not m:
+        m = re.search(rf'href="([^"]+)"[^>]*\s+data-kpi="{re.escape(kpi)}"', html)
+    assert m, f"kein Link mit data-kpi={kpi!r} im Dashboard-HTML"
+    return m.group(1)
 
 
-def test_dashboard_kachel_offene_stimmt_mit_liste_ueberein(pg_session, client):
-    """Wichtigster Test: Kachel und verlinkte Liste zaehlen dieselbe Menge."""
-    _inv(pg_session, "issued", "100.00")
-    _inv(pg_session, "issued", "50.00")
+def _liste_gesamt(client, href: str) -> int:
+    from urllib.parse import parse_qs, urlparse
+
+    qs = parse_qs(urlparse(href).query)
+    params = {k: v[0] for k, v in qs.items()}
+    r = client.get("/invoices/", params=params)
+    assert r.status_code == 200, href
+    # Blaetterzeile: "N Rechnung" / "N Rechnungen"
+    import re
+    m = re.search(r"(\d+) Rechnung", r.text)
+    assert m, f"keine Gesamtzahl in Liste fuer {href}"
+    return int(m.group(1))
+
+
+def test_dashboard_kachel_und_hinweis_links_stimmen_mit_liste(pg_session, client):
+    """Befund 1+2: href aus dem HTML, nicht fest einkodiert; fehlende Filter machen rot.
+
+    Daten: Gutschrift (art), versendet+unversendet (versand), ueberfaellig+heute (faellig),
+    ungleiche Statuszaehlungen (Unterzeilen).
+    """
+    from datetime import datetime, timezone, timedelta
+
+    heute = date.today()
+    for _ in range(2):
+        _inv(pg_session, "draft", "0")
+    # drei gestellte Standard: eine ueberfaellig unversendet, eine heute faellig unversendet,
+    # eine versendet
+    _inv(pg_session, "issued", "100.00", due=heute - timedelta(days=3))
+    _inv(pg_session, "issued", "50.00", due=heute)
+    versendet = _inv(pg_session, "issued", "70.00", due=heute)
+    versendet.datev_sent_at = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    for _ in range(4):
+        _inv(pg_session, "paid", "10.00")
+    for _ in range(5):
+        _inv(pg_session, "cancelled", "0")
     _gutschrift(pg_session, "issued", "25.00")
+    pg_session.commit()
+
+    html = client.get("/dashboard").text
+    assert "ohne Versand" in html
     ctx = main.dashboard(_request(), pg_session).context
-    kachel = ctx["open_invoices"]
-    liste = client.get("/invoices/?status=issued&art=rechnung")
-    assert liste.status_code == 200
-    assert f"{kachel} Rechnung" in liste.text
-    assert kachel == 2
+
+    faelle = [
+        ("offen", ctx["open_invoices"]),
+        ("ueberfaellig", ctx["ueberfaellig"].anzahl),
+        ("status-draft", ctx["belegzaehlung"].entwurf),
+        ("status-issued", ctx["belegzaehlung"].gestellt),
+        ("status-paid", ctx["belegzaehlung"].bezahlt),
+        ("status-cancelled", ctx["belegzaehlung"].storniert),
+        ("hinweis-versand", ctx["nicht_versendet_anzahl"]),
+    ]
+    abweichungen = []
+    for kpi, erwartet in faelle:
+        href = _href_fuer_kpi(html, kpi)
+        gefunden = _liste_gesamt(client, href)
+        if gefunden != erwartet:
+            abweichungen.append(
+                f"{kpi}: Kachel={erwartet}, Liste={gefunden}, href={href}"
+            )
+    assert not abweichungen, "Links und Liste weichen ab:\n" + "\n".join(abweichungen)
 
 
 def test_dashboard_zeigt_entwuerfe_unterzeile(pg_session, client):

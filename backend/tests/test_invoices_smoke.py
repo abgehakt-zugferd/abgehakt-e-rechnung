@@ -140,7 +140,7 @@ def test_liste_unbekannte_art_und_faellig_werden_ignoriert(pg_session):
 def test_liste_zeigt_aktive_filter_sichtbar_und_aufhebbar(pg_session):
     _invoice(pg_session, number="RE-FILT-1", status="issued")
     r = _client(pg_session).get(
-        "/invoices/?status=issued&art=rechnung&faellig=ueberfaellig"
+        "/invoices/?status=issued&art=rechnung&faellig=ueberfaellig&versand=offen"
     )
     assert r.status_code == 200
     assert 'name="art"' in r.text
@@ -148,4 +148,19 @@ def test_liste_zeigt_aktive_filter_sichtbar_und_aufhebbar(pg_session):
     assert "selected" in r.text
     assert 'name="faellig"' in r.text
     assert "ueberfaellig" in r.text
+    assert 'name="versand"' in r.text
+    assert "offen" in r.text
     assert 'href="/invoices"' in r.text  # Reset
+
+
+def test_liste_versand_offen_blendet_versendete_aus(pg_session):
+    offen = _invoice(pg_session, number="RE-SEND-OFFEN", status="issued")
+    versendet = _invoice(pg_session, number="RE-SEND-OK", status="issued")
+    versendet.datev_sent_at = datetime(2026, 9, 2, 13, 0, tzinfo=timezone.utc)
+    pg_session.commit()
+    r = _client(pg_session).get(
+        "/invoices/?status=issued&art=rechnung&versand=offen"
+    )
+    assert r.status_code == 200
+    assert offen.invoice_number in r.text
+    assert versendet.invoice_number not in r.text

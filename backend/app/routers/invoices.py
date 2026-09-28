@@ -41,6 +41,7 @@ from app.services.archive_frist import berechne_archive_until
 from app.config import get_settings
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
+from app.services.rechnungsliste_filter import filtere_rechnungsliste
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -324,31 +325,15 @@ def list_invoices(
     seite: int = 1,
     art: str = "",
     faellig: str = "",
+    versand: str = "",
 ):
     # `outerjoin`, nicht `join`: die Verbindung dient nur der Suche nach dem
     # Kundennamen. Ein INNER JOIN wuerde jeden Entwurf ohne Kunden (#141) lautlos
     # aus der Liste werfen — Status 200, Seite vollstaendig, Rechnung unauffindbar.
     query = db.query(Invoice).outerjoin(Customer)
-    if status:
-        query = query.filter(Invoice.status == status)
-    else:
-        # Verworfene Entwürfe (#145) sind aus dem Weg geräumt — sie erscheinen nur
-        # noch über den Statusfilter, nicht in der Alltagsliste.
-        query = query.filter(Invoice.status != "discarded")
-    if q:
-        query = query.filter(Invoice.invoice_number.ilike(f"%{q}%") | Customer.name.ilike(f"%{q}%"))
-
-    if art == "rechnung":
-        query = query.filter(Invoice.invoice_type.is_(None))
-    elif art == "gutschrift":
-        query = query.filter(Invoice.invoice_type == "credit_note")
-    else:
-        art = ""
-
-    if faellig == "ueberfaellig":
-        query = query.filter(Invoice.due_date < date.today())
-    else:
-        faellig = ""
+    query, filtern = filtere_rechnungsliste(
+        query, status=status, q=q, art=art, faellig=faellig, versand=versand,
+    )
 
     # Gezählt wird in der Datenbank, geladen wird nur die Seite. Die Zahl unten
     # auf der geladenen Menge zu bilden, hieße das Problem zu verstecken statt es
@@ -364,7 +349,7 @@ def list_invoices(
                 .all())
     return templates.TemplateResponse("invoices/list.html", {
         "request": request, "invoices": invoices, "status_filter": status, "q": q,
-        "art": art, "faellig": faellig,
+        "art": filtern.art, "faellig": filtern.faellig, "versand": filtern.versand,
         "seite": seite, "seiten": seiten, "gesamt": gesamt,
     })
 

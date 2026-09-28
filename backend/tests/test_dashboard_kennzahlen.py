@@ -186,14 +186,18 @@ def test_nicht_versendet_zaehlt_nur_issued_ohne_versand(pg_session):
 def test_belegzaehlung_teilt_status_auf(pg_session):
     from tests.test_dashboard import _inv
 
-    _inv(pg_session, "draft", "0")
-    _inv(pg_session, "issued", "100.00")
-    _inv(pg_session, "paid", "50.00")
-    _inv(pg_session, "cancelled", "0")
+    for _ in range(2):
+        _inv(pg_session, "draft", "0")
+    for _ in range(3):
+        _inv(pg_session, "issued", "100.00")
+    for _ in range(4):
+        _inv(pg_session, "paid", "50.00")
+    for _ in range(5):
+        _inv(pg_session, "cancelled", "0")
     _inv(pg_session, "discarded", "0")
     z = belegzaehlung(pg_session)
-    assert z.gesamt == 5
-    assert z.entwurf == 1
-    assert z.gestellt == 1
-    assert z.bezahlt == 1
-    assert z.storniert == 1
+    assert z.gesamt == 15
+    assert z.entwurf == 2
+    assert z.gestellt == 3
+    assert z.bezahlt == 4
+    assert z.storniert == 5

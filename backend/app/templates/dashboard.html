@@ -26,7 +26,7 @@
 
     {% if nicht_versendet_anzahl %}
     <div class="card mb-5" style="border-color:var(--amber);">
-        <a href="/invoices?status=issued&art=rechnung" style="display:block; font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--amber); text-decoration:none;">
+        <a data-kpi="hinweis-versand" href="/invoices?status=issued&art=rechnung&versand=offen" style="display:block; font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--amber); text-decoration:none;">
             {{ nicht_versendet_anzahl }} gestellte Rechnung{{ '' if nicht_versendet_anzahl == 1 else 'en' }} ohne Versand
         </a>
     </div>
@@ -42,13 +42,13 @@
                     <p class="kpi__beschriftung">RECHNUNGEN GESAMT</p>
                     <p class="kpi__wert">{{ total_invoices }}</p>
                     <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:6px; line-height:1.6;">
-                        <a href="/invoices?status=draft" style="color:var(--text-dim);">{{ belegzaehlung.entwurf }} Entwurf{{ '' if belegzaehlung.entwurf == 1 else 'e' }}</a>
+                        <a data-kpi="status-draft" href="/invoices?status=draft" style="color:var(--text-dim);">{{ belegzaehlung.entwurf }} Entwurf{{ '' if belegzaehlung.entwurf == 1 else 'e' }}</a>
                         ·
-                        <a href="/invoices?status=issued" style="color:var(--text-dim);">{{ belegzaehlung.gestellt }} gestellt</a>
+                        <a data-kpi="status-issued" href="/invoices?status=issued" style="color:var(--text-dim);">{{ belegzaehlung.gestellt }} gestellt</a>
                         ·
-                        <a href="/invoices?status=paid" style="color:var(--text-dim);">{{ belegzaehlung.bezahlt }} bezahlt</a>
+                        <a data-kpi="status-paid" href="/invoices?status=paid" style="color:var(--text-dim);">{{ belegzaehlung.bezahlt }} bezahlt</a>
                         ·
-                        <a href="/invoices?status=cancelled" style="color:var(--text-dim);">{{ belegzaehlung.storniert }} storniert</a>
+                        <a data-kpi="status-cancelled" href="/invoices?status=cancelled" style="color:var(--text-dim);">{{ belegzaehlung.storniert }} storniert</a>
                     </p>
                 </div>
                 <div style="width:40px; height:40px; background:rgba(255,215,0,0.08); border:2px solid var(--gold-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
@@ -60,7 +60,7 @@
         </div>
 
         <!-- Offene Rechnungen -->
-        <a href="/invoices?status=issued&art=rechnung" class="card card-hover" style="display:block; text-decoration:none; color:inherit;">
+        <a data-kpi="offen" href="/invoices?status=issued&art=rechnung" class="card card-hover" style="display:block; text-decoration:none; color:inherit;">
             <div class="flex items-center justify-between">
                 <div>
                     <p class="kpi__beschriftung">OFFENE RECHNUNGEN</p>
@@ -76,7 +76,7 @@
         </a>
 
         <!-- Ueberfaellig -->
-        <a href="/invoices?status=issued&art=rechnung&faellig=ueberfaellig" class="card card-hover" style="display:block; text-decoration:none; color:inherit;">
+        <a data-kpi="ueberfaellig" href="/invoices?status=issued&art=rechnung&faellig=ueberfaellig" class="card card-hover" style="display:block; text-decoration:none; color:inherit;">
             <div class="flex items-center justify-between">
                 <div>
                     <p class="kpi__beschriftung">ÜBERFÄLLIG</p>
