@@ -88,9 +88,12 @@ Erlaubt sind genau fuenf Namen, in geschweiften Klammern, kleingeschrieben:
 | `{faellig_am}` | `due_date` ueber `format_datum` derselben Darstellung |
 | `{firma}` | `company.name`, sonst leer |
 
-Betrag und Datum kommen damit in der Schreibweise des Belegs: `1.234,56 EUR` und `28.09.2026`
+Betrag und Datum kommen damit in der Schreibweise des Belegs: `1.234,56 €` und `28.09.2026`
 im deutschen, `EUR 1,234.56` und `2026-09-28` im englischen Beleg. Eine zweite
 Formatierungsvorschrift fuer Mails entsteht nicht.
+
+Massgeblich ist `format_betrag`, nicht dieses Beispiel: die Funktion setzt bei `currency == "EUR"`
+im deutschen Beleg das Eurozeichen und schreibt den Code nur bei einer anderen Waehrung aus.
 
 **Ersetzt wird ueber einen eigenen, engen Ausdruck**, nicht ueber `str.format` und
 ausdruecklich nicht ueber Jinja. `str.format` gibt einem hinterlegten Text Zugriff auf
