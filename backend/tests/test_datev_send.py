@@ -24,6 +24,11 @@ from app.main import app
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services import datev_email, mustang, pdfa
+from app.services.mailtext import Mailinhalt
+
+
+def _mail(nummer="RE-77"):
+    return Mailinhalt(betreff=f"Rechnung {nummer}", rumpf=f"Body {nummer}\n")
 
 settings = get_settings()
 
@@ -270,20 +275,20 @@ def test_20mb_gate_blocks_send(tmp_path):
         f.truncate(20 * 1024 * 1024 + 1)   # sparse: st_size > 20 MB ohne 20 MB zu schreiben
     with patch.object(datev_email, "_get_effective_smtp_config", return_value=_cfg()):
         with pytest.raises(datev_email.EmailError, match="20 MB"):
-            datev_email.send_invoice("k@example.de", "RE-1", "Kunde", big)
+            datev_email.send_invoice("k@example.de", _mail("RE-1"), big)
 
 
 def test_send_requires_smtp_configured(tmp_path):
     pdf = tmp_path / "a.pdf"; pdf.write_bytes(b"%PDF-1.4\n")
     with patch.object(datev_email, "_get_effective_smtp_config", return_value=_cfg(smtp_host="")):
         with pytest.raises(datev_email.EmailError, match="nicht konfiguriert"):
-            datev_email.send_invoice("k@example.de", "RE-1", "Kunde", pdf)
+            datev_email.send_invoice("k@example.de", _mail("RE-1"), pdf)
 
 
 def test_send_missing_pdf_raises(tmp_path):
     with patch.object(datev_email, "_get_effective_smtp_config", return_value=_cfg()):
         with pytest.raises(datev_email.EmailError, match="nicht gefunden"):
-            datev_email.send_invoice("k@example.de", "RE-1", "Kunde", tmp_path / "fehlt.pdf")
+            datev_email.send_invoice("k@example.de", _mail("RE-1"), tmp_path / "fehlt.pdf")
 
 
 def test_send_attaches_pdf_and_bccs_datev(tmp_path):
@@ -293,7 +298,7 @@ def test_send_attaches_pdf_and_bccs_datev(tmp_path):
     smtp_cm.__enter__.return_value = server
     with patch.object(datev_email, "_get_effective_smtp_config", return_value=_cfg()), \
          patch.object(datev_email.smtplib, "SMTP", return_value=smtp_cm):
-        datev_email.send_invoice("k@example.de", "RE-77", "Kunde", pdf, bcc_datev=True)
+        datev_email.send_invoice("k@example.de", _mail(), pdf, bcc_datev=True)
 
     msg = server.send_message.call_args.args[0]
     assert msg["To"] == "k@example.de"
@@ -309,7 +314,7 @@ def test_send_without_bcc_omits_datev(tmp_path):
     smtp_cm = MagicMock(); smtp_cm.__enter__.return_value = server
     with patch.object(datev_email, "_get_effective_smtp_config", return_value=_cfg()), \
          patch.object(datev_email.smtplib, "SMTP", return_value=smtp_cm):
-        datev_email.send_invoice("k@example.de", "RE-77", "Kunde", pdf, bcc_datev=False)
+        datev_email.send_invoice("k@example.de", _mail(), pdf, bcc_datev=False)
     msg = server.send_message.call_args.args[0]
     assert msg["Bcc"] is None
 
@@ -323,7 +328,7 @@ def test_send_setzt_cc_kopf(tmp_path):
     smtp_cm = MagicMock(); smtp_cm.__enter__.return_value = server
     with patch.object(datev_email, "_get_effective_smtp_config", return_value=_cfg()), \
          patch.object(datev_email.smtplib, "SMTP", return_value=smtp_cm):
-        datev_email.send_invoice("k@example.de", "RE-77", "Kunde", pdf,
+        datev_email.send_invoice("k@example.de", _mail(), pdf,
                                  cc_email="buchhaltung@example.de")
     msg = server.send_message.call_args.args[0]
     assert msg["Cc"] == "buchhaltung@example.de"
@@ -341,6 +346,6 @@ def test_send_ohne_cc_setzt_keinen_kopf(tmp_path, leer):
     smtp_cm = MagicMock(); smtp_cm.__enter__.return_value = server
     with patch.object(datev_email, "_get_effective_smtp_config", return_value=_cfg()), \
          patch.object(datev_email.smtplib, "SMTP", return_value=smtp_cm):
-        datev_email.send_invoice("k@example.de", "RE-77", "Kunde", pdf, cc_email=leer)
+        datev_email.send_invoice("k@example.de", _mail(), pdf, cc_email=leer)
     msg = server.send_message.call_args.args[0]
     assert msg["Cc"] is None

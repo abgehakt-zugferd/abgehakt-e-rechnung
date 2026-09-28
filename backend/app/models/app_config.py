@@ -42,6 +42,13 @@ class AppConfig(Base):
     # Spalte behält ihren Namen: eine Umbenennung wäre eine Migration ohne Gewinn.
     invoice_cc_email: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
+    # Text der Rechnungsmail je Belegsprache (docs/specs/mailtext.md).
+    # NULL oder leer: eingebauter Text der Sprache. Keine Daten in der Migration.
+    mail_betreff_de: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    mail_text_de: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    mail_betreff_en: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    mail_text_en: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Update-Hinweis (#120). Zwei Zeitstempel mit Absicht:
     # last_checked_at = letzte ERFOLGREICHE Prüfung (speist "seit X Tagen"),
     # last_attempt_at = letzter VERSUCH. Liegt attempt nach checked, war die
