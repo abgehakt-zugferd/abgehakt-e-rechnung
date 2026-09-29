@@ -6,6 +6,8 @@ diese Trennung sieht eine versendete Rechnung wie eine offene Forderung.
 """
 from datetime import datetime
 
+from sqlalchemy import and_
+
 _ETIKETT = {
     "draft": "Entwurf",
     "paid": "Bezahlt",
@@ -19,8 +21,29 @@ def ist_nicht_versendet(status: str, datev_sent_at: datetime | None = None) -> b
     return status == "issued" and datev_sent_at is None
 
 
+def nicht_versendet_bedingung(status_spalte, versand_spalte):
+    """`ist_nicht_versendet` als SQL-Ausdruck: beide Haelften der Regel, nicht eine.
+
+    Die Spalten kommen als Parameter herein, statt dass dieses Modul `Invoice`
+    importiert. Es bleibt damit frei von der Rechnung und von der Datenbank; wer
+    die Etiketten liest, muss das Modell nicht kennen.
+
+    Der Zwilling in Python steht direkt darueber. Zwei Fassungen derselben Regel
+    sind unvermeidlich (ein `and`-Ausdruck ist keine SQL-Bedingung), nebeneinander
+    im selben Modul faellt ihr Auseinanderlaufen aber auf.
+    """
+    return and_(status_spalte == "issued", versand_spalte.is_(None))
+
+
 def ohne_erstversand_bedingung(spalte):
-    """SQLAlchemy-Ausdruck: kein Erstversand. Mit status=issued == ist_nicht_versendet."""
+    """SQLAlchemy-Ausdruck: kein Erstversand, unabhaengig vom Status.
+
+    NICHT dasselbe wie `ist_nicht_versendet`: ein Entwurf hat auch keinen
+    Erstversand. Das ist die Filterdimension der Rechnungsliste und bleibt
+    absichtlich rechtwinklig zum Statusfilter daneben, damit `versand=offen`
+    nicht heimlich den Status mitfiltert. Wer den Belegzustand meint, nimmt
+    `nicht_versendet_bedingung`.
+    """
     return spalte.is_(None)
 
 
