@@ -78,9 +78,39 @@ Die Startseite **Übersicht** fasst den Stand zusammen:
 | Umsatz lfd. Jahr | Brutto-Umsatz gestellter und bezahlter Rechnungen seit Jahresanfang (ohne Gutschriften) |
 | Schuldige Umsatzsteuer | Summe der auf gestellten Belegen **ausgewiesenen USt** im laufenden Jahr, abzüglich Gutschriften, **ohne Vorsteuerabzug** (das Programm kennt keine Eingangsrechnungen) |
 | Gesch. Steuerabgaben | Schuldige USt plus pauschale **KSt/GewSt-Rücklage** auf den Nettoumsatz (Anteil in den Einstellungen) |
+| Offene Forderungen | Anzahl und Bruttosumme der gestellten Standardrechnungen. Gutschriften zählen nicht mit. |
+| Überfällige Forderungen | Davon jene, deren Fälligkeitsdatum vor heute liegt, mit Anzahl, Bruttosumme und dem Alter der ältesten in Tagen. |
+| Nicht versendete Belege | Anzahl der gestellten Standardrechnungen ohne Erstversand. Diese Zahl wird in der Datenbank gezählt, nicht im Speicher. |
+| Umsatzvergleich | Dem Umsatz des laufenden Jahres stellt die Übersicht den Umsatz zum selben Kalendertag des Vorjahres gegenüber und nennt die Abweichung in Prozent. Fehlt ein Vergleichswert, weil der Vorjahreswert null ist, entfällt die Prozentangabe. |
+
+Die Belegzahlen und die Forderungen sind Verweise: Ein Klick öffnet die Rechnungsliste mit
+genau der Auswahl, die die Zahl gezählt hat. Kennzahl und Liste zeigen deshalb dieselbe Menge.
+Für die Umsatz- und Steuerkennzahlen gilt das nicht, sie summieren und verlinken nichts.
 
 In der Rechnungsliste und auf der Detailseite unterscheidet der Status **Versendet** und
-**Nicht versendet** bei finalisierten Belegen. **Bezahlt** bleibt der Endzustag nach Zahlungseingang.
+**Nicht versendet** bei finalisierten Belegen. **Bezahlt** bleibt der Endzustand nach Zahlungseingang.
+
+---
+
+## Die Rechnungsliste filtern
+
+Über der Rechnungsliste stehen fünf Filter, die sich kombinieren lassen:
+
+| Filter | Auswahl |
+|---|---|
+| Suche | Rechnungsnummer oder Kundenname, als Teiltreffer |
+| Status | Entwurf, Gestellt, Bezahlt, Storniert, Verworfen |
+| Art | Rechnung oder Gutschrift |
+| Frist | **Überfällig**: Fälligkeitsdatum liegt vor heute |
+| Versand | **Ohne Versand**: gestellt und noch nicht versendet |
+
+**Ohne Versand** benutzt dieselbe Bedingung wie das Etikett **Nicht versendet** in der Liste und
+wie die Kennzahl auf der Übersicht. Die drei können deshalb nicht auseinanderlaufen.
+
+Solange Sie keinen Status wählen, blendet die Liste verworfene Entwürfe aus; sie erscheinen nur
+über **Verworfen**. Die gesetzten Filter stehen in der Adresse der Seite, eine gefilterte Liste
+lässt sich also als Lesezeichen ablegen. Ein unbekannter Wert in einer solchen Adresse wird
+stillschweigend geleert: Sie sehen dann die ungefilterte Liste und keine Fehlerseite.
 
 ---
 
@@ -312,6 +342,37 @@ Standard-Zahlungsbedingungen; fehlen sie, weist das Programm das Speichern zurü
 Nach dem Finalisieren ist die Sprache unveränderlich. Ein fremder oder manipulierter
 Sprachwert wird ebenfalls vor der Nummernvergabe zurückgewiesen, statt still auf Deutsch
 zurückzufallen.
+
+---
+
+## Mailtext der Rechnungsmail
+
+Betreff und Rumpf der Mail, mit der eine Rechnung herausgeht, richten sich nach der
+**Belegsprache dieser einen Rechnung**, nicht nach einer globalen Einstellung. Eine englische
+Rechnung wird also mit einer englischen Mail versendet, auch wenn alle anderen deutsch sind.
+
+Beide Texte sind unter Einstellungen hinterlegbar, getrennt für Deutsch und Englisch, also vier
+Felder. Bleibt ein Feld leer, gilt die eingebaute Schablone der jeweiligen Sprache; Sie müssen
+nichts eintragen, damit der Versand funktioniert.
+
+Erlaubt sind genau fünf Platzhalter:
+
+| Platzhalter | Bedeutung |
+|---|---|
+| {rechnungsnummer} | Die Rechnungsnummer |
+| {kunde} | Der Kundenname |
+| {betrag} | Der Rechnungsbetrag, in der Darstellung der Belegsprache |
+| {faellig_am} | Das Fälligkeitsdatum, in der Darstellung der Belegsprache |
+| {firma} | Der eigene Firmenname |
+
+Betrag und Fälligkeitsdatum erscheinen in der Schreibweise der Belegsprache, ein deutscher Beleg
+also mit Komma als Dezimaltrennung. Ein anderer Platzhalter als diese fünf wird beim Speichern
+abgelehnt, und ein Betreff mit Zeilenumbruch ebenfalls: ein Mail-Header kann keinen tragen. Im
+Rumpf sind Umbrüche erlaubt.
+
+Unter den Rumpf setzt das Programm eine Fußzeile mit der Anschrift Ihrer Firma, eingeleitet mit
+„Verantwortlich:" auf Deutsch und „Responsible:" auf Englisch. Sind die Firmendaten unvollständig
+hinterlegt, entfällt die Fußzeile.
 
 ---
 

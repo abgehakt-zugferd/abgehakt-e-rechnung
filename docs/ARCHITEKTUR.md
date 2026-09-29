@@ -67,7 +67,8 @@ backend/app/
 │   ├── archive.py            # Archivansicht storage/{pdfs,xml}
 │   ├── updates.py            # Update-Hinweis (nur auf Klick)
 │   ├── uebergaben.py         # Übergabebelege ansehen, als Entwurf anlegen (#22)
-│   └── settings.py           # Firmendaten, SMTP-Test
+│   ├── settings.py           # Firmendaten, SMTP-Test
+│   └── settings_mailtext.py  # Mailtext der Rechnungsmail je Sprache
 ├── services/                 # Fachlogik, framework-unabhängig
 │   ├── zugferd_xml.py        # CII-XML nach EN 16931
 │   ├── pdf_generator.py      # sichtbares PDF (ReportLab)
@@ -78,6 +79,7 @@ backend/app/
 │   ├── einheiten.py          # fester Einheitenkatalog für Formular, Validator und CII
 │   ├── belegart.py           # Belegart → BT-3 TypeCode, manuelle Wählbarkeit
 │   ├── belegsprache.py       # Belegsprache de|en → PDF-Darstellung
+│   ├── mailtext.py           # Betreff und Rumpf der Rechnungsmail je Belegsprache
 │   ├── invoice_number.py     # fortlaufende Nummern
 │   ├── customer_number.py    # Vorschlag für Kundennummern, überschreibbar
 │   ├── storno.py             # Gutschrift zum Original (TypeCode 381), reine Logik
@@ -88,12 +90,13 @@ backend/app/
 │   ├── gobd_export.py        # ZIP-Export (CSV + Belege + Audit-Log)
 │   ├── datev_email.py        # SMTP-Versand + DATEV-BCC
 │   ├── crypto.py             # verschlüsselt Secrets in der Datenbank (SMTP-Passwort)
-│   ├── dashboard_kennzahlen.py # USt- und Steuer-Rücklagen-Kennzahlen für die Übersicht
+│   ├── dashboard_kennzahlen.py # USt-, Steuer-Rücklagen-, offene und überfällige Forderungen
 │   ├── steuer_ruecklage.py   # konfigurierbare GmbH-Pauschale (KSt/GewSt) für Rücklagen
 │   ├── beleg_status.py       # Status-Etiketten Versendet / Nicht versendet in der UI
 │   ├── secret_key.py         # Schlüssel dafür, als Datei im storage-Volume
 │   ├── epc_qr.py             # EPC-QR (Girocode) für Rechnung und Gutschrift
 │   ├── bankverbindung.py     # IBAN/BIC normalisieren und prüfen
+│   ├── iban.py               # IBAN-Prüfung mit Registry-Länge und MOD 97-10
 │   ├── adresse.py            # Adresszeilen für Beleg und XML
 │   ├── leistungszeit.py      # Leistungsdatum und -zeitraum (§ 14 Abs. 4 Nr. 6)
 │   ├── archive_frist.py      # archive_until = 31.12. des Ausstellungsjahrs + 8
@@ -106,6 +109,7 @@ backend/app/
 │   ├── abrechnungsauftrag_wirkung.py  # Entwürfe aus angenommenem Beleg (TypeCode 389)
 │   ├── belegsperre.py        # was am Entwurf aus einem Beleg feststeht
 │   ├── protokoll.py          # Protokollfassung, Befundcodes, Feldverzeichnis
+│   ├── rechnungsliste_filter.py # Status-, Such- und Auswahlfilter der Liste
 │   ├── update_check.py       # Versionsabruf, ausschließlich auf Klick
 │   └── update_banner.py      # was daraus im Seitenkopf erscheint, rein und testbar
 ├── dependencies/             # was jede Route braucht
@@ -364,6 +368,30 @@ Speichern setzt den Prüfstand zurück (`zuruecksetzen` in `ust_id_pruefung.py`)
 
 Der Validator (`validator._ust_id_validator_issues`) mappt den Prüfstand auf Warnungen und
 Fehler beim Finalisieren. Tests: `test_ust_id_pruefung.py`, `test_ust_id_zustimmung.py`.
+
+### Kennzahl, Hinweisstreifen und Liste zählen dieselbe Menge
+
+Die Bedingung „gestellt und ohne Erstversand" steht genau einmal im Code, als
+`ohne_erstversand_bedingung` und `nicht_versendet_bedingung` in `beleg_status.py`. Aus ihr
+entstehen alle drei Anzeigen: die Kennzahl der Übersicht
+(`dashboard_kennzahlen.nicht_versendet_anzahl`), das Etikett **Nicht versendet** in Liste und
+Detailansicht und der Versandfilter der Liste (`rechnungsliste_filter.filtere_rechnungsliste`).
+Wer die Bedingung ändert, ändert sie für alle drei.
+
+Das ist eine Regel und keine Empfehlung, weil zwei getrennte Fassungen derselben Bedingung
+auseinanderdriften, ohne dass es auffällt. Der Schaden ist dann nicht ein Rechenfehler, sondern
+ein Widerspruch: Der Hinweisstreifen nennt eine Zahl, und die Liste, auf die er verlinkt, zeigt
+eine andere Menge. Wer das sieht, glaubt danach keiner Zahl mehr. Die Bedingung wird deshalb in
+SQL formuliert und nicht im Speicher ausgewertet, damit Zählung und Filterung dieselbe Fassung
+benutzen können.
+
+### Der Betreff der Rechnungsmail trägt keinen Zeilenumbruch
+
+`mailtext.pruefe_betreff` lehnt einen Betreff mit `\n` oder `\r` ab, und zwar nach dem Einsetzen
+der Platzhalter, weil der Umbruch auch aus einem Wert kommen kann. Ein Mail-Header endet am
+Zeilenumbruch; was danach steht, wäre entweder verloren oder ein zusätzlicher Header. Für den
+Rumpf gilt die Einschränkung nicht. Tests: `test_mailtext_betreff_zeilenumbruch.py`,
+`test_mailtext.py`.
 
 ## Datenbankmigrationen
 

@@ -42,6 +42,16 @@ lesbar und für die Buchhaltungssoftware des Empfängers auswertbar, in einer Da
   Umsatz im laufenden Jahr, **schuldige Umsatzsteuer** (ausgewiesene USt auf gestellten Belegen)
   und **geschätzte Steuerabgaben** (USt plus pauschale GmbH-Rücklage auf den Nettoumsatz für
   Rücklagenplanung). Die Steuersätze sind unter Einstellungen konfigurierbar.
+- **Mailtext je Belegsprache:** Betreff und Rumpf der Rechnungsmail sind für Deutsch und Englisch
+  getrennt hinterlegbar, mit fünf Platzhaltern für Rechnungsnummer, Kunde, Betrag, Fälligkeit und
+  Firma. Ohne eigenen Text gilt eine eingebaute Schablone. Welche Mail eine Rechnung bekommt,
+  entscheidet ihre Belegsprache, nicht eine globale Einstellung.
+- **Offene und überfällige Forderungen:** die Übersicht nennt Anzahl und Bruttosumme der offenen
+  Rechnungen, davon die überfälligen samt Alter der ältesten, und die Zahl der noch nicht
+  versendeten Belege. Ein Klick auf eine dieser Zahlen öffnet die Rechnungsliste mit genau der
+  Auswahl, die sie gezählt hat.
+- **Filter in der Rechnungsliste:** Suche, Status, Belegart, Überfälligkeit und Versandstand, auch
+  kombiniert; die Auswahl steht in der Adresse und lässt sich als Lesezeichen ablegen.
 - **Versandstatus in der Liste:** Finalisierte Belege zeigen **Versendet** oder **Nicht versendet**;
   bezahlte Belege zeigen **Bezahlt**.
 - **Migration aus altem Abgehakt:** Finalisierte Belege (XML + PDF) aus einer früheren Installation
