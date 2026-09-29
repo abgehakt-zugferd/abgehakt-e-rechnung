@@ -2,7 +2,8 @@
 
 Rechnungsprogramm für **E-Rechnungen nach ZUGFeRD/Factur-X (EN 16931)** mit einem Archiv, das
 gestellte Rechnungen unveränderlich aufbewahrt. Läuft lokal auf dem eigenen Rechner oder
-Server: keine Cloud, kein Konto, keine Übertragung von Rechnungsdaten an Dritte.
+Server: keine Cloud, kein Konto; Rechnungsdaten werden nur beim ausdrücklich ausgelösten
+Versand übertragen.
 
 Eine erzeugte Rechnung ist ein PDF/A-3 mit eingebetteter, maschinenlesbarer XML: für Menschen
 lesbar und für die Buchhaltungssoftware des Empfängers auswertbar, in einer Datei.
@@ -39,20 +40,23 @@ lesbar und für die Buchhaltungssoftware des Empfängers auswertbar, in einer Da
   DATEV-Upload-Adresse, über Ihren eigenen Mailserver.
 - **GoBD-Export:** Prüferpaket mit Belegen, Stammdaten und Änderungsprotokoll für einen Zeitraum.
 - **Übersicht mit Kennzahlen:** Rechnungen gesamt, offene Posten, Bezahlt diesen Monat,
-  Umsatz im laufenden Jahr, **schuldige Umsatzsteuer** (ausgewiesene USt auf gestellten Belegen)
-  und **geschätzte Steuerabgaben** (USt plus pauschale GmbH-Rücklage auf den Nettoumsatz für
+  Umsatz seit Jahresanfang, **schuldige Umsatzsteuer** (USt gestellter und bezahlter
+  Standardrechnungen abzüglich Gutschriften)
+  und **geschätzte Steuerabgaben** (USt plus pauschale GmbH-Rücklage auf den positiven
+  Nettosaldo aus Standardrechnungen und Gutschriften für
   Rücklagenplanung). Die Steuersätze sind unter Einstellungen konfigurierbar.
 - **Mailtext je Belegsprache:** Betreff und Rumpf der Rechnungsmail sind für Deutsch und Englisch
   getrennt hinterlegbar, mit fünf Platzhaltern für Rechnungsnummer, Kunde, Betrag, Fälligkeit und
   Firma. Ohne eigenen Text gilt eine eingebaute Schablone. Welche Mail eine Rechnung bekommt,
   entscheidet ihre Belegsprache, nicht eine globale Einstellung.
-- **Offene und überfällige Forderungen:** die Übersicht nennt Anzahl und Bruttosumme der offenen
-  Rechnungen, davon die überfälligen samt Alter der ältesten, und die Zahl der noch nicht
-  versendeten Belege. Ein Klick auf eine dieser Zahlen öffnet die Rechnungsliste mit genau der
+- **Offene und überfällige Forderungen:** die Übersicht nennt Anzahl und Bruttosumme der gestellten
+  Standardrechnungen, davon die überfälligen samt Alter der ältesten, und die Zahl der noch nicht
+  versendeten gestellten Standardrechnungen. Ein Klick auf eine dieser Zahlen öffnet die
+  Rechnungsliste mit genau der
   Auswahl, die sie gezählt hat.
 - **Filter in der Rechnungsliste:** Suche, Status, Belegart, Überfälligkeit und Versandstand, auch
   kombiniert; die Auswahl steht in der Adresse und lässt sich als Lesezeichen ablegen.
-- **Versandstatus in der Liste:** Finalisierte Belege zeigen **Versendet** oder **Nicht versendet**;
+- **Versandstatus in der Liste:** Gestellte Belege zeigen **Versendet** oder **Nicht versendet**;
   bezahlte Belege zeigen **Bezahlt**.
 - **Migration aus altem Abgehakt:** Finalisierte Belege (XML + PDF) aus einer früheren Installation
   einspielen und Versand/Bezahlung aus dem alten System nachziehen (Skripte, siehe
@@ -118,10 +122,12 @@ auf ein Verfahren, und es wäre eine Zusage, die niemand einlösen kann.
 Was das Programm dafür beiträgt:
 
 - Gestellte Rechnungen lassen sich **nicht mehr ändern und nicht löschen**. Das erzwingen
-  Wächter in der Anwendung und zusätzlich Auslöser in der Datenbank, die auch bei direktem
-  Zugriff über `psql` greifen. Eine Korrektur läuft über eine Stornorechnung, nicht über eine
+  Wächter in der Anwendung; zusätzliche Auslöser in der Datenbank sperren DELETE und TRUNCATE,
+  auch bei direktem Zugriff über `psql`, aber keine Inhaltsänderungen. Eine Korrektur läuft
+  über eine Stornorechnung, nicht über eine
   Änderung.
-- Jede Änderung an Rechnungen, Kunden und Firmendaten landet automatisch im
+- Jede über die registrierten ORM-Listener erfasste Änderung an Rechnungen, Kunden und
+  Firmendaten landet automatisch im
   **Änderungsprotokoll**. Für die einzelnen Rechnungspositionen führt das Programm kein
   eigenes Protokoll: Sobald eine Rechnung gestellt ist, lassen sich ihre Positionen
   überhaupt nicht mehr ändern, weder einzeln noch im Ganzen.
@@ -144,9 +150,9 @@ ehrlich benannt".
 - rund 1,5 GB Plattenplatz für das Image (Java-Laufzeitumgebung, Ghostscript, Mustang)
 
 Das Programm selbst ist klein und braucht im Betrieb gut 100 MB Arbeitsspeicher. Alles
-Weitere geht auf die Werkzeugkette für das Dateiformat: die XML wird von Ghostscript und
-Mustang ins PDF eingebettet und anschließend von Mustang gegen Schema und Schematron
-geprüft. Mustang ist die Referenzimplementierung für ZUGFeRD und läuft in einer
+Weitere geht auf die Werkzeugkette für das Dateiformat: Ghostscript erzeugt das PDF/A-3;
+Mustang bettet die XML ein und prüft anschließend gegen Schema und Schematron.
+Mustang ist die Referenzimplementierung für ZUGFeRD und läuft in einer
 Java-Laufzeitumgebung; jedes Finalisieren startet sie zweimal und dauert deshalb auf einer
 ruhigen Maschine rund zehn Sekunden. Das ist der Preis dafür, die Prüfung nicht selbst zu
 schreiben und sich damit die eigenen Hausaufgaben zu benoten.
@@ -202,9 +208,9 @@ Die Datenbankrollen legt das Programm beim ersten Start selbst an.
 **Diese Datei ist ab jetzt Teil Ihres Bestandes.** Sie gehört in jede Sicherung (siehe
 *Sicherung und Rücksicherung*) und darf nicht gelöscht werden. Die drei Passwörter stehen
 nirgendwo sonst: Das Programm legt die Datenbankrollen beim ersten Start damit an, und ohne die
-Datei kommt weder das Programm noch Sie selbst an die eigenen Belege heran. Dass Schlüssel und
-E-Mail-Einstellungen ausdrücklich **nicht** hier stehen, sondern in `storage/secret.key` und in
-der Datenbank, ändert daran nichts.
+Datei kommt weder das Programm noch Sie selbst an die eigenen Belege heran. Dass der Schlüssel
+normalerweise in `storage/secret.key` liegt und E-Mail-Einstellungen in der Datenbank die
+Umgebungswerte überlagern, ändert daran nichts.
 
 **Nur auf einem Linux-Server:** Das Programm läuft im Container unter einem eigenen
 Systembenutzer und schreibt Belege und Schlüssel nach `storage/`. Dieses Verzeichnis gehört
@@ -388,6 +394,7 @@ Löschen einzelner Zeilen, nicht das Verwerfen der Datenbank selbst.
 
 ```bash
 docker compose stop app                                     # niemand schreibt mehr hinein
+set -a; . ./.env; set +a
 docker compose exec -T db pg_dump -U "$DB_USER" -d "$DB_NAME" | gzip > vorher.sql.gz
 docker compose exec -T db dropdb   -U "$DB_BOOTSTRAP_USER" "$DB_NAME"
 docker compose exec -T db createdb -U "$DB_BOOTSTRAP_USER" "$DB_NAME"
@@ -458,8 +465,8 @@ ohne Sicherung da, ohne es zu merken.
 | ReportLab | BSD-3-Clause | PyPI |
 | PostgreSQL | PostgreSQL License | offizielles Image |
 | FastAPI, SQLAlchemy, Alembic | MIT / MIT / MIT | PyPI |
-| Tailwind CSS, Alpine.js | MIT | im Image unter `backend/app/static/js/` |
-| Press Start 2P, VT323, Share Tech Mono, Staatliches | OFL-1.1 | im Image unter `backend/app/static/fonts/` |
+| Tailwind CSS, Alpine.js | MIT | im Image unter `/app/app/static/js/` |
+| Press Start 2P, VT323, Share Tech Mono, Staatliches | OFL-1.1 | im Image unter `/app/app/static/fonts/` |
 
 Schriften und JavaScript liegen bewusst im Image: die Oberfläche lädt beim Seitenaufbau nichts
 aus dem Netz nach und sieht ohne Internetverbindung genauso aus wie mit.
@@ -480,7 +487,8 @@ die niemand prüft.
   wann Sie die Grenze reißen und in die Regelbesteuerung wechseln müssen. Diesen Wechsel
   müssen Sie selbst im Blick behalten. Der Steuertyp wird pro Rechnung gewählt, es gibt
   keine dauerhafte Einstellung dafür.
-- **Nur deutsche Steuersätze.** Zulässig sind 0, 7 und 19 Prozent. Für Kunden im EU-Ausland
+- **Deutsche Steuersätze im Formular.** Wählbar sind 0, 7 und 19 Prozent; die Regelprüfung
+  vergleicht den auf ganze Prozent gerundeten Satz. Für Kunden im EU-Ausland
   deckt das die üblichen Fälle ab, weil dort in der Regel gar keine deutsche Umsatzsteuer
   anfällt: bei Geschäftskunden mit USt-IdNr. geht die Steuerschuld auf den Empfänger über,
   bei innergemeinschaftlichen Lieferungen ist der Umsatz steuerfrei. Beides kennt das Programm
@@ -512,8 +520,11 @@ einem fremden Server.
 
 Ihre Daten verlassen den Rechner an genau **vier** Stellen, und alle vier stoßen Sie selbst an:
 
-1. **Rechnungsversand.** Die Mail geht an Ihren Kunden, auf Wunsch mit Kopie an die Kanzlei
-   und als Blindkopie an die DATEV-Upload-Adresse. Über Ihren eigenen Mailserver.
+1. **Rechnungs- und Testmailversand.** Die Rechnungsmail geht an Ihren Kunden, auf Wunsch mit
+   Kopie an die Kanzlei
+   und als Blindkopie an die DATEV-Upload-Adresse. Über Ihren eigenen Mailserver. Auch die
+   SMTP-Testmail unter Einstellungen nutzt diesen Server und überträgt gegebenenfalls den
+   Firmennamen.
 2. **Update-Prüfung.** Sie ruft die Releases dieses Repos bei GitHub ab. Über Ihre
    Installation wird dabei **nichts** übermittelt: keine Versionsnummer, keine Kennung, keine
    Rechnungs-, Kunden- oder Firmendaten. Der Vergleich mit Ihrer Version passiert danach auf
@@ -553,8 +564,8 @@ hier steht, wofür es nicht einsteht:
     Auch ein Datenbank-Administrator kommt an einer finalisierten Rechnung nicht vorbei.
   - **Das nachträgliche Ändern** finalisierter Rechnungen ist nur in der **Anwendung**
     gesperrt. Wer die Datenbank direkt mit `psql` bearbeitet, umgeht diese Sperre. Das ist
-    eine bewusst in Kauf genommene Restlücke (siehe `docs/ARCHITEKTUR.md`); dagegen stehen das
-    Änderungsprotokoll und die Sicherungen, nicht die Datenbank.
+    eine bewusst in Kauf genommene Restlücke (siehe `docs/ARCHITEKTUR.md`); solche Änderungen
+    erfasst auch das ORM-Änderungsprotokoll nicht. Sicherungen bleiben eine Vergleichsquelle.
 - **Sicherung.** Ob gesichert wird, wohin, und ob sich die Sicherung wiederherstellen lässt,
   verantwortet der Betreiber (siehe „Sicherung und Rücksicherung"). Ein Datenträger, den
   niemand sichert, ist auch mit Schreibschutz verloren.

@@ -66,7 +66,8 @@ Beleg falsch, und die Gegenseite erzeugt einen neuen.
 
 ```bash
 docker compose -p abgehakt-test \
-  -f docker-compose.yml -f docker-compose.integration.yml down -v
+  -f docker-compose.yml -f docker-compose.integration.yml \
+  --env-file integration.env down -v
 rm -rf storage-integration
 ```
 

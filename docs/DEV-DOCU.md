@@ -68,7 +68,7 @@ Unverträglichkeit mit der funktions-scoped `pg_session`-Fixture).
 | Komponente | Gepinnt / Bezug | Neueste bekannt | Delta | Hinweis |
 |---|---|---|---|---|
 | **Mustang CLI** | `Dockerfile` → `ARG MUSTANG_VERSION` + `MUSTANG_SHA256` (aktuell 2.24.0) | 2.24.0 | aktuell | Upgrade = Nummer **und** SHA-256 im Dockerfile, Rebuild, volle Mustang-E2E (`test_finalize_e2e`, Schema, Storno). CLI-Flags (`--format zf`, `--no-additional-attachments`) vorab gegen die Release notes prüfen. Rezept + Fallstricke: unten. |
-| Python-Basis | `python:3.11-slim` | 3.11 weiterhin; 3.12/3.13 verfügbar | Image-Tag floatet Patch | Major-Python-Sprung separat entscheiden |
+| Python-Basis | `python:3.11-slim` mit Digest-Pin | 3.11 weiterhin; 3.12/3.13 verfügbar | Digest hält das Basisabbild fest | Major-Python-Sprung separat entscheiden |
 | PostgreSQL | `postgres:16-alpine` | 16.x (Tag floatet) | Patch via Image-Pull | Major 17 = eigene Migration |
 | Ghostscript | apt `ghostscript=10.05.1~dfsg-1+deb13u2` | n/a | Pin | PDF/A-3-Pfad; beim nächsten Debian-Point-Release laut brechen (zusammen mit Base-Digest anheben) |
 | JRE | apt `default-jre-headless=2:1.21-76` | n/a | Pin | nur für Mustang; beim nächsten Debian-Point-Release laut brechen |
@@ -259,8 +259,9 @@ ausfuellen und **keine einzige Rechnung finalisieren**.
 
 Gemessen (Mustang, EN16931-Profil): nur Steuernummer ⇒ `XML:invalid`; mit USt-IdNr.
 ⇒ `XML:valid`; nur Steuernummer, diese zusaetzlich als BT-29 ⇒ `XML:valid`.
-`zugferd_xml._seller_id_xml` gibt sie deshalb als BT-29 aus, **nur** wenn die
-USt-IdNr. fehlt. BT-29 ist das erste Kind von `SellerTradeParty` (die CII-Sequenz
+`zugferd_xml._seller_id_xml` gibt sie deshalb als BT-29 aus, wenn die
+USt-IdNr. fehlt oder die Steuerkategorie `O` ist. BT-29 ist das erste Kind von
+`SellerTradeParty` (die CII-Sequenz
 ist geordnet: ID, GlobalID, Name, …); nach dem Namen waere es ein Schemafehler.
 
 **Warum 673 gruene Tests das nicht gesehen haben:** die Firma in
@@ -278,7 +279,8 @@ derselben Regel.
 
 ### Mustang ist die Wahrheit: nicht `combine`-rc, nicht der Dateiname (#98 E1/E3, PR #102)
 
-`mustang.combine` liefert `True` (rc=0 + Datei existiert) auch für ein PDF, das ein
+`mustang.combine` liefert `True` (rc=0 + Datei existiert und ist nicht leer) auch für ein PDF,
+das ein
 Empfänger-/Prüfer-System ablehnen würde. Deshalb reicht `combine==True` NICHT:
 
 - **Finalize (E1):** nach erfolgreichem `combine` validiert der Router
@@ -424,7 +426,7 @@ Drei nicht offensichtliche Voraussetzungen, alle empirisch geklärt, vorher schl
    stdin nach Anhängen und Format; ohne stdin wirft es eine `NullPointerException`, schreibt
    **keine** Ausgabedatei, und beendet sich mit **rc=0**. Deshalb übergibt `combine()`
    `--format zf --no-additional-attachments` und prüft den Erfolg an
-   `rc == 0 **und** out_path.exists()`, nie am Rückgabewert allein.
+   `rc == 0 and out_path.exists() and out_path.stat().st_size > 0`, nie am Rückgabewert allein.
 2. **`combine` verlangt ein PDF/A als Eingabe.** Der Exporter liest `pdfaid:part` aus dem XMP;
    ein normales ReportLab-PDF, auch mit eingebetteten Schriften, endet mit
    `IllegalArgumentException: PDF-A version not supported`. Schrifteinbettung ist für PDF/A
@@ -538,7 +540,7 @@ Zu **Vorfall 2026-07-08** (Hard-Delete/TRUNCATE auf `invoices`, Ursache offen) k
 Die Trigger sind Single Source of Truth für **beide**:
 - **Migration:** `backend/alembic/versions/001_initial_schema.py` liest die
   `INSTALL_SQL` aus dem Modul und führt sie per `op.execute` aus.
-- **Test-DB-Erzeugung:** `conftest.py::pg_session` lädt die Tabellenschema per
+- **Test-DB-Erzeugung:** `conftest.py::pg_engine` lädt die Tabellenschema per
   `create_all()`, dann das Trigger-SQL aus demselben Modul für eine konsistente Testumgebung.
 
 Änderungen am Trigger-Text müssen **in beiden Richtungen laufen**, Migration UND Test-Setup aus derselben Quelle lesen, nicht separate SQL-Strings pflegen (False-Green-Risiko).
@@ -568,11 +570,11 @@ Die Trigger sind Single Source of Truth für **beide**:
   Reihenfolge ist dokumentierte Architektur.
 - **Test-Cleanup: `ALTER TABLE … DISABLE TRIGGER USER`** (Owner-Befehl).
   `session_replication_role` ist für Superuser-Debugging; das brauchen wir nicht.
-  Der Test-Cleanup funktioniert mit `DISABLE TRIGGER USER` pro Tabelle nach jedem Test
+  Der Test-Cleanup funktioniert mit `DISABLE TRIGGER USER` pro Tabelle vor jedem Test
   (s. `conftest.py::pg_session`), damit die nächste Testfunktion mit sauberer DB startet
   und die Trigger sich nicht über mehrere Tests hinweg aufbauen. **Nicht nutzen:**
-  `session_replication_role = replica` (würde ORM-Audit-Events auslösen, die wir nicht
-  wollen), `SET ROLE` (hat Scoping-Fallstricke).
+  `session_replication_role = replica` (ist für diesen Cleanup nicht nötig und schaltet
+  Datenbank-Trigger um, keine ORM-Audit-Events), `SET ROLE` (hat Scoping-Fallstricke).
 - **`ENABLE TRIGGER USER` MUSS im `finally` stehen** (Fix `a25acbb`). Der Cleanup ist
   `DISABLE TRIGGER USER` → `TRUNCATE … RESTART IDENTITY CASCADE` → `ENABLE TRIGGER USER`.
   Wirft das TRUNCATE (FK-Restzustand, DB-Fehler), ohne `try/finally` bliebe der Trigger
@@ -599,11 +601,12 @@ abgehakt_admin       (NOSUPERUSER, Owner, CREATEROLE; läuft Alembic + Bootstrap
 abgehakt_app         (Runtime-Rolle, least-privilege, kein DELETE/TRUNCATE auf Schutz-Tabellen)
 ```
 
-- **Alembic:** läuft als `abgehakt_admin` (aus `DATABASE_URL` in `.env`, Passwort im Secret-Store).
+- **Alembic:** läuft als `abgehakt_admin` (`DATABASE_URL` wird in Compose aus
+  `DB_USER`/`DB_PASSWORD` in `.env` gebildet).
   CREATE/ALTER Tabellen, Migrationen, Trigger-Grants, Owner-Operationen.
 - **Bootstrap:** `backend/scripts/bootstrap_roles.py` (in-container aufgerufen als
   `python scripts/bootstrap_roles.py`) erstellt `abgehakt_app` mit Passwort aus `DB_APP_PASSWORD`
-  (Umgebungsvariable, nicht `.env`) + räumt die Grants auf.
+  (Umgebungsvariable aus `.env` via Compose) + räumt die Grants auf.
   - ⚠️ **Der Docker-Build-Kontext ist `./backend` (`COPY . .` im Dockerfile), NICHT das Repo-Root.**
     Ein Skript/Asset unter Repo-`scripts/` liegt daher **nicht** im Prod-Image, es würde nur
     über einen Compose-Volume-Mount im Dev existieren und im Image (CI, Prod, `run-tests.sh`)
@@ -734,11 +737,12 @@ Zwei Fallstricke beim „Positionen ersetzen" in `_replace_items`:
 
 1. **Einzeln löschen, nicht als Bulk.** `db.query(InvoiceItem).filter(...).delete()` wäre
    die naheliegende Zeile, sie umginge aber `before_flush` und damit den
-   `invoice_guard` **und** das Audit-Log, genau wie das für `query().update()` bereits
+   `invoice_guard`; `InvoiceItem` wird ohnehin nicht auditiert. Es gilt das für
+   `query().update()` bereits
    dokumentierte Muster. Also `for alt in list(invoice.items): db.delete(alt)`.
-2. **Zwischen Löschen und Neuanlegen flushen.** Ohne den `db.flush()` liegen alte und
-   neue Zeilen mit denselben `position`-Werten in EINEM Flush; die Reihenfolge, in der
-   SQLAlchemy INSERT und DELETE ausführt, ist dann die einzige Rettung.
+2. **Zwischen Löschen und Neuanlegen wird geflusht.** Der `db.flush()` führt die Löschungen
+   vor dem Anlegen der neuen Positionen aus. Eine Eindeutigkeitsbedingung auf
+   `invoice_id` und `position` gibt es im Modell nicht.
 
 Berechtigungen: `invoice_items` steht **nicht** in `PROTECTED_NO_DELETE` (`db/roles.py`),
 die App-Rolle `abgehakt_app` darf dort zeilenweise löschen; der DB-Trigger blockt für diese
@@ -798,7 +802,8 @@ privaten Ketten-Dokumentation `UEBERGABEFORMAT.md` (Published Language der drei 
 **Richtung:** `tantiemen-app-nach-abgehakt`, signierte JSON-Dateien mit
 `nutzlast_art: abrechnungsauftrag`. Abgehakt liest, prüft mit **eigener**
 RFC-8785-Implementierung (`app/services/uebergabebeleg.py`) und legt **nur Entwürfe** an
-(`invoice_type=self_billing`, TypeCode 389). Finalisiert und versendet wird nichts
+(`invoice_type=self_billing`, TypeCode 389, oder `credit_note`, TypeCode 381). Finalisiert und
+versendet wird nichts
 automatisch.
 
 ```mermaid
@@ -812,7 +817,7 @@ flowchart LR
   E --> tantiemen["tantiemen-app"]
   tantiemen -->|"abrechnungsauftrag"| A
   A --> abgehakt["abgehakt (dieses Repo)"]
-  abgehakt -->|"quittung Stufe 7"| Q
+  abgehakt -.->|"quittung Stufe 7, noch nicht implementiert"| Q
   Q --> tantiemen
 ```
 
@@ -838,7 +843,7 @@ die die Gegenseite von ihm verlangt.
 | Ansicht | `routers/uebergaben.py` GET | Tabelle, **transient**: kein Datensatz, kein Zustand |
 | Anlegen | `routers/uebergaben.py` POST | `abrechnungsauftrag_wirkung.entwuerfe_anlegen()` |
 | Entwürfe + Gedächtnis | `abrechnungsauftrag_wirkung` | `Invoice` status `draft` und eine Zeile in `uebergabe_eingaenge` |
-| Befundbericht (nur lesen) | `python scripts/uebergabe_einlesen.py` | Zeile je Beleg, schreibt nichts |
+| Befundbericht (nur lesen) | `python -m scripts.uebergabe_einlesen` | Zeile je Beleg, schreibt nichts |
 
 Der Befund entsteht an **einer** Stelle, als Ergebnisobjekt und nicht in der
 Tabellendarstellung: er ist später der Inhalt der Quittung (Stufe 7), und ob die beim
@@ -933,7 +938,9 @@ Compose-Mounts in der Testinstanz: Wegwerf-`storage-integration`, `${UEBERGABEN_
 
 ```bash
 # Nach Auftrag der Gegenseite in .../tantiemen-app-nach-abgehakt/
-docker compose -p abgehakt-test exec app python scripts/uebergabe_einlesen.py
+docker compose -p abgehakt-test \
+  -f docker-compose.yml -f docker-compose.integration.yml \
+  --env-file integration.env exec app python -m scripts.uebergabe_einlesen
 ```
 
 Das Skript **liest nur** und meldet je Beleg den Befund; es legt nichts an. Entwürfe
@@ -1175,7 +1182,7 @@ Deshalb erreicht man „kein Superuser im Betrieb" **nicht** durch Demotion, son
 
 | Rolle | Attribute | Verwendung | Credentials |
 |---|---|---|---|
-| `abgehakt_db` | Bootstrap-Superuser (OID 10) | **keine** im Betrieb, nur Volume-Init + Break-Glass | `DB_BOOTSTRAP_*` in `.env` |
+| `abgehakt_db` | Bootstrap-Superuser (OID 10) | Volume-Init, `bootstrap_owner.py` bei jedem App-Start, Healthcheck + Break-Glass | `DB_BOOTSTRAP_*` in `.env` |
 | `abgehakt_admin` | NOSUPERUSER, CREATEROLE, CREATEDB, `pg_signal_backend`, Owner aller Objekte | Alembic (Entrypoint), `bootstrap_roles.py`, `pg_dump` (db-backup) | `DB_USER`/`DB_PASSWORD` in `.env` |
 | `abgehakt_app` | NOSUPERUSER, kein DELETE auf `invoices`/`customers`, nie TRUNCATE | App-Laufzeit (`APP_DATABASE_URL`) | `DB_APP_*` in `.env` |
 | `abgehakt_root` | Superuser | Break-Glass (Notfall) | nur im Passwort-Manager, **nicht** in `.env` |
@@ -1201,8 +1208,8 @@ Zwei Eigenschaften machen den Verlust tückisch:
 - **Sie wird versehentlich mitgelöscht.** Alles, was „nicht versionierte Dateien entfernt",
   nimmt sie mit, allen voran `git clean -xdf`. Ein zweiter Weg dorthin ist der Irrtum, die
   Datei sei entbehrlich, weil Anwendungsschlüssel (`storage/secret.key`) und die SMTP-Angaben
-  (verschlüsselt in `AppConfig`) ausdrücklich **nicht** darin stehen. Beides stimmt, der
-  Schluss daraus nicht.
+  (in `AppConfig`, nur das Passwort verschlüsselt) nicht darin stehen müssten. SMTP-Werte
+  aus `.env` bleiben jedoch als Rückfallwerte unterstützt; die Datei bleibt ohnehin Pflicht.
 
 **Rückweg, solange ein Container existiert.** Die Werte stehen in seiner Konfiguration:
 
@@ -1561,7 +1568,7 @@ gilt:
 - **Import auf Modulebene** (beim Einsammeln, vor jedem Testlauf) ⇒ das
   urspruengliche Objekt ⇒ die Ersetzung greift.
 - **Import in der Testfunktion** ⇒ das neue Objekt ⇒ die Ersetzung trifft niemanden,
-  und die Anfrage geht gegen die echte Entwicklungsdatenbank aus `DATABASE_URL`.
+  und die Anfrage geht gegen die echte Entwicklungsdatenbank aus `APP_DATABASE_URL`.
 
 Das Fehlerbild ist heimtueckisch, weil es **nicht nach einem Datenbankproblem
 aussieht**: die Antwort ist ein fachlich einwandfreies `400 Firmendaten nicht
