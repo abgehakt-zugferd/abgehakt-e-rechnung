@@ -24,6 +24,13 @@
         </div>
     </div>
 
+    {% if nicht_versendet_anzahl %}
+    <div class="card mb-5" style="border-color:var(--amber);">
+        <a data-kpi="hinweis-versand" href="/invoices?status=issued&art=rechnung&versand=offen" style="display:block; font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--amber); text-decoration:none;">
+            {{ nicht_versendet_anzahl }} gestellte Rechnung{{ '' if nicht_versendet_anzahl == 1 else 'en' }} ohne Versand
+        </a>
+    </div>
+    {% endif %}
 
     <!-- Kennzahlen -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -34,6 +41,15 @@
                 <div>
                     <p class="kpi__beschriftung">RECHNUNGEN GESAMT</p>
                     <p class="kpi__wert">{{ total_invoices }}</p>
+                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:6px; line-height:1.6;">
+                        <a data-kpi="status-draft" href="/invoices?status=draft" style="color:var(--text-dim);">{{ belegzaehlung.entwurf }} Entwurf{{ '' if belegzaehlung.entwurf == 1 else 'e' }}</a>
+                        ·
+                        <a data-kpi="status-issued" href="/invoices?status=issued" style="color:var(--text-dim);">{{ belegzaehlung.gestellt }} gestellt</a>
+                        ·
+                        <a data-kpi="status-paid" href="/invoices?status=paid" style="color:var(--text-dim);">{{ belegzaehlung.bezahlt }} bezahlt</a>
+                        ·
+                        <a data-kpi="status-cancelled" href="/invoices?status=cancelled" style="color:var(--text-dim);">{{ belegzaehlung.storniert }} storniert</a>
+                    </p>
                 </div>
                 <div style="width:40px; height:40px; background:rgba(255,215,0,0.08); border:2px solid var(--gold-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                     <svg style="width:20px;height:20px;color:var(--gold-dim);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -44,11 +60,12 @@
         </div>
 
         <!-- Offene Rechnungen -->
-        <div class="card card-hover">
+        <a data-kpi="offen" href="/invoices?status=issued&art=rechnung" class="card card-hover" style="display:block; text-decoration:none; color:inherit;">
             <div class="flex items-center justify-between">
                 <div>
                     <p class="kpi__beschriftung">OFFENE RECHNUNGEN</p>
                     <p class="kpi__wert">{{ open_invoices }}</p>
+                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:4px;">{{ open_amount|betrag(0) }} € offen</p>
                 </div>
                 <div style="width:40px; height:40px; background:rgba(0,229,255,0.07); border:2px solid rgba(0,229,255,0.3); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                     <svg style="width:20px;height:20px;color:var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -56,7 +73,28 @@
                     </svg>
                 </div>
             </div>
-        </div>
+        </a>
+
+        <!-- Ueberfaellig -->
+        <a data-kpi="ueberfaellig" href="/invoices?status=issued&art=rechnung&faellig=ueberfaellig" class="card card-hover" style="display:block; text-decoration:none; color:inherit;">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="kpi__beschriftung">ÜBERFÄLLIG</p>
+                    <p class="kpi__wert"{% if ueberfaellig.anzahl %} style="color:var(--pink);"{% endif %}>{{ ueberfaellig.anzahl }}</p>
+                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:4px;">
+                        {{ ueberfaellig.betrag|betrag(0) }} €
+                        {% if ueberfaellig.aeltester_tage is not none %}
+                        · ältester {{ ueberfaellig.aeltester_tage }} Tag{{ '' if ueberfaellig.aeltester_tage == 1 else 'e' }}
+                        {% endif %}
+                    </p>
+                </div>
+                <div style="width:40px; height:40px; background:rgba(255,77,124,0.07); border:2px solid rgba(255,77,124,0.3); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    <svg style="width:20px;height:20px;color:var(--pink);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </a>
 
         <!-- Bezahlt in diesem Monat -->
         <div class="card card-hover">
@@ -64,6 +102,7 @@
                 <div>
                     <p class="kpi__beschriftung">BEZAHLT DIESEN MONAT</p>
                     <p class="kpi__wert">{{ paid_this_month|betrag(0) }}<span class="kpi__einheit">€</span></p>
+                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:4px;">Vormonat {{ paid_previous_month|betrag(0) }} €</p>
                 </div>
                 <div style="width:40px; height:40px; background:rgba(0,230,118,0.07); border:2px solid rgba(0,230,118,0.3); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                     <svg style="width:20px;height:20px;color:var(--green);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -79,6 +118,14 @@
                 <div>
                     <p class="kpi__beschriftung">UMSATZ LFD. JAHR</p>
                     <p class="kpi__wert">{{ revenue_ytd|betrag(0) }}<span class="kpi__einheit">€</span></p>
+                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:4px;">
+                        Vorjahr {{ revenue_prev_ytd|betrag(0) }} €
+                        {% if revenue_yoy_pct is not none %}
+                        ({{ revenue_yoy_pct|betrag(1) }} %)
+                        {% else %}
+                        (kein Vergleichswert)
+                        {% endif %}
+                    </p>
                 </div>
                 <div style="width:40px; height:40px; background:rgba(255,215,0,0.07); border:2px solid var(--gold-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                     <svg style="width:20px;height:20px;color:var(--gold-dim);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -95,6 +142,7 @@
                     <p class="kpi__beschriftung">SCHULDIGE UMSATZSTEUER</p>
                     <p class="kpi__wert">{{ vat_liability_ytd|betrag(0) }}<span class="kpi__einheit">€</span></p>
                     <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:4px;">Ausgewiesene USt lfd. Jahr</p>
+                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:2px;">{{ vat_quarter_label }}: {{ vat_liability_quarter|betrag(0) }} €</p>
                 </div>
                 <div style="width:40px; height:40px; background:rgba(255,171,0,0.07); border:2px solid rgba(255,171,0,0.35); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                     <svg style="width:20px;height:20px;color:var(--amber);" fill="none" stroke="currentColor" viewBox="0 0 24 24">

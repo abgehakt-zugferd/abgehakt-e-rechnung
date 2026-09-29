@@ -25,13 +25,15 @@ def _client(pg_session):
     return TestClient(app, follow_redirects=False)
 
 
-def _invoice(pg_session, number="RE-2026-777", status="issued"):
+def _invoice(pg_session, number="RE-2026-777", status="issued", due=None, invoice_type=None):
     c = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Smoke GmbH",
                  address_line1="Weg 1", zip_code="80331", city="München", country="DE")
     pg_session.add(c)
     pg_session.flush()
-    inv = Invoice(invoice_number=number, customer_id=c.id, issue_date=date(2026, 6, 1),
-                  due_date=date(2026, 6, 15), currency="EUR", tax_category="S", status=status,
+    issue = date(2026, 6, 1)
+    inv = Invoice(invoice_number=number, customer_id=c.id, issue_date=issue,
+                  due_date=due or date(2026, 6, 15), currency="EUR", tax_category="S",
+                  status=status, invoice_type=invoice_type,
                   net_total=Decimal("100.00"), tax_total=Decimal("19.00"),
                   gross_total=Decimal("119.00"))
     inv.items = [InvoiceItem(position=1, description="Beratung", unit="Stunde",
@@ -104,3 +106,61 @@ def test_liste_liest_kunden_ohne_n_plus_eins(pg_session):
         assert len(abfragen) <= 6, f"Zu viele SQL-Abfragen: {len(abfragen)}"
     finally:
         event.remove(engine, "before_cursor_execute", zaehle)
+
+
+def test_liste_art_rechnung_blendet_gutschriften_aus(pg_session):
+    _invoice(pg_session, number="RE-ART-1", status="issued")
+    _invoice(pg_session, number="GS-ART-1", status="issued", invoice_type="credit_note")
+    r = _client(pg_session).get("/invoices/?status=issued&art=rechnung")
+    assert r.status_code == 200
+    assert "RE-ART-1" in r.text
+    assert "GS-ART-1" not in r.text
+
+
+def test_liste_faellig_ueberfaellig_blendet_nicht_faellige_aus(pg_session):
+    heute = date.today()
+    gestern = heute.fromordinal(heute.toordinal() - 1)
+    _invoice(pg_session, number="RE-DUE-ALT", due=gestern)
+    _invoice(pg_session, number="RE-DUE-HEUTE", due=heute)
+    r = _client(pg_session).get(
+        "/invoices/?status=issued&art=rechnung&faellig=ueberfaellig"
+    )
+    assert r.status_code == 200
+    assert "RE-DUE-ALT" in r.text
+    assert "RE-DUE-HEUTE" not in r.text
+
+
+def test_liste_unbekannte_art_und_faellig_werden_ignoriert(pg_session):
+    _invoice(pg_session, number="RE-IGN-1", status="issued")
+    r = _client(pg_session).get("/invoices/?art=xyz&faellig=xyz")
+    assert r.status_code == 200
+    assert "RE-IGN-1" in r.text
+
+
+def test_liste_zeigt_aktive_filter_sichtbar_und_aufhebbar(pg_session):
+    _invoice(pg_session, number="RE-FILT-1", status="issued")
+    r = _client(pg_session).get(
+        "/invoices/?status=issued&art=rechnung&faellig=ueberfaellig&versand=offen"
+    )
+    assert r.status_code == 200
+    assert 'name="art"' in r.text
+    assert 'value="rechnung"' in r.text
+    assert "selected" in r.text
+    assert 'name="faellig"' in r.text
+    assert "ueberfaellig" in r.text
+    assert 'name="versand"' in r.text
+    assert "offen" in r.text
+    assert 'href="/invoices"' in r.text  # Reset
+
+
+def test_liste_versand_offen_blendet_versendete_aus(pg_session):
+    offen = _invoice(pg_session, number="RE-SEND-OFFEN", status="issued")
+    versendet = _invoice(pg_session, number="RE-SEND-OK", status="issued")
+    versendet.datev_sent_at = datetime(2026, 9, 2, 13, 0, tzinfo=timezone.utc)
+    pg_session.commit()
+    r = _client(pg_session).get(
+        "/invoices/?status=issued&art=rechnung&versand=offen"
+    )
+    assert r.status_code == 200
+    assert offen.invoice_number in r.text
+    assert versendet.invoice_number not in r.text

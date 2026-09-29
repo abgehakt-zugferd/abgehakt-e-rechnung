@@ -10,7 +10,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.database import get_db
 from app.models.company import Company
@@ -33,10 +32,20 @@ from app.services.invoice_guard import register_invoice_guard
 from app.branding import PRODUCT_NAME, register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
 from app.services.dashboard_kennzahlen import (
+    belegzaehlung,
+    bezahlt_im_zeitraum,
     geschaetzte_steuerabgaben,
     gmbh_ruecklage_ytd,
     nettoumsatz_ytd,
+    nicht_versendet_anzahl,
+    offene_forderungen,
+    quartalsbeginn,
+    schuldige_umsatzsteuer,
     schuldige_umsatzsteuer_ytd,
+    ueberfaellige_forderungen,
+    umsatz_abweichung_prozent,
+    umsatz_im_zeitraum,
+    vorjahres_stichtag,
 )
 from app.services.steuer_ruecklage import steuerruecklage_anteil_prozent
 
@@ -270,40 +279,33 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     today = date.today()
     first_of_month = today.replace(day=1)
     month_start = datetime(first_of_month.year, first_of_month.month, 1, tzinfo=timezone.utc)
-    year_start = today.replace(month=1, day=1)
-
-    total_invoices = db.query(func.count(Invoice.id)).scalar() or 0
-    standard = Invoice.invoice_type.is_(None)
-    open_invoices = (
-        db.query(func.count(Invoice.id))
-        .filter(Invoice.status == "issued", standard)
-        .scalar()
-    ) or 0
-    draft_count = db.query(func.count(Invoice.id)).filter(Invoice.status == "draft").scalar() or 0
-
-    # Bezahlt diesen Monat = als bezahlt vermerkt diesen Monat (updated_at), nicht
-    # Ausstellungsdatum. Juli-Rechnung, die im September bezahlt wird, zaehlt hier.
-    paid_this_month = (
-        db.query(func.coalesce(func.sum(Invoice.gross_total), 0))
-        .filter(
-            Invoice.status == "paid",
-            standard,
-            Invoice.updated_at >= month_start,
+    if first_of_month.month == 1:
+        previous_month_start = datetime(first_of_month.year - 1, 12, 1, tzinfo=timezone.utc)
+    else:
+        previous_month_start = datetime(
+            first_of_month.year, first_of_month.month - 1, 1, tzinfo=timezone.utc,
         )
-        .scalar()
-    ) or Decimal("0")
+    year_start = today.replace(month=1, day=1)
+    prev_year_end = vorjahres_stichtag(today)
+    prev_year_start = date(prev_year_end.year, 1, 1)
+    quarter_start = quartalsbeginn(today)
+    quarter_number = (today.month - 1) // 3 + 1
 
-    revenue_ytd = (
-        db.query(func.coalesce(func.sum(Invoice.gross_total), 0))
-        .filter(Invoice.status.in_(["issued", "paid"]), standard,
-                Invoice.issue_date >= year_start)
-        .scalar()
-    ) or Decimal("0")
+    zaehlung = belegzaehlung(db)
+    offen = offene_forderungen(db)
+    ueberfaellig = ueberfaellige_forderungen(db, today)
+    paid_this_month = bezahlt_im_zeitraum(db, month_start, None)
+    paid_previous_month = bezahlt_im_zeitraum(db, previous_month_start, month_start)
+    revenue_ytd = umsatz_im_zeitraum(db, year_start, None)
+    revenue_prev_ytd = umsatz_im_zeitraum(db, prev_year_start, prev_year_end)
+    revenue_yoy_pct = umsatz_abweichung_prozent(revenue_ytd, revenue_prev_ytd)
 
     vat_liability_ytd = schuldige_umsatzsteuer_ytd(db, year_start)
+    vat_liability_quarter = schuldige_umsatzsteuer(db, quarter_start, None)
     net_revenue_ytd = nettoumsatz_ytd(db, year_start)
     steuer_ruecklage_ytd = gmbh_ruecklage_ytd(net_revenue_ytd, company)
     estimated_tax_ytd = geschaetzte_steuerabgaben(vat_liability_ytd, net_revenue_ytd, company)
+    unversendet = nicht_versendet_anzahl(db)
 
     recent_invoices = (
         db.query(Invoice)
@@ -316,14 +318,23 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "company": company,
-        "total_invoices": total_invoices,
-        "open_invoices": open_invoices,
-        "draft_count": draft_count,
+        "total_invoices": zaehlung.gesamt,
+        "open_invoices": offen.anzahl,
+        "open_amount": offen.betrag,
+        "draft_count": zaehlung.entwurf,
+        "belegzaehlung": zaehlung,
+        "ueberfaellig": ueberfaellig,
         "paid_this_month": paid_this_month,
+        "paid_previous_month": paid_previous_month,
         "revenue_ytd": revenue_ytd,
+        "revenue_prev_ytd": revenue_prev_ytd,
+        "revenue_yoy_pct": revenue_yoy_pct,
         "vat_liability_ytd": vat_liability_ytd,
+        "vat_liability_quarter": vat_liability_quarter,
+        "vat_quarter_label": f"Q{quarter_number} {today.year}",
         "steuer_ruecklage_ytd": steuer_ruecklage_ytd,
         "estimated_tax_ytd": estimated_tax_ytd,
         "steuer_ruecklage_anteil_prozent": steuerruecklage_anteil_prozent(company),
+        "nicht_versendet_anzahl": unversendet,
         "recent_invoices": recent_invoices,
     })
