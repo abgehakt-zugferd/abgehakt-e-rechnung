@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.models.company import Company
 from app.models.invoice import Invoice
-from app.services.beleg_status import ist_nicht_versendet
+from app.services.beleg_status import nicht_versendet_bedingung
 from app.services.steuer_ruecklage import steuerruecklage_anteil
 
 _AUSGESTELLT = ("issued", "paid")
@@ -172,18 +172,18 @@ def ueberfaellige_forderungen(db: Session, heute: date) -> Ueberfaellig:
 def nicht_versendet_anzahl(db: Session) -> int:
     """Gestellte Standardrechnungen ohne Erstversand.
 
-    Die Bedingung kommt aus `beleg_status.ist_nicht_versendet`, nicht noch einmal
-    hier formuliert.
+    Gezaehlt wird in der Datenbank, nicht im Speicher: die Uebersicht laedt sonst
+    bei jedem Aufruf die ganze Rechnungstabelle, um am Ende eine Zahl zu zeigen.
+    Die Bedingung kommt aus `beleg_status`, nicht noch einmal hier formuliert.
     """
-    belege = (
-        db.query(Invoice.status, Invoice.datev_sent_at)
-        .filter(_STANDARD)
-        .all()
-    )
-    return sum(
-        1 for status, sent_at in belege
-        if ist_nicht_versendet(status, sent_at)
-    )
+    return (
+        db.query(func.count(Invoice.id))
+        .filter(
+            _STANDARD,
+            nicht_versendet_bedingung(Invoice.status, Invoice.datev_sent_at),
+        )
+        .scalar()
+    ) or 0
 
 
 def bezahlt_im_zeitraum(
