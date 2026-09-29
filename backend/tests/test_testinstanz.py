@@ -8,6 +8,7 @@ import pytest
 
 from app.config import get_settings
 from app.services import datev_email
+from app.services.mailtext import Mailinhalt
 
 
 @pytest.fixture
@@ -58,8 +59,10 @@ def test_rechnungsmail_nur_an_testpostbox(testinstanz_settings, tmp_path):
          patch.object(datev_email.smtplib, "SMTP", return_value=smtp_cm):
         datev_email.send_invoice(
             to_email="kunde@example.de",
-            invoice_number="RE-2026-001",
-            customer_name="Kunde",
+            mailinhalt=Mailinhalt(
+                betreff="Rechnung RE-2026-001",
+                rumpf="Body RE-2026-001\n",
+            ),
             pdf_path=pdf,
             bcc_datev=True,
             cc_email="cc@example.de",

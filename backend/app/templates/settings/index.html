@@ -219,6 +219,55 @@
     <form id="smtp-test-form" method="post" action="/settings/smtp-test"></form>
     {% endif %}
 
+    <!-- Text der Rechnungsmail je Belegsprache -->
+    <form method="post" action="/settings/mailtext" class="card mb-5">
+        <h2 style="margin-bottom:6px;">Text der Rechnungsmail</h2>
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:12px;">
+            Betreff und Rumpf je Belegsprache. Ein leeres Feld bedeutet den eingebauten Text.
+            Die Sprache kommt aus der jeweiligen Rechnung, nicht aus dieser Seite.
+        </p>
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-bottom:20px;">
+            Erlaubte Platzhalter:
+            {% for name in mail_platzhalter %}{% if not loop.first %}, {% endif %}{{ '{' }}{{ name }}{{ '}' }}{% endfor %}
+        </p>
+
+        <div class="grid grid-cols-1 gap-4">
+            <div>
+                <label class="label">Betreff (Deutsch)</label>
+                <input type="text" name="mail_betreff_de" value="{{ mail_werte.mail_betreff_de }}"
+                       class="input" maxlength="200">
+                {% if mail_fehler.mail_betreff_de %}
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--pink);">{{ mail_fehler.mail_betreff_de }}</p>
+                {% endif %}
+            </div>
+            <div>
+                <label class="label">Rumpf (Deutsch)</label>
+                <textarea name="mail_text_de" rows="12" class="input">{{ mail_werte.mail_text_de }}</textarea>
+                {% if mail_fehler.mail_text_de %}
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--pink);">{{ mail_fehler.mail_text_de }}</p>
+                {% endif %}
+            </div>
+            <div>
+                <label class="label">Betreff (Englisch)</label>
+                <input type="text" name="mail_betreff_en" value="{{ mail_werte.mail_betreff_en }}"
+                       class="input" maxlength="200">
+                {% if mail_fehler.mail_betreff_en %}
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--pink);">{{ mail_fehler.mail_betreff_en }}</p>
+                {% endif %}
+            </div>
+            <div>
+                <label class="label">Rumpf (Englisch)</label>
+                <textarea name="mail_text_en" rows="12" class="input">{{ mail_werte.mail_text_en }}</textarea>
+                {% if mail_fehler.mail_text_en %}
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--pink);">{{ mail_fehler.mail_text_en }}</p>
+                {% endif %}
+            </div>
+        </div>
+        <div style="margin-top:20px;">
+            <button type="submit" class="btn-primary">MAILTEXT SPEICHERN</button>
+        </div>
+    </form>
+
     <!-- DATEV -->
     <form method="post" action="/settings/datev" class="card">
         <h2 style="margin-bottom:6px;">DATEV UPLOAD MAIL</h2>

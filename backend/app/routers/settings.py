@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.company import Company
 from app.models.app_config import AppConfig
-from app.services import datev_email, empfaenger
+from app.services import datev_email, empfaenger, mailtext
+from app.routers import settings_mailtext
 from app.services.bankverbindung import normalisiere_bic, normalisiere_iban, pruefe_bic, pruefe_iban
 from app.services.invoice_number import pruefe_praefix
 from app.services.ust_id_pruefung import (
@@ -58,7 +59,14 @@ def _get_or_create_app_config(db: Session) -> AppConfig:
 
 
 @router.get("/", response_class=HTMLResponse)
-def settings_page(request: Request, db: Session = Depends(get_db), saved: bool = False, error: str = ""):
+def settings_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    saved: bool = False,
+    error: str = "",
+    mail_werte: dict | None = None,
+    mail_fehler: dict | None = None,
+):
     company = _get_or_create_company(db)
     config = _get_or_create_app_config(db)  # Template braucht ihn für die CC-Vorbelegung (#147)
     from app.config import get_settings
@@ -66,6 +74,7 @@ def settings_page(request: Request, db: Session = Depends(get_db), saved: bool =
     # Effektive Konfiguration (DB überschreibt .env) – das Template zeigt genau die Werte,
     # die auch beim Versand verwendet werden, statt DB und .env inkonsistent zu mischen.
     effective = datev_email._get_effective_smtp_config(db)
+    mail_werte = settings_mailtext.mail_form_werte(config, mail_werte)
     return templates.TemplateResponse("settings/index.html", {
         "request": request,
         "company": company,
@@ -82,6 +91,9 @@ def settings_page(request: Request, db: Session = Depends(get_db), saved: bool =
         },
         "saved": saved,
         "error": error,
+        "mail_werte": mail_werte,
+        "mail_fehler": mail_fehler or {},
+        "mail_platzhalter": mailtext.PLATZHALTER,
     })
 
 
@@ -261,3 +273,6 @@ def test_smtp(test_email: str = Form(...), db: Session = Depends(get_db)):
         return RedirectResponse(url="/settings?saved=true", status_code=303)
     except datev_email.EmailError as e:
         return RedirectResponse(url=f"/settings?error={str(e)}", status_code=303)
+
+
+settings_mailtext.register(router, settings_page, _get_or_create_app_config)

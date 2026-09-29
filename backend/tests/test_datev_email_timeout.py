@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.services import datev_email
+from app.services.mailtext import Mailinhalt
 
 
 def _smtp_cfg():
@@ -26,6 +27,10 @@ def _pdf(tmp_path):
     return p
 
 
+def _mail():
+    return Mailinhalt(betreff="Rechnung RE-2026-001", rumpf="Body\n")
+
+
 def test_send_invoice_uebergibt_smtp_timeout(tmp_path):
     """Verbindungsaufbau muss begrenzt sein, nicht der globale Socket-Default None."""
     pdf = _pdf(tmp_path)
@@ -35,8 +40,7 @@ def test_send_invoice_uebergibt_smtp_timeout(tmp_path):
         mock_smtp.return_value.__exit__ = MagicMock(return_value=False)
         datev_email.send_invoice(
             to_email="kunde@example.com",
-            invoice_number="RE-2026-001",
-            customer_name="Test",
+            mailinhalt=_mail(),
             pdf_path=pdf,
             bcc_datev=False,
             db=None,
@@ -69,8 +73,7 @@ def test_send_invoice_bricht_bei_stiller_verbindung_ab(tmp_path):
         with pytest.raises(datev_email.EmailError, match="Zeitlimit|timeout|SMTP"):
             datev_email.send_invoice(
                 to_email="kunde@example.com",
-                invoice_number="RE-2026-001",
-                customer_name="Test",
+                mailinhalt=_mail(),
                 pdf_path=pdf,
                 bcc_datev=False,
                 db=None,

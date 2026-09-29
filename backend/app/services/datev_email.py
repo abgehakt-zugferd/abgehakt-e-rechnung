@@ -109,48 +109,6 @@ def _company(db: Session | None):
     return db.query(Company).filter(Company.id == 1).first()
 
 
-def _anschrift(company) -> str:
-    """„Name, Straße, PLZ Ort" — leer, wenn die Firma unvollständig ist."""
-    if not company:
-        return ""
-    teile = [(company.name or "").strip(), (company.address_line1 or "").strip()]
-    ort = " ".join(t for t in ((company.zip_code or "").strip(),
-                               (company.city or "").strip()) if t)
-    teile.append(ort)
-    return ", ".join(t for t in teile if t)
-
-
-def build_invoice_body(invoice_number: str, company) -> str:
-    """Mailtext zur Rechnung. Der Absender kommt AUSSCHLIESSLICH aus `company`.
-
-    Diese Mail verlässt das Haus (Kunde + BCC an den Steuerberater). Ein hart
-    kodierter Absender würde dort einen fremden Dritten als datenschutzrechtlich
-    Verantwortlichen für fremde Daten benennen — deshalb: die konfigurierte Firma
-    oder gar niemand. Eine falsche Angabe ist schlechter als keine.
-    """
-    name = (company.name or "").strip() if company else ""
-    zeilen = [
-        "Sehr geehrte Damen und Herren,",
-        "",
-        f"anbei erhalten Sie Ihre Rechnung {invoice_number}.",
-        "",
-        "Das Dokument enthält die strukturierten ZUGFeRD-Rechnungsdaten "
-        "(Factur-X EN16931) gemäß § 14 UStG.",
-        "",
-        "Bei Fragen stehen wir Ihnen gerne zur Verfügung.",
-        "",
-        "Mit freundlichen Grüßen",
-    ]
-    if name:
-        zeilen.append(name)
-
-    anschrift = _anschrift(company)
-    if anschrift:
-        zeilen += ["", "---", f"Verantwortlich: {anschrift}"]
-
-    return "\n".join(zeilen) + "\n"
-
-
 def build_test_mail(company) -> tuple[str, str]:
     """(Text, Betreff) der SMTP-Testmail. Nennt bewusst kein Produkt — der
     Platzhalter aus `branding.py` hat in einer echten Mail nichts verloren."""
@@ -163,13 +121,13 @@ def build_test_mail(company) -> tuple[str, str]:
 
 def send_invoice(
     to_email: str,
-    invoice_number: str,
-    customer_name: str,
+    mailinhalt,
     pdf_path: Path,
     bcc_datev: bool = True,
     db: Session = None,
     cc_email: str | None = "",
 ) -> None:
+    """Versendet die Rechnungsmail. `mailinhalt` kommt aus `mailtext.rechnungsmail`."""
     cfg = _get_effective_smtp_config(db)
     if not cfg.smtp_host:
         raise EmailError("SMTP nicht konfiguriert. Bitte Einstellungen ausfüllen.")
@@ -199,12 +157,12 @@ def send_invoice(
         if cc:
             msg["Cc"] = cc
 
-    msg["Subject"] = _betreff(f"Rechnung {invoice_number}")
+    msg["Subject"] = _betreff(mailinhalt.betreff)
 
     if bcc_addresses and not is_testinstanz():
         msg["Bcc"] = ", ".join(bcc_addresses)
 
-    text = "\n".join(body_prefix) + build_invoice_body(invoice_number, _company(db))
+    text = "\n".join(body_prefix) + mailinhalt.rumpf
     msg.set_content(text)
 
     with open(pdf_path, "rb") as f:

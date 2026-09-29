@@ -22,6 +22,7 @@ from app.models.app_config import AppConfig
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceSendLog
 from app.services import datev_email
+from app.services.mailtext import Mailinhalt
 
 
 def teardown_function():
@@ -213,7 +214,11 @@ def test_cc_kopf_traegt_beide_adressen(tmp_path):
     smtp_cm.__enter__.return_value = server
     with patch.object(datev_email, "_get_effective_smtp_config", return_value=cfg), \
          patch.object(datev_email.smtplib, "SMTP", return_value=smtp_cm):
-        datev_email.send_invoice("kunde@example.de", "RE-77", "Kunde", pdf,
-                                 cc_email="ines@example.de, buchhaltung@example.de")
+        datev_email.send_invoice(
+            "kunde@example.de",
+            Mailinhalt(betreff="Rechnung RE-77", rumpf="Body\n"),
+            pdf,
+            cc_email="ines@example.de, buchhaltung@example.de",
+        )
     msg = server.send_message.call_args.args[0]
     assert msg["Cc"] == "ines@example.de, buchhaltung@example.de"

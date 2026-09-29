@@ -28,7 +28,7 @@ from app.services.belegsprache import UnknownDocumentLanguageError, resolve_bele
 from app.services.leistungszeit import parse_leistungszeit_from_form
 from app.models.app_config import AppConfig
 from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
-                          datev_email, aenderungsprotokoll)
+                          datev_email, aenderungsprotokoll, mailtext)
 from app.services.einheiten import (
     UnknownUnitError,
     formular_bezeichnungen,
@@ -1004,20 +1004,32 @@ def send_to_datev(invoice_id: uuid.UUID, customer_email: str = Form(""),
     db.add(protokoll)
     db.commit()
     try:
+        company = db.query(Company).filter(Company.id == 1).first()
+        config = db.query(AppConfig).filter(AppConfig.id == 1).first()
+        inhalt = mailtext.rechnungsmail(invoice, company, config)
         datev_email.send_invoice(
             to_email=to_email,
-            invoice_number=invoice.invoice_number,
-            customer_name=invoice.customer.name,
+            mailinhalt=inhalt,
             pdf_path=pdf_path,
             bcc_datev=True,
             db=db,
             cc_email=cc,
         )
-    except datev_email.EmailError as e:
+    except (
+        UnknownDocumentLanguageError,
+        mailtext.BetreffMitZeilenumbruchError,
+        datev_email.EmailError,
+    ) as e:
         protokoll.success = False
         protokoll.error = str(e)
         db.commit()
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from e
+    except Exception as e:
+        # Jede unerwartete Ausnahme schliesst den Nachweis; still schlucken waere schlimmer.
+        protokoll.success = False
+        protokoll.error = str(e)
+        db.commit()
+        raise
 
     protokoll.success = True
     # `datev_sent_at` ist der ERSTversand und bleibt unverfälscht: der invoice_guard
