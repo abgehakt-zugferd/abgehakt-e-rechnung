@@ -213,3 +213,19 @@ Test rot wird; danach zuruecknehmen. Beide Haelften messen, nicht nur die gruene
 
 Keine Aenderung an Datenbankschema, Migrationen, Modellen, Unveraenderlichkeitswaechtern oder
 Triggern. Es entsteht keine neue Spalte. Alle Kennzahlen sind Abfragen auf Bestehendes.
+
+## Nachtrag 2026-09-30: Zahlungsdatum und Umsatzdefinition
+
+Entscheidung des Betreibers vom 2026-09-30:
+
+1. Neues Feld `invoices.bezahlt_am` (Date, nullable). Beim Markieren als bezahlt wird ein
+   Datum angegeben (Voreinstellung heute, aenderbar). Danach unveraenderlich.
+2. **Umsatz lfd. Jahr** ist die **Nettosumme** bezahlter Standardrechnungen nach
+   `bezahlt_am`. Eine gestellte, unbezahlte Rechnung ist eine offene Forderung, kein Umsatz.
+3. **Bezahlt diesen Monat** bleibt **brutto**, zaehlt aber nach `bezahlt_am` statt
+   `updated_at`.
+4. Soll-Versteuerung unveraendert: schuldige Umsatzsteuer, geschaetzte Steuerabgaben,
+   Nettoumsatz fuer die Ruecklage und Vorsteuer aus Honorargutschriften bleiben nach
+   Rechnungsdatum.
+
+Die Kachel „Offene Rechnungen“ heisst in der Oberflaeche „Offene Forderungen“.

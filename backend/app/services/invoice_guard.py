@@ -10,7 +10,8 @@ kein Codepfad (Router, Skript, SQLAlchemy-Shell) kann sie umgehen.
 Regeln (docs/ARCHITEKTUR.md, „Kritische Regeln — niemals brechen"):
   - Finalisierte Rechnungen (issued/paid/cancelled) sind INHALTLICH unveränderlich.
     Nur Metadaten dürfen sich noch ändern: `status` (per erlaubtem Übergang),
-    `datev_sent_at` (Versandzeitpunkt) und `updated_at` (Auto-Timestamp).
+    `datev_sent_at` (Versandzeitpunkt), `bezahlt_am` (nur mit issued→paid) und
+    `updated_at` (Auto-Timestamp).
   - Rechnungen werden NIE hard-gelöscht (auch keine Entwürfe) — nur `cancelled`/Storno.
   - Entwürfe (draft) bleiben frei bearbeitbar.
 
@@ -41,7 +42,9 @@ ALLOWED_TRANSITIONS: dict[str, set[str]] = {
 
 # Felder, die auch NACH Finalisierung noch geschrieben werden dürfen — Metadaten,
 # kein Rechnungsinhalt. `status` wird separat über ALLOWED_TRANSITIONS geprüft.
-MUTABLE_AFTER_FINALIZE: set[str] = {"status", "datev_sent_at", "updated_at"}
+MUTABLE_AFTER_FINALIZE: set[str] = {
+    "status", "datev_sent_at", "bezahlt_am", "updated_at",
+}
 
 # Session-Schlüssel für die in DIESER Transaktion neu erzeugten Rechnungen. Sie
 # werden erst mit dem Commit „unveränderlich"; ihre schrittweise Befüllung (z. B.
@@ -189,6 +192,32 @@ def _before_flush(session: Session, flush_context, instances) -> None:
                     "datev_sent_at (Versandnachweis) ist nach dem Setzen unveränderlich "
                     "(GoBD) — weder Löschen noch Umdatieren erlaubt."
                 )
+
+        # Zahlungsdatum: nur mit issued → paid setzen, danach forward-only
+        # (Entscheidung 2026-09-30). In MUTABLE_AFTER_FINALIZE, damit das Setzen
+        # beim erlaubten Statuswechsel nicht an der allgemeinen Sperre scheitert.
+        ba_hist = get_history(obj, "bezahlt_am")
+        if ba_hist.has_changes():
+            old_ba = ba_hist.deleted[0] if ba_hist.deleted else session.execute(
+                select(Invoice.__table__.c.bezahlt_am)
+                .where(Invoice.__table__.c.id == obj.id)
+            ).scalar()
+            new_ba = ba_hist.added[0] if ba_hist.added else None
+            if old_ba is not None and new_ba != old_ba:
+                raise InvoiceStateError(
+                    "bezahlt_am (Zahlungsdatum) ist nach dem Setzen unveränderlich "
+                    "(GoBD) — weder Löschen noch Umdatieren erlaubt."
+                )
+            if old_ba is None and new_ba is not None:
+                new_status = (
+                    status_hist.added[0]
+                    if status_hist.has_changes() and status_hist.added
+                    else None
+                )
+                if not (old_status == "issued" and new_status == "paid"):
+                    raise InvoiceStateError(
+                        "bezahlt_am darf nur beim Statuswechsel issued → paid gesetzt werden."
+                    )
 
         # Inhalt einer finalisierten Rechnung ist unveränderlich
         if old_status in FINALIZED:

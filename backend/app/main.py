@@ -2,7 +2,7 @@ import http
 import mimetypes
 import warnings
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 from fastapi import FastAPI, Request, Depends
 from fastapi.exceptions import RequestValidationError
@@ -278,14 +278,11 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/setup", status_code=303)
 
     today = date.today()
-    first_of_month = today.replace(day=1)
-    month_start = datetime(first_of_month.year, first_of_month.month, 1, tzinfo=timezone.utc)
-    if first_of_month.month == 1:
-        previous_month_start = datetime(first_of_month.year - 1, 12, 1, tzinfo=timezone.utc)
+    month_start = today.replace(day=1)
+    if month_start.month == 1:
+        previous_month_start = date(month_start.year - 1, 12, 1)
     else:
-        previous_month_start = datetime(
-            first_of_month.year, first_of_month.month - 1, 1, tzinfo=timezone.utc,
-        )
+        previous_month_start = date(month_start.year, month_start.month - 1, 1)
     year_start = today.replace(month=1, day=1)
     prev_year_end = vorjahres_stichtag(today)
     prev_year_start = date(prev_year_end.year, 1, 1)

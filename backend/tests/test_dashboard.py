@@ -22,7 +22,8 @@ def _request() -> Request:
     })
 
 
-def _inv(pg_session, status, gross, issue=date.today(), net=None, tax=None, due=None):
+def _inv(pg_session, status, gross, issue=date.today(), net=None, tax=None, due=None,
+         bezahlt_am=None):
     c = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Kunde",
                  address_line1="Weg 1", zip_code="80331", city="München", country="DE")
     pg_session.add(c)
@@ -31,10 +32,13 @@ def _inv(pg_session, status, gross, issue=date.today(), net=None, tax=None, due=
         net = Decimal(gross) if gross else Decimal("0")
     if tax is None:
         tax = Decimal("0")
+    if status == "paid" and bezahlt_am is None:
+        bezahlt_am = issue
     inv = Invoice(invoice_number=f"RE-{uuid.uuid4().hex[:6]}", customer_id=c.id,
                   issue_date=issue, due_date=due or issue, currency="EUR",
                   net_total=net, tax_total=tax,
-                  gross_total=Decimal(gross), status=status)
+                  gross_total=Decimal(gross), status=status,
+                  bezahlt_am=bezahlt_am)
     pg_session.add(inv)
     pg_session.commit()
     return inv
@@ -60,38 +64,46 @@ def _gutschrift(pg_session, status, gross, issue=date.today(), net=None, tax=Non
 
 
 def test_dashboard_zaehlt_status_korrekt(pg_session):
+    heute = date.today()
     for _ in range(2):
         _inv(pg_session, "draft", "0")
     for _ in range(3):
         _inv(pg_session, "issued", "100.00")
-    _inv(pg_session, "paid", "50.00")
+    # Netto != Brutto, sonst merkt kein Test den Wechsel auf netto.
+    _inv(
+        pg_session, "paid", "59.50",
+        net=Decimal("50.00"), tax=Decimal("9.50"),
+        bezahlt_am=heute,
+    )
     _inv(pg_session, "cancelled", "0")
 
     ctx = main.dashboard(_request(), pg_session).context
     assert ctx["total_invoices"] == 7
     assert ctx["open_invoices"] == 3      # nur 'issued'
     assert ctx["draft_count"] == 2
-    # issued (3×100) + paid (50) fließen ins YTD, cancelled/draft nicht
-    assert Decimal(ctx["revenue_ytd"]) == Decimal("350.00")
-    assert Decimal(ctx["paid_this_month"]) == Decimal("50.00")
+    # Umsatz: nur bezahlt, netto. Gestellte zaehlen nicht.
+    assert Decimal(ctx["revenue_ytd"]) == Decimal("50.00")
+    assert Decimal(ctx["paid_this_month"]) == Decimal("59.50")
 
 
 def test_dashboard_bezahlt_diesen_monat_nutzt_zahlungsmonat(pg_session):
-    """Juli-Rechnung, im September als bezahlt markiert, zaehlt im September."""
+    """Juli-Rechnung, im laufenden Monat als bezahlt markiert, zaehlt jetzt."""
+    heute = date.today()
     inv = _inv(pg_session, "issued", "300.00", issue=date(2026, 7, 8))
     inv.status = "paid"
+    inv.bezahlt_am = heute
     pg_session.commit()
     ctx = main.dashboard(_request(), pg_session).context
     assert Decimal(ctx["paid_this_month"]) == Decimal("300.00")
 
 
 def test_dashboard_bezahlt_diesen_monat_ignoriert_vorherigen_monat(pg_session):
-    from datetime import datetime, timezone
-
-    _inv(pg_session, "paid", "100.00", issue=date(2026, 7, 8))
-    inv = pg_session.query(Invoice).filter(Invoice.gross_total == Decimal("100.00")).one()
-    inv.updated_at = datetime(2026, 8, 15, tzinfo=timezone.utc)
-    pg_session.commit()
+    heute = date.today()
+    if heute.month == 1:
+        bezahlt = date(heute.year - 1, 12, 15)
+    else:
+        bezahlt = date(heute.year, heute.month - 1, 15)
+    _inv(pg_session, "paid", "100.00", issue=date(2026, 7, 8), bezahlt_am=bezahlt)
     ctx = main.dashboard(_request(), pg_session).context
     assert Decimal(ctx["paid_this_month"]) == Decimal("0.00")
 
@@ -161,7 +173,12 @@ def test_dashboard_steuer_kennzahlen_nutzt_einstellungen(pg_session):
 
 def test_dashboard_ytd_ignoriert_gutschriften(pg_session):
     """#5: Gutschriften duerfen den YTD-Umsatz nicht aufblaehen."""
-    _inv(pg_session, "issued", "100.00")
+    heute = date.today()
+    _inv(
+        pg_session, "paid", "119.00",
+        net=Decimal("100.00"), tax=Decimal("19.00"),
+        bezahlt_am=heute,
+    )
     _gutschrift(pg_session, "issued", "50.00")
     ctx = main.dashboard(_request(), pg_session).context
     assert Decimal(ctx["revenue_ytd"]) == Decimal("100.00")
@@ -187,30 +204,33 @@ def test_dashboard_liefert_offenen_betrag_und_ueberfaellig(pg_session):
 
 
 def test_dashboard_vormonat_und_vorjahr_im_kontext(pg_session):
-    from datetime import datetime, timezone
-
     from app.services.dashboard_kennzahlen import vorjahres_stichtag
 
     heute = date.today()
-    # Vorjahresbeleg am Stichtag: liegt an jedem Kalendertag im Vergleichsfenster
-    # (auch am 1. Januar und am 31. Dezember, siehe test_vorjahresbeleg_am_jahresrand).
-    _inv(pg_session, "issued", "200.00", issue=heute)
-    _inv(pg_session, "issued", "80.00", issue=vorjahres_stichtag(heute))
-
-    bezahlt = _inv(pg_session, "paid", "30.00", issue=heute)
-    bezahlt.updated_at = datetime(heute.year, heute.month, 1, tzinfo=timezone.utc)
     if heute.month == 1:
-        vormonat = datetime(heute.year - 1, 12, 15, tzinfo=timezone.utc)
+        vormonat_tag = date(heute.year - 1, 12, 15)
     else:
-        vormonat = datetime(heute.year, heute.month - 1, 15, tzinfo=timezone.utc)
-    alt = _inv(pg_session, "paid", "12.00", issue=heute)
-    alt.updated_at = vormonat
-    pg_session.commit()
+        vormonat_tag = date(heute.year, heute.month - 1, 15)
+    # Bezahlt dieses Jahr (netto 200) und Vorjahr zum Stichtag (netto 80).
+    _inv(
+        pg_session, "paid", "238.00",
+        net=Decimal("200.00"), tax=Decimal("38.00"),
+        issue=heute, bezahlt_am=heute,
+    )
+    _inv(
+        pg_session, "paid", "95.20",
+        net=Decimal("80.00"), tax=Decimal("15.20"),
+        issue=vorjahres_stichtag(heute),
+        bezahlt_am=vorjahres_stichtag(heute),
+    )
+    _inv(pg_session, "paid", "30.00", issue=heute, bezahlt_am=heute)
+    _inv(pg_session, "paid", "12.00", issue=heute, bezahlt_am=vormonat_tag)
 
     ctx = main.dashboard(_request(), pg_session).context
     assert Decimal(ctx["paid_previous_month"]) == Decimal("12.00")
     assert Decimal(ctx["revenue_prev_ytd"]) == Decimal("80.00")
-    # YTD = 200 + 30 + 12 = 242; Vorjahr 80 → (242 - 80) / 80 * 100 = 202,5
+    # YTD netto: 200 + 30 + 12 (Vormonat liegt im selben Jahr) = 242;
+    # Vorjahr 80 → (242 - 80) / 80 * 100 = 202,5
     assert ctx["revenue_yoy_pct"] == Decimal("202.5")
     assert ctx["vat_quarter_label"].startswith("Q")
     assert "nicht_versendet_anzahl" in ctx

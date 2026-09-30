@@ -1,6 +1,6 @@
 """Tests fuer Steuer-Kennzahlen und Belegaggregationen auf der Uebersicht."""
 
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 
 from app.services.dashboard_kennzahlen import (
@@ -121,15 +121,17 @@ def test_aeltester_tage_nimmt_kleinstes_due_date(pg_session):
 def test_vormonat_enthalt_laufenden_monat_nicht(pg_session):
     from tests.test_dashboard import _inv
 
-    heute = date(2026, 9, 28)
-    monat_beginn = datetime(2026, 9, 1, tzinfo=timezone.utc)
-    vormonat_beginn = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    monat_beginn = date(2026, 9, 1)
+    vormonat_beginn = date(2026, 8, 1)
 
-    dieser = _inv(pg_session, "paid", "100.00", issue=date(2026, 8, 15))
-    dieser.updated_at = datetime(2026, 9, 10, tzinfo=timezone.utc)
-    vorher = _inv(pg_session, "paid", "40.00", issue=date(2026, 7, 15))
-    vorher.updated_at = datetime(2026, 8, 20, tzinfo=timezone.utc)
-    pg_session.commit()
+    _inv(
+        pg_session, "paid", "100.00",
+        issue=date(2026, 8, 15), bezahlt_am=date(2026, 9, 10),
+    )
+    _inv(
+        pg_session, "paid", "40.00",
+        issue=date(2026, 7, 15), bezahlt_am=date(2026, 8, 20),
+    )
 
     assert bezahlt_im_zeitraum(pg_session, vormonat_beginn, monat_beginn) == Decimal("40.00")
     assert bezahlt_im_zeitraum(pg_session, monat_beginn, None) == Decimal("100.00")
@@ -142,7 +144,10 @@ def test_vorjahres_stichtag_am_29_februar():
 def test_umsatz_vorjahr_null_liefert_keine_prozentzahl(pg_session):
     from tests.test_dashboard import _inv
 
-    _inv(pg_session, "issued", "100.00", issue=date(2026, 3, 1))
+    _inv(
+        pg_session, "paid", "100.00",
+        issue=date(2026, 3, 1), bezahlt_am=date(2026, 3, 1),
+    )
     vorjahr = umsatz_im_zeitraum(
         pg_session, date(2025, 1, 1), date(2025, 3, 15),
     )

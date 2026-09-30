@@ -39,9 +39,10 @@ lesbar und für die Buchhaltungssoftware des Empfängers auswertbar, in einer Da
 - **Versand** per E-Mail an den Kunden, optional mit Kopie an die Kanzlei und Blindkopie an die
   DATEV-Upload-Adresse, über Ihren eigenen Mailserver.
 - **GoBD-Export:** Prüferpaket mit Belegen, Stammdaten und Änderungsprotokoll für einen Zeitraum.
-- **Übersicht mit Kennzahlen:** Rechnungen gesamt, offene Posten, Bezahlt diesen Monat,
-  Umsatz seit Jahresanfang, **schuldige Umsatzsteuer** (USt gestellter und bezahlter
-  Standardrechnungen abzüglich Gutschriften)
+- **Übersicht mit Kennzahlen:** Rechnungen gesamt, offene Forderungen, Bezahlt diesen Monat
+  (brutto nach Zahlungsdatum), Umsatz seit Jahresanfang (netto, nur bezahlte Belege nach
+  Zahlungsdatum), **schuldige Umsatzsteuer** (USt gestellter und bezahlter
+  Standardrechnungen abzüglich Gutschriften, weiterhin nach Rechnungsdatum)
   und **geschätzte Steuerabgaben** (USt abzüglich der Vorsteuer aus Honorargutschriften,
   plus pauschale GmbH-Rücklage auf den positiven
   Nettosaldo aus Standardrechnungen und Gutschriften für

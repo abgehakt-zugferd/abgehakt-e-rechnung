@@ -54,6 +54,7 @@ FELDNAMEN = {
     "tax_category": "Steuertyp",
     "zugferd_profile": "ZUGFeRD-Profil",
     "datev_sent_at": "DATEV-Versand",
+    "bezahlt_am": "Zahlungsdatum",
     "archive_until": "Aufbewahrung bis",
     "pdf_filename": "PDF-Datei",
     "zugferd_xml": "ZUGFeRD-XML",
