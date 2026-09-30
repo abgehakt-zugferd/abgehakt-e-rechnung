@@ -67,7 +67,8 @@ backend/app/
 │   ├── archive.py            # Archivansicht storage/{pdfs,xml}
 │   ├── updates.py            # Update-Hinweis (nur auf Klick)
 │   ├── uebergaben.py         # Übergabebelege ansehen, als Entwurf anlegen (#22)
-│   └── settings.py           # Firmendaten, SMTP-Test
+│   ├── settings.py           # Firmendaten, SMTP-Test
+│   └── settings_mailtext.py  # Mailtext der Rechnungsmail je Sprache
 ├── services/                 # Fachlogik, framework-unabhängig
 │   ├── zugferd_xml.py        # CII-XML nach EN 16931
 │   ├── pdf_generator.py      # sichtbares PDF (ReportLab)
@@ -78,6 +79,7 @@ backend/app/
 │   ├── einheiten.py          # fester Einheitenkatalog für Formular, Validator und CII
 │   ├── belegart.py           # Belegart → BT-3 TypeCode, manuelle Wählbarkeit
 │   ├── belegsprache.py       # Belegsprache de|en → PDF-Darstellung
+│   ├── mailtext.py           # Betreff und Rumpf der Rechnungsmail je Belegsprache
 │   ├── invoice_number.py     # fortlaufende Nummern
 │   ├── customer_number.py    # Vorschlag für Kundennummern, überschreibbar
 │   ├── storno.py             # Gutschrift zum Original (TypeCode 381), reine Logik
@@ -88,12 +90,13 @@ backend/app/
 │   ├── gobd_export.py        # ZIP-Export (CSV + Belege + Audit-Log)
 │   ├── datev_email.py        # SMTP-Versand + DATEV-BCC
 │   ├── crypto.py             # verschlüsselt Secrets in der Datenbank (SMTP-Passwort)
-│   ├── dashboard_kennzahlen.py # USt- und Steuer-Rücklagen-Kennzahlen für die Übersicht
+│   ├── dashboard_kennzahlen.py # USt-, Steuer-Rücklagen-, offene und überfällige Forderungen
 │   ├── steuer_ruecklage.py   # konfigurierbare GmbH-Pauschale (KSt/GewSt) für Rücklagen
 │   ├── beleg_status.py       # Status-Etiketten Versendet / Nicht versendet in der UI
 │   ├── secret_key.py         # Schlüssel dafür, als Datei im storage-Volume
 │   ├── epc_qr.py             # EPC-QR (Girocode) für Rechnung und Gutschrift
 │   ├── bankverbindung.py     # IBAN/BIC normalisieren und prüfen
+│   ├── iban.py               # IBAN-Prüfung mit Registry-Länge und MOD 97-10
 │   ├── adresse.py            # Adresszeilen für Beleg und XML
 │   ├── leistungszeit.py      # Leistungsdatum und -zeitraum (§ 14 Abs. 4 Nr. 6)
 │   ├── archive_frist.py      # archive_until = 31.12. des Ausstellungsjahrs + 8
@@ -103,9 +106,10 @@ backend/app/
 │   ├── uebergabe_schluessel.py  # öffentliche Schlüssel der Übergabe-Absender
 │   ├── uebergabe_befund.py   # ein Befund je Beleg, Lesen ohne Wirkung
 │   ├── uebergabe_eingang.py  # DB-Gedächtnis des Lesens (Idempotenz)
-│   ├── abrechnungsauftrag_wirkung.py  # Entwürfe aus angenommenem Beleg (TypeCode 389)
+│   ├── abrechnungsauftrag_wirkung.py  # Entwürfe aus angenommenem Beleg (TypeCode 381 oder 389)
 │   ├── belegsperre.py        # was am Entwurf aus einem Beleg feststeht
 │   ├── protokoll.py          # Protokollfassung, Befundcodes, Feldverzeichnis
+│   ├── rechnungsliste_filter.py # Status-, Such- und Auswahlfilter der Liste
 │   ├── update_check.py       # Versionsabruf, ausschließlich auf Klick
 │   └── update_banner.py      # was daraus im Seitenkopf erscheint, rein und testbar
 ├── dependencies/             # was jede Route braucht
@@ -117,7 +121,7 @@ backend/app/
 └── templates/                # Jinja2
 ```
 
-Laufzeitdaten liegen unter `storage/{pdfs,xml,temp}/`, als Docker-Volume und nicht im Repo.
+Laufzeitdaten liegen unter `storage/{pdfs,xml,temp}/`, als Bind-Mount aus dem Projektverzeichnis.
 
 ## Kritische Regeln, niemals brechen
 
@@ -126,7 +130,7 @@ Laufzeitdaten liegen unter `storage/{pdfs,xml,temp}/`, als Docker-Volume und nic
 - Rechnungen (`invoices`) werden **nie hart gelöscht**, nur der Status wird gesetzt.
 - Kunden (`customers`) werden **nie hart gelöscht**, gesetzt wird nur `deleted_at`.
 - Finalisierte Rechnungen (`issued`/`paid`/`cancelled`) sind **unveränderlich**.
-- `archive_until` ist immer `issue_date` + 8 Jahre. Ändert sich das Rechnungsdatum, muss die
+- `archive_until` ist der 31.12. des Ausstellungsjahrs + 8. Ändert sich das Rechnungsdatum, muss die
   Frist mitwandern (`_apply_totals`), sonst driftet sie gegen den Beleg.
 - Der Betriebsprüfungs-Export (Z3) liegt unter `GET /export/gobd?von=…&bis=…`.
 - Das Audit-Log füllt sich automatisch über Session-Events (`services/audit.py`, registriert
@@ -135,8 +139,9 @@ Laufzeitdaten liegen unter `storage/{pdfs,xml,temp}/`, als Docker-Volume und nic
 ### Zwei Verteidigungslinien, nicht eine
 
 **Erste Linie: Guards auf Session-Ebene** (`before_flush`, in `main.py` registriert **vor**
-dem Audit-Listener). Sie greifen auf **jeder** Session, ob Web, Skript oder Shell; kein
-Codepfad kommt daran vorbei. Die Reihenfolge Guards → Audit ist Pflicht, sonst schreibt das
+dem Audit-Listener). Nach der Registrierung greifen sie bei ORM-Flushes; direktes SQL und
+Bulk-Operationen umgehen sie. Skripte ohne Registrierung sind ebenfalls nicht erfasst. Die
+Reihenfolge Guards → Audit ist Pflicht, sonst schreibt das
 Audit-Log Einträge für einen Flush, der anschließend abbricht.
 
 - `services/invoice_guard.py`: Statusmaschine, Hard-Delete-Verbot, Unveränderlichkeit
@@ -153,7 +158,8 @@ manuellen `psql` als Eigentümer. Die DDL steht **nur** in
 `app/db/immutability_triggers.py`; die Migration führt sie von dort aus. Die Anwendung selbst
 läuft als Rolle mit geringstem Recht (`APP_DATABASE_URL`, fail-closed) und hat auf den
 geschützten Tabellen kein DELETE und kein TRUNCATE. Die UPDATE-Statusmaschine bleibt
-ORM-seitig: eine bewusst dokumentierte Restlücke, abgesichert über Audit-Log und Backups.
+ORM-seitig: eine bewusst dokumentierte Restlücke. Direkte SQL-Änderungen umgehen auch das
+ORM-Audit-Log; Backups bleiben eine unabhängige Vergleichsquelle.
 
 Rollen und ihre Aufgaben: siehe [`DEV-DOCU.md`](DEV-DOCU.md), Abschnitt „Rollen-Topologie".
 
@@ -171,7 +177,8 @@ werden konnte. Das Gate ist mehrstufig und fail-closed:
 3. Danach Pflichtprüfung des **kombinierten** PDFs mit `mustang.validate(zugferd_pdf)`.
 4. `issued` nur bei `result["is_valid"]` **und** `XML:valid` im Mustang-Rohbericht.
 
-Scheitert eine der Stufen 2 bis 4, bleibt die Rechnung `draft`, es gibt `400`,
+Melden PDF/A-Konvertierung, Einbettung oder Pflichtprüfung einen Fehlschlag, bleibt die
+Rechnung `draft`, es gibt `400`,
 `db.rollback()` läuft, und das Arbeitsverzeichnis samt Zwischenartefakten wird gelöscht.
 Im Archiv landet nichts, und es gibt keinen Rückfall auf ein reines Sicht-PDF. Das würde
 eine unvollständige E-Rechnung zementieren. Als zusätzliche Absicherung verweigert
@@ -185,19 +192,21 @@ eine unvollständige E-Rechnung zementieren. Als zusätzliche Absicherung verwei
 - Seit 01.01.2025 hat der XML-Teil rechtlich **Vorrang** vor dem sichtbaren PDF.
 - Die XML wird in `invoices.zugferd_xml` **und** als Datei in `storage/xml/` gehalten. Die
   Datenbank ist der Primärspeicher, die Datei die Zweitablage.
-- Erfolg von `mustang.combine` wird an `rc == 0 **und** Existenz der Ausgabedatei` geprüft,
+- Erfolg von `mustang.combine` wird an `rc == 0`, Existenz und positiver Größe der Ausgabedatei
+  geprüft,
   nie am Rückgabewert allein. Warum, steht in [`DEV-DOCU.md`](DEV-DOCU.md).
 
 ### DATEV-Upload-Mail
 
 - Akzeptiert **nur PDF**, niemals reine XML.
-- Maximal 20 MB pro Datei (wird geprüft).
+- Maximal 20 MiB pro Datei (20 × 1024 × 1024 Byte, wird geprüft).
 - Der Versandnachweis ist zweigeteilt: `invoices.datev_sent_at` ist der **Erst**versand und
   wird nur gesetzt, solange er `NULL` ist. Er ist **forward-only**: der Guard verbietet
   Löschen und Umdatieren; ein einmal belegter Versand lässt sich nicht nachträglich
   bestreiten. **Alle** Versuche stehen in `invoice_send_log`, auch gescheiterte samt
-  SMTP-Fehlertext. Ein Aufruf, der an den Vorprüfungen scheitert, hat nie gesendet und darf
-  **keine** Protokollzeile schreiben.
+  SMTP-Fehlertext. Ablehnungen bei Status-, PDF-, Empfänger- und CC-Prüfung im Router schreiben
+  **keine** Protokollzeile. Mailtext-, SMTP-Konfigurations- und Größenprüfung folgen erst nach
+  dem Commit des offenen Versandprotokolls; auch ihre Fehler werden dort festgehalten.
 
 ### Statusmaschine
 
@@ -228,11 +237,11 @@ Korrektur eines gestellten Belegs ausschließlich per Storno.
 Drei Punkte, die dabei nicht auseinanderlaufen dürfen:
 
 - **Positionen werden ersetzt, nicht zusammengeführt.** Alte Zeilen gehen **einzeln** über
-  `db.delete()`. Ein Bulk-`query().delete()` umginge Guard und Audit-Log stillschweigend.
+  `db.delete()`. Ein Bulk-`query().delete()` umginge den Guard; Positionen werden nicht auditiert.
 - **`archive_until` folgt `issue_date`.**
 - **`invoice_number`, `id`, `status`, `created_at` sind unveränderlich.**
 
-### Ein Entwurf hat keine Pflichtfelder, auch keinen Kunden
+### Ein Entwurf braucht keinen Kunden; Rechnungs- und Fälligkeitsdatum bleiben Pflicht
 
 `invoices.customer_id` ist **nullable** (Migration 004), und das Auswahlfeld im Formular trägt
 kein `required`. Beides gehört zusammen: nähme der Server den Entwurf an und bliebe das
@@ -261,7 +270,8 @@ Die XML-Vorschau daneben kommt ohne Kunden aus, `zugferd_xml` ist durchgehend `N
 `storage/`, kein `commit()`, kein `ValidationResult`, keine Zuweisung an `zugferd_xml`.
 `storage/pdfs/` ist das GoBD-Archiv; ein Vorschau-PDF dort wäre später von einem echten Beleg
 nicht mehr zu unterscheiden. Das PDF entsteht in einer Wegwerf-Datei und trägt ein
-`ENTWURF`-Wasserzeichen: es hat schon die endgültige Nummer, aber keine eingebettete XML
+`ENTWURF`- bzw. bei englischer Belegsprache `DRAFT`-Wasserzeichen: es hat schon die endgültige
+Nummer, aber keine eingebettete XML
 (§-14c-Risiko, falls es jemand weitergibt).
 
 ### Das Vorbefüllen aus einer Vorlage schreibt nichts
@@ -276,8 +286,9 @@ Entwurfs-Vorschau nichts schreibt.
 
 ### Die Belegsprache gehört an die Rechnung
 
-`invoices.document_language` ist `de` oder `en` und steuert nur die menschliche Darstellung
-des Belegs (PDF-Titel, Labels, Zahlen- und Datumsformat). Sie hängt weder am Kundenland noch
+`invoices.document_language` ist `de` oder `en` und steuert die menschliche Darstellung
+des Belegs (PDF-Titel, Labels, Zahlen- und Datumsformat) sowie den Mailtext. Sie hängt weder am
+Kundenland noch
 an einer globalen Laufzeiteinstellung. Unbekannte Werte fallen nicht still auf Deutsch
 zurück (`resolve_belegsprache`). Nach dem Finalisieren ist das Feld unveränderlich (nicht in
 `MUTABLE_AFTER_FINALIZE`). Die CII-XML trägt **kein** Sprachattribut, und übersetzt wird dort
@@ -365,6 +376,30 @@ Speichern setzt den Prüfstand zurück (`zuruecksetzen` in `ust_id_pruefung.py`)
 Der Validator (`validator._ust_id_validator_issues`) mappt den Prüfstand auf Warnungen und
 Fehler beim Finalisieren. Tests: `test_ust_id_pruefung.py`, `test_ust_id_zustimmung.py`.
 
+### Kennzahl, Etikett und Versandfilter sind drei Bedingungen, nicht eine
+
+Die Bedingung „gestellt und ohne Erstversand" steht in `beleg_status.py` als SQL-Ausdruck
+`nicht_versendet_bedingung` und als Python-Prüfung `ist_nicht_versendet` für das Etikett.
+Die Kennzahl (`dashboard_kennzahlen.nicht_versendet_anzahl`) schränkt zusätzlich auf
+Standardrechnungen ein. Der Versandfilter (`rechnungsliste_filter.filtere_rechnungsliste`)
+nutzt dagegen `ohne_erstversand_bedingung`, also nur den fehlenden Erstversand.
+Der Dashboard-Link kombiniert deshalb `status=issued`, `art=rechnung` und `versand=offen`.
+
+Das ist eine Regel und keine Empfehlung, weil zwei getrennte Fassungen derselben Bedingung
+auseinanderdriften, ohne dass es auffällt. Der Schaden ist dann nicht ein Rechenfehler, sondern
+ein Widerspruch: Der Hinweisstreifen nennt eine Zahl, und die Liste, auf die er verlinkt, zeigt
+eine andere Menge. Wer das sieht, glaubt danach keiner Zahl mehr. Die Bedingung wird deshalb in
+SQL formuliert; Zählung und Filterung müssen dieselben zusätzlichen Bedingungen setzen.
+Das Etikett wertet die entsprechende Python-Prüfung im Speicher aus.
+
+### Der Betreff der Rechnungsmail trägt keinen Zeilenumbruch
+
+`mailtext.pruefe_betreff` lehnt einen Betreff mit `\n` oder `\r` ab, und zwar nach dem Einsetzen
+der Platzhalter, weil der Umbruch auch aus einem Wert kommen kann. Ein Mail-Header endet am
+Zeilenumbruch; was danach steht, wäre entweder verloren oder ein zusätzlicher Header. Für den
+Rumpf gilt die Einschränkung nicht. Tests: `test_mailtext_betreff_zeilenumbruch.py`,
+`test_mailtext.py`.
+
 ## Datenbankmigrationen
 
 ```bash
@@ -382,7 +417,7 @@ Dateisystem des Containers, und sie ist beim nächsten `up` verschwunden.
 Modellen erzeugt und legt das Schema des Extraktionsstands an, dazu die GoBD-Trigger (aus
 `app/db/immutability_triggers.py`, deren einzige Quelle) und die beiden Singleton-Zeilen
 `company` und `app_config`. Ab hier gilt der normale Ablauf: jede weitere Änderung ist eine
-**neue** Migration (derzeit `002` bis `015`).
+**neue** Migration (derzeit `002` bis `016`).
 
 **`alembic check` ist hier ein echtes Gate** und muss grün bleiben. Modelle und Migrationen
 sind deckungsgleich, und `tests/test_migrationskette.py` prüft das bei jedem Lauf gegen eine

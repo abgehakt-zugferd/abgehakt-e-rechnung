@@ -39,7 +39,8 @@ dem Finalisieren sind Art und Sprache wie der übrige Beleginhalt nicht mehr än
 
 ### Kunden
 
-Jeder Kunde hat eine **Kundennummer** (Pflicht), einen Namen und optional Adresse, E-Mail,
+Jeder Kunde hat eine **Kundennummer** (bei leerer Eingabe automatisch vergeben), einen Namen
+und eine Pflichtanschrift; optional sind E-Mail,
 Telefon und USt-IdNr. Zusätzlich können Sie pro Kunde **CC-Adressen** hinterlegen: diese
 erhalten jede Rechnung an diesen Kunden in Kopie und überlagern die Voreinstellung aus den
 Einstellungen.
@@ -73,14 +74,45 @@ Die Startseite **Übersicht** fasst den Stand zusammen:
 | Kennzahl | Bedeutung |
 |---|---|
 | Rechnungen gesamt | Alle Belege in der Datenbank (jeden Status) |
-| Offene Rechnungen | Finalisiert (`gestellt`), noch nicht bezahlt, ohne Gutschriften |
-| Bezahlt diesen Monat | Brutto-Summe der Rechnungen, die **in diesem Kalendermonat** als bezahlt vermerkt wurden (nicht Ausstellungsdatum) |
-| Umsatz lfd. Jahr | Brutto-Umsatz gestellter und bezahlter Rechnungen seit Jahresanfang (ohne Gutschriften) |
-| Schuldige Umsatzsteuer | Summe der auf gestellten Belegen **ausgewiesenen USt** im laufenden Jahr, abzüglich Gutschriften, **ohne Vorsteuerabzug** (das Programm kennt keine Eingangsrechnungen) |
-| Gesch. Steuerabgaben | Schuldige USt plus pauschale **KSt/GewSt-Rücklage** auf den Nettoumsatz (Anteil in den Einstellungen) |
+| Offene Rechnungen | Finalisierte (`gestellt`), noch nicht bezahlte Rechnungen; Gutschriften zählen nicht mit |
+| Bezahlt diesen Monat | Brutto-Summe bezahlter Standardrechnungen mit `updated_at` ab Monatsanfang (letzte Änderung, kein eigener Zahlungszeitpunkt; ohne obere Datumsgrenze) |
+| Umsatz lfd. Jahr | Brutto-Umsatz gestellter und bezahlter Standardrechnungen seit Jahresanfang (ohne obere Datumsgrenze) |
+| Schuldige Umsatzsteuer | Summe der **ausgewiesenen USt** gestellter und bezahlter Standardrechnungen seit Jahresanfang, abzüglich gestellter und bezahlter Gutschriften (`credit_note`), **ohne Vorsteuerabzug** und ohne obere Datumsgrenze (das Programm kennt keine Eingangsrechnungen) |
+| Gesch. Steuerabgaben | Schuldige USt plus pauschale **KSt/GewSt-Rücklage** auf den positiven Nettosaldo aus Standardrechnungen und Gutschriften (Anteil in den Einstellungen) |
+| Offene Forderungen | Anzahl und Bruttosumme der gestellten Standardrechnungen. Gutschriften zählen nicht mit. |
+| Überfällige Forderungen | Davon jene, deren Fälligkeitsdatum vor heute liegt, mit Anzahl, Bruttosumme und dem Alter der ältesten in Tagen. |
+| Nicht versendete Belege | Anzahl der gestellten Standardrechnungen ohne Erstversand. Diese Zahl wird in der Datenbank gezählt, nicht im Speicher. |
+| Umsatzvergleich | Dem Umsatz des laufenden Jahres stellt die Übersicht den Umsatz zum selben Kalendertag des Vorjahres gegenüber und nennt die Abweichung in Prozent. Fehlt ein Vergleichswert, weil der Vorjahreswert null ist, entfällt die Prozentangabe. |
+
+Die Belegzahlen je Status und die Forderungen sind Verweise; die Gesamtzahl ist kein Verweis.
+Ein Klick öffnet die Rechnungsliste mit
+genau der Auswahl, die die Zahl gezählt hat. Kennzahl und Liste zeigen deshalb dieselbe Menge.
+Für die Umsatz- und Steuerkennzahlen gilt das nicht, sie summieren und verlinken nichts.
 
 In der Rechnungsliste und auf der Detailseite unterscheidet der Status **Versendet** und
-**Nicht versendet** bei finalisierten Belegen. **Bezahlt** bleibt der Endzustag nach Zahlungseingang.
+**Nicht versendet** bei gestellten Belegen. **Bezahlt** bleibt der Endzustand nach Zahlungseingang.
+
+---
+
+## Die Rechnungsliste filtern
+
+Über der Rechnungsliste stehen fünf Filter, die sich kombinieren lassen:
+
+| Filter | Auswahl |
+|---|---|
+| Suche | Rechnungsnummer oder Kundenname, als Teiltreffer |
+| Status | Entwurf, Gestellt, Bezahlt, Storniert, Verworfen |
+| Art | Rechnung oder Gutschrift |
+| Frist | **Überfällig**: Fälligkeitsdatum liegt vor heute |
+| Versand | **Ohne Versand**: ohne Erstversand, unabhängig vom Status |
+
+**Ohne Versand** prüft nur den fehlenden Erstversand. Das Etikett **Nicht versendet** verlangt
+zusätzlich den Status **Gestellt**, die Kennzahl auf der Übersicht außerdem die Art **Rechnung**.
+
+Solange Sie keinen Status wählen, blendet die Liste verworfene Entwürfe aus; sie erscheinen nur
+über **Verworfen**. Die gesetzten Filter stehen in der Adresse der Seite, eine gefilterte Liste
+lässt sich also als Lesezeichen ablegen. Unbekannte Werte für Art, Frist oder Versand werden
+ignoriert; andere Filter bleiben wirksam. Ein unbekannter Status liefert eine leere Liste.
 
 ---
 
@@ -113,16 +145,19 @@ bezahlt hat, nutzt:
 docker exec abgehakt_app python scripts/beleg_migration_nachziehen.py Z-2026-002 Z-2026-004
 ```
 
-Das Skript setzt, sofern noch leer:
+Das Skript setzt:
 
-- `datev_sent_at` auf das **Rechnungsdatum** (Erstversand),
-- den Status **bezahlt** (falls noch `gestellt`),
-- einen Eintrag im **Versandprotokoll** (Hinweis: historischer Versand, kein erneuter Mailversand),
-- den Bezahlt-Zeitpunkt (`updated_at`) auf das **Fälligkeitsdatum**, damit „Bezahlt diesen Monat“
+- `datev_sent_at`, sofern noch leer, auf das **Rechnungsdatum** (Erstversand),
+- den Status **bezahlt** (bei jedem anderen Status),
+- einen Eintrag im **Versandprotokoll**, sofern noch keiner existiert (Hinweis: historischer
+  Versand, kein erneuter Mailversand),
+- bei jedem Aufruf den Bezahlt-Zeitpunkt (`updated_at`) auf das **Fälligkeitsdatum**, damit
+  „Bezahlt diesen Monat“
   nicht fälschlich den Umzugmonat zeigt.
 
-Exakte Versand- oder Zahlungsdaten aus dem alten System können nur per Skript-Anpassung oder
-direkter Datenbankkorrektur gesetzt werden; die Standard-Schätzung ist bewusst aus
+Exakte Versand- oder Zahlungsdaten aus dem alten System können über die Funktionsparameter
+`versendet_am` und `bezahlt_am` von `nachziehen` gesetzt werden; die Standard-Schätzung ist
+bewusst aus
 Rechnungs- und Fälligkeitsdatum.
 
 ---
@@ -300,7 +335,7 @@ Beleg, nicht zum Kundenland, zur Adresse oder zur USt-IdNr.; es gibt dafür kein
 Einstellung. Eine Vorlage und eine Stornorechnung übernehmen die Sprache ihres Ausgangsbelegs,
 eine aus Vorlage angelegte Rechnung kann sie vor dem Speichern noch ändern.
 
-Die Belegsprache steuert nur die menschenlesbare Darstellung im PDF: Belegtitel,
+Die Belegsprache steuert den Mailtext und die menschenlesbare Darstellung im PDF: Belegtitel,
 Beschriftungen, Zahlen und Datumsformate sowie die vom Programm erzeugten Hinweise. Sie
 übersetzt weder Positionsbeschreibungen noch selbst eingegebene Zahlungsbedingungen. Die
 Sprachkennzeichnung selbst wird nicht in die E-Rechnungs-XML geschrieben. Bleiben die
@@ -312,6 +347,40 @@ Standard-Zahlungsbedingungen; fehlen sie, weist das Programm das Speichern zurü
 Nach dem Finalisieren ist die Sprache unveränderlich. Ein fremder oder manipulierter
 Sprachwert wird ebenfalls vor der Nummernvergabe zurückgewiesen, statt still auf Deutsch
 zurückzufallen.
+
+---
+
+## Mailtext der Rechnungsmail
+
+Betreff und Rumpf der Mail, mit der eine Rechnung herausgeht, richten sich nach der
+**Belegsprache dieser einen Rechnung**, nicht nach einer globalen Einstellung. Eine englische
+Rechnung wird also mit einer englischen Mail versendet, auch wenn alle anderen deutsch sind.
+
+Beide Texte sind unter Einstellungen hinterlegbar, getrennt für Deutsch und Englisch, also vier
+Felder. Bleibt ein Feld leer, gilt die eingebaute Schablone der jeweiligen Sprache; Sie müssen
+nichts eintragen, damit der Versand funktioniert.
+
+Erlaubt sind genau fünf Platzhalter:
+
+| Platzhalter | Bedeutung |
+|---|---|
+| {rechnungsnummer} | Die Rechnungsnummer |
+| {kunde} | Der Kundenname |
+| {betrag} | Der Rechnungsbetrag, in der Darstellung der Belegsprache |
+| {faellig_am} | Das Fälligkeitsdatum, in der Darstellung der Belegsprache |
+| {firma} | Der eigene Firmenname |
+
+Betrag und Fälligkeitsdatum erscheinen in der Schreibweise der Belegsprache, ein deutscher Beleg
+also mit Komma als Dezimaltrennung. Unbekannte Platzhalter aus kleinen ASCII-Buchstaben und
+Unterstrichen in geschweiften Klammern werden beim Speichern abgelehnt; andere Schreibweisen
+bleiben wörtlich stehen. Ein Betreff mit Zeilenumbruch wird ebenfalls abgelehnt: ein
+Mail-Header kann keinen tragen. Im
+Rumpf sind Umbrüche erlaubt.
+
+Unter den Rumpf setzt das Programm eine Fußzeile mit der Anschrift Ihrer Firma, eingeleitet mit
+„Verantwortlich:" auf Deutsch und „Responsible:" auf Englisch. Sind Firmenname, Straße, Postleitzahl
+und Ort sämtlich leer oder fehlt die Firma, entfällt die Fußzeile; sonst erscheinen die
+vorhandenen Teile.
 
 ---
 
