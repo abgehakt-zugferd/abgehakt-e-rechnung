@@ -24,7 +24,11 @@ from app.services.belegart import (
     manuelle_belegart,
     manuelle_belegarten,
 )
-from app.services.belegsprache import UnknownDocumentLanguageError, resolve_belegsprache
+from app.services.belegsprache import (
+    UnknownDocumentLanguageError,
+    dezimal_klartext,
+    resolve_belegsprache,
+)
 from app.services.leistungszeit import parse_leistungszeit_from_form
 from app.models.app_config import AppConfig
 from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
@@ -290,8 +294,8 @@ def _get_draft(db: Session, invoice_id: uuid.UUID) -> Invoice:
 
 
 def _items_as_json(invoice: Invoice) -> str:
-    """Positionen für das Alpine-Formular. `normalize()` bei Menge und Steuersatz,
-    damit `19.00` als `19` ankommt und zur Auswahlliste im Formular passt."""
+    """Positionen für das Alpine-Formular. Menge und Steuersatz ohne Nullen am Ende,
+    damit `19.00` als `19` zur Auswahlliste passt, aber nie als `6E+1`."""
     # `</` maskieren: die Liste steht im Template in einem <script>-Block, und eine
     # Beschreibung mit "</script>" würde ihn sonst vorzeitig schließen. `<\/` ist
     # gültiges JSON und dekodiert zum selben Zeichen.
@@ -299,9 +303,9 @@ def _items_as_json(invoice: Invoice) -> str:
         {
             "description": item.description or "",
             "unit": item.unit,
-            "quantity": str(item.quantity.normalize()),
+            "quantity": dezimal_klartext(item.quantity),
             "unit_price": str(item.unit_price),
-            "tax_rate": str(item.tax_rate.normalize()),
+            "tax_rate": dezimal_klartext(item.tax_rate),
             "net_amount": float(item.net_amount),
             "tax_amount": float(item.tax_amount),
             "gross_amount": float(item.gross_amount),
