@@ -31,6 +31,7 @@ from app.services.belegart import (
     InvoiceTypeNotSelectable,
     UnknownInvoiceTypeError,
     belegart,
+    belegart_aus_bt3,
     manuelle_belegart,
     manuelle_belegarten,
 )
@@ -180,6 +181,21 @@ class TestV5Typaufloesung:
         assert belegart("prepayment").intern == "prepayment"
         assert belegart("storno").intern == "credit_note"
         assert belegart("self-billing").intern == "self_billing"
+
+    @pytest.mark.parametrize("bt3,intern", [
+        ("380", None),
+        ("386", "prepayment"),
+        ("381", "credit_note"),
+        ("384", "correction"),
+        ("389", "self_billing"),
+    ])
+    def test_belegart_aus_bt3_kanonische_codes(self, bt3, intern):
+        assert belegart_aus_bt3(bt3).intern == intern
+
+    @pytest.mark.parametrize("bt3", ["", None, "999", "38"])
+    def test_belegart_aus_bt3_unbekannt_oder_leer_wirft(self, bt3):
+        with pytest.raises(UnknownInvoiceTypeError):
+            belegart_aus_bt3(bt3)
 
     def test_pdf_titel_aus_belegdarstellung(self):
         """Sichtbarer Titel liegt in Belegdarstellung, nicht mehr in belegart."""
