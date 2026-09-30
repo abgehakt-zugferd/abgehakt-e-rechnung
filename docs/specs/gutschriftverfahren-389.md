@@ -62,9 +62,10 @@ Fünf Befunde, jeder am Quelltext belegt:
 3. **`zugferd_xml.py:54`**: Der für 389 formulierte Befreiungstext lautet „Kein Ausweis von
    Umsatzsteuer gemäß § 19 UStG (Kleinunternehmer **Beteiligung**)". Er setzt voraus, dass
    der Beteiligte der Leistende ist. Der Verkäufer-Knoten behauptet das Gegenteil.
-4. **`models/customer.py`**: Ein Kunde hat `vat_id`, aber **keine `tax_number`**. Die Firma
-   hat beides (`models/company.py:25`). Ein Autor ohne USt-IdNr. kann die Pflichtangabe nach
-   § 14 Abs. 4 S. 1 Nr. 2 UStG heute also gar nicht tragen.
+4. **`models/customer.py`**: Ein Kunde hat `vat_id` und seit dem Steuerstatus-Auftrag auch
+   `tax_number` (Feld, Formular, Prüfung beim Finalisieren). **Offen bleibt die XML-Ausgabe**
+   mit getauschten Rollen (`zugferd_xml.py` unberührt). Die Firma hat beides schon länger
+   (`models/company.py:25`).
 5. **`routers/invoices.py:1152`**: Storniert werden darf alles außer `credit_note`. Ein
    finalisierter 389 fällt nicht darunter, und `storno.py:38` erzeugt daraus einen 381,
    also einen Beleg mit zurückgedrehten Rollen.
@@ -168,20 +169,20 @@ Befunde) und im PDF-Erzeuger. Das Modul trägt also etwas, statt nur durchzureic
    Erwerberblock, Verkäuferkennung, Steuerregistrierung, Verkäuferkontakt, elektronische
    Adressen und die Adresszusatz-Aufbereitung. Im PDF ebenso, samt der Steuernummer im Fuß
    (`pdf_generator.py:587`) und der Kundenkennung (`:457`).
-3. **Der Kunde bekommt eine Steuernummer.** Neues Feld `Customer.tax_number`, Migration,
-   Formularfeld, Speicherung, Ausgabe als `FC`-Registrierung. Nach § 9 des Übergabeformats
-   darf sie **nicht** über den Übergabebeleg kommen: Steuernummern sind Stammdaten dieses
-   Systems. Ebenso fehlt dem Kunden ein `contact_name`, den `_seller_contact_xml` liest;
-   entweder wird er ergänzt oder die Funktion kommt ohne ihn aus.
+3. **Der Kunde bekommt eine Steuernummer.** Umgesetzt: Feld `Customer.tax_number`, Migration,
+   Formularfeld, Speicherung, Prüfung beim Finalisieren einer 389. **Noch offen:** Ausgabe als
+   `FC`-Registrierung in der XML (Rollenbesetzung). Nach § 9 des Übergabeformats darf sie
+   **nicht** über den Übergabebeleg kommen: Steuernummern sind Stammdaten dieses Systems.
+   Ebenso fehlt dem Kunden ein `contact_name`, den `_seller_contact_xml` liest; entweder wird
+   er ergänzt oder die Funktion kommt ohne ihn aus.
 4. **389 trägt die Pflichtangabe.** Die Zeichenfolge `Gutschrift` erscheint als
    systemseitiger Pflichttext in BT-22 und im sichtbaren PDF-Titel, in beiden
    Belegsprachen. Sie darf durch keine Nutzereingabe verschwinden.
-5. **Der Steuerstatus gilt auch beim Finalisieren, nicht nur beim Import.** Heute leitet
-   `abrechnungsauftrag_wirkung.py:41` Kategorie und Satz aus `customer.ust_status` ab,
-   danach sind beide bearbeitbar, und der Validator vergleicht sie nicht mit dem Status
-   (`validator.py:305`, `:357`). Bei 389 ist die Kombination hart zu prüfen:
-   `regelbesteuert` erzwingt `S` und 7, `kleinunternehmer` erzwingt `E` und 0. Alles andere
-   ist ein Fehler beim Finalisieren, kein Warnhinweis.
+5. **Der Steuerstatus gilt auch beim Finalisieren, nicht nur beim Import.** Umgesetzt
+   (Abnahmekriterium 7): Modul `services/steuerstatus.py`, Voreinstellung `ungeklaert`,
+   Schalter `gutschriftempfaenger`, Prüfung in `validate_invoice` für `self_billing` als
+   Fehler. `regelbesteuert` erzwingt `S` und 7, `kleinunternehmer` erzwingt `E` und 0,
+   jeweils am Belegkopf und an den Positionen. Die Ableitung beim Import nutzt dasselbe Modul.
 6. **Die Herleitung wird gespeichert, gebunden und sichtbar.** Der Auftrag trägt je Position
    optional `herleitung {basis_netto, satz}`; Abgehakt rechnet sie schon nach und lehnt bei
    Abweichung ab (`uebergabe_befund.py:236`, Übergabeformat § 8, „der Prüfhaken"). Heute

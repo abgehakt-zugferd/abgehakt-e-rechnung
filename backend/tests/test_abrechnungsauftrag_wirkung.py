@@ -31,7 +31,9 @@ def _kunde(pg_session, kennung, ust_status="regelbesteuert", name="Autorin A"):
     kunde = Customer(
         customer_number=f"K-{uuid.uuid4().hex[:8]}", name=name,
         address_line1="Weg 1", zip_code="10115", city="Berlin", country="DE",
+        gutschriftempfaenger=True,
         ust_status=ust_status,
+        tax_number="12/345/67890",
     )
     kunde.id = kennung
     pg_session.add(kunde)

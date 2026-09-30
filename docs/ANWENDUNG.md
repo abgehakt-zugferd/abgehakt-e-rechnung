@@ -41,13 +41,24 @@ dem Finalisieren sind Art und Sprache wie der übrige Beleginhalt nicht mehr än
 
 Jeder Kunde hat eine **Kundennummer** (bei leerer Eingabe automatisch vergeben), einen Namen
 und eine Pflichtanschrift; optional sind E-Mail,
-Telefon und USt-IdNr. Zusätzlich können Sie pro Kunde **CC-Adressen** hinterlegen: diese
+Telefon, Steuernummer und USt-IdNr. Zusätzlich können Sie pro Kunde **CC-Adressen** hinterlegen: diese
 erhalten jede Rechnung an diesen Kunden in Kopie und überlagern die Voreinstellung aus den
 Einstellungen.
 
 Unter **Bankverbindung (Auszahlung)** können IBAN, BIC und Bankname des Beteiligten stehen.
 Diese Felder sind für **Gutschriften** und **Abrechnungsgutschriften** (Typ 389) gedacht, nicht
 für normale Rechnungen: dort zahlt der Kunde an Ihre Firmen-IBAN in den Einstellungen.
+Ist der Schalter **Gutschriftempfänger** gesetzt, ist die IBAN als empfohlen markiert: ohne sie
+entsteht auf der Honorargutschrift kein EPC-QR-Code zum Überweisen. Speichern und Finalisieren
+bleiben möglich; es bleibt bei der Warnung `CUSTOMER_BANK_MISSING`.
+
+Für Honorargutschriften (Typ 389) gibt es am Kunden den Schalter **Gutschriftempfänger** und den
+umsatzsteuerlichen Status (`ungeklaert`, `regelbesteuert`, `kleinunternehmer`). Die Voreinstellung
+ist bewusst **ungeklärt**, keine ungeprüfte Annahme. Speichern bleibt bei ungeklärtem Status
+möglich; blockiert wird erst das Finalisieren einer 389. Ohne Steuernummer und ohne USt-IdNr.
+scheitert die Finalisierung ebenfalls (§ 14 Abs. 4 S. 1 Nr. 2 UStG). Die XML-Ausgabe mit
+getauschten Rollen gehört nicht zu diesem Stand; das Feld `tax_number` ist gespeichert und
+geprüft, noch nicht in die ZUGFeRD-XML geschrieben.
 
 Kunden werden nicht gelöscht, nur **inaktiv** gesetzt. Inaktive Kunden erscheinen nicht mehr in
 der Auswahl beim Anlegen einer Rechnung.

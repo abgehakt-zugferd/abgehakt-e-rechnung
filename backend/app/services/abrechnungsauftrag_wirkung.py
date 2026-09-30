@@ -28,20 +28,12 @@ from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services.archive_frist import berechne_archive_until
 from app.services.invoice_number import generate_next_invoice_number
+from app.services.steuerstatus import (
+    SteuerstatusFehler,
+    steuer_fuer as _steuer_aus_status,
+)
 from app.services.uebergabe_befund import Belegurteil
 from app.services.uebergabe_eingang import merken
-
-# § 12 Abs. 2 Nr. 7c UStG: Einraeumung von Nutzungsrechten nach dem UrhG.
-TANTIEME_STEUERSATZ = Decimal("7.00")
-
-# Der Wertevorrat des Kundenstatus in dieser Anwendung. `nicht_steuerbar` gibt
-# es hier nicht: die Zuweisung an den eigenen Verlag ist kein
-# Leistungsaustausch, sie erzeugt drueben gar keine Gutschrift und kommt
-# deshalb nie an.
-STEUER_AUS_STATUS = {
-    "regelbesteuert": ("S", TANTIEME_STEUERSATZ),
-    "kleinunternehmer": ("E", Decimal("0.00")),
-}
 
 # 389 ist die Abrechnung ueber eine fremde Leistung (Gutschriftverfahren,
 # § 14 Abs. 2 UStG), 381 die kaufmaennische Gutschrift. Der Unterschied ist eine
@@ -64,12 +56,10 @@ class BelegSchonVerarbeitet(WirkungFehler):
 
 def steuer_fuer(kunde: Customer) -> tuple:
     """(Steuerkategorie, Satz) aus dem Status des Kunden."""
-    status = (kunde.ust_status or "regelbesteuert").strip()
-    if status not in STEUER_AUS_STATUS:
-        raise WirkungFehler(
-            f"Unbekannter Umsatzsteuerstatus '{status}' bei Kunde {kunde.customer_number}"
-        )
-    return STEUER_AUS_STATUS[status]
+    try:
+        return _steuer_aus_status(kunde)
+    except SteuerstatusFehler as fehler:
+        raise WirkungFehler(str(fehler)) from fehler
 
 
 def _kunde(db: Session, partner_id) -> Customer:

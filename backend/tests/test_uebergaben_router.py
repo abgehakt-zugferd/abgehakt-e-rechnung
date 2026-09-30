@@ -59,6 +59,9 @@ def _kunde(pg_session, kennung=PARTNER_A, name="Autorin A"):
     kunde = Customer(
         customer_number=f"K-{uuid.uuid4().hex[:8]}", name=name,
         address_line1="Weg 1", zip_code="10115", city="Berlin", country="DE",
+        gutschriftempfaenger=True,
+        ust_status="regelbesteuert",
+        tax_number="12/345/67890",
     )
     kunde.id = uuid.UUID(kennung)
     pg_session.add(kunde)

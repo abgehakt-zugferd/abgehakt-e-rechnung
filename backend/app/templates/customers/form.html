@@ -93,21 +93,48 @@
             </div>
         </div>
 
+        {% set ist_gutschrift = (customer.gutschriftempfaenger if customer else values.get('gutschriftempfaenger') in ('1', 'on', 'true', True)) %}
+        <div class="space-y-5" x-data="{ gutschrift: {{ 'true' if ist_gutschrift else 'false' }} }">
         <div class="card space-y-4">
             <h2>STEUER &amp; KONTAKT</h2>
             <div>
-                {% set status = customer.ust_status if customer else values.get('ust_status', 'regelbesteuert') %}
+                <label class="label" style="display:flex; align-items:center; gap:10px;">
+                    <input type="checkbox" name="gutschriftempfaenger" value="1"
+                           x-model="gutschrift"
+                           {% if ist_gutschrift %}checked{% endif %}>
+                    Gutschriftempfänger (Honorargutschrift / § 14 Abs. 2 UStG)
+                </label>
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                    Nur wenn dieses Programm für den Beteiligten Honorargutschriften ausstellt,
+                    ist der umsatzsteuerliche Status Pflicht. Speichern bleibt bei ungeklärtem
+                    Status möglich; blockiert wird erst das Finalisieren einer 389.
+                </p>
+            </div>
+            <div x-show="gutschrift" x-cloak>
+                {% set status = customer.ust_status if customer else values.get('ust_status', 'ungeklaert') %}
                 <label class="label">Umsatzsteuerlicher Status</label>
                 <select name="ust_status" class="input">
-                    <option value="regelbesteuert" {% if status != 'kleinunternehmer' %}selected{% endif %}>Regelbesteuert</option>
+                    <option value="ungeklaert" {% if status == 'ungeklaert' or status not in ('regelbesteuert', 'kleinunternehmer') %}selected{% endif %}>Noch ungeklärt</option>
+                    <option value="regelbesteuert" {% if status == 'regelbesteuert' %}selected{% endif %}>Regelbesteuert</option>
                     <option value="kleinunternehmer" {% if status == 'kleinunternehmer' %}selected{% endif %}>Kleinunternehmer (§ 19 UStG)</option>
                 </select>
                 <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
-                    Gilt für Gutschriften, die dieses Programm für diesen Beteiligten ausstellt
-                    (Gutschriftverfahren nach § 14 Abs. 2 UStG). Bei Kleinunternehmern wird keine
-                    Umsatzsteuer ausgewiesen: ausgewiesene Steuer würde er nach § 14c Abs. 2 UStG
-                    schulden, auf einem Beleg, den er selbst nicht geschrieben hat.
+                    Gilt für Honorargutschriften an diesen Beteiligten. Bei Kleinunternehmern
+                    wird keine Umsatzsteuer ausgewiesen: ausgewiesene Steuer würde er nach
+                    § 14c Abs. 2 UStG schulden, auf einem Beleg, den er selbst nicht geschrieben hat.
                 </p>
+                {% set bestaetigt = customer.ust_status_bestaetigt_am if customer else None %}
+                {% if bestaetigt %}
+                <p style="margin-top:8px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                    Status bestätigt am {{ bestaetigt.strftime('%d.%m.%Y') }}
+                </p>
+                {% endif %}
+            </div>
+
+            <div>
+                <label class="label">Steuernummer</label>
+                <input type="text" name="tax_number" value="{{ (customer.tax_number if customer else values.get('tax_number','')) or '' }}" placeholder="z. B. 12/345/67890" class="input font-mono">
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Pflichtangabe nach § 14 Abs. 4 S. 1 Nr. 2 UStG auf der Honorargutschrift, wenn keine USt-IdNr. vorliegt.</p>
             </div>
 
             <div>
@@ -154,8 +181,15 @@
                 (Einstellungen).
             </p>
             <div>
-                <label class="label">IBAN</label>
+                <label class="label">
+                    IBAN
+                    <span x-show="gutschrift" x-cloak> (empfohlen)</span>
+                </label>
                 <input type="text" name="bank_iban" value="{{ (customer.bank_iban if customer else values.get('bank_iban','')) or '' }}" placeholder="DE00 1234 5678..." class="input font-mono">
+                <p x-show="gutschrift" x-cloak
+                   style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                    Ohne IBAN bekommt die Honorargutschrift keinen QR-Code zum Überweisen.
+                </p>
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -167,6 +201,7 @@
                     <input type="text" name="bank_name" value="{{ (customer.bank_name if customer else values.get('bank_name','')) or '' }}" class="input">
                 </div>
             </div>
+        </div>
         </div>
 
         <div style="display:flex; gap:12px;">

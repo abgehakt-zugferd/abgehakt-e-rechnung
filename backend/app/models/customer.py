@@ -1,6 +1,6 @@
 import uuid
-from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, func, Integer, text
+from datetime import date, datetime
+from sqlalchemy import String, Boolean, Date, DateTime, func, Integer, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
@@ -21,22 +21,36 @@ class Customer(Base):
     city: Mapped[str] = mapped_column(String(100), nullable=False)
     country: Mapped[str] = mapped_column(String(2), nullable=False, default="DE", server_default="DE")
     vat_id: Mapped[str | None] = mapped_column(String(20))
+    # Steuernummer des Kunden (§ 14 Abs. 4 S. 1 Nr. 2 UStG), wenn keine
+    # USt-IdNr. vorliegt. Pflicht fuer Honorargutschriften (389); die
+    # XML-Rollenbesetzung nutzt das Feld erst in einem spaeteren Auftrag.
+    tax_number: Mapped[str | None] = mapped_column(String(50))
     vat_id_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     vat_id_check_valid: Mapped[bool | None] = mapped_column(Boolean)
     vat_id_vies_name: Mapped[str | None] = mapped_column(String(500))
     vat_id_name_match: Mapped[str | None] = mapped_column(String(20))
     email: Mapped[str | None] = mapped_column(String(255))
+    # Nur fuer Gutschriftempfaenger ist der Steuerstatus eine Pflichtangabe.
+    # Sonst bleibt er ungeklaert und blockiert kein Speichern des Kunden.
+    gutschriftempfaenger: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false",
+    )
     # Umsatzsteuerlicher Status (#22). Er entscheidet, welche Steuer auf einer
     # Gutschrift im Gutschriftverfahren steht: `regelbesteuert` -> 7 % nach
     # § 12 Abs. 2 Nr. 7c UStG (Nutzungsrechte), `kleinunternehmer` -> kein
-    # Ausweis nach § 19 UStG. Die Angabe steht HIER und kommt nie ueber den
-    # Draht: wer als Kleinunternehmer Umsatzsteuer ausgewiesen bekommt,
-    # schuldet sie nach § 14c Abs. 2 UStG, und zwar auf einem Beleg, den er
-    # selbst nicht geschrieben hat.
+    # Ausweis nach § 19 UStG, `ungeklaert` -> Finalisieren einer 389 scheitert.
+    # Die Angabe steht HIER und kommt nie ueber den Draht: wer als
+    # Kleinunternehmer Umsatzsteuer ausgewiesen bekommt, schuldet sie nach
+    # § 14c Abs. 2 UStG, und zwar auf einem Beleg, den er selbst nicht
+    # geschrieben hat. Voreinstellung bewusst ungeklaert, keine ungepruefte
+    # Annahme regelbesteuert.
     ust_status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="regelbesteuert",
-        server_default="regelbesteuert",
+        String(20), nullable=False, default="ungeklaert",
+        server_default="ungeklaert",
     )
+    # Gesetzt, wenn jemand bewusst regelbesteuert oder kleinunternehmer waehlt.
+    # Bei Rueckkehr zu ungeklaert geleert. Nur Anzeige, keine Fachlogik.
+    ust_status_bestaetigt_am: Mapped[date | None] = mapped_column(Date)
     # Kommagetrennte Liste (#58), gepflegt über `services/empfaenger.py`. Sie steht
     # hier und nicht in `app_config`, weil sie zu DIESEM Kunden gehört: die globale
     # Voreinstellung ginge sonst an jeden anderen Kunden mit in Kopie.
