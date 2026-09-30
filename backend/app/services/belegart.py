@@ -128,6 +128,24 @@ def belegart(internal_value: str | None) -> Belegart:
         ) from None
 
 
+def belegart_aus_bt3(type_code: str | None) -> Belegart:
+    """Loesst einen BT-3-TypeCode auf die kanonische Belegart.
+
+    Abgeleitet aus denselben Belegart-Werten wie TYPE_CODE_MAP, keine zweite
+    Tabelle. Fehlender oder unbekannter Code: fail-closed statt still 380.
+    """
+    code = (type_code or "").strip()
+    if not code:
+        raise UnknownInvoiceTypeError("TypeCode (BT-3) fehlt in der XML.")
+    for art in dict.fromkeys(_ALIASES.values()):
+        if art.bt3 == code:
+            return art
+    erlaubt = ", ".join(sorted({a.bt3 for a in _ALIASES.values()}))
+    raise UnknownInvoiceTypeError(
+        f"Unbekannter TypeCode {code!r} (BT-3). Erlaubt: {erlaubt}."
+    )
+
+
 def manuelle_belegarten() -> tuple[Belegart, ...]:
     """Genau die Arten, die das Formular anbietet: Standard und Anzahlung."""
     return tuple(a for a in dict.fromkeys(_ALIASES.values()) if a.manuell_waehlbar)
