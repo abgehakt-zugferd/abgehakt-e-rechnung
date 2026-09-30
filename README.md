@@ -42,7 +42,8 @@ lesbar und für die Buchhaltungssoftware des Empfängers auswertbar, in einer Da
 - **Übersicht mit Kennzahlen:** Rechnungen gesamt, offene Posten, Bezahlt diesen Monat,
   Umsatz seit Jahresanfang, **schuldige Umsatzsteuer** (USt gestellter und bezahlter
   Standardrechnungen abzüglich Gutschriften)
-  und **geschätzte Steuerabgaben** (USt plus pauschale GmbH-Rücklage auf den positiven
+  und **geschätzte Steuerabgaben** (USt abzüglich der Vorsteuer aus Honorargutschriften,
+  plus pauschale GmbH-Rücklage auf den positiven
   Nettosaldo aus Standardrechnungen und Gutschriften für
   Rücklagenplanung). Die Steuersätze sind unter Einstellungen konfigurierbar.
 - **Mailtext je Belegsprache:** Betreff und Rumpf der Rechnungsmail sind für Deutsch und Englisch

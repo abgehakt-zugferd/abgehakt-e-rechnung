@@ -287,9 +287,12 @@ mindert. Das ändert aber die Bedeutung einer dokumentierten Zahl.
   Zahl beschreibt die Ausgangsseite, die andere plant die Zahlung.
 - **Gegenargument:** Wer die Rücklage lieber zu hoch als zu niedrig bildet, lässt es.
 
-Solange das nicht entschieden ist, wird **nicht** abgezogen, und die neue Vorsteuerkennzahl
-steht unverrechnet daneben. Eine stillschweigend geänderte Kennzahl wäre der schlechtere
-Fehler.
+**Entschieden am 2026-09-30 durch den Betreiber: abziehen**, wie empfohlen. Die Vorsteuer aus
+gestellten und bezahlten Honorargutschriften seit Jahresanfang wird in „Geschätzte
+Steuerabgaben" abgezogen und in der Kachel als eigene Zeile ausgewiesen; „Schuldige
+Umsatzsteuer" bleibt unverändert. Übersteigt die Vorsteuer die USt, wird die Differenz nicht
+bei null gekappt, weil eine Erstattung die Rücklage tatsächlich mindert. Festgehalten in
+`test_dashboard_honorargutschrift.py`.
 
 ## Abnahmekriterien
 

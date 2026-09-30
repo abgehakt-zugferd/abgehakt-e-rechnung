@@ -46,6 +46,7 @@ from app.services.dashboard_kennzahlen import (
     umsatz_abweichung_prozent,
     umsatz_im_zeitraum,
     vorjahres_stichtag,
+    vorsteuer_honorargutschriften,
 )
 from app.services.steuer_ruecklage import steuerruecklage_anteil_prozent
 
@@ -304,7 +305,10 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     vat_liability_quarter = schuldige_umsatzsteuer(db, quarter_start, None)
     net_revenue_ytd = nettoumsatz_ytd(db, year_start)
     steuer_ruecklage_ytd = gmbh_ruecklage_ytd(net_revenue_ytd, company)
-    estimated_tax_ytd = geschaetzte_steuerabgaben(vat_liability_ytd, net_revenue_ytd, company)
+    vorsteuer_honorargutschriften_ytd = vorsteuer_honorargutschriften(db, year_start)
+    estimated_tax_ytd = geschaetzte_steuerabgaben(
+        vat_liability_ytd, net_revenue_ytd, company, vorsteuer_honorargutschriften_ytd,
+    )
     unversendet = nicht_versendet_anzahl(db)
 
     recent_invoices = (
@@ -334,6 +338,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         "vat_quarter_label": f"Q{quarter_number} {today.year}",
         "steuer_ruecklage_ytd": steuer_ruecklage_ytd,
         "estimated_tax_ytd": estimated_tax_ytd,
+        "vorsteuer_honorargutschriften_ytd": vorsteuer_honorargutschriften_ytd,
         "steuer_ruecklage_anteil_prozent": steuerruecklage_anteil_prozent(company),
         "nicht_versendet_anzahl": unversendet,
         "recent_invoices": recent_invoices,

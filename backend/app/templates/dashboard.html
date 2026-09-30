@@ -160,6 +160,7 @@
                     <p class="kpi__wert">{{ estimated_tax_ytd|betrag(0) }}<span class="kpi__einheit">€</span></p>
                     <div style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:6px; line-height:1.5;">
                         <div>USt {{ vat_liability_ytd|betrag(0) }}&nbsp;€</div>
+                        {% if vorsteuer_honorargutschriften_ytd %}<div>− Vorsteuer Honorargutschriften {{ vorsteuer_honorargutschriften_ytd|betrag(0) }}&nbsp;€</div>{% endif %}
                         <div>+ KSt/GewSt {{ steuer_ruecklage_ytd|betrag(0) }}&nbsp;€ ({{ steuer_ruecklage_anteil_prozent|betrag(1) }}&nbsp;% Netto)</div>
                     </div>
                 </div>
