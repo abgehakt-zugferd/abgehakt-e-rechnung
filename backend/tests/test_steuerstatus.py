@@ -10,9 +10,12 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from app.main import app
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
+from app.services.steuerstatus import bestaetigungsdatum_nach_wechsel
 from tests.helpers.finalize_pipeline import client, patched_success_pipeline
 
 
@@ -158,3 +161,25 @@ def test_389_ohne_iban_finalisiert_trotz_bank_warnung(pg_session):
     assert antwort.status_code == 303
     pg_session.expire_all()
     assert pg_session.get(Invoice, inv.id).status == "issued"
+
+
+_GESTERN = date(2026, 9, 29)
+_HEUTE = date(2026, 9, 30)
+
+
+@pytest.mark.parametrize("bisher,neu,erwartet", [
+    ("ungeklaert", "ungeklaert", None),
+    ("ungeklaert", "regelbesteuert", _HEUTE),
+    ("ungeklaert", "kleinunternehmer", _HEUTE),
+    ("regelbesteuert", "ungeklaert", None),
+    ("regelbesteuert", "regelbesteuert", _GESTERN),
+    ("regelbesteuert", "kleinunternehmer", _HEUTE),
+    ("kleinunternehmer", "ungeklaert", None),
+    ("kleinunternehmer", "regelbesteuert", _HEUTE),
+    ("kleinunternehmer", "kleinunternehmer", _GESTERN),
+])
+def test_bestaetigungsdatum_ueber_alle_neun_wechsel(bisher, neu, erwartet):
+    """Alle 3x3 Wechsel, jeweils mit einem vorhandenen Datum von gestern."""
+    assert bestaetigungsdatum_nach_wechsel(
+        bisher, neu, _GESTERN, heute=_HEUTE,
+    ) == erwartet

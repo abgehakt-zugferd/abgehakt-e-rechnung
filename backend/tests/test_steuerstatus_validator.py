@@ -175,3 +175,12 @@ def test_d_rundung_je_position_ist_kein_satzfehler():
     )
     errors, _ = validate_invoice(inv, company_stub())
     assert "UST_STATUS_STEUER_MISMATCH" not in _codes(errors)
+
+
+def test_d_falsche_kategorie_bei_richtigem_satz_ist_fehler():
+    """Kategorie allein falsch, Satz richtig: sonst verdeckt der Satzfehler eine
+    fehlende Kategorienpruefung."""
+    inv = _hg(tax_category="E", tax_rate=Decimal("7.00"))
+    errors, _ = validate_invoice(inv, company_stub())
+    felder = {e.field for e in errors if e.code == "UST_STATUS_STEUER_MISMATCH"}
+    assert felder == {"tax_category"}
