@@ -22,6 +22,7 @@ from app.services.belegart import (
     belegart,
 )
 from app.services.zugferd_xml import COMPLIANT_PROFILES
+from app.services.steuerstatus import pruefe_honorargutschrift
 
 
 VALID_TAX_RATES = {Decimal("0"), Decimal("7"), Decimal("19")}
@@ -438,6 +439,12 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
                         "eigenen Beleg.",
                         feld
                     ))
+
+    # Honorargutschrift (389): Steuerstatus und Kennung des Autors. Eigene
+    # Regeln im Modul steuerstatus; hier nur der Aufruf, damit validator.py
+    # nicht weiter waechst und keine zirkulaeren Imports entstehen.
+    if invoice_type == "self_billing":
+        errors.extend(pruefe_honorargutschrift(invoice))
 
     # Empfehlungen
     if not invoice.payment_terms:
