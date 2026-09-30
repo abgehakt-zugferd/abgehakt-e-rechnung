@@ -62,7 +62,13 @@ def _betrag_de(wert, nachkommastellen: int = 2) -> str:
     )
 
 
-def _menge_roh(wert) -> str:
+def dezimal_klartext(wert) -> str:
+    """`Decimal("60.0000")` → `"60"`, `Decimal("61.5000")` → `"61.5"`.
+
+    Punkt, keine Tausender, nie Exponentenform. `str(x.normalize())` kippt bei
+    durch zehn teilbaren Werten in `6E+1`; genau das stand am 2026-09-30 im
+    Zahlenfeld des Rechnungsformulars.
+    """
     zahl = wert if isinstance(wert, Decimal) else Decimal(str(wert))
     zahl = zahl.normalize()
     if zahl == zahl.to_integral_value():
@@ -138,7 +144,7 @@ class Belegdarstellung:
         return f"{waehrung} {_betrag_roh(wert)}"
 
     def format_menge(self, wert) -> str:
-        roh = _menge_roh(wert)
+        roh = dezimal_klartext(wert)
         if self.code == "de":
             return roh.replace(".", ",")
         return roh
