@@ -94,6 +94,7 @@ def test_finalize_draft_to_issued_with_field_changes(pg_session):
 def test_issued_to_paid_allowed(pg_session):
     inv = _invoice(pg_session, status="issued")
     inv.status = "paid"
+    inv.bezahlt_am = date(2026, 6, 20)  # Pflicht seit 2026-09-30, siehe test_bezahlt_am_guard
     pg_session.commit()
     assert inv.status == "paid"
 

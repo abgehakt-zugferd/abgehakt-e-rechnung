@@ -77,3 +77,13 @@ def test_bezahlt_am_auf_issued_ohne_statuswechsel_verboten(pg_session):
     with pytest.raises(InvoiceStateError):
         pg_session.commit()
     pg_session.rollback()
+
+
+def test_bezahlt_ohne_zahlungsdatum_verboten(pg_session):
+    """Ohne Datum faellt eine bezahlte Rechnung still aus Umsatz und Geldeingang,
+    und nachtragen liesse es sich nicht mehr: paid -> paid ist kein issued -> paid."""
+    inv = _inv(pg_session, status="issued")
+    inv.status = "paid"
+    with pytest.raises(InvoiceStateError, match="Zahlungsdatum"):
+        pg_session.commit()
+    pg_session.rollback()

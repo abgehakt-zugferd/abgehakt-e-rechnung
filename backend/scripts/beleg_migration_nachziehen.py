@@ -2,13 +2,14 @@
 
 Im alten System waren die Belege laengst versendet und bezahlt; der XML-Import
 kennt nur issued. Dieses Skript setzt datev_sent_at, optional den Bezahlt-
-Zeitpunkt (updated_at) und ein Versandprotokoll — ohne erneuten Mailversand.
+Zeitpunkt (bezahlt_am und updated_at) und ein Versandprotokoll — ohne erneuten Mailversand.
 """
 from __future__ import annotations
 
 import sys
 from datetime import date, datetime, time, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -56,6 +57,9 @@ def nachziehen(
                 print(f"{num}: Versand bereits {inv.datev_sent_at.strftime('%d.%m.%Y')}")
 
             if als_bezahlt and inv.status != "paid":
+                # Kalendertag in Berlin: die Uebersicht zaehlt nach bezahlt_am,
+                # und der Guard laesst paid ohne Datum nicht zu.
+                inv.bezahlt_am = paid.astimezone(ZoneInfo("Europe/Berlin")).date()
                 inv.status = "paid"
                 print(f"{num}: Status → bezahlt")
 

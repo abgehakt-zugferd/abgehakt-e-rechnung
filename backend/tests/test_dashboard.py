@@ -44,7 +44,8 @@ def _inv(pg_session, status, gross, issue=date.today(), net=None, tax=None, due=
     return inv
 
 
-def _gutschrift(pg_session, status, gross, issue=date.today(), net=None, tax=None, due=None):
+def _gutschrift(pg_session, status, gross, issue=date.today(), net=None, tax=None, due=None,
+                bezahlt_am=None):
     c = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Kunde",
                  address_line1="Weg 1", zip_code="80331", city="München", country="DE")
     pg_session.add(c)
@@ -57,7 +58,7 @@ def _gutschrift(pg_session, status, gross, issue=date.today(), net=None, tax=Non
                   issue_date=issue, due_date=due or issue, currency="EUR",
                   net_total=net, tax_total=tax,
                   gross_total=Decimal(gross), status=status,
-                  invoice_type="credit_note")
+                  invoice_type="credit_note", bezahlt_am=bezahlt_am)
     pg_session.add(inv)
     pg_session.commit()
     return inv
@@ -179,7 +180,8 @@ def test_dashboard_ytd_ignoriert_gutschriften(pg_session):
         net=Decimal("100.00"), tax=Decimal("19.00"),
         bezahlt_am=heute,
     )
-    _gutschrift(pg_session, "issued", "50.00")
+    # Bezahlt und mit Zahlungsdatum im Jahr: nur der Typfilter haelt sie heraus.
+    _gutschrift(pg_session, "paid", "50.00", bezahlt_am=heute)
     ctx = main.dashboard(_request(), pg_session).context
     assert Decimal(ctx["revenue_ytd"]) == Decimal("100.00")
 
@@ -229,9 +231,13 @@ def test_dashboard_vormonat_und_vorjahr_im_kontext(pg_session):
     ctx = main.dashboard(_request(), pg_session).context
     assert Decimal(ctx["paid_previous_month"]) == Decimal("12.00")
     assert Decimal(ctx["revenue_prev_ytd"]) == Decimal("80.00")
-    # YTD netto: 200 + 30 + 12 (Vormonat liegt im selben Jahr) = 242;
-    # Vorjahr 80 → (242 - 80) / 80 * 100 = 202,5
-    assert ctx["revenue_yoy_pct"] == Decimal("202.5")
+    # YTD netto: 200 + 30, dazu 12 nur, wenn der Vormonat im selben Jahr liegt.
+    # Im Januar ist er Dezember des Vorjahres: 230 statt 242.
+    # Vorjahr 80 → (242 - 80) / 80 * 100 = 202,5 bzw. (230 - 80) / 80 * 100 = 187,5
+    if vormonat_tag.year == heute.year:
+        assert ctx["revenue_yoy_pct"] == Decimal("202.5")
+    else:
+        assert ctx["revenue_yoy_pct"] == Decimal("187.5")
     assert ctx["vat_quarter_label"].startswith("Q")
     assert "nicht_versendet_anzahl" in ctx
 
