@@ -100,11 +100,31 @@ def _parent_status(session: Session, item: InvoiceItem, new_invoices: set) -> st
     ).scalar()
 
 
+def _vorheriger_parent_status(session: Session, item: InvoiceItem) -> str | None:
+    """Committeten Status der Rechnung, zu der die Position VOR dem Umhängen gehörte.
+
+    `item.invoice_id` trägt nach einer Änderung schon den neuen Wert (#120). Der alte
+    wird aus der Datenbank gelesen, nicht aus der History: die ist leer, wenn das
+    Attribut vor dem Setzen nie geladen war. None bei neuen Positionen."""
+    if not get_history(item, "invoice_id").has_changes():
+        return None
+    items = InvoiceItem.__table__
+    invoices = Invoice.__table__
+    return session.execute(
+        select(invoices.c.status)
+        .join(items, items.c.invoice_id == invoices.c.id)
+        .where(items.c.id == item.id)
+    ).scalar()
+
+
 def _guard_item(session: Session, item: InvoiceItem, new_invoices: set) -> None:
     """Positionen einer finalisierten Rechnung sind unveränderlich (GoBD) —
-    kein Ändern, Löschen oder Nachschieben (audit.py auditiert Items bewusst nicht,
-    daher ist der Guard hier die einzige Verteidigungslinie)."""
-    if _parent_status(session, item, new_invoices) in FINALIZED:
+    kein Ändern, Löschen, Nachschieben oder Umhängen (audit.py auditiert Items bewusst
+    nicht, daher ist der Guard hier die einzige Verteidigungslinie)."""
+    if (
+        _parent_status(session, item, new_invoices) in FINALIZED
+        or _vorheriger_parent_status(session, item) in FINALIZED
+    ):
         raise InvoiceStateError(
             "Positionen einer finalisierten Rechnung sind unveränderlich (GoBD) — "
             "Korrektur nur per Storno."

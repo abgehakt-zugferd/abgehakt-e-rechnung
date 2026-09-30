@@ -88,8 +88,8 @@ Die Startseite **Übersicht** fasst den Stand zusammen:
 | Offene Rechnungen | Finalisierte (`gestellt`), noch nicht bezahlte Rechnungen; Gutschriften zählen nicht mit |
 | Bezahlt diesen Monat | Brutto-Summe bezahlter Standardrechnungen mit `updated_at` ab Monatsanfang (letzte Änderung, kein eigener Zahlungszeitpunkt; ohne obere Datumsgrenze) |
 | Umsatz lfd. Jahr | Brutto-Umsatz gestellter und bezahlter Standardrechnungen seit Jahresanfang (ohne obere Datumsgrenze) |
-| Schuldige Umsatzsteuer | Summe der **ausgewiesenen USt** gestellter und bezahlter Standardrechnungen seit Jahresanfang, abzüglich gestellter und bezahlter Gutschriften (`credit_note`), **ohne Vorsteuerabzug** und ohne obere Datumsgrenze (das Programm kennt keine Eingangsrechnungen) |
-| Gesch. Steuerabgaben | Schuldige USt plus pauschale **KSt/GewSt-Rücklage** auf den positiven Nettosaldo aus Standardrechnungen und Gutschriften (Anteil in den Einstellungen) |
+| Schuldige Umsatzsteuer | Summe der **ausgewiesenen USt** gestellter und bezahlter Standardrechnungen seit Jahresanfang, abzüglich gestellter und bezahlter Gutschriften (`credit_note`), **ohne Vorsteuerabzug** und ohne obere Datumsgrenze (das Programm kennt keine fremden Eingangsrechnungen; die Vorsteuer aus selbst ausgestellten Honorargutschriften mindert erst die geschätzten Steuerabgaben) |
+| Gesch. Steuerabgaben | Schuldige USt abzüglich der **Vorsteuer aus Honorargutschriften** (389, gestellt oder bezahlt, seit Jahresanfang) plus pauschale **KSt/GewSt-Rücklage** auf den positiven Nettosaldo aus Standardrechnungen und Gutschriften (Anteil in den Einstellungen) |
 | Offene Forderungen | Anzahl und Bruttosumme der gestellten Standardrechnungen. Gutschriften zählen nicht mit. |
 | Überfällige Forderungen | Davon jene, deren Fälligkeitsdatum vor heute liegt, mit Anzahl, Bruttosumme und dem Alter der ältesten in Tagen. |
 | Nicht versendete Belege | Anzahl der gestellten Standardrechnungen ohne Erstversand. Diese Zahl wird in der Datenbank gezählt, nicht im Speicher. |

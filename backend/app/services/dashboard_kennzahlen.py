@@ -3,8 +3,10 @@
 Abgehakt kennt nur Ausgangsrechnungen, keine Eingangsrechnungen und keine
 Betriebsausgaben. „Schuldige Umsatzsteuer“ ist deshalb die auf gestellten
 Belegen ausgewiesene USt (abzueglich Gutschriften) — kein Vorsteuerabzug.
-„Geschaetzte Steuerabgaben“ addiert dazu die in den Einstellungen hinterlegte
-GmbH-Ruecklage (KSt + GewSt) auf den Nettoumsatz.
+„Geschaetzte Steuerabgaben“ plant die Zahlung: sie zieht die Vorsteuer aus selbst
+ausgestellten Honorargutschriften (389) ab, der einzigen Eingangsseite, die das
+Programm kennt, und addiert die in den Einstellungen hinterlegte GmbH-Ruecklage
+(KSt + GewSt) auf den Nettoumsatz. Entscheidung des Betreibers vom 2026-09-30.
 """
 from __future__ import annotations
 
@@ -51,18 +53,19 @@ def _summe_feld(
     feld,
     seit: date,
     *,
-    rechnung: bool,
+    art: str | None,
     bis: date | None = None,
 ) -> Decimal:
-    """Summiert ein Betragsfeld fuer Rechnungen oder Gutschriften seit `seit`.
+    """Summiert ein Betragsfeld gestellter Belege einer Art seit `seit`.
 
+    `art` ist `invoice_type`; None steht fuer die gewoehnliche Rechnung.
     Betraege werden ohne Ruecksicht auf `invoices.currency` addiert. Das ist eine
     bestehende Vereinfachung: gemischte Waehrungen werden nicht getrennt.
     """
-    if rechnung:
+    if art is None:
         typ_filter = Invoice.invoice_type.is_(None)
     else:
-        typ_filter = Invoice.invoice_type == "credit_note"
+        typ_filter = Invoice.invoice_type == art
     bedingungen = [
         Invoice.status.in_(_AUSGESTELLT),
         typ_filter,
@@ -81,8 +84,8 @@ def schuldige_umsatzsteuer(
     db: Session, von: date, bis: date | None = None,
 ) -> Decimal:
     """Ausgewiesene USt auf gestellten Belegen im Zeitraum, netto nach Gutschriften."""
-    ust = _summe_feld(db, Invoice.tax_total, von, rechnung=True, bis=bis)
-    gutschrift_ust = _summe_feld(db, Invoice.tax_total, von, rechnung=False, bis=bis)
+    ust = _summe_feld(db, Invoice.tax_total, von, art=None, bis=bis)
+    gutschrift_ust = _summe_feld(db, Invoice.tax_total, von, art="credit_note", bis=bis)
     return (ust - gutschrift_ust).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
@@ -93,19 +96,33 @@ def schuldige_umsatzsteuer_ytd(db: Session, seit: date) -> Decimal:
 
 def nettoumsatz_ytd(db: Session, seit: date) -> Decimal:
     """Nettoumsatz gestellter Belege im Zeitraum, abzueglich Gutschriften."""
-    netto = _summe_feld(db, Invoice.net_total, seit, rechnung=True)
-    gutschrift_netto = _summe_feld(db, Invoice.net_total, seit, rechnung=False)
+    netto = _summe_feld(db, Invoice.net_total, seit, art=None)
+    gutschrift_netto = _summe_feld(db, Invoice.net_total, seit, art="credit_note")
     return (netto - gutschrift_netto).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def vorsteuer_honorargutschriften(db: Session, seit: date) -> Decimal:
+    """Ausgewiesene USt auf gestellten Honorargutschriften (389) seit `seit`."""
+    return _summe_feld(db, Invoice.tax_total, seit, art="self_billing").quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP,
+    )
 
 
 def geschaetzte_steuerabgaben(
     schuldige_ust: Decimal,
     nettoumsatz: Decimal,
     company: Company | None = None,
+    vorsteuer: Decimal = Decimal("0"),
 ) -> Decimal:
-    """USt plus pauschale GmbH-Ruecklage auf positiven Nettoumsatz."""
+    """USt abzueglich Vorsteuer, plus pauschale GmbH-Ruecklage auf positiven Nettoumsatz.
+
+    Die Differenz aus USt und Vorsteuer wird nicht bei null gekappt: uebersteigt die
+    Vorsteuer die USt, ist das eine Erstattung und mindert die Ruecklage wirklich.
+    """
     ruecklage = gmbh_ruecklage_ytd(nettoumsatz, company)
-    return (schuldige_ust + ruecklage).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return (schuldige_ust - vorsteuer + ruecklage).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP,
+    )
 
 
 def gmbh_ruecklage_ytd(
