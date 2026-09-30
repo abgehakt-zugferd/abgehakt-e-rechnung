@@ -20,6 +20,30 @@ Der Tantiemenfall ist der rechte Fall: Der Autor räumt Nutzungsrechte ein, ZEMP
 Beleg aus. Dass es kein Original gibt, ist kein Sonderfall, sondern das Wesen des
 Verfahrens.
 
+## Namen: drei Dinge dürfen nicht gleich heißen
+
+Heute drucken 381 und 389 denselben Titel. `belegsprache.py:158` und `:162` bilden beide
+auf `titel_gutschrift` ab, also auf `GUTSCHRIFT` beziehungsweise `CREDIT NOTE`. Damit ist
+am fertigen Beleg nicht zu erkennen, welcher der beiden Fälle vorliegt.
+
+Das ist mehr als unschön. Die Angabe „Gutschrift" ist nach § 14 Abs. 4 S. 1 Nr. 10 UStG die
+**Pflichtangabe für das Gutschriftverfahren**. Steht sie auf einer Stornorechnung, behauptet
+der Beleg, der Empfänger habe ihn ausgestellt. Umgekehrt fehlt sie dem 389, wenn man den
+Titel für den Storno entschärft, ohne beide zu trennen.
+
+Die Spec legt deshalb drei verschiedene Bezeichnungen fest, in Oberfläche, PDF und
+Dokumentation:
+
+| Belegart | BT-3 | heißt ab jetzt | heißt **nicht** |
+|---|---|---|---|
+| Storno einer eigenen Rechnung | 381 | Stornorechnung | Gutschrift |
+| Abrechnung über eine fremde Leistung | 389 | Honorargutschrift (Gutschriftverfahren) | Gutschrift einer Rechnung |
+| Korrektur | 384 | Korrekturrechnung | unverändert |
+
+Der 389 behält das Wort „Gutschrift" im Titel, weil das Gesetz es verlangt. Der 381 gibt es
+ab, weil er es nie tragen durfte. Die Oberfläche nennt beim Anlegen zusätzlich den Zweck,
+damit niemand die Honorargutschrift für die Korrektur einer Rechnung hält.
+
 ## Gemessener Ist-Stand (2026-09-30)
 
 Der Code kennt 389 bereits an drei Stellen richtig: `abrechnungsauftrag_wirkung.py:46`
@@ -175,6 +199,19 @@ Befunde) und im PDF-Erzeuger. Das Modul trägt also etwas, statt nur durchzureic
 8. **Die Bearbeitungssperre bleibt, wie sie ist.** `_get_draft` weist `credit_note` ab;
    `self_billing` fällt nicht darunter und soll es nicht, dafür gibt es `belegsperre.py`.
    Zu prüfen ist nur, dass die Meldung für 381 ihren Wortlaut behält.
+9. **Eine Honorargutschrift lässt sich von Hand anlegen und bearbeiten.**
+   `belegart.py` stellt `self_billing` auf `manuell_waehlbar=True` mit dem Formularwert
+   `honorargutschrift` und der Beschriftung aus der Namenstabelle oben. Damit ist die
+   Auszahlung nicht mehr davon abhängig, dass die Gegenseite einen signierten Auftrag
+   liefert.
+   Die Sperren richten sich dabei nach der **Herkunft**, nicht nach der Belegart:
+   `belegsperre.gilt` prüft `uebergabe_beleg_sha256`, greift also nur bei Belegen aus der
+   Integration. Eine von Hand angelegte Honorargutschrift ist ein gewöhnlicher Entwurf und
+   bis zum Finalisieren frei bearbeitbar, Beträge eingeschlossen.
+   `herleitung` ist bei ihr **optional**: es gibt keinen signierten Auftrag, gegen den sie
+   zu prüfen wäre. Wird sie eingegeben, gilt dieselbe Rechenprobe wie beim Import.
+   Alles andere gilt unverändert: Rollenbesetzung, Pflichtangabe, Steuerprüfung nach
+   `ust_status`, kein Originalbezug, kein Nullbetrag, keine Stornierbarkeit.
 
 ## Was ausdrücklich NICHT gilt
 
@@ -197,6 +234,62 @@ Abgestimmt mit der Session `tantiemen-app--tantiemen-profi` am 30.09.2026:
   eigene Rechnung mit 19 %. Ebenso **keine KSA-Zeile**, § 32 KSVG verbietet die Abwälzung.
 - **Aus `vortraege` entsteht keine Rechnungswirkung.** Der Feldprüfer liest die Liste
   strukturell (`uebergabe_befund.py:163`, `protokoll.py:154`); ein Beleg wird daraus nicht.
+
+## Die Übersicht: ein 389 zeigt in die andere Richtung
+
+Eine Honorargutschrift ist wirtschaftlich das Gegenteil einer Ausgangsrechnung. ZEMP
+schuldet Geld, statt welches zu bekommen, und die 7 % darauf sind **Vorsteuer**, kein
+abzuführender Betrag. Das Programm ist aber durchgehend auf Ausgangsrechnungen gebaut;
+`docs/ANWENDUNG.md` begründet die Kennzahl „Schuldige Umsatzsteuer" ausdrücklich damit,
+dass es keine Eingangsrechnungen kenne. Ein 389 ist genau die eine Ausnahme davon.
+
+**Gemessener Ist-Stand.** Heute ist die Behandlung nicht falsch, sondern uneinheitlich:
+
+| Kennzahl | filtert auf | 389 enthalten? |
+|---|---|---|
+| Rechnungen gesamt, Status-Zählung | kein Typfilter (`dashboard_kennzahlen.py:122`) | **ja** |
+| Offene und überfällige Forderungen, nicht versendet | `invoice_type IS NULL` | nein |
+| Umsatz, bezahlt im Monat | `invoice_type IS NULL` | nein |
+| Schuldige USt, Nettoumsatz, Rücklage | `IS NULL` **oder** `credit_note` (`:63`) | nein |
+| Liste, Filter `art=rechnung` / `art=gutschrift` | `IS NULL` / `credit_note` | **in keinem von beiden** |
+
+Ein 389 wird also in den Belegzahlen mitgezählt, taucht in keiner Geldkennzahl auf und ist
+über den Art-Filter nicht auffindbar. Wer die Übersicht liest, sieht eine Zahl im Kopf,
+deren Belege er über die Filter nicht erreicht, und sieht von den Auszahlungsverpflichtungen
+nichts.
+
+**Was dieser Auftrag festlegt:**
+
+1. **Der Art-Filter bekommt einen dritten Wert.** `art=honorargutschrift` filtert auf
+   `invoice_type == 'self_billing'`. Ohne ihn bleibt ein Beleg unerreichbar, den die
+   Übersicht mitzählt.
+2. **Die Geldkennzahlen der Ausgangsseite bleiben unberührt.** Umsatz, offene Forderungen
+   und schuldige Umsatzsteuer sind Zahlen über das, was ZEMP einnimmt und abführt. Ein 389
+   gehört dort nicht hinein, und zwar nicht aus Bequemlichkeit, sondern weil er die andere
+   Richtung hat. Die heutige Ausklammerung ist also richtig und wird als Absicht
+   festgeschrieben, nicht als Zufall stehen gelassen.
+3. **Die Übersicht bekommt einen eigenen Block für die Auszahlungsseite** mit zwei
+   Kennzahlen: **Offene Auszahlungen** (Anzahl und Bruttosumme gestellter, noch nicht
+   bezahlter Honorargutschriften) und **Vorsteuer aus Honorargutschriften** (Summe der
+   ausgewiesenen USt im laufenden Jahr). Beide verlinken auf die Liste mit dem neuen
+   Art-Filter, wie die übrigen Kennzahlen auch.
+4. **Die Doku wird mitgezogen.** Der Satz „das Programm kennt keine Eingangsrechnungen" in
+   `docs/ANWENDUNG.md` und `README.md` stimmt danach nicht mehr uneingeschränkt und ist zu
+   schärfen: es kennt keine **fremden** Eingangsrechnungen, wohl aber die selbst
+   ausgestellte Honorargutschrift.
+
+**Eine Entscheidung liegt beim Betreiber, nicht bei der Umsetzung.** Die Kennzahl
+„Geschätzte Steuerabgaben" ist ausdrücklich für die Rücklagenplanung gedacht. Dort wäre die
+Vorsteuer aus Honorargutschriften sachlich abzuziehen, weil sie die tatsächliche Zahllast
+mindert. Das ändert aber die Bedeutung einer dokumentierten Zahl.
+
+- **Empfehlung:** abziehen, und zwar nur dort, nicht in „Schuldige Umsatzsteuer". Die eine
+  Zahl beschreibt die Ausgangsseite, die andere plant die Zahlung.
+- **Gegenargument:** Wer die Rücklage lieber zu hoch als zu niedrig bildet, lässt es.
+
+Solange das nicht entschieden ist, wird **nicht** abgezogen, und die neue Vorsteuerkennzahl
+steht unverrechnet daneben. Eine stillschweigend geänderte Kennzahl wäre der schlechtere
+Fehler.
 
 ## Abnahmekriterien
 
@@ -230,6 +323,19 @@ Jedes Kriterium nennt den Zustand, in dem es rot sein muss.
    ist dieselbe UND-Bedingung wie in `routers/invoices.py:902`; `XML:valid` allein genügt
    nicht. Scheitert eine Stufe, liegt am Ende kein Beleg im Archiv.
 
+9. Das Anlegeformular bietet die Honorargutschrift an. Ein von Hand angelegter 389 lässt
+   sich bearbeiten, Beträge eingeschlossen; ein aus einem signierten Beleg entstandener 389
+   lässt die gebundenen Felder nicht ändern. Geprüft wird beides am selben Belegtyp, damit
+   sichtbar bleibt, dass die Herkunft entscheidet und nicht die Belegart.
+10. Ein 381 trägt im PDF **nicht** das Wort „Gutschrift", ein 389 trägt es, in `de` und
+    `en`. Dieselbe Probe läuft gegen die Bezeichnung im Anlegeformular und in der Liste.
+11. Die Liste kennt `art=honorargutschrift`; der Filter zeigt genau die 389 und kein
+    anderer Art-Filter zeigt sie mit.
+12. Ein gestellter 389 erhöht **nicht** Umsatz, offene Forderungen oder schuldige
+    Umsatzsteuer, wohl aber die neuen Kennzahlen Offene Auszahlungen und Vorsteuer aus
+    Honorargutschriften. Der Test prüft beide Richtungen an demselben Beleg; ein Test, der
+    nur die neuen Zahlen ansieht, übersähe genau den Fehler, um den es hier geht.
+
 ## Tests
 
 Alles mit Datenbankwirkung gehört in einen Integrationstest mit der `pg_session`-Fixture.
@@ -246,6 +352,11 @@ Neu, mindestens:
 - `test_herleitung_ueberlebt_bearbeitung.py`: Kriterium 6, ausdrücklich mit einem
   Bearbeitungsschritt dazwischen.
 - `test_storno_389_gesperrt.py`: Umfang 7.
+- `test_honorargutschrift_manuell.py`: Kriterium 9, mit beiden Herkünften.
+- `test_belegtitel_trennung.py`: Kriterium 10, gegen das erzeugte PDF, nicht gegen die
+  Titelkonstante.
+- `test_dashboard_honorargutschrift.py`: Kriterien 11 und 12, als Integrationstest mit
+  echten Belegen beider Arten in derselben Datenbank.
 - `test_finalize_389_e2e.py`: Kriterium 8, im Container, mit echtem Mustang. Übersprungene
   Tests gelten hier als Fehlschlag; fehlt Mustang, ist der Lauf rot.
 
@@ -266,8 +377,10 @@ brechen, nicht nur einen.
 - **Korrektur eines finalisierten 389.** Heute ist ein Korrekturlauf beim Sender ein Ersatz
   des ganzen Laufs. Bis geklärt ist, was das für einen bereits gestellten Beleg bedeutet,
   ist der Stornoweg gesperrt (Umfang 7).
-- **Die manuelle Anlage eines 389.** Die Belegart bleibt `manuell_waehlbar=False`. Ohne den
-  signierten Auftrag gäbe es keine prüfbare Bemessungsgrundlage.
+- **Ein Nachweis der Bemessungsgrundlage bei der manuellen Anlage.** Wer von Hand eine
+  Honorargutschrift schreibt, verantwortet die Summe selbst; das Programm prüft sie gegen
+  nichts. Die Rechenprobe greift nur, wenn eine `herleitung` eingegeben oder aus einem
+  signierten Auftrag übernommen wurde.
 
 ## Offene Frage an das Übergabeformat
 
