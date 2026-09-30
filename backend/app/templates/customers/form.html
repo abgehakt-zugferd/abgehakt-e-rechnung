@@ -94,7 +94,8 @@
         </div>
 
         {% set ist_gutschrift = (customer.gutschriftempfaenger if customer else values.get('gutschriftempfaenger') in ('1', 'on', 'true', True)) %}
-        <div class="card space-y-4" x-data="{ gutschrift: {{ 'true' if ist_gutschrift else 'false' }} }">
+        <div class="space-y-5" x-data="{ gutschrift: {{ 'true' if ist_gutschrift else 'false' }} }">
+        <div class="card space-y-4">
             <h2>STEUER &amp; KONTAKT</h2>
             <div>
                 <label class="label" style="display:flex; align-items:center; gap:10px;">
@@ -180,8 +181,15 @@
                 (Einstellungen).
             </p>
             <div>
-                <label class="label">IBAN</label>
+                <label class="label">
+                    IBAN
+                    <span x-show="gutschrift" x-cloak> (empfohlen)</span>
+                </label>
                 <input type="text" name="bank_iban" value="{{ (customer.bank_iban if customer else values.get('bank_iban','')) or '' }}" placeholder="DE00 1234 5678..." class="input font-mono">
+                <p x-show="gutschrift" x-cloak
+                   style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                    Ohne IBAN bekommt die Honorargutschrift keinen QR-Code zum Überweisen.
+                </p>
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -193,6 +201,7 @@
                     <input type="text" name="bank_name" value="{{ (customer.bank_name if customer else values.get('bank_name','')) or '' }}" class="input">
                 </div>
             </div>
+        </div>
         </div>
 
         <div style="display:flex; gap:12px;">

@@ -153,3 +153,34 @@ def test_steuernummer_laesst_sich_speichern(client, pg_session):
 
     pg_session.expire_all()
     assert pg_session.get(Customer, kunde.id).tax_number == "23/456/78901"
+
+
+_HINWEIS_QR = "Ohne IBAN bekommt die Honorargutschrift keinen QR-Code zum Überweisen"
+
+
+def test_iban_hinweis_erscheint_fuer_gutschriftempfaenger(client, pg_session):
+    """Mit Schalter: Hinweis an den bestehenden Bankfeldern, nicht als Pflicht."""
+    kunde = _kunde(pg_session, gutschriftempfaenger=True, bank_iban=None)
+
+    text = client.get(f"/customers/{kunde.id}/bearbeiten").text
+
+    assert _HINWEIS_QR in text
+    assert "empfohlen" in text.lower()
+
+
+def test_iban_hinweis_ist_an_x_show_des_schalters_gebunden(client, pg_session):
+    """Der Hinweisabsatz selbst traegt x-show=\"gutschrift\", nicht nur ein Nachbar.
+
+    Alpine laesst den Text im HTML; die Zusicherung greift am <p> mit dem
+    Hinweistext. Ein bedingungslos gerenderter Absatz (ohne x-show am Element)
+    macht den Test rot; x-show nur am Label \"empfohlen\" genuegt nicht.
+    """
+    import re
+
+    kunde = _kunde(pg_session, gutschriftempfaenger=False)
+    text = client.get(f"/customers/{kunde.id}/bearbeiten").text
+
+    assert re.search(
+        r'<p[^>]*\bx-show="gutschrift"[^>]*>[\s\S]*?' + re.escape(_HINWEIS_QR),
+        text,
+    ), "Hinweisabsatz ohne x-show=\"gutschrift\" am Element selbst"

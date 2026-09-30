@@ -127,3 +127,34 @@ def test_finalisierung_einer_389_mit_ungeklaertem_status_wird_abgewiesen(pg_sess
         or "steuerstatus" in antwort.text.lower() or "umsatzsteuer" in antwort.text.lower()
     pg_session.expire_all()
     assert pg_session.get(Invoice, inv.id).status == "draft"
+
+
+def test_389_ohne_iban_finalisiert_trotz_bank_warnung(pg_session):
+    """Fehlende Kunden-IBAN ist Warnung, kein Finalisierungsfehler."""
+    from app.models.company import Company
+    from app.services.validator import validate_invoice
+
+    kunde = _kunde(
+        pg_session,
+        ust_status="regelbesteuert",
+        tax_number="12/345/67890",
+        bank_iban=None,
+    )
+    original = _original(pg_session, kunde)
+    inv = _honorargutschrift(pg_session, kunde, original=original)
+    company = pg_session.query(Company).filter(Company.id == 1).one()
+    # Beziehung laden: Validator liest invoice.customer
+    pg_session.refresh(inv)
+    inv.customer  # noqa: B018 – eager use
+
+    errors, warnings = validate_invoice(inv, company)
+    assert "CUSTOMER_BANK_MISSING" in {w.code for w in warnings}
+    assert "CUSTOMER_BANK_MISSING" not in {e.code for e in errors}
+    assert not errors
+
+    with patched_success_pipeline():
+        antwort = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
+
+    assert antwort.status_code == 303
+    pg_session.expire_all()
+    assert pg_session.get(Invoice, inv.id).status == "issued"

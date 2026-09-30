@@ -48,6 +48,9 @@ Einstellungen.
 Unter **Bankverbindung (Auszahlung)** können IBAN, BIC und Bankname des Beteiligten stehen.
 Diese Felder sind für **Gutschriften** und **Abrechnungsgutschriften** (Typ 389) gedacht, nicht
 für normale Rechnungen: dort zahlt der Kunde an Ihre Firmen-IBAN in den Einstellungen.
+Ist der Schalter **Gutschriftempfänger** gesetzt, ist die IBAN als empfohlen markiert: ohne sie
+entsteht auf der Honorargutschrift kein EPC-QR-Code zum Überweisen. Speichern und Finalisieren
+bleiben möglich; es bleibt bei der Warnung `CUSTOMER_BANK_MISSING`.
 
 Für Honorargutschriften (Typ 389) gibt es am Kunden den Schalter **Gutschriftempfänger** und den
 umsatzsteuerlichen Status (`ungeklaert`, `regelbesteuert`, `kleinunternehmer`). Die Voreinstellung
