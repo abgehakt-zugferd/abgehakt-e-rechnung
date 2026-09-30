@@ -32,13 +32,6 @@ GEKLAERTE_STATUS = frozenset({
     UST_STATUS_KLEINUNTERNEHMER,
 })
 
-# Auswahl fuer das Kundenformular: Wert und sichtbare Beschriftung.
-UST_STATUS_AUSWAHL = (
-    (UST_STATUS_UNGEKLAERT, "Noch ungeklaert"),
-    (UST_STATUS_REGELBESTEUERT, "Regelbesteuert"),
-    (UST_STATUS_KLEINUNTERNEHMER, "Kleinunternehmer (§ 19 UStG)"),
-)
-
 # Der Wertevorrat, aus dem Kategorie und Satz folgen. `ungeklaert` fehlt
 # absichtlich: daraus entsteht keine Steuer.
 STEUER_AUS_STATUS = {
@@ -170,17 +163,10 @@ def _steuer_passt_zu_status(invoice: Invoice, status: str) -> list:
             f"(erwartet {erwartet_kat}).",
             "tax_category",
         ))
-    netto = getattr(invoice, "net_total", None)
-    steuer = getattr(invoice, "tax_total", None)
-    if netto is not None and steuer is not None and Decimal(netto) != 0:
-        abgeleitet = (Decimal(steuer) * 100 / Decimal(netto)).quantize(Decimal("0.01"))
-        if abgeleitet != erwartet_satz:
-            fehler.append(_issue(
-                "UST_STATUS_STEUER_MISMATCH",
-                f"Steuersatz am Belegkopf ({abgeleitet}) passt nicht zum "
-                f"Status '{status}' (erwartet {erwartet_satz}).",
-                "tax_total",
-            ))
+    # Der Satz wird je Position geprueft, nicht aus Kopfsummen zurueckgerechnet:
+    # 30,07 EUR zu 7 % ergeben 2,10 EUR, rueckgerechnet 6,98 %. Dass Kopf und
+    # Positionen zusammenpassen, sichern ITEM_TAX_MISMATCH und TAX_TOTAL_MISMATCH
+    # im Validator schon.
     for pos, item in enumerate(getattr(invoice, "items", None) or [], start=1):
         satz = getattr(item, "tax_rate", None)
         if satz is None:

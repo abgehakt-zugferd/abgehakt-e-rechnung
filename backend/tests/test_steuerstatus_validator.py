@@ -152,3 +152,26 @@ def test_kleinunternehmer_mit_e_und_null_ist_ok():
     )
     errors, _ = validate_invoice(inv, company_stub())
     assert "UST_STATUS_STEUER_MISMATCH" not in _codes(errors)
+
+
+def test_d_rundung_je_position_ist_kein_satzfehler():
+    """30,07 € zu 7 % ergeben 2,10 € Steuer. Rueckgerechnet sind das 6,98 %,
+    der Beleg ist trotzdem richtig. Der Satz steht an der Position, nicht im
+    Quotienten gerundeter Summen."""
+    netto = Decimal("30.07")
+    steuer = Decimal("2.10")
+    inv = validator_invoice_stub(
+        invoice_type="self_billing",
+        customer=_kunde(),
+        tax_category="S",
+        net_total=netto,
+        tax_total=steuer,
+        gross_total=netto + steuer,
+        items=[item_stub(
+            quantity=Decimal("1"), unit_price=netto, tax_rate=Decimal("7.00"),
+            net_amount=netto, tax_amount=steuer, gross_amount=netto + steuer,
+        )],
+        original_invoice_id="dummy",
+    )
+    errors, _ = validate_invoice(inv, company_stub())
+    assert "UST_STATUS_STEUER_MISMATCH" not in _codes(errors)

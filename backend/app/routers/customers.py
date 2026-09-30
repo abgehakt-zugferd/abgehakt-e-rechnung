@@ -108,8 +108,10 @@ def list_customers(request: Request, db: Session = Depends(get_db), q: str = "")
 
 @router.get("/neu", response_class=HTMLResponse)
 def new_customer_form(request: Request, db: Session = Depends(get_db)):
-    # no-store: sonst legt Zurueck + Speichern einen zweiten Kunden an (#bfcache).
     response = _render_form(request, None, next_customer_number(db), {}, None)
+    # Ohne `no-store` liefert der Zurück-Button das gefüllte Formular aus dem Cache, und
+    # erneutes Speichern legt einen ZWEITEN Kunden an. Den bfcache-Pfad ohne Serverfrage
+    # deckt das Makro `partials/formular_zurueck_guard.html` in `form.html` ab.
     response.headers["Cache-Control"] = "no-store"
     return response
 
