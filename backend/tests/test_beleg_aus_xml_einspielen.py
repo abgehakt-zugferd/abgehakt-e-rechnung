@@ -45,7 +45,9 @@ def _lege_xml_und_pdf(nummer: str, xml: str) -> None:
     (settings.storage_path / "pdfs" / f"{nummer}.pdf").write_bytes(b"%PDF-1.4 probe")
 
 
-def _xml_fuer(nummer: str, kunde: Customer, *, invoice_type: str | None) -> str:
+def _xml_fuer(
+    nummer: str, kunde: Customer, *, invoice_type: str | None, rate: Decimal | None = None,
+) -> str:
     company = company_stub(
         name="Muster Handwerk GmbH",
         tax_number=STEUER_PROBE_ZEHN,
@@ -59,7 +61,8 @@ def _xml_fuer(nummer: str, kunde: Customer, *, invoice_type: str | None) -> str:
         country=kunde.country,
         vat_id=kunde.vat_id,
     )
-    rate = Decimal("7.00") if invoice_type == "self_billing" else Decimal("19.00")
+    if rate is None:
+        rate = Decimal("7.00") if invoice_type == "self_billing" else Decimal("19.00")
     netto = Decimal("100.00")
     steuer = (netto * rate / Decimal("100")).quantize(Decimal("0.01"))
     inv = zugferd_invoice_stub(
@@ -124,6 +127,9 @@ def test_einspielen_setzt_invoice_type_self_billing_aus_389(pg_session):
     row = pg_session.query(Invoice).filter(Invoice.invoice_number == nummer).one()
     assert row.status == "issued"
     assert row.invoice_type == "self_billing"
+    pg_session.expunge_all()
+    frisch = pg_session.query(Invoice).filter(Invoice.invoice_number == nummer).one()
+    assert [(i.position, i.tax_rate) for i in frisch.items] == [(1, Decimal("7.00"))]
 
 
 def test_einspielen_standardrechnung_behaelt_invoice_type_none(pg_session):
@@ -154,3 +160,22 @@ def test_einspielen_weist_unbekannten_typecode_ab(pg_session, capsys):
     assert pg_session.query(Invoice).filter(Invoice.invoice_number == nummer).count() == 0
     assert "999" in out
     assert "TypeCode" in out or "typecode" in out.lower()
+
+
+def test_einspielen_prueft_den_satz_jeder_position(pg_session, capsys):
+    """Kopf S passt zu regelbesteuert, die Position traegt aber 19 statt 7 %.
+
+    Die Pruefung lief vor dem Anlegen der Positionen und sah deshalb nur den
+    Kopf; eine solche 389 kam durch.
+    """
+    nummer = "HG-EIN-005"
+    kunde = _kunde(pg_session, ust_status="regelbesteuert", gutschriftempfaenger=True)
+    xml = _xml_fuer(nummer, kunde, invoice_type="self_billing", rate=Decimal("19.00"))
+    _lege_xml_und_pdf(nummer, xml)
+
+    einspielen([nummer], db=pg_session)
+
+    out = capsys.readouterr().out
+    pg_session.expire_all()
+    assert pg_session.query(Invoice).filter(Invoice.invoice_number == nummer).count() == 0
+    assert "UST_STATUS_STEUER_MISMATCH" in out

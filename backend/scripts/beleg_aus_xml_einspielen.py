@@ -236,12 +236,12 @@ def _ein_beleg(db: Session, num: str, xml_dir: Path, pdf_dir: Path, *, aus_altem
         print(f"FEHLER: {num} — kein Kunde mit USt-IdNr. {data['buyer_vat']}")
         return
     inv = _baue_invoice(data, customer, num)
+    # Positionen VOR der Pruefung anhaengen: sonst sieht pruefe_honorargutschrift
+    # nur den Kopf und laesst einen falschen Satz je Position durch.
+    inv.items = [InvoiceItem(**row) for row in data["items"]]
     if not _pruefe_vor_anlage(num, inv):
         return
     db.add(inv)
-    db.flush()
-    for row in data["items"]:
-        db.add(InvoiceItem(invoice_id=inv.id, **row))
     db.commit()
     print(f"eingespielt: {num} → Kunde {customer.name} ({customer.customer_number})")
     if aus_altem_system:
