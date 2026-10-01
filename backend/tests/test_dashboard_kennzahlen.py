@@ -142,6 +142,13 @@ def test_vorjahres_stichtag_am_29_februar():
     assert vorjahres_stichtag(date(2024, 2, 29)) == date(2023, 2, 28)
 
 
+def test_vorjahres_stichtag_an_jahresraendern_und_schalttag():
+    """Untergrenze des Vorjahresfensters: selber Kalendertag ein Jahr zuvor."""
+    assert vorjahres_stichtag(date(2026, 1, 1)) == date(2025, 1, 1)
+    assert vorjahres_stichtag(date(2026, 12, 31)) == date(2025, 12, 31)
+    assert vorjahres_stichtag(date(2028, 2, 29)) == date(2027, 2, 28)
+
+
 def test_umsatz_vorjahr_null_liefert_keine_prozentzahl(pg_session):
     from tests.test_dashboard import _inv
 

@@ -196,3 +196,25 @@ def test_uebersicht_ytd_noch_2026_vor_mitternacht_berlin(pg_session, monkeypatch
     ctx = dashboard(Request(scope), pg_session).context
     assert Decimal(ctx["revenue_ytd"]) == Decimal("80.00")
     assert ctx["vat_quarter_label"] == "Q4 2026"
+
+
+def test_heute_folgt_sommerzeit_ueber_mitternacht(monkeypatch):
+    """2026-06-30T22:30Z ist in Berlin (CEST) der 01.07.; 21:30Z noch der 30.06."""
+    from app.zeit import heute
+
+    _uhr_fest(monkeypatch, _fest_utc(2026, 6, 30, 22, 30))
+    assert heute() == date(2026, 7, 1)
+    _uhr_fest(monkeypatch, _fest_utc(2026, 6, 30, 21, 30))
+    assert heute() == date(2026, 6, 30)
+
+
+def test_status_paid_ohne_datum_folgt_sommerzeit(pg_session, monkeypatch):
+    _uhr_fest(monkeypatch, _fest_utc(2026, 6, 30, 22, 30))
+    inv = _issued(pg_session, issue=date(2026, 6, 1))
+    r = _client(pg_session).post(
+        f"/invoices/{inv.id}/status",
+        data={"new_status": "paid"},
+    )
+    assert r.status_code == 303
+    pg_session.expire_all()
+    assert pg_session.get(Invoice, inv.id).bezahlt_am == date(2026, 7, 1)

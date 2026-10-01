@@ -25,3 +25,14 @@ def jetzt() -> datetime:
 def heute() -> date:
     """Kalendertag in Europe/Berlin."""
     return jetzt().date()
+
+
+def kalendertag(ts: datetime) -> date:
+    """Kalendertag eines aware Zeitstempels in Europe/Berlin.
+
+    Naive Zeitstempel werden abgelehnt: ohne Offset ist die Umrechnung
+    nach Berlin nicht definiert.
+    """
+    if ts.tzinfo is None:
+        raise ValueError("kalendertag verlangt einen aware Zeitstempel.")
+    return ts.astimezone(ZEITZONE).date()

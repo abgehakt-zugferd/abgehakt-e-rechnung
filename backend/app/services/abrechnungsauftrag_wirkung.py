@@ -33,7 +33,7 @@ from app.services.steuerstatus import (
     steuer_fuer as _steuer_aus_status,
 )
 from app.services.uebergabe_befund import Belegurteil
-from app.zeit import heute
+from app.zeit import heute, kalendertag
 from app.services.uebergabe_eingang import merken
 
 # 389 ist die Abrechnung ueber eine fremde Leistung (Gutschriftverfahren,
@@ -112,7 +112,7 @@ def entwuerfe_anlegen(
     nutzlast = urteil.nutzlast
     quartal = nutzlast.get("abrechnungsquartal", "")
     projekt = (nutzlast.get("projekt") or {}).get("name", "")
-    ausstellung = urteil.erzeugt_am.date() if urteil.erzeugt_am else heute()
+    ausstellung = kalendertag(urteil.erzeugt_am) if urteil.erzeugt_am else heute()
     faellig = ausstellung + timedelta(days=14)
 
     entwuerfe = []
