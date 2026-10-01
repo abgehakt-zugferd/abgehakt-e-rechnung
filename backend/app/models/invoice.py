@@ -92,6 +92,9 @@ class Invoice(Base):
     zugferd_xml: Mapped[Optional[str]] = mapped_column(Text)
     pdf_filename: Mapped[Optional[str]] = mapped_column(String(255))
     datev_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Zahlungseingang (Entscheidung 2026-09-30): nur beim Uebergang issued→paid
+    # gesetzt, danach unveraenderlich. Umsatz und „Bezahlt diesen Monat“ rechnen danach.
+    bezahlt_am: Mapped[Optional[date]] = mapped_column(Date)
     # GoBD: 8-Jahr-Aufbewahrung – Datum ab dem die Frist läuft
     archive_until: Mapped[Optional[date]] = mapped_column(Date)
     # P5: Bezug auf Originalrechnung für Stornorechnungen (GoBD-Nachvollziehbarkeit)

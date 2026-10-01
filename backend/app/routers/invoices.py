@@ -46,6 +46,11 @@ from app.config import get_settings
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
 from app.services.rechnungsliste_filter import filtere_rechnungsliste
+from app.services.bezahlt_am import (
+    BezahltAmFehler,
+    BezahltTrotzGutschrift,
+    vorbereiten_bezahlt,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -684,6 +689,7 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
         "cc_default": cc_default,
         "cc_herkunft": cc_herkunft,
         "protokoll": aenderungsprotokoll.protokoll_fuer(db, invoice_id),
+        "heute": date.today(),
     })
 
 
@@ -1065,7 +1071,12 @@ _VALID_TRANSITIONS: dict[str, set[str]] = {
 
 
 @router.post("/{invoice_id}/status")
-def update_status(invoice_id: uuid.UUID, new_status: str = Form(...), db: Session = Depends(get_db)):
+def update_status(
+    invoice_id: uuid.UUID,
+    new_status: str = Form(...),
+    bezahlt_am: str | None = Form(None),
+    db: Session = Depends(get_db),
+):
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(404)
@@ -1077,36 +1088,11 @@ def update_status(invoice_id: uuid.UUID, new_status: str = Form(...), db: Sessio
             f"Übergang von '{invoice.status}' nach '{new_status}' ist nicht erlaubt."
         )
 
-    # Bezahlt trotz Gutschrift (#15). Ein Original, zu dem eine Gutschrift
-    # existiert, darf nicht als bezahlt gelten: das wäre ein Zahlungsstatus, der
-    # seiner eigenen Korrektur widerspricht, und in OPOS und DATEV zwei Buchungen,
-    # die sich gegenseitig ausschließen. Auch der noch offene Entwurf sperrt, denn
-    # er ist die erklärte Absicht zu korrigieren.
-    #
-    # Gesperrt wird der Weg nach `paid`; das Original wird NICHT automatisch auf
-    # `cancelled` gesetzt. `invoice_guard.ALLOWED_TRANSITIONS` macht `paid` zum
-    # Endzustand, `paid → cancelled` ist verboten, und stornieren darf man hier
-    # ausdrücklich auch eine bereits bezahlte Rechnung. Eine Automatik griffe damit
-    # in der Hälfte der Fälle stillschweigend nicht. Den Wächter dafür
-    # aufzuweichen wäre der falsche Tausch: die Statusmaschine ist eine GoBD-Zusage,
-    # keine Ergonomiefrage. Der Weg nach `cancelled` bleibt eine bewusste
-    # menschliche Entscheidung und wird hier bewusst nicht mitgesperrt.
     if new_status == "paid":
-        gutschrift = (
-            db.query(Invoice)
-            .filter(Invoice.original_invoice_id == invoice.id,
-                    Invoice.status != "discarded")
-            .order_by(Invoice.invoice_number)
-            .first()
-        )
-        if gutschrift:
-            raise HTTPException(
-                400,
-                f"Zu dieser Rechnung existiert die Gutschrift "
-                f"{gutschrift.invoice_number}. Ein stornierter Beleg kann nicht als "
-                "bezahlt geführt werden. Setze ihn auf „storniert“, oder verwirf "
-                "die Gutschrift, falls sie versehentlich entstanden ist.",
-            )
+        try:
+            vorbereiten_bezahlt(db, invoice, bezahlt_am, heute=date.today())
+        except (BezahltAmFehler, BezahltTrotzGutschrift) as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     invoice.status = new_status
     db.commit()

@@ -63,7 +63,7 @@
         <a data-kpi="offen" href="/invoices?status=issued&art=rechnung" class="card card-hover" style="display:block; text-decoration:none; color:inherit;">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="kpi__beschriftung">OFFENE RECHNUNGEN</p>
+                    <p class="kpi__beschriftung">OFFENE FORDERUNGEN</p>
                     <p class="kpi__wert">{{ open_invoices }}</p>
                     <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:4px;">{{ open_amount|betrag(0) }} € offen</p>
                 </div>
@@ -100,9 +100,9 @@
         <div class="card card-hover">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="kpi__beschriftung">BEZAHLT DIESEN MONAT</p>
+                    <p class="kpi__beschriftung">BEZAHLT DIESEN MONAT (BRUTTO)</p>
                     <p class="kpi__wert">{{ paid_this_month|betrag(0) }}<span class="kpi__einheit">€</span></p>
-                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:4px;">Vormonat {{ paid_previous_month|betrag(0) }} €</p>
+                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:4px;">nach Zahlungsdatum · Vormonat {{ paid_previous_month|betrag(0) }} €</p>
                 </div>
                 <div style="width:40px; height:40px; background:rgba(0,230,118,0.07); border:2px solid rgba(0,230,118,0.3); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                     <svg style="width:20px;height:20px;color:var(--green);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -116,7 +116,7 @@
         <div class="card card-hover">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="kpi__beschriftung">UMSATZ LFD. JAHR</p>
+                    <p class="kpi__beschriftung">UMSATZ LFD. JAHR (NETTO, BEZAHLT)</p>
                     <p class="kpi__wert">{{ revenue_ytd|betrag(0) }}<span class="kpi__einheit">€</span></p>
                     <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:4px;">
                         Vorjahr {{ revenue_prev_ytd|betrag(0) }} €

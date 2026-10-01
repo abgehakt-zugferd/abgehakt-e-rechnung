@@ -106,9 +106,21 @@
         </div>
         {% endif %}
 
+        {% if invoice.status == 'paid' and invoice.bezahlt_am %}
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--green);">
+            bezahlt am {{ invoice.bezahlt_am.strftime('%d.%m.%Y') }}
+        </p>
+        {% endif %}
+
         {% if invoice.status == 'issued' %}
-        <form method="post" action="/invoices/{{ invoice.id }}/status">
+        <form method="post" action="/invoices/{{ invoice.id }}/status" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
             <input type="hidden" name="new_status" value="paid">
+            <label style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                bezahlt am
+                <input type="date" name="bezahlt_am" value="{{ heute.isoformat() }}"
+                       min="{{ invoice.issue_date.isoformat() }}" max="{{ heute.isoformat() }}"
+                       style="margin-left:6px; font-family:'VT323',monospace; font-size:var(--fs-text); background:var(--bg); color:var(--text-hi); border:1px solid var(--border); padding:4px 6px;">
+            </label>
             <button type="submit" class="btn-success">✓ ALS BEZAHLT MARKIEREN</button>
         </form>
         <form method="post" action="/invoices/{{ invoice.id }}/status"

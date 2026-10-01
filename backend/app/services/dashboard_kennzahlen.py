@@ -11,7 +11,7 @@ Programm kennt, und addiert die in den Einstellungen hinterlegte GmbH-Ruecklage
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy import func
@@ -204,20 +204,20 @@ def nicht_versendet_anzahl(db: Session) -> int:
 
 
 def bezahlt_im_zeitraum(
-    db: Session, von: datetime, bis: datetime | None = None,
+    db: Session, von: date, bis: date | None = None,
 ) -> Decimal:
-    """Bruttosumme bezahlter Standardrechnungen nach `updated_at`.
+    """Bruttosumme bezahlter Standardrechnungen nach `bezahlt_am` (Geldeingang).
 
-    `bis` ist die obere Grenze exklusiv (`updated_at < bis`), damit angrenzende
+    `bis` ist die obere Grenze exklusiv (`bezahlt_am < bis`), damit angrenzende
     Monate sich nicht ueberschneiden.
     """
     bedingungen = [
         Invoice.status == "paid",
         _STANDARD,
-        Invoice.updated_at >= von,
+        Invoice.bezahlt_am >= von,
     ]
     if bis is not None:
-        bedingungen.append(Invoice.updated_at < bis)
+        bedingungen.append(Invoice.bezahlt_am < bis)
     return (
         db.query(func.coalesce(func.sum(Invoice.gross_total), 0))
         .filter(*bedingungen)
@@ -228,16 +228,20 @@ def bezahlt_im_zeitraum(
 def umsatz_im_zeitraum(
     db: Session, von: date, bis: date | None = None,
 ) -> Decimal:
-    """Bruttoumsatz gestellter und bezahlter Standardrechnungen nach `issue_date`."""
+    """Nettoumsatz bezahlter Standardrechnungen nach `bezahlt_am`.
+
+    Entscheidung des Betreibers vom 2026-09-30: Umsatz ist, was bezahlt wurde.
+    Gestellte, unbezahlte Rechnungen sind offene Forderungen und zaehlen hier nicht.
+    """
     bedingungen = [
-        Invoice.status.in_(_AUSGESTELLT),
+        Invoice.status == "paid",
         _STANDARD,
-        Invoice.issue_date >= von,
+        Invoice.bezahlt_am >= von,
     ]
     if bis is not None:
-        bedingungen.append(Invoice.issue_date <= bis)
+        bedingungen.append(Invoice.bezahlt_am <= bis)
     return (
-        db.query(func.coalesce(func.sum(Invoice.gross_total), 0))
+        db.query(func.coalesce(func.sum(Invoice.net_total), 0))
         .filter(*bedingungen)
         .scalar()
     ) or Decimal("0")

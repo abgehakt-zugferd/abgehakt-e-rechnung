@@ -49,3 +49,21 @@ def test_nachziehen_setzt_versand_und_bezahlt(pg_session):
     log = pg_session.query(InvoiceSendLog).filter(InvoiceSendLog.invoice_id == row.id).one()
     assert log.success is True
     assert "vorheriges Abgehakt" in log.error
+
+
+def test_nachziehen_setzt_das_zahlungsdatum(pg_session):
+    """Die Uebersicht zaehlt Zahlungen nach bezahlt_am. Schreibt das Skript das
+    Datum nur nach updated_at, fehlt der Beleg in Umsatz und Geldeingang."""
+    _inv(pg_session, "MIG-BA1", date(2026, 3, 2), date(2026, 3, 16))
+    _inv(pg_session, "MIG-BA2", date(2026, 3, 2), date(2026, 3, 16))
+
+    nachziehen(["MIG-BA1"], db=pg_session)
+    nachziehen(["MIG-BA2"], db=pg_session,
+               bezahlt_am=datetime(2026, 4, 30, 23, 30, tzinfo=timezone.utc))
+
+    pg_session.expunge_all()
+    stand = {i.invoice_number: (i.status, i.bezahlt_am) for i in
+             pg_session.query(Invoice).filter(Invoice.invoice_number.in_(["MIG-BA1", "MIG-BA2"]))}
+    assert stand["MIG-BA1"] == ("paid", date(2026, 3, 16))
+    # 23:30 UTC am 30.04. ist in Berlin schon der 01.05.
+    assert stand["MIG-BA2"] == ("paid", date(2026, 5, 1))
