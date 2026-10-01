@@ -80,7 +80,10 @@ Betriebsausgaben im System = Gewinn-Schätzung). Das ist Planungshilfe, keine St
 
 ## Übersicht und Kennzahlen
 
-Die Startseite **Übersicht** fasst den Stand zusammen:
+Die Startseite **Übersicht** fasst den Stand zusammen. „Heute“ und alle davon
+abhängigen Kalendergrenzen (Jahresanfang, Monatsanfang, Vorbelegung von
+Beleg- und Zahlungsdatum) gelten fest in Europe/Berlin, unabhängig von der
+Zeitzone des Servers.
 
 | Kennzahl | Bedeutung |
 |---|---|
