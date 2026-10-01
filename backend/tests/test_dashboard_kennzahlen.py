@@ -1,6 +1,7 @@
 """Tests fuer Steuer-Kennzahlen und Belegaggregationen auf der Uebersicht."""
 
 from datetime import date
+from app.zeit import heute
 from decimal import Decimal
 
 from app.services.dashboard_kennzahlen import (
@@ -26,7 +27,7 @@ def test_schuldige_ust_summiert_gestellte_rechnungen(pg_session):
 
     _inv(pg_session, "issued", "119.00", net=Decimal("100.00"), tax=Decimal("19.00"))
     _inv(pg_session, "draft", "119.00", net=Decimal("100.00"), tax=Decimal("19.00"))
-    seit = date.today().replace(month=1, day=1)
+    seit = heute().replace(month=1, day=1)
     assert schuldige_umsatzsteuer_ytd(pg_session, seit) == Decimal("19.00")
 
 
@@ -38,7 +39,7 @@ def test_schuldige_ust_zieht_gutschriften_ab(pg_session):
         pg_session, "issued", "59.50",
         net=Decimal("50.00"), tax=Decimal("9.50"),
     )
-    seit = date.today().replace(month=1, day=1)
+    seit = heute().replace(month=1, day=1)
     assert schuldige_umsatzsteuer_ytd(pg_session, seit) == Decimal("9.50")
 
 
@@ -58,7 +59,7 @@ def test_nettoumsatz_ytd_ignoriert_gutschriften_netto(pg_session):
         pg_session, "issued", "59.50",
         net=Decimal("50.00"), tax=Decimal("9.50"),
     )
-    seit = date.today().replace(month=1, day=1)
+    seit = heute().replace(month=1, day=1)
     assert nettoumsatz_ytd(pg_session, seit) == Decimal("50.00")
 
 

@@ -10,6 +10,8 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from app.zeit import heute as kalender_heute
+
 if TYPE_CHECKING:
     from app.models.customer import Customer
     from app.models.invoice import Invoice
@@ -61,7 +63,7 @@ def bestaetigungsdatum_nach_wechsel(
     if neu == UST_STATUS_UNGEKLAERT:
         return None
     if neu in GEKLAERTE_STATUS and neu != (bisher or "").strip():
-        return heute or date.today()
+        return heute or kalender_heute()
     return bisheriges_datum
 
 

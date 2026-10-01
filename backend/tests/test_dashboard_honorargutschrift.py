@@ -6,6 +6,7 @@ nicht in „Schuldige Umsatzsteuer“. Geprueft werden beide Richtungen am selbe
 """
 import uuid
 from datetime import date
+from app.zeit import heute
 from decimal import Decimal
 
 import app.main as main
@@ -21,7 +22,7 @@ def _honorargutschrift(pg_session, status, gross, net, tax):
     pg_session.add(autor)
     pg_session.flush()
     inv = Invoice(invoice_number=f"HG-{uuid.uuid4().hex[:6]}", customer_id=autor.id,
-                  issue_date=date.today(), due_date=date.today(), currency="EUR",
+                  issue_date=heute(), due_date=heute(), currency="EUR",
                   net_total=net, tax_total=tax, gross_total=Decimal(gross),
                   status=status, invoice_type="self_billing")
     pg_session.add(inv)

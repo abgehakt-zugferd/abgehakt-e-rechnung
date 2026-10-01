@@ -8,6 +8,7 @@ import json
 import re
 import uuid
 from datetime import date, timedelta
+from app.zeit import heute as kalender_heute
 from decimal import Decimal
 from pathlib import Path
 
@@ -147,7 +148,7 @@ def _feldwert(html: str, name: str) -> str | None:
 def test_k1_gestellte_vorlage_oeffnet_neuanlage_vorbefuellt(pg_session):
     """K1: GET mit vorlage liefert Anlegeformular, Aktion neu, Felder vorbelegt, Daten heute."""
     inv, kunde = _vorlage(pg_session)
-    heute = date.today()
+    heute = kalender_heute()
     faellig = heute + timedelta(days=14)
 
     r = _client(pg_session).get(f"/invoices/neu?vorlage={inv.id}")
@@ -234,7 +235,7 @@ def test_k2_speichern_legt_neuen_entwurf_an_vorlage_unveraendert(pg_session):
     # vererbt, die Auswahl steht auf Standard.
     assert _feldwert(html, "invoice_type") == "standard"
 
-    heute = date.today()
+    heute = kalender_heute()
     r = client.post("/invoices/neu", data={
         "customer_id": _feldwert(html, "customer_id"),
         "issue_date": _feldwert(html, "issue_date"),

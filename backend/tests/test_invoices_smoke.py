@@ -5,6 +5,7 @@ Query-Bruch dort fiel bisher durch kein Netz. pg_session, echtes Rendering.
 """
 import uuid
 from datetime import date, datetime, timezone
+from app.zeit import heute as kalender_heute
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
@@ -118,7 +119,7 @@ def test_liste_art_rechnung_blendet_gutschriften_aus(pg_session):
 
 
 def test_liste_faellig_ueberfaellig_blendet_nicht_faellige_aus(pg_session):
-    heute = date.today()
+    heute = kalender_heute()
     gestern = heute.fromordinal(heute.toordinal() - 1)
     _invoice(pg_session, number="RE-DUE-ALT", due=gestern)
     _invoice(pg_session, number="RE-DUE-HEUTE", due=heute)

@@ -8,6 +8,7 @@ einem Beleg, den er selbst nicht geschrieben hat.
 
 import uuid
 from datetime import date
+from app.zeit import heute
 
 from app.models.customer import Customer
 
@@ -74,7 +75,7 @@ def test_der_status_laesst_sich_setzen(client, pg_session):
     frisch = pg_session.query(Customer).filter(Customer.id == kunde.id).one()
     assert frisch.ust_status == "kleinunternehmer"
     assert frisch.gutschriftempfaenger is True
-    assert frisch.ust_status_bestaetigt_am == date.today()
+    assert frisch.ust_status_bestaetigt_am == heute()
 
 
 def test_ein_erfundener_status_wird_nicht_uebernommen(client, pg_session):
@@ -128,7 +129,7 @@ def test_statuswechsel_setzt_bestaetigungsdatum(client, pg_session):
                 data=_formular(ust_status="regelbesteuert", gutschriftempfaenger="1"))
 
     pg_session.expire_all()
-    assert pg_session.get(Customer, kunde.id).ust_status_bestaetigt_am == date.today()
+    assert pg_session.get(Customer, kunde.id).ust_status_bestaetigt_am == heute()
 
 
 def test_gleicher_status_laesst_bestaetigungsdatum_stehen(client, pg_session):

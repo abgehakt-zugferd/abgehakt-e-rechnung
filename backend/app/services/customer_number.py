@@ -10,10 +10,11 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.models.customer import Customer
+from app.zeit import heute
 
 
 def next_customer_number(db: Session, today: date | None = None) -> str:
-    today = today or date.today()
+    today = today or heute()
     prefix = today.strftime("%Y%m")
     pattern = re.compile(rf"^{prefix}(\d+)$")
 

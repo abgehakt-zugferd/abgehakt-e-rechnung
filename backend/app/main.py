@@ -4,6 +4,7 @@ import warnings
 from contextlib import asynccontextmanager
 from datetime import date
 from decimal import Decimal
+from app.zeit import heute as kalender_heute
 from fastapi import FastAPI, Request, Depends
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -277,7 +278,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     if not setup.ist_eingerichtet(company):
         return RedirectResponse("/setup", status_code=303)
 
-    today = date.today()
+    today = kalender_heute()
     month_start = today.replace(day=1)
     if month_start.month == 1:
         previous_month_start = date(month_start.year - 1, 12, 1)

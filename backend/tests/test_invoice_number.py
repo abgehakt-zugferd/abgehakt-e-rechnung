@@ -12,6 +12,7 @@ import pytest
 
 from app.models.company import Company
 from app.services.invoice_number import generate_next_invoice_number
+from app.zeit import heute
 
 
 def _company(pg_session) -> Company:
@@ -22,7 +23,7 @@ def test_sequential_numbers_increment_and_persist(pg_session):
     _company(pg_session).invoice_counter = 0
     pg_session.commit()
 
-    year = date.today().year
+    year = heute().year
     first = generate_next_invoice_number(pg_session)
     second = generate_next_invoice_number(pg_session)
     pg_session.commit()

@@ -8,7 +8,7 @@ angenommenen Belegs.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -80,7 +80,7 @@ def merken(db: Session, urteil: Belegurteil, *, dateiname: Optional[str] = None)
         beleg_sha256=urteil.beleg_sha256,
         absender=urteil.absender or "",
         nutzlast_art=urteil.nutzlast_art or "",
-        erzeugt_am=urteil.erzeugt_am or datetime.now(),
+        erzeugt_am=urteil.erzeugt_am or datetime.now(timezone.utc),
         dateiname=dateiname,
     )
     db.add(zeile)
