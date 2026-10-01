@@ -7,6 +7,7 @@ from app.database import get_db
 from app.main import app
 from app.models.customer import Customer
 from app.models.invoice import Invoice
+from app.zeit import heute
 
 
 def teardown_function():
@@ -69,12 +70,12 @@ def test_status_paid_ohne_datum_nimmt_heute(pg_session):
     )
     assert r.status_code == 303
     pg_session.expire_all()
-    assert pg_session.get(Invoice, inv.id).bezahlt_am == date.today()
+    assert pg_session.get(Invoice, inv.id).bezahlt_am == heute()
 
 
 def test_status_paid_lehnt_zukunft_ab(pg_session):
     inv = _issued(pg_session)
-    zukunft = (date.today() + timedelta(days=2)).isoformat()
+    zukunft = (heute() + timedelta(days=2)).isoformat()
     r = _client(pg_session).post(
         f"/invoices/{inv.id}/status",
         data={"new_status": "paid", "bezahlt_am": zukunft},

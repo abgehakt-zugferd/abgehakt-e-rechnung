@@ -9,6 +9,7 @@ from sqlalchemy.orm import Query
 from app.models.customer import Customer
 from app.models.invoice import Invoice
 from app.services.beleg_status import ohne_erstversand_bedingung
+from app.zeit import heute as kalender_heute
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +48,7 @@ def filtere_rechnungsliste(
         art = ""
 
     if faellig == "ueberfaellig":
-        query = query.filter(Invoice.due_date < (heute or date.today()))
+        query = query.filter(Invoice.due_date < (heute or kalender_heute()))
     else:
         faellig = ""
 

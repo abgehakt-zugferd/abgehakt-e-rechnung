@@ -51,6 +51,7 @@ from app.services.bezahlt_am import (
     BezahltTrotzGutschrift,
     vorbereiten_bezahlt,
 )
+from app.zeit import heute
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -371,7 +372,7 @@ def new_invoice_form(
 ):
     customers = db.query(Customer).filter(Customer.deleted_at.is_(None), Customer.is_active == True).order_by(Customer.name).all()
     company = db.query(Company).filter(Company.id == 1).first()
-    today = date.today()
+    today = heute()
     # invoice bleibt immer None: gesetzt wuerde das Formular auf die Vorlage speichern.
     # Vorbelegung ist eine eigene Kontextgroesse (docs/specs/kopieren.md).
     vorbelegung = None
@@ -527,9 +528,9 @@ def edit_invoice_form(invoice_id: uuid.UUID, request: Request, db: Session = Dep
         "items_json": _items_as_json(invoice),
         "customers": customers,
         "company": company,
-        "today": date.today().isoformat(),
+        "today": heute().isoformat(),
         "due_default": invoice.due_date.isoformat(),
-        "delivery_default": date.today().isoformat(),
+        "delivery_default": heute().isoformat(),
         "belegart_waehlbar": _belegart_waehlbar(invoice),
         "error": None,
     })
@@ -552,9 +553,9 @@ def _bearbeiten_mit_fehler(request: Request, db: Session, invoice: Invoice, meld
         "items_json": _items_as_json(invoice),
         "customers": customers,
         "company": company,
-        "today": date.today().isoformat(),
+        "today": heute().isoformat(),
         "due_default": invoice.due_date.isoformat(),
-        "delivery_default": date.today().isoformat(),
+        "delivery_default": heute().isoformat(),
         "belegart_waehlbar": _belegart_waehlbar(invoice),
         "error": meldung,
     }, status_code=400)
@@ -689,7 +690,7 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
         "cc_default": cc_default,
         "cc_herkunft": cc_herkunft,
         "protokoll": aenderungsprotokoll.protokoll_fuer(db, invoice_id),
-        "heute": date.today(),
+        "heute": heute(),
     })
 
 
@@ -1090,7 +1091,7 @@ def update_status(
 
     if new_status == "paid":
         try:
-            vorbereiten_bezahlt(db, invoice, bezahlt_am, heute=date.today())
+            vorbereiten_bezahlt(db, invoice, bezahlt_am, heute=heute())
         except (BezahltAmFehler, BezahltTrotzGutschrift) as exc:
             raise HTTPException(400, str(exc)) from exc
 
@@ -1196,9 +1197,10 @@ def create_storno(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
                 "berichtigt werden; das geht nicht im Stornoweg.",
             ) from None
 
-    number = generate_next_invoice_number(db)
+    storno_datum = heute()
+    number = generate_next_invoice_number(db, issue_date=storno_datum)
     from app.services.storno import build_storno
-    storno = build_storno(original, number, date.today())
+    storno = build_storno(original, number, storno_datum)
     db.add(storno)
     try:
         db.commit()

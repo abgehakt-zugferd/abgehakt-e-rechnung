@@ -2,6 +2,7 @@ import re
 from datetime import date
 from sqlalchemy.orm import Session
 from app.models.company import Company
+from app.zeit import heute
 
 # Der Präfix wird Teil der Rechnungsnummer, und die Rechnungsnummer wird Teil
 # eines Dateinamens (`storage/pdfs/{nummer}.pdf`) und des Betreffs der
@@ -47,6 +48,6 @@ def generate_next_invoice_number(db: Session, issue_date: date | None = None) ->
     if company.invoice_year_in_number:
         # Jahr aus dem Ausstellungsdatum beim Anlegen (#19). Die Nummer selbst bleibt
         # danach unveraenderlich (#145); ein spaeteres Umdatieren des Belegs aendert sie nicht.
-        year = (issue_date or date.today()).year
+        year = (issue_date or heute()).year
         return f"{company.invoice_prefix}-{year}-{counter}"
     return f"{company.invoice_prefix}-{counter}"

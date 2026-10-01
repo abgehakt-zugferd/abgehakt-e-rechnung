@@ -14,6 +14,7 @@ from app.models.invoice import AuditLog, Invoice
 from app.services.gobd_export import build_gobd_export
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
+from app.zeit import heute
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -23,7 +24,7 @@ registriere_darstellungsfilter(templates)
 
 @router.get("/", response_class=HTMLResponse)
 def export_page(request: Request):
-    today = date.today()
+    today = heute()
     return templates.TemplateResponse("export/index.html", {
         "request": request,
         "default_von": date(today.year, 1, 1).isoformat(),

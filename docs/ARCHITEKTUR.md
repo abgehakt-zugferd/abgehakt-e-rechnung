@@ -48,6 +48,7 @@ backend/app/
 ├── database.py               # SQLAlchemy-Engine + get_db()
 ├── branding.py               # AGPL-§13-Hinweis im Footer (nicht abschaltbar)
 ├── darstellung.py            # Zahlenformat der Oberfläche; Beleg-PDF über belegsprache.py
+├── zeit.py                   # heute()/jetzt() fest Europe/Berlin (eine Uhr-Naht)
 ├── installation.py           # Installationstyp: Produktion vs. Ketten-Testinstanz
 ├── laender.py                # LAENDER (kuratiert) und ISO_LAENDER für die Landesauswahl
 ├── db/

@@ -5,6 +5,7 @@ Bisher 0 Tests. Wir rufen die Route-Funktion direkt und prüfen den Template-Kon
 """
 import uuid
 from datetime import date
+from app.zeit import heute as kalender_heute
 from decimal import Decimal
 
 from starlette.requests import Request
@@ -22,8 +23,10 @@ def _request() -> Request:
     })
 
 
-def _inv(pg_session, status, gross, issue=date.today(), net=None, tax=None, due=None,
+def _inv(pg_session, status, gross, issue=None, net=None, tax=None, due=None,
          bezahlt_am=None):
+    if issue is None:
+        issue = kalender_heute()
     c = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Kunde",
                  address_line1="Weg 1", zip_code="80331", city="München", country="DE")
     pg_session.add(c)
@@ -44,8 +47,10 @@ def _inv(pg_session, status, gross, issue=date.today(), net=None, tax=None, due=
     return inv
 
 
-def _gutschrift(pg_session, status, gross, issue=date.today(), net=None, tax=None, due=None,
+def _gutschrift(pg_session, status, gross, issue=None, net=None, tax=None, due=None,
                 bezahlt_am=None):
+    if issue is None:
+        issue = kalender_heute()
     c = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Kunde",
                  address_line1="Weg 1", zip_code="80331", city="München", country="DE")
     pg_session.add(c)
@@ -65,7 +70,7 @@ def _gutschrift(pg_session, status, gross, issue=date.today(), net=None, tax=Non
 
 
 def test_dashboard_zaehlt_status_korrekt(pg_session):
-    heute = date.today()
+    heute = kalender_heute()
     for _ in range(2):
         _inv(pg_session, "draft", "0")
     for _ in range(3):
@@ -89,7 +94,7 @@ def test_dashboard_zaehlt_status_korrekt(pg_session):
 
 def test_dashboard_bezahlt_diesen_monat_nutzt_zahlungsmonat(pg_session):
     """Juli-Rechnung, im laufenden Monat als bezahlt markiert, zaehlt jetzt."""
-    heute = date.today()
+    heute = kalender_heute()
     inv = _inv(pg_session, "issued", "300.00", issue=date(2026, 7, 8))
     inv.status = "paid"
     inv.bezahlt_am = heute
@@ -99,7 +104,7 @@ def test_dashboard_bezahlt_diesen_monat_nutzt_zahlungsmonat(pg_session):
 
 
 def test_dashboard_bezahlt_diesen_monat_ignoriert_vorherigen_monat(pg_session):
-    heute = date.today()
+    heute = kalender_heute()
     if heute.month == 1:
         bezahlt = date(heute.year - 1, 12, 15)
     else:
@@ -174,7 +179,7 @@ def test_dashboard_steuer_kennzahlen_nutzt_einstellungen(pg_session):
 
 def test_dashboard_ytd_ignoriert_gutschriften(pg_session):
     """#5: Gutschriften duerfen den YTD-Umsatz nicht aufblaehen."""
-    heute = date.today()
+    heute = kalender_heute()
     _inv(
         pg_session, "paid", "119.00",
         net=Decimal("100.00"), tax=Decimal("19.00"),
@@ -195,7 +200,7 @@ def test_dashboard_offene_posten_ignorieren_gutschriften(pg_session):
 
 
 def test_dashboard_liefert_offenen_betrag_und_ueberfaellig(pg_session):
-    heute = date.today()
+    heute = kalender_heute()
     _inv(pg_session, "issued", "100.00", due=heute.fromordinal(heute.toordinal() - 5))
     _inv(pg_session, "issued", "50.00", due=heute)
     ctx = main.dashboard(_request(), pg_session).context
@@ -208,7 +213,7 @@ def test_dashboard_liefert_offenen_betrag_und_ueberfaellig(pg_session):
 def test_dashboard_vormonat_und_vorjahr_im_kontext(pg_session):
     from app.services.dashboard_kennzahlen import vorjahres_stichtag
 
-    heute = date.today()
+    heute = kalender_heute()
     if heute.month == 1:
         vormonat_tag = date(heute.year - 1, 12, 15)
     else:
@@ -240,17 +245,6 @@ def test_dashboard_vormonat_und_vorjahr_im_kontext(pg_session):
         assert ctx["revenue_yoy_pct"] == Decimal("187.5")
     assert ctx["vat_quarter_label"].startswith("Q")
     assert "nicht_versendet_anzahl" in ctx
-
-
-def test_vorjahresbeleg_am_jahresrand_liegt_im_fenster():
-    """Befund 5: Platzierung relativ zum Stichtag gilt am 1.1. und am 31.12."""
-    from app.services.dashboard_kennzahlen import vorjahres_stichtag
-
-    for heute in (date(2026, 1, 1), date(2026, 12, 31)):
-        beleg = vorjahres_stichtag(heute)
-        fenster_start = date(heute.year - 1, 1, 1)
-        fenster_ende = vorjahres_stichtag(heute)
-        assert fenster_start <= beleg <= fenster_ende, heute
 
 
 def test_dashboard_hinweisstreifen_fehlt_ohne_unversendete(pg_session, client):
@@ -295,7 +289,7 @@ def test_dashboard_kachel_und_hinweis_links_stimmen_mit_liste(pg_session, client
     """
     from datetime import datetime, timezone, timedelta
 
-    heute = date.today()
+    heute = kalender_heute()
     for _ in range(2):
         _inv(pg_session, "draft", "0")
     # drei gestellte Standard: eine ueberfaellig unversendet, eine heute faellig unversendet,

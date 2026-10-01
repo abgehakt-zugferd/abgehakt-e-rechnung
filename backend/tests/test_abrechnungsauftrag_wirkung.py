@@ -56,7 +56,9 @@ def _gutschrift(partner_id, netto="174.33", nummer=1):
     }
 
 
-def _urteil(gutschriften=None, angenommen=True, bereits=False, sha="1" * 64):
+def _urteil(
+    gutschriften=None, angenommen=True, bereits=False, sha="1" * 64, erzeugt_am=None,
+):
     nutzlast = {
         "abrechnungsquartal": "2026-Q2",
         "projekt": {"id": "probe", "name": "Probeverlag"},
@@ -70,7 +72,8 @@ def _urteil(gutschriften=None, angenommen=True, bereits=False, sha="1" * 64):
         beleg_sha256=sha, beleg_id="c0c0c0c0-0000-4000-8000-000000000001",
         angenommen=angenommen, bereits_verarbeitet=bereits,
         feststellungen=() if angenommen else (Feststellung("SIGNATUR_UNGUELTIG", "$"),),
-        absender="tantiemen-app", nutzlast_art="abrechnungsauftrag", erzeugt_am=ERZEUGT,
+        absender="tantiemen-app", nutzlast_art="abrechnungsauftrag",
+        erzeugt_am=ERZEUGT if erzeugt_am is None else erzeugt_am,
         nutzlast=nutzlast, abrechnungsquartal="2026-Q2", projekt="Probeverlag",
         zahl_gutschriften=len(nutzlast["gutschriften"]),
         summe_netto=Decimal(nutzlast["gutschriften"][0]["summe"]["netto"])
@@ -198,3 +201,17 @@ def test_ein_unbekannter_typcode_wirkt_nicht(pg_session):
 
     with pytest.raises(WirkungFehler):
         entwuerfe_anlegen(pg_session, _urteil([gutschrift]))
+
+
+def test_ausstellung_folgt_berlin_kalendertag_des_erzeugt_am(pg_session):
+    """#129: erzeugt_am 23:30Z am 31.12. ist in Berlin schon der 01.01."""
+    from datetime import date
+
+    _kunde(pg_session, PARTNER_A, name="Probe Autorin A")
+    erzeugt = datetime(2026, 12, 31, 23, 30, tzinfo=timezone.utc)
+    entwurf = entwuerfe_anlegen(pg_session, _urteil(erzeugt_am=erzeugt))[0]
+    pg_session.flush()
+
+    assert entwurf.issue_date == date(2027, 1, 1)
+    assert entwurf.due_date == date(2027, 1, 15)
+    assert entwurf.invoice_number.startswith("RE-2027-")

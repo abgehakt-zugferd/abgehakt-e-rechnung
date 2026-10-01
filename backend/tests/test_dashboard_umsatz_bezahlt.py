@@ -5,6 +5,7 @@ Vertiefungen fuer Route, Guard und Migration liegen in eigenen Dateien.
 """
 import uuid
 from datetime import date, datetime, timezone
+from app.zeit import heute as kalender_heute
 from decimal import Decimal
 
 from starlette.requests import Request
@@ -66,7 +67,7 @@ def _rechnung(
 
 def test_dashboard_umsatz_zaehlt_nur_bezahlte_netto(pg_session):
     """Durchstich: gestellte unbezahlte Rechnung zaehlt nicht; bezahlte mit Netto."""
-    heute = date.today()
+    heute = kalender_heute()
     _rechnung(
         pg_session,
         status="issued",
@@ -90,7 +91,7 @@ def test_dashboard_umsatz_zaehlt_nur_bezahlte_netto(pg_session):
 
 def test_dashboard_umsatz_folgt_bezahlt_am_nicht_rechnungsdatum(pg_session):
     """Vorjahr gestellt, dieses Jahr bezahlt: zaehlt. Vorjahr bezahlt: nicht."""
-    heute = date.today()
+    heute = kalender_heute()
     _rechnung(
         pg_session,
         status="paid",
@@ -115,7 +116,7 @@ def test_dashboard_umsatz_folgt_bezahlt_am_nicht_rechnungsdatum(pg_session):
 
 def test_dashboard_bezahlt_monat_folgt_bezahlt_am_nicht_updated_at(pg_session):
     """Spaeteres datev_sent_at verschiebt updated_at, nicht den Zahlungsmonat."""
-    heute = date.today()
+    heute = kalender_heute()
     if heute.month == 1:
         bezahlt = date(heute.year - 1, 12, 15)
     else:
@@ -137,7 +138,7 @@ def test_dashboard_bezahlt_monat_folgt_bezahlt_am_nicht_updated_at(pg_session):
 
 def test_dashboard_bezahlt_diesen_monat_summiert_brutto(pg_session):
     """Geldeingang bleibt brutto; Netto und Brutto muessen verschieden sein."""
-    heute = date.today()
+    heute = kalender_heute()
     _rechnung(
         pg_session,
         status="paid",
