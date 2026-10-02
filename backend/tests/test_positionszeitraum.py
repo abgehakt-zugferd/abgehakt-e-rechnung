@@ -111,3 +111,24 @@ def test_pdf_zeigt_den_positionszeitraum_unter_der_beschreibung(tmp_path, sprach
     assert f"Abo {juli}" in text
     assert f"Abo {august}" in text
     assert "Porto 1" in text
+
+
+def test_entwurf_aus_beleg_bindet_den_positionszeitraum_an_den_bestand():
+    """Der Leistungszeitraum stammt bei einem Beleg-Entwurf aus dem signierten Beleg
+    (belegsperre.py). Ein im Formular eingetragener Positionszeitraum könnte ihm
+    widersprechen; er wird deshalb aus dem Bestand genommen wie Menge und Preis.
+    Gefunden im Gegenspieler-Review 2026-10-02."""
+    from types import SimpleNamespace
+
+    from app.services import belegsperre
+
+    alt = SimpleNamespace(position=1, quantity=Decimal("1"), unit_price=Decimal("10"),
+                          unit="Stück", leistung_von=None, leistung_bis=None)
+    inv = SimpleNamespace(items=[alt])
+    eingabe = [{"description": "Neu", "quantity": "9", "unit_price": "99", "unit": "Stunde",
+                "leistung_von": "2026-07-01", "leistung_bis": "2026-07-31"}]
+
+    gebunden = belegsperre.positionen_binden(inv, eingabe)
+
+    assert (gebunden[0]["leistung_von"], gebunden[0]["leistung_bis"]) == ("", "")
+    assert gebunden[0]["description"] == "Neu"

@@ -56,6 +56,12 @@ def positionen_binden(invoice, rohe_positionen: list) -> list:
         neu["quantity"] = str(alt.quantity)
         neu["unit_price"] = str(alt.unit_price)
         neu["unit"] = alt.unit
+        # Positionszeitraeume gehoeren zum Leistungszeitraum: aus dem Bestand,
+        # damit kein Formularwert dem signierten Beleg widerspricht.
+        von = getattr(alt, "leistung_von", None)
+        bis = getattr(alt, "leistung_bis", None)
+        neu["leistung_von"] = von.isoformat() if von else ""
+        neu["leistung_bis"] = bis.isoformat() if bis else ""
         gebunden.append(neu)
     return gebunden
 

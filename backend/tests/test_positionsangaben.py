@@ -208,6 +208,8 @@ def test_unvollstaendiger_leistungszeitraum_wird_vor_der_nummernvergabe_abgelehn
     assert antwort.status_code == 400
     assert meldung in antwort.text
     assert pg_session.execute(text("SELECT invoice_counter FROM company")).scalar() == zaehler_vorher
+    pg_session.expire_all()
+    assert pg_session.query(Invoice).filter(Invoice.customer_id == kunde.id).count() == 0
 
 
 def test_vorlage_laesst_positionszeitraeume_weg_behaelt_aber_die_artikelnummer(pg_session, client):

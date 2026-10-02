@@ -175,9 +175,11 @@
                                     <div>
                                         <label class="label">Leistungszeitraum dieser Position (optional, beide Felder)</label>
                                         <div class="flex items-center gap-2" style="flex-wrap:wrap;">
-                                            <input type="date" x-model="item.leistung_von" class="input" style="font-size:var(--fs-gross); padding:6px 8px; max-width:180px;">
+                                            <input type="date" x-model="item.leistung_von" class="input" style="font-size:var(--fs-gross); padding:6px 8px; max-width:180px;"
+                                                   {% if aus_beleg %}readonly title="aus dem Beleg übernommen"{% endif %}>
                                             <span style="color:var(--text-dim);">bis</span>
-                                            <input type="date" x-model="item.leistung_bis" class="input" style="font-size:var(--fs-gross); padding:6px 8px; max-width:180px;">
+                                            <input type="date" x-model="item.leistung_bis" class="input" style="font-size:var(--fs-gross); padding:6px 8px; max-width:180px;"
+                                                   {% if aus_beleg %}readonly title="aus dem Beleg übernommen"{% endif %}>
                                         </div>
                                     </div>
 
