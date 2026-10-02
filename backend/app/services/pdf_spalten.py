@@ -10,14 +10,21 @@ um und bekommt den Rest.
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
 
+from reportlab.lib.units import cm
+
+BESCHREIBUNG_MIN = 4 * cm
+
+
 def spaltenbreiten(kopf: list[str], zeilen: list[list], gesamt: float, *,
                    schrift: str, fett: str, groesse: float, polster: float,
                    beschreibung: int = 1) -> list[float]:
     """Breiten in Punkt, Summe = `gesamt`.
 
-    `zeilen` enthält je Zelle einen Text; die Zelle der Beschreibungsspalte wird
-    nicht vermessen (dort steht ein umbrechender Paragraph). Sehr große Beträge
-    können die Beschreibung schmal machen; sie wird nie negativ.
+    `zeilen` enthält je Zelle einen Text, nur die Beschreibungsspalte nicht: dort
+    steht ein umbrechender Paragraph, und sie wird nicht vermessen. Sie bekommt den
+    Rest, mindestens `BESCHREIBUNG_MIN`. Reicht der Platz dafür nicht (Beträge im
+    Billionenbereich), geben die festen Spalten anteilig nach; ihre Texte stehen
+    dann über, die Beschreibung bleibt lesbar.
     """
     breiten: list[float] = []
     for spalte, titel in enumerate(kopf):
@@ -28,5 +35,9 @@ def spaltenbreiten(kopf: list[str], zeilen: list[list], gesamt: float, *,
         for zeile in zeilen:
             noetig = max(noetig, stringWidth(str(zeile[spalte]), schrift, groesse))
         breiten.append(noetig + polster)
-    breiten[beschreibung] = max(gesamt - sum(breiten), 0.0)
+    fest = sum(breiten)
+    if gesamt - fest < BESCHREIBUNG_MIN:
+        faktor = (gesamt - BESCHREIBUNG_MIN) / fest
+        breiten = [b * faktor for b in breiten]
+    breiten[beschreibung] = gesamt - sum(breiten)
     return breiten

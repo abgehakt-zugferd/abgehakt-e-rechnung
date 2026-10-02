@@ -104,3 +104,19 @@ def test_im_gestellten_pdf_ragt_kein_tabellentext_in_die_naechste_spalte(tmp_pat
         funde.sort()
         for (x1, _, b1, t1), (x2, _, _, t2) in zip(funde, funde[1:]):
             assert x1 + b1 + 2 <= x2, f"{t1!r} ragt in {t2!r} (y={y})"
+
+
+def test_beschreibung_behaelt_ihre_untergrenze_auch_bei_absurden_betraegen(schriften):
+    """Gegenspieler-Review 2026-10-02: ohne Untergrenze schrumpfte die Beschreibung
+    bei sehr großen Beträgen auf 0 und verschwand. Dann geben die festen Spalten
+    anteilig nach; ihre Texte können überstehen, die Beschreibung bleibt lesbar."""
+    body, bold = schriften
+    riesig = "999.999.999.999.999,99 €"
+    kopf = ["Pos.", "Beschreibung", "Menge", "Einheit", "Einzelpreis", "MwSt.", "Betrag"]
+    zeilen = [["1", None, "999.999.999,9999", "Pauschale", riesig, "19 %", riesig]]
+
+    breiten = spaltenbreiten(kopf, zeilen, BREITE, schrift=body, fett=bold,
+                             groesse=GROESSE, polster=POLSTER)
+
+    assert sum(breiten) == pytest.approx(BREITE)
+    assert breiten[1] >= 4 * cm - 1e-6
