@@ -25,3 +25,5 @@ IBAN_BR_PROBE = "BR" + "93" + "PROBE" + ("0" * 20)  # Registry ja, EPC-SCT nein
 # Steuernummer-Hausfixtures (#88): aufsteigend, Wache laesst sie durch.
 STEUER_PROBE_ZEHN = "12" + "/" + "345" + "/" + "67890"
 STEUER_PROBE_ELF = "123" + "/" + "456" + "/" + "78901"
+# Handelsregisternummer: lauter Nullen, keine echte Eintragung (Pflichtangaben).
+HRB_PROBE = "HRB" + " " + "00000"

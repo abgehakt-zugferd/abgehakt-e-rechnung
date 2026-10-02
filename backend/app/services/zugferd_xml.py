@@ -20,6 +20,8 @@ from app.services.belegart import (  # noqa: F401
     belegart,
 )
 from app.services.einheiten import resolve_einheit
+from app.services.belegsprache import resolve_belegsprache
+from app.services.pflichtangaben import pflichtangaben
 from app.services.iban import IbanProfil
 
 PROFILE_IDS = {
@@ -192,6 +194,26 @@ def _seller_id_xml(company: Company, tax_category: str = "S") -> str:
         return ""
     return f"""
                 <ram:ID>{_esc(company.tax_number)}</ram:ID>"""
+
+
+def _seller_legal_xml(company: Company, invoice: Invoice) -> str:
+    """BT-33 und BT-30: Pflichtangaben des Geschäftsbriefs (services/pflichtangaben.py).
+
+    CII-Reihenfolge: Name, Description, SpecifiedLegalOrganization, DefinedTradeContact.
+    Dieselben Zeilen wie im PDF-Fuß, damit beide Teile des Belegs dasselbe sagen.
+    """
+    sprache = resolve_belegsprache(getattr(invoice, "document_language", None) or "de")
+    angaben = pflichtangaben(company, sprache)
+    teile = []
+    if angaben.zeilen:
+        teile.append(f"""
+                <ram:Description>{_esc(chr(10).join(angaben.zeilen))}</ram:Description>""")
+    if angaben.registernummer:
+        teile.append(f"""
+                <ram:SpecifiedLegalOrganization>
+                    <ram:ID>{_esc(angaben.registernummer)}</ram:ID>
+                </ram:SpecifiedLegalOrganization>""")
+    return "".join(teile)
 
 
 def _seller_contact_xml(company: Company) -> str:
@@ -531,7 +553,7 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
 {_line_items_xml(invoice)}
         <ram:ApplicableHeaderTradeAgreement>{_buyer_reference_xml(invoice)}
             <ram:SellerTradeParty>{_seller_id_xml(company, inv_cat)}
-                <ram:Name>{_esc(company.name)}</ram:Name>{_seller_contact_xml(company)}
+                <ram:Name>{_esc(company.name)}</ram:Name>{_seller_legal_xml(company, invoice)}{_seller_contact_xml(company)}
                 <ram:PostalTradeAddress>
                     <ram:PostcodeCode>{_esc(company.zip_code)}</ram:PostcodeCode>
                     <ram:LineOne>{_esc(company.address_line1)}</ram:LineOne>{addr2_seller}

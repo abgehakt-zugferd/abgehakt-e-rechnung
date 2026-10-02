@@ -16,6 +16,7 @@ from app.services.ust_id_pruefung import vies_name_vergleichbar
 from app.models.invoice import Invoice
 from app.models.company import Company
 from app.services.einheiten import UnknownUnitError, resolve_einheit
+from app.services.pflichtangaben import pflichtangaben
 from app.services.belegart import (
     TYPE_CODE_MAP,
     UnknownInvoiceTypeError,
@@ -159,6 +160,13 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
             "Leistungserbringers in den Einstellungen hinterlegt sein "
             "(§ 14a Abs. 3 Satz 2 UStG). Die Steuernummer allein genügt hier nicht.",
             "company.vat_id",
+        ))
+    angaben = pflichtangaben(company)
+    if angaben.fehlend:
+        errors.append(Issue(
+            "SELLER_PFLICHTANGABEN_MISSING", "error",
+            f"Pflichtangaben für Geschäftsbriefe fehlen in den Einstellungen: {angaben.luecke()}.",
+            f"company.{angaben.fehlend[0]}",
         ))
     if company.vat_id:
         _ust_id_validator_issues(

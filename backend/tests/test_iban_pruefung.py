@@ -162,6 +162,7 @@ def _firma_form(**extra):
         "zip_code": "12345",
         "city": "Musterstadt",
         "country": "DE",
+        "rechtsform": "gmbh",
         "invoice_prefix": "RE",
         "kst_satz_percent": "15",
         "soli_auf_kst_percent": "5,5",

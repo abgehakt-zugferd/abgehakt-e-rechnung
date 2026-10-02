@@ -256,6 +256,7 @@ def test_einstellungen_rueckfall_fuer_code_ausserhalb_iso_liste(client, pg_sessi
         "address_line2": "", "zip_code": firma.zip_code, "city": firma.city,
         "country": treffer.group(1), "tax_number": firma.tax_number or "",
         "vat_id": firma.vat_id or "", "invoice_prefix": firma.invoice_prefix or "RE",
+        "rechtsform": firma.rechtsform,
         "payment_terms_default": firma.payment_terms_default or "Zahlbar.",
         "payment_terms_default_en": "Payable within 14 days without deduction.",
     })
@@ -364,6 +365,7 @@ def test_japanischer_aussteller_landet_als_jp_in_der_verkaeufer_xml(pg_session):
             "country": "JP",
             "tax_number": "T1234567890123",
             "vat_id": "",
+            "rechtsform": "sonstige",
         })
         assert r.status_code == 303, r.text
 

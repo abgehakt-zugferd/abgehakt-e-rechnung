@@ -20,6 +20,7 @@ from app.services.ust_id_pruefung import (
     zuruecksetzen as ust_zuruecksetzen,
 )
 from app.services.adresse import bereinige_adresszeile2
+from app.services.pflichtangaben import RECHTSFORMEN, pflichtangaben
 from app.services.protokoll import PROTOKOLL_VERSION
 from app.services.steuer_ruecklage import (
     gewerbe_hebesatz as ruecklage_hebesatz,
@@ -58,6 +59,12 @@ def _get_or_create_app_config(db: Session) -> AppConfig:
     return config
 
 
+def _pflicht_hinweis(company) -> str | None:
+    """Was das Stellen noch sperrt, in denselben Worten wie der Validator."""
+    luecke = pflichtangaben(company).luecke()
+    return f"Noch nicht stellbar, es fehlt: {luecke}" if luecke else None
+
+
 @router.get("/", response_class=HTMLResponse)
 def settings_page(
     request: Request,
@@ -78,6 +85,8 @@ def settings_page(
     return templates.TemplateResponse("settings/index.html", {
         "request": request,
         "company": company,
+        "rechtsformen": RECHTSFORMEN,
+        "pflicht_hinweis": _pflicht_hinweis(company),
         "config": config,
         "effective": effective,
         "cfg": cfg,
@@ -114,6 +123,12 @@ def save_company(
     bank_iban: str = Form(""),
     bank_bic: str = Form(""),
     bank_name: str = Form(""),
+    rechtsform: str = Form(""),
+    sitz: str = Form(""),
+    registergericht: str = Form(""),
+    registernummer: str = Form(""),
+    vertretung: str = Form(""),
+    aufsichtsrat_vorsitz: str = Form(""),
     invoice_prefix: str = Form("RE"),
     invoice_year_in_number: str = Form("on"),
     payment_terms_default: str = Form(""),
@@ -130,6 +145,9 @@ def save_company(
     # der Sitzung und ein späterer Commit an anderer Stelle nähme sie mit.
     if (meldung := pruefe_praefix(invoice_prefix)):
         return settings_page(request, db, saved=False, error=meldung)
+    if rechtsform not in RECHTSFORMEN:
+        return settings_page(request, db, saved=False,
+                             error="Bitte die Rechtsform wählen (Pflichtangaben auf Rechnungen).")
     if (meldung := pruefe_steuer_ruecklage(kst_satz_percent, soli_auf_kst_percent, gewerbe_hebesatz)):
         return settings_page(request, db, saved=False, error=meldung)
     if (meldung := pruefe_iban(bank_iban)):
@@ -172,6 +190,12 @@ def save_company(
     company.bank_iban = normalisiere_iban(bank_iban)
     company.bank_bic = normalisiere_bic(bank_bic)
     company.bank_name = bank_name.strip() or None
+    company.rechtsform = rechtsform
+    company.sitz = sitz.strip() or None
+    company.registergericht = registergericht.strip() or None
+    company.registernummer = registernummer.strip() or None
+    company.vertretung = vertretung.strip() or None
+    company.aufsichtsrat_vorsitz = aufsichtsrat_vorsitz.strip() or None
     company.invoice_prefix = invoice_prefix.strip() or "RE"
     company.invoice_year_in_number = invoice_year_in_number == "on"
     company.payment_terms_default = de_terms

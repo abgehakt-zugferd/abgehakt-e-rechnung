@@ -39,6 +39,31 @@
         </fieldset>
 
         <fieldset style="border:2px solid var(--border-hi); padding:16px; margin-bottom:20px;">
+            <legend>Rechtsform und Register</legend>
+            <p style="color:var(--text-dim); margin-bottom:12px;">
+                Pflichtangaben auf Geschäftsbriefen (§ 35a GmbHG, § 80 AktG, §§ 37a, 125a HGB).
+                Registergericht, Registernummer und Vertretung braucht nur, wer im Register eingetragen ist.
+            </p>
+            <label>Rechtsform *<br>
+                <select name="rechtsform" required class="input">
+                    <option value="">Bitte wählen</option>
+                    {% for schluessel, bezeichnung in rechtsformen.items() %}
+                    <option value="{{ schluessel }}"{% if wert('rechtsform') == schluessel %} selected{% endif %}>{{ bezeichnung }}</option>
+                    {% endfor %}
+                </select></label><br><br>
+            <label>Registergericht<br>
+                <input type="text" name="registergericht" value="{{ wert('registergericht') }}" placeholder="Amtsgericht …" class="input"></label><br><br>
+            <label>Registernummer<br>
+                <input type="text" name="registernummer" value="{{ wert('registernummer') }}" placeholder="HRB …" class="input font-mono"></label><br><br>
+            <label>Sitz (falls abweichend vom Ort)<br>
+                <input type="text" name="sitz" value="{{ wert('sitz') }}" class="input"></label><br><br>
+            <label>Geschäftsführung / Vorstand (alle)<br>
+                <input type="text" name="vertretung" value="{{ wert('vertretung') }}" placeholder="Vorname Name, Vorname Name" class="input"></label><br><br>
+            <label>Vorsitz des Aufsichtsrats (falls vorhanden)<br>
+                <input type="text" name="aufsichtsrat_vorsitz" value="{{ wert('aufsichtsrat_vorsitz') }}" class="input"></label>
+        </fieldset>
+
+        <fieldset style="border:2px solid var(--border-hi); padding:16px; margin-bottom:20px;">
             <legend>Steuerliche Angaben</legend>
             <p style="color:var(--text-dim); margin-bottom:12px;">
                 Mindestens eine der beiden Nummern ist nach § 14 UStG Pflicht.

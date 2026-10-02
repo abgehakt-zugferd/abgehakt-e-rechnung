@@ -78,7 +78,7 @@ def test_die_einstellungen_speichern_einen_unzulaessigen_praefix_nicht(pg_sessio
     antwort = client.post("/settings/firma", data={
         "name": "Muster Handwerk GmbH", "address_line1": "Musterstraße 1",
         "zip_code": "12345", "city": "Musterstadt", "country": "DE",
-        "tax_number": "12/345/67890", "invoice_prefix": "../entwischt",
+        "tax_number": "12/345/67890", "rechtsform": "gmbh", "invoice_prefix": "../entwischt",
         "payment_terms_default": "Zahlbar innerhalb von 14 Tagen ohne Abzug.",
         "payment_terms_default_en": "Payable within 14 days without deduction.",
     })
@@ -97,7 +97,7 @@ def test_ein_zulaessiger_praefix_wird_weiterhin_gespeichert(pg_session):
     antwort = client.post("/settings/firma", data={
         "name": "Muster Handwerk GmbH", "address_line1": "Musterstraße 1",
         "zip_code": "12345", "city": "Musterstadt", "country": "DE",
-        "tax_number": "12/345/67890", "invoice_prefix": "RG-2026",
+        "tax_number": "12/345/67890", "rechtsform": "gmbh", "invoice_prefix": "RG-2026",
         "payment_terms_default": "Zahlbar innerhalb von 14 Tagen ohne Abzug.",
         "payment_terms_default_en": "Payable within 14 days without deduction.",
     })
