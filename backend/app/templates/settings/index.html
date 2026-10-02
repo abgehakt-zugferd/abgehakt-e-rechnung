@@ -51,6 +51,47 @@
             </div>
 
             <div style="border-top:1px solid var(--border); padding-top:16px;">
+                <h3 style="margin-bottom:6px;">RECHTSFORM UND REGISTER</h3>
+                <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:14px;">
+                    Pflichtangaben auf Geschäftsbriefen (§ 35a GmbHG, § 80 AktG, §§ 37a, 125a HGB). Stehen im Fuß jeder Rechnung und in der E-Rechnung.
+                </p>
+                {% if pflicht_hinweis %}
+                <p class="label" style="color:var(--pink); text-transform:none; margin-bottom:12px;">{{ pflicht_hinweis }}</p>
+                {% endif %}
+                <div>
+                    <label class="label">Rechtsform *</label>
+                    <select name="rechtsform" required class="input">
+                        <option value=""{% if not company.rechtsform %} selected{% endif %}>Bitte wählen</option>
+                        {% for schluessel, bezeichnung in rechtsformen.items() %}
+                        <option value="{{ schluessel }}"{% if company.rechtsform == schluessel %} selected{% endif %}>{{ bezeichnung }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4" style="margin-top:12px;">
+                    <div>
+                        <label class="label">Registergericht</label>
+                        <input type="text" name="registergericht" value="{{ company.registergericht or '' }}" placeholder="Amtsgericht …" class="input">
+                    </div>
+                    <div>
+                        <label class="label">Registernummer</label>
+                        <input type="text" name="registernummer" value="{{ company.registernummer or '' }}" placeholder="HRB …" class="input font-mono">
+                    </div>
+                    <div>
+                        <label class="label">Sitz (falls abweichend von Stadt)</label>
+                        <input type="text" name="sitz" value="{{ company.sitz or '' }}" placeholder="{{ company.city or '' }}" class="input">
+                    </div>
+                    <div>
+                        <label class="label">Geschäftsführung / Vorstand (alle)</label>
+                        <input type="text" name="vertretung" value="{{ company.vertretung or '' }}" placeholder="Vorname Name, Vorname Name" class="input">
+                    </div>
+                    <div>
+                        <label class="label">Vorsitz des Aufsichtsrats (falls vorhanden)</label>
+                        <input type="text" name="aufsichtsrat_vorsitz" value="{{ company.aufsichtsrat_vorsitz or '' }}" class="input">
+                    </div>
+                </div>
+            </div>
+
+            <div style="border-top:1px solid var(--border); padding-top:16px;">
                 <h3 style="margin-bottom:14px;">STEUER (mind. eines erforderlich)</h3>
                 <div class="grid grid-cols-2 gap-4">
                     <div>

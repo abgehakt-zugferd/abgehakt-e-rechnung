@@ -19,6 +19,7 @@ from app.darstellung import registriere_darstellungsfilter
 from app.laender import registriere_laender_globals
 from app.database import get_db
 from app.models.company import Company
+from app.services.pflichtangaben import RECHTSFORMEN, pflichtangaben
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -28,7 +29,13 @@ registriere_laender_globals(templates)
 
 PFLICHTFELDER = ("name", "address_line1", "zip_code", "city")
 FREIE_FELDER = ("address_line2", "country", "tax_number", "vat_id",
-                "email", "phone", "bank_iban", "bank_bic", "bank_name")
+                "email", "phone", "bank_iban", "bank_bic", "bank_name",
+                "rechtsform", "sitz", "registergericht", "registernummer",
+                "vertretung", "aufsichtsrat_vorsitz")
+
+
+PFLICHTANGABEN_FELDER = ("rechtsform", "sitz", "registergericht", "registernummer",
+                         "vertretung", "aufsichtsrat_vorsitz")
 
 
 def _company(db: Session) -> Company | None:
@@ -44,6 +51,7 @@ def formular(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse("setup/index.html", {
         "request": request,
         "company": _company(db),
+        "rechtsformen": RECHTSFORMEN,
         "fehler": None,
     })
 
@@ -65,6 +73,13 @@ async def speichern(request: Request, db: Session = Depends(get_db)):
     if not werte["tax_number"] and not werte["vat_id"]:
         return _mit_fehler(request, db, werte,
                            "Steuernummer oder USt-IdNr. ist für § 14 UStG erforderlich.")
+
+    # Pflichtangaben auf Geschäftsbriefen: geprüft an einer Wegwerf-Firma, damit
+    # eine Absage nichts in der Sitzung hinterlässt.
+    probe = Company(**{f: werte[f] or None for f in PFLICHTANGABEN_FELDER}, city=werte["city"])
+    if (luecke := pflichtangaben(probe).luecke()):
+        return _mit_fehler(request, db, werte,
+                           f"Pflichtangaben für Rechnungen fehlen: {luecke}.")
 
     if (meldung := pruefe_iban(werte["bank_iban"])):
         return _mit_fehler(request, db, werte, meldung)
@@ -100,5 +115,6 @@ def _mit_fehler(request: Request, db: Session, werte: dict, meldung: str):
         "request": request,
         "company": _company(db),
         "werte": werte,
+        "rechtsformen": RECHTSFORMEN,
         "fehler": meldung,
     }, status_code=400)

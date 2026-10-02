@@ -69,6 +69,28 @@ Die Firmendaten (Name, Anschrift, Steuernummer oder USt-IdNr., Bankverbindung f�
 **Eingänge**) stehen unter **Einstellungen**. Ohne vollständige Firmendaten bleibt die
 Rechnungserstellung gesperrt.
 
+Unter **Rechtsform und Register** stehen die Pflichtangaben für Geschäftsbriefe, die auch auf
+jeder Rechnung stehen müssen (§ 35a GmbHG, § 80 AktG, §§ 37a, 125a HGB, § 7 Abs. 5 PartGG).
+Die Rechtsform ist eine Pflichtauswahl. Je nach Rechtsform verlangt das Programm dazu:
+
+| Rechtsform | Verlangt |
+|---|---|
+| Einzelunternehmen, Freiberuf, andere Rechtsform | nichts weiter |
+| e.K., OHG, KG, PartG | Registergericht, Registernummer |
+| GmbH, UG (haftungsbeschränkt) | dazu die gesamte Geschäftsführung; der Vorsitz eines Aufsichtsrats, falls einer gebildet ist |
+| AG | dazu den gesamten Vorstand und den Vorsitz des Aufsichtsrats |
+
+Der Sitz ist der Ort der Anschrift, solange kein abweichender Sitz eingetragen ist. Die Angaben
+erscheinen im Fuß des PDFs und in der E-Rechnung (Registernummer als BT-30, alle Zeilen als
+BT-33). Fehlt etwas, bleibt das Stellen gesperrt, und die Einstellungen sagen, was fehlt.
+Bestehende Installationen haben nach dem Update noch keine Rechtsform; bis sie gewählt ist,
+lassen sich Entwürfe anlegen, aber nicht stellen. Bereits gestellte Belege bleiben, wie sie
+sind.
+
+Nicht abgedeckt ist die GmbH & Co. KG: Sie muss zusätzlich die Angaben ihrer
+Komplementär-GmbH nennen. Bis das eingebaut ist, die Rechtsform **Andere Rechtsform** wählen
+und die Angaben selbst prüfen.
+
 Unter **Steuer-Rücklage (Übersicht)** legen Sie die pauschale GmbH-Schätzung für die Kennzahl
 **Gesch. Steuerabgaben** fest: Körperschaftsteuer, Solidaritätszuschlag auf die KSt und
 Gewerbehebesatz. Die Übersicht addiert daraus einen Anteil auf den Nettoumsatz (ohne

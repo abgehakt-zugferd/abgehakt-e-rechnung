@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
-from tests.probe_daten import IBAN_FIRMA_PROBE, UST_DE_PROBE, UST_DE_PROBE_2
+from tests.probe_daten import HRB_PROBE, IBAN_FIRMA_PROBE, UST_DE_PROBE, UST_DE_PROBE_2
 
 # Felder, die SimpleNamespace-Stubs fuer Validator und ZUGFeRD-Generator tragen muessen.
 COMPANY_STUB_FIELDS = (
@@ -39,6 +39,18 @@ INVOICE_STUB_FIELDS = (
     "notes", "currency", "net_total", "tax_total", "gross_total", "status",
     "customer", "items", "tax_category", "zugferd_profile", "invoice_type",
     "original_invoice_id", "original_invoice",
+)
+
+
+# Die Musterfirma ist eine GmbH: ohne vollständige Pflichtangaben sperrt der
+# Validator das Stellen (services/pflichtangaben.py).
+PFLICHTANGABEN_PROBE = dict(
+    rechtsform="gmbh",
+    sitz=None,
+    registergericht="Amtsgericht Musterstadt",
+    registernummer=HRB_PROBE,
+    vertretung="Probe Geschäftsführerin",
+    aufsichtsrat_vorsitz=None,
 )
 
 
@@ -73,6 +85,7 @@ def company_stub(**kwargs):
         bank_iban=None,
         bank_bic=None,
         bank_name=None,
+        **PFLICHTANGABEN_PROBE,
     ), **kwargs)
 
 
@@ -180,6 +193,7 @@ def orm_company(**over) -> Company:
         bank_iban=IBAN_FIRMA_PROBE,
         bank_bic="ABCDDEFF",
         bank_name="Testbank",
+        **PFLICHTANGABEN_PROBE,
     )
     kw.update(over)
     if kw.get("vat_id") and kw.get("vat_id_checked_at") is None and "vat_id_checked_at" not in over:

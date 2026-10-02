@@ -19,6 +19,7 @@ def _firma_form(**extra):
         # Ohne Steuernummer: das Formular verlangt serverseitig keine, und jede
         # neu hinzukommende Zeile im Format NNN/NNN/NNNNN haelt die Datenwache
         # im Pre-Push-Hook an, gleich ob die Nummer erfunden ist oder nicht.
+        "rechtsform": "gmbh",
         "invoice_prefix": "RE",
         "kst_satz_percent": "15",
         "soli_auf_kst_percent": "5,5",

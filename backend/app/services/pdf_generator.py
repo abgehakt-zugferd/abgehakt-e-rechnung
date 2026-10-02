@@ -25,6 +25,7 @@ from app.services.adresse import bereinige_adresszeile2
 from app.services.pdf_fonts import register_fonts
 from app.services.bankverbindung import iban_fuer_ausgabe
 from app.services.epc_qr import build_epc_payload, qr_png_bytes
+from app.services.pflichtangaben import pflichtangaben
 from app.services.iban import IbanProfil
 from app.services.zugferd_xml import EXEMPTION_REASONS
 from app.services.belegart import belegart
@@ -590,6 +591,8 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         footer_parts.append(f"{d.label_steuernummer} {company.tax_number}")
     if footer_parts:
         story.append(Paragraph("  ·  ".join(footer_parts), small))
+    for zeile in pflichtangaben(company, d.code).zeilen:
+        story.append(Paragraph(escape(zeile), small))
 
     def _canvasmaker(*args, **kwargs):
         kwargs["initialFontName"] = BODY

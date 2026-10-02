@@ -100,6 +100,7 @@ backend/app/
 │   ├── iban.py               # IBAN-Prüfung mit Registry-Länge und MOD 97-10
 │   ├── adresse.py            # Adresszeilen für Beleg und XML
 │   ├── leistungszeit.py      # Leistungsdatum und -zeitraum (§ 14 Abs. 4 Nr. 6)
+│   ├── pflichtangaben.py     # Rechtsform, Register, Vertretung (§ 35a GmbHG u. a.): PDF-Fuß, BT-30/33, Sperre
 │   ├── archive_frist.py      # archive_until = 31.12. des Ausstellungsjahrs + 8
 │   ├── empfaenger.py         # Kopie-Empfänger aus Kunde, Einstellungen, Sende-Dialog
 │   ├── ust_id_pruefung.py    # VIES-Prüfung, nur auf Klick mit Einwilligung

@@ -156,9 +156,11 @@ def pg_session(pg_engine):
             # liefe jeder Test in das Ersteinrichtungs-Tor (#99 §4.1) — Tests, die
             # die Ersteinrichtung selbst prüfen, setzen es gezielt zurück.
             "INSERT INTO company (id, name, address_line1, zip_code, city, country, tax_number, vat_id, "
-            "invoice_prefix, invoice_year_in_number, invoice_counter, payment_terms_default, setup_completed_at) "
+            "invoice_prefix, invoice_year_in_number, invoice_counter, payment_terms_default, setup_completed_at, "
+            "rechtsform, registergericht, registernummer, vertretung) "
             "VALUES (1, 'Muster Handwerk GmbH', 'Musterstraße 1', '12345', 'Musterstadt', 'DE', '12/345/67890', 'DE123456789', "
-            "'RE', true, 0, 'Zahlbar innerhalb von 14 Tagen ohne Abzug.', now()) "
+            "'RE', true, 0, 'Zahlbar innerhalb von 14 Tagen ohne Abzug.', now(), "
+            "'gmbh', 'Amtsgericht Musterstadt', 'HRB ' || '00000', 'Probe Geschäftsführerin') "
             "ON CONFLICT DO NOTHING"
         ))
         conn.commit()

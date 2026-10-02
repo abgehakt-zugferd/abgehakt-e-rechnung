@@ -52,6 +52,7 @@ FORMULAR = {
     "country": "DE",
     "tax_number": STEUER_PROBE_ELF,
     "vat_id": "",
+    "rechtsform": "einzelunternehmen",
 }
 
 

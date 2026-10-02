@@ -34,6 +34,17 @@ class Company(Base):
     # der Firmenname dort. Ein leeres Element wäre ein Schemafehler, ein fehlender
     # Ansprechpartner ist dagegen nur eine fehlende Angabe.
     contact_name: Mapped[str | None] = mapped_column(String(255))
+    # Pflichtangaben auf Geschäftsbriefen (§ 35a GmbHG, § 80 AktG, §§ 37a, 125a HGB).
+    # Welche davon eine Rechtsform verlangt, steht allein in services/pflichtangaben.py.
+    # `rechtsform` NULL heißt: nie gewählt, und dann wird nicht gestellt.
+    rechtsform: Mapped[str | None] = mapped_column(String(20))
+    # Satzungssitz; leer heißt: Ort der Geschäftsanschrift.
+    sitz: Mapped[str | None] = mapped_column(String(100))
+    registergericht: Mapped[str | None] = mapped_column(String(100))
+    registernummer: Mapped[str | None] = mapped_column(String(50))
+    # Geschäftsführung, Vorstand oder Inhaber, so wie sie gedruckt werden sollen.
+    vertretung: Mapped[str | None] = mapped_column(String(500))
+    aufsichtsrat_vorsitz: Mapped[str | None] = mapped_column(String(255))
     bank_iban: Mapped[str | None] = mapped_column(String(34))
     bank_bic: Mapped[str | None] = mapped_column(String(11))
     bank_name: Mapped[str | None] = mapped_column(String(100))
