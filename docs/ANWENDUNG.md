@@ -310,6 +310,20 @@ lässt sich im Entwurf ergänzen.
 
 Die Kundennummer, die das PDF im Kopf zeigt, steht ebenso in der E-Rechnung (BT-46).
 
+### Leistungszeitraum je Position
+
+Rechnen Sie mehrere Zeiträume auf einer Rechnung ab, etwa drei Monate eines Abonnements, kann
+jede Position einen eigenen Leistungszeitraum tragen: Beginn und Ende, beide oder keines,
+der Beginn nicht nach dem Ende. Er steht im PDF klein unter der Beschreibung, in der
+E-Rechnung als BT-134/135 und im GoBD-Export in den Spalten `leistung_von` und
+`leistung_bis`.
+
+Der Leistungszeitraum oder das Leistungsdatum der Rechnung im Kopf bleibt die Pflichtangabe
+nach § 14 Abs. 4 Nr. 6 UStG; die Positionszeiträume schlüsseln ihn nur auf und ersetzen ihn
+nicht. Das Programm leitet ihn auch nicht aus den Positionen ab. Storno übernimmt die
+Positionszeiträume. Eine Vorlage lässt sie weg, denn die nächste Rechnung betrifft andere
+Monate; verschoben wird nichts, weil das Programm Ihren Rhythmus nicht kennt.
+
 ---
 
 ## Bestehende Rechnung als Vorlage verwenden

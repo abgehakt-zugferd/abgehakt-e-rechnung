@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional
-from sqlalchemy import String, Boolean, DateTime, Date, Index, Numeric, Integer, Text, JSON, func, text, ForeignKey
+from sqlalchemy import String, Boolean, CheckConstraint, DateTime, Date, Index, Numeric, Integer, Text, JSON, func, text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
@@ -137,6 +137,16 @@ class Invoice(Base):
 
 class InvoiceItem(Base):
     __tablename__ = "invoice_items"
+    __table_args__ = (
+        CheckConstraint(
+            "(leistung_von IS NULL) = (leistung_bis IS NULL)",
+            name="ck_invoice_items_leistung_beide_oder_keiner",
+        ),
+        CheckConstraint(
+            "leistung_von IS NULL OR leistung_von <= leistung_bis",
+            name="ck_invoice_items_leistung_reihenfolge",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
@@ -148,6 +158,11 @@ class InvoiceItem(Base):
     # BT-155, eigene Artikel- oder Leistungsnummer; optional. Grenzen und
     # Normalisierung: services/positionsangaben.py.
     artikelnummer: Mapped[Optional[str]] = mapped_column(String(50))
+    # BT-134/135, Leistungszeitraum dieser Position; optional, beide oder keiner,
+    # von <= bis (Produktregel, strenger als BR-30). Der Kopfzeitraum bleibt die
+    # Pflichtangabe nach § 14 Abs. 4 Nr. 6 UStG.
+    leistung_von: Mapped[Optional[date]] = mapped_column(Date)
+    leistung_bis: Mapped[Optional[date]] = mapped_column(Date)
     unit: Mapped[str] = mapped_column(String(20), nullable=False, default="Stück", server_default="Stück")
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
