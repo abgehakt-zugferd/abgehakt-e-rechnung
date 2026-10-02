@@ -299,6 +299,17 @@ als ungültig. Wählen Sie ausdrücklich eine Katalogeinheit, wenn Sie ihn korri
 Ein bereits gestellter Beleg bleibt unverändert mit seiner bisherigen Einheit erhalten; das
 Programm schreibt seine PDF oder XML nicht wegen eines späteren Katalogstands um.
 
+### Artikel- oder Leistungsnummer
+
+Jede Position kann eine eigene Artikel- oder Leistungsnummer tragen, höchstens 50 Zeichen,
+etwa für wiederkehrende Leistungen aus einer Vorlage. Sie steht im PDF klein unter der
+Beschreibung („Art.-Nr.“, auf englischen Belegen „Item no.“), in der E-Rechnung als BT-155
+und im GoBD-Export als letzte Spalte von `positionen.csv`. Vorlage und Storno übernehmen sie.
+Leer bleibt sie einfach weg. Belege aus einer Übergabe bringen keine Artikelnummer mit; sie
+lässt sich im Entwurf ergänzen.
+
+Die Kundennummer, die das PDF im Kopf zeigt, steht ebenso in der E-Rechnung (BT-46).
+
 ---
 
 ## Bestehende Rechnung als Vorlage verwenden

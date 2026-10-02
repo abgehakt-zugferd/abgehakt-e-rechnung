@@ -40,6 +40,8 @@ _POSITIONEN_COLS = [
     ("einheit", "A"), ("menge", ("N", 4)), ("einzelpreis", ("N", 4)),
     ("steuersatz", ("N", 2)), ("netto", ("N", 2)), ("steuer", ("N", 2)),
     ("brutto", ("N", 2)),
+    # Hinten angehängt (2026-10), damit bestehende Spaltenpositionen gleich bleiben.
+    ("artikelnummer", "A"),
 ]
 _KUNDEN_COLS = [
     ("kundennummer", "A"), ("name", "A"), ("adresszeile1", "A"), ("adresszeile2", "A"),
@@ -99,6 +101,7 @@ def _positionen_csv(invoices: Sequence[Invoice]) -> str:
                 inv.invoice_number, item.position, item.description, item.unit,
                 _fmt(item.quantity), _fmt(item.unit_price), _fmt(item.tax_rate),
                 _fmt(item.net_amount), _fmt(item.tax_amount), _fmt(item.gross_amount),
+                item.artikelnummer or "",
             ])
     return _csv_bytes(header, rows)
 

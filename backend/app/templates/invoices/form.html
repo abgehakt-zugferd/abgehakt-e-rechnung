@@ -166,6 +166,12 @@
                                                   style="font-family:'VT323',monospace; font-size:var(--fs-gross); line-height:1.35; resize:none; overflow:hidden;"></textarea>
                                     </div>
 
+                                    <div>
+                                        <label class="label">Artikel-/Leistungsnummer (optional)</label>
+                                        <input type="text" x-model="item.artikelnummer" maxlength="50"
+                                               class="input font-mono" style="font-size:var(--fs-gross); padding:6px 8px; max-width:220px;">
+                                    </div>
+
                                     <div class="grid gap-3" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr));">
                                         <div>
                                             <label class="label">Menge *</label>
@@ -433,6 +439,7 @@ function invoiceForm() {
         addItem() {
             this.items.push({
                 description: '',
+                artikelnummer: '',
                 quantity: 1,
                 unit: 'Stück',
                 unit_price: 0,
