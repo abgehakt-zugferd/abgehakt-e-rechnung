@@ -669,7 +669,7 @@ def test_schablonentexte_vollstaendig_in_belegdarstellung():
         "Purchase order number", "Customer VAT ID", "No.", "Description", "Quantity",
         "Unit", "Unit price", "VAT", "Amount", "Net amount", "Credit note amount",
         "Invoice total", "Reference", "Scan to pay", "VAT ID", "Tax number", "DRAFT",
-        "Item no.",
+        "Item no.", "Page {seite} of {gesamt}",
     }
     felder = {
         getattr(en, name).rstrip(":.")
