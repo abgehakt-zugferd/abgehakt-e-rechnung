@@ -601,7 +601,15 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     ])
 
     # Kompakt und rechtsbündig, der Endbetrag getönt (Vorbild DATEV-Rechnung).
-    totals_table = Table(totals_data, colWidths=[SUMMEN_BREITE * 0.6, SUMMEN_BREITE * 0.4])
+    # Die Betragsspalte ist so breit wie ihr breitester Betrag: in festen 3,2 cm
+    # brach „EUR 12,345.67“ im Endbetrag auf zwei Zeilen um (Code-Review 2026-10-02).
+    betraege = [money(invoice.net_total)] + [money(g["tax"]) for g in tax_groups.values()]
+    betrag_breite = max(
+        [pdfmetrics.stringWidth(b, BODY, right.fontSize) for b in betraege]
+        + [pdfmetrics.stringWidth(money(invoice.gross_total), BOLD, right_bold.fontSize)]
+    ) + 12
+    totals_table = Table(totals_data, colWidths=[SUMMEN_BREITE * 0.6,
+                                                 max(SUMMEN_BREITE * 0.4, betrag_breite)])
     totals_table.hAlign = "RIGHT"
     totals_table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), BODY),

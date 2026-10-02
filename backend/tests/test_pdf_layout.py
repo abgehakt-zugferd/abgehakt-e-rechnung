@@ -117,3 +117,17 @@ def test_absenderzeile_steht_klein_direkt_ueber_der_empfaengeranschrift(tmp_path
     empfaenger = funde["Kunde GmbH"]
     assert absender[1] < 8, "Absenderzeile soll klein sein"
     assert 0 < absender[0] - empfaenger[0] < 25, "Absenderzeile gehört direkt über die Anschrift"
+
+
+@pytest.mark.parametrize("sprache, preis, endbetrag", [
+    ("en", "12345.67", "EUR 14,691.35"),
+    ("de", "1234567.89", "1.469.135,79 €"),
+])
+def test_endbetrag_steht_in_einem_stueck_auf_einer_zeile(tmp_path, sprache, preis, endbetrag):
+    """Code-Review 2026-10-02: in 3,2 cm brach „EUR 12,345.67“ im getönten Endbetrag
+    auf zwei Zeilen um, deutsch ab einer Million."""
+    inv = orm_invoice([orm_item(1, "1", preis, "19")], delivery_date=None, document_language=sprache)
+    pfad = tmp_path / "beleg.pdf"
+    pdf_generator.generate_pdf(inv, orm_company(), pfad)
+
+    assert endbetrag in _positionen(pfad)
