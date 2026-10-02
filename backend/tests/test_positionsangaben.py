@@ -153,3 +153,18 @@ def test_vorlage_uebernimmt_die_artikelnummer(pg_session, client):
     formular = _formular_positionen(client.get(f"/invoices/neu?vorlage={inv.id}").text)
 
     assert [p["artikelnummer"] for p in formular] == ["00950"]
+
+
+@pytest.mark.parametrize("roh", ["A\u0001B", "A\nB", "A\u0000B", "A\tB", "A￾B"])
+def test_steuerzeichen_in_der_artikelnummer_werden_vor_der_nummernvergabe_abgelehnt(
+        pg_session, client, roh):
+    """U+0001 machte die XML ungültig, U+0000 scheiterte erst am Datenbankschreiben,
+    ein Umbruch stand in der XML, aber nicht im PDF."""
+    kunde = _kunde(pg_session)
+    zaehler_vorher = pg_session.execute(text("SELECT invoice_counter FROM company")).scalar()
+
+    antwort = _anlegen(client, kunde, [_position(artikelnummer=roh)])
+
+    assert antwort.status_code == 400
+    assert "Position 1: Artikelnummer darf keine Steuerzeichen" in antwort.text
+    assert pg_session.execute(text("SELECT invoice_counter FROM company")).scalar() == zaehler_vorher

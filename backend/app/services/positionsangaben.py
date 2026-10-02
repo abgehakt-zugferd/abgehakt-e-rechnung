@@ -8,6 +8,8 @@ Hier steht die Liste einmal.
 
 Derzeit: Artikelnummer (BT-155).
 """
+import unicodedata
+
 ARTIKELNUMMER_MAX = 50
 
 
@@ -26,7 +28,20 @@ def aus_formular(roh: dict, nr: int) -> dict:
         raise PositionsangabeUngueltig(
             f"Position {nr}: Artikelnummer ist länger als {ARTIKELNUMMER_MAX} Zeichen."
         )
+    if not _einzeilig_und_xml_tauglich(artikelnummer):
+        raise PositionsangabeUngueltig(
+            f"Position {nr}: Artikelnummer darf keine Steuerzeichen oder Zeilenumbrüche enthalten."
+        )
     return {"artikelnummer": artikelnummer or None}
+
+
+def _einzeilig_und_xml_tauglich(text: str) -> bool:
+    """Keine Steuerzeichen (Kategorie Cc, darunter NUL, Tab, Umbruch), keine
+    Surrogate und keine Nichtzeichen U+FFFE/U+FFFF: sie machen die XML ungültig,
+    scheitern an PostgreSQL oder stehen im PDF anders als in der XML."""
+    return not any(
+        unicodedata.category(z) in ("Cc", "Cs") or z in "\ufffe\uffff" for z in text
+    )
 
 
 def fuer_formular(item) -> dict:
