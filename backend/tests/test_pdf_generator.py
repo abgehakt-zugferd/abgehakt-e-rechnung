@@ -120,9 +120,9 @@ def test_header_ohne_doppelten_firmennamen_in_adresszeile2(tmp_path):
     out = tmp_path / "invoice.pdf"
     pdf_generator.generate_pdf(_sample_invoice(_sample_customer()), company, out)
     text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages).casefold()
-    # Brand-Stempel (GROSS) + Kontaktblock + fester Fuß (eine Seite) = genau drei
-    # Nennungen. Druckte Kopf oder Fuß Adresszeile 2 mit, wären es vier oder fünf.
-    assert text.count("duplikat test gmbh") == 3
+    # Brand-Stempel (GROSS) + Kontaktblock + Absenderzeile + fester Fuß (eine Seite)
+    # = genau vier Nennungen. Druckte Kopf oder Fuß Adresszeile 2 mit, wären es mehr.
+    assert text.count("duplikat test gmbh") == 4
 
 
 def test_credit_note_pdf_shows_gutschrift_title(tmp_path):
