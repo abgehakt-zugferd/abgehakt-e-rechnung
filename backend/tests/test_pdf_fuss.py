@@ -9,7 +9,7 @@ from pypdf import PdfReader
 
 from app.services import pdf_generator
 from tests.factories import orm_company, orm_invoice, orm_item
-from tests.probe_daten import HRB_PROBE
+from tests.probe_daten import HRB_PROBE, IBAN_FIRMA_PROBE, UST_DE_PROBE
 
 FUSS_GROESSE = 7
 
@@ -33,8 +33,28 @@ def test_jede_seite_traegt_seitenzahl_und_den_vollstaendigen_fuss(tmp_path, spra
     assert n >= 2, "Testrechnung muss mehrseitig sein"
     for i, text in enumerate(seiten, 1):
         assert muster.format(i=i, n=n) in text, f"Seite {i}"
-        assert text.count(HRB_PROBE) == 1, f"Seite {i}: Registerangabe"
-        assert text.count("123/456/78901") == 1, f"Seite {i}: Steuernummer"
+        assert text.count("123/456/78901") == 1, f"Seite {i}: Steuernummer auch im Fluss?"
+        assert text.count(HRB_PROBE) == 1, f"Seite {i}: Registerangabe auch im Fluss?"
+
+
+def test_fuss_enthaelt_jede_angabe_genau_einmal_je_seite(tmp_path):
+    pfad = tmp_path / "beleg.pdf"
+    pdf_generator.generate_pdf(_lang(), orm_company(), pfad)
+
+    erwartet = [
+        "Muster Handwerk GmbH", "Musterstraße 1", "12345 Musterstadt", "info@example.de",
+        "Steuernummer: 123/456/78901", f"USt-IdNr.: {UST_DE_PROBE}",
+        "Sitz: Musterstadt · Registergericht:", f"Amtsgericht Musterstadt, {HRB_PROBE}",
+        "Geschäftsführung: Probe Geschäftsführerin",
+        "Testbank", f"IBAN: {IBAN_FIRMA_PROBE}", "BIC: ABCDDEFF",
+    ]
+    texte = _texte(pfad)
+    seiten = {t[0] for t in texte}
+    assert len(seiten) >= 2
+    for seite in seiten:
+        fuss = [" ".join(t.split()) for s, _, g, t in texte if s == seite and g == FUSS_GROESSE]
+        for angabe in erwartet:
+            assert fuss.count(angabe) == 1, f"Seite {seite + 1}: {angabe!r} im Fuß {fuss.count(angabe)}x"
 
 
 def _texte(pfad):
@@ -73,7 +93,8 @@ def test_rechnung_nennt_die_eigene_bank_auf_jeder_seite_gutschrift_nicht(tmp_pat
     assert all(IBAN_FIRMA_PROBE in s for s in rechnung)
 
     gutschrift = _seiten(_lang(invoice_type="credit_note", original_invoice_id=1), tmp_path)
-    assert not any("IBAN" in s for s in gutschrift)
+    for angabe in ("IBAN", IBAN_FIRMA_PROBE, "ABCDDEFF", "Testbank"):
+        assert not any(angabe in s for s in gutschrift), angabe
 
 
 def test_entwurf_traegt_wasserzeichen_und_fuss_auf_jeder_seite(tmp_path):
