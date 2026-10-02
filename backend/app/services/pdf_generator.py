@@ -268,6 +268,11 @@ def _beschreibung_mit_angaben(item, d: Belegdarstellung) -> str:
     nummer = (getattr(item, "artikelnummer", None) or "").strip()
     if nummer:
         markup += f'<br/><font size="7">{escape(d.label_artikelnummer)} {escape(nummer)}</font>'
+    von = getattr(item, "leistung_von", None)
+    bis = getattr(item, "leistung_bis", None)
+    if von and bis:
+        zeitraum = f"{d.label_leistungszeitraum} {d.format_datum(von)} – {d.format_datum(bis)}"
+        markup += f'<br/><font size="7">{escape(zeitraum)}</font>'
     return markup
 
 

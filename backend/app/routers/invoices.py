@@ -309,7 +309,7 @@ def _get_draft(db: Session, invoice_id: uuid.UUID) -> Invoice:
     return invoice
 
 
-def _items_as_json(invoice: Invoice) -> str:
+def _items_as_json(invoice: Invoice, *, vorlage: bool = False) -> str:
     """Positionen für das Alpine-Formular. Menge und Steuersatz ohne Nullen am Ende,
     damit `19.00` als `19` zur Auswahlliste passt, aber nie als `6E+1`."""
     # `</` maskieren: die Liste steht im Template in einem <script>-Block, und eine
@@ -325,7 +325,7 @@ def _items_as_json(invoice: Invoice) -> str:
             "net_amount": float(item.net_amount),
             "tax_amount": float(item.tax_amount),
             "gross_amount": float(item.gross_amount),
-            **positionsangaben.fuer_formular(item),
+            **positionsangaben.fuer_formular(item, vorlage=vorlage),
         }
         for item in sorted(invoice.items, key=lambda i: i.position)
     ]).replace("</", "<\\/")
@@ -429,7 +429,7 @@ def new_invoice_form(
                     notes=quelle.notes,
                     document_language=getattr(quelle, "document_language", None) or "de",
                 )
-                items_json = _items_as_json(quelle)
+                items_json = _items_as_json(quelle, vorlage=True)
 
     delivery_default = today.isoformat()
     if vorbelegung and getattr(vorbelegung, "delivery_date", None):
