@@ -101,6 +101,9 @@ backend/app/
 │   ├── adresse.py            # Adresszeilen für Beleg und XML
 │   ├── leistungszeit.py      # Leistungsdatum und -zeitraum (§ 14 Abs. 4 Nr. 6)
 │   ├── pflichtangaben.py     # Rechtsform, Register, Vertretung (§ 35a GmbHG u. a.): PDF-Fuß, BT-30/33, Sperre
+│   ├── positionsangaben.py   # optionale Zusatzangaben je Position (Artikelnummer, Zeitraum): Formular, Vorlage, Storno
+│   ├── pdf_spalten.py        # Spaltenbreiten der Positionstabelle aus dem Inhalt
+│   ├── pdf_fuss.py           # fester Fuß auf jeder Seite, „Seite x von y“
 │   ├── archive_frist.py      # archive_until = 31.12. des Ausstellungsjahrs + 8
 │   ├── empfaenger.py         # Kopie-Empfänger aus Kunde, Einstellungen, Sende-Dialog
 │   ├── ust_id_pruefung.py    # VIES-Prüfung, nur auf Klick mit Einwilligung

@@ -12,7 +12,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable,
-    Image, Flowable,
+    Image, Flowable, KeepTogether,
 )
 from reportlab.lib.enums import TA_RIGHT, TA_LEFT, TA_CENTER
 from reportlab.lib.utils import ImageReader
@@ -42,6 +42,8 @@ LOGO_MAX_WIDTH = 120       # pt — Deckel, damit eine Wortmarke den Header nich
 
 
 TABELLE_GROESSE = 8.5
+SUMMEN_BREITE = 8 * cm
+QR_KANTE = 2.8 * cm
 TABELLE_POLSTER = 4
 
 
@@ -115,10 +117,18 @@ def _zahlungs_empfaenger(invoice, company):
     return None
 
 
-def _epc_qr_anhaengen(story, invoice, company, small, d: Belegdarstellung) -> None:
+def _zahlungsblock(invoice, company, small, d: Belegdarstellung, payment_text: str, schrift: str):
+    """Zahlungstext, Bankdaten und Verwendungszweck rechts, der Girocode links.
+
+    Eine Tabelle in KeepTogether: vorher standen Text, Bankdaten, QR-Code und
+    Bildunterschrift einzeln im Fluss, und bei langen Rechnungen landete die
+    Bildunterschrift allein auf der nächsten Seite. Ohne Empfänger bleibt nur der
+    Zahlungstext; ohne gültigen Girocode (EPC strenger als REGISTRY) der Klartext.
+    """
+    text = [Paragraph(_description_markup(payment_text), small)]
     ziel = _zahlungs_empfaenger(invoice, company)
     if not ziel:
-        return
+        return text
     name, iban, bic, bank_name = ziel
     wer = "Kunde" if _zahlung_an_kunde(invoice) else "Firma"
     # Option A: Registry-ungueltige Bestands-IBAN bricht die Erzeugung ab
@@ -129,10 +139,8 @@ def _epc_qr_anhaengen(story, invoice, company, small, d: Belegdarstellung) -> No
         bank_parts.append(f"BIC: {bic}")
     if bank_name:
         bank_parts.append(bank_name)
-    story.append(Paragraph(" · ".join(bank_parts), small))
-    story.append(Paragraph(
-        f"{d.label_verwendungszweck} {invoice.invoice_number}", small,
-    ))
+    text.append(Paragraph(escape(" · ".join(bank_parts)), small))
+    text.append(Paragraph(escape(f"{d.label_verwendungszweck} {invoice.invoice_number}"), small))
     try:
         payload = build_epc_payload(
             beneficiary_name=name,
@@ -142,12 +150,30 @@ def _epc_qr_anhaengen(story, invoice, company, small, d: Belegdarstellung) -> No
             currency=getattr(invoice, "currency", "EUR") or "EUR",
             remittance=invoice.invoice_number,
         )
-        story.append(Spacer(1, 0.4 * cm))
-        story.append(Image(io.BytesIO(qr_png_bytes(payload)), width=3.5 * cm, height=3.5 * cm))
-        story.append(Paragraph(d.label_scan_to_pay, small))
     except ValueError:
-        # EPC_SCT strenger als REGISTRY: kein falscher Girocode, Klartext bleibt.
-        pass
+        return [KeepTogether(text)]
+    qr = [Image(io.BytesIO(qr_png_bytes(payload)), width=QR_KANTE, height=QR_KANTE),
+          Paragraph(escape(d.label_scan_to_pay), small)]
+    breite = A4[0] - 4 * cm
+    # So breit wie QR-Code oder Bildunterschrift, je nachdem was breiter ist:
+    # umgebrochen stand „Zum Überweisen / scannen.“ auf zwei Zeilen.
+    links = max(QR_KANTE, pdfmetrics.stringWidth(d.label_scan_to_pay, schrift, small.fontSize)) + 0.6 * cm
+    tabelle = Table([[qr, text]], colWidths=[links, breite - links])
+    tabelle.hAlign = "LEFT"
+    tabelle.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), schrift),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (0, 0), 0.6 * cm),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    return [KeepTogether([tabelle])]
+
+
+def _absenderzeile(company) -> str:
+    """Kleine Rücksendeangabe über der Empfängeranschrift: Firma · Straße · PLZ Ort."""
+    teile = [company.name, company.address_line1, f"{company.zip_code} {company.city}"]
+    return " · ".join(t.strip() for t in teile if t and t.strip())
 
 
 def _document_title(invoice) -> str:
@@ -373,6 +399,8 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     small_right = ParagraphStyle("small_right", fontName=BODY, fontSize=8, textColor=TEXT_GRAY, leading=11, alignment=TA_RIGHT)
     small_bold = ParagraphStyle("small_bold", fontName=BOLD, fontSize=8, textColor=INK)
     right = ParagraphStyle("right", fontName=BODY, fontSize=9, alignment=TA_RIGHT)
+    absender_stil = ParagraphStyle("absender", fontName=BODY, fontSize=6.5, leading=9,
+                                   textColor=TEXT_GRAY, spaceAfter=3)
     right_bold = ParagraphStyle("right_bold", fontName=BOLD, fontSize=10, alignment=TA_RIGHT, textColor=INK)
 
     story = []
@@ -390,7 +418,7 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     if company.phone:
         addr_lines.append(company.phone)
 
-    contact_text = "<br/>".join(addr_lines)
+    contact_text = "<br/>".join(escape(z) for z in addr_lines)
 
     PAD = 10
     brand_fontsize = 8
@@ -398,7 +426,7 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         "brand", fontName=PIXEL, fontSize=brand_fontsize, leading=13, textColor=INK
     )
     brand_text = company.name.upper()
-    brand_name = Paragraph(brand_text, brand_style)
+    brand_name = Paragraph(escape(brand_text), brand_style)
 
     logo_img = _logo_flowable()
     name_w = pdfmetrics.stringWidth(brand_text, PIXEL, brand_fontsize)
@@ -480,10 +508,12 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     if customer.vat_id:
         meta_rows.append((d.label_ust_id_kunde, customer.vat_id))
 
-    meta_text = "".join(f"<b>{k}</b> {v}<br/>" for k, v in meta_rows)
+    meta_text = "".join(f"<b>{escape(k)}</b> {escape(str(v))}<br/>" for k, v in meta_rows)
 
     addr_meta = Table(
-        [[Paragraph("<br/>".join(cust_addr), normal), Paragraph(meta_text, small_right)]],
+        [[[Paragraph(escape(_absenderzeile(company)), absender_stil),
+           Paragraph("<br/>".join(escape(z) for z in cust_addr), normal)],
+          Paragraph(meta_text, small_right)]],
         colWidths=[W * 0.5, W * 0.5]
     )
     addr_meta.hAlign = "LEFT"
@@ -570,25 +600,30 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         Paragraph(f"<b>{money(invoice.gross_total)}</b>", right_bold)
     ])
 
-    totals_col = W * 0.55
-    totals_table = Table(totals_data, colWidths=[totals_col, W - totals_col])
+    # Kompakt und rechtsbündig, der Endbetrag getönt (Vorbild DATEV-Rechnung).
+    # Die Betragsspalte ist so breit wie ihr breitester Betrag: in festen 3,2 cm
+    # brach „EUR 12,345.67“ im Endbetrag auf zwei Zeilen um (Code-Review 2026-10-02).
+    betraege = [money(invoice.net_total)] + [money(g["tax"]) for g in tax_groups.values()]
+    betrag_breite = max(
+        [pdfmetrics.stringWidth(b, BODY, right.fontSize) for b in betraege]
+        + [pdfmetrics.stringWidth(money(invoice.gross_total), BOLD, right_bold.fontSize)]
+    ) + 12
+    totals_table = Table(totals_data, colWidths=[SUMMEN_BREITE * 0.6,
+                                                 max(SUMMEN_BREITE * 0.4, betrag_breite)])
+    totals_table.hAlign = "RIGHT"
     totals_table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), BODY),
         ("ALIGN", (0, 0), (-1, -1), "LEFT"),
         ("ALIGN", (1, 0), (1, -1), "RIGHT"),
         ("LINEABOVE", (0, -1), (-1, -1), 1, GOLD),
+        ("BACKGROUND", (0, -1), (-1, -1), GOLD_TINT),
         ("TOPPADDING", (0, -1), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, -1), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -2), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
     ]))
-
-    totals_wrap = Table([[None, totals_table]], colWidths=[totals_col * 0.1, W - totals_col * 0.1])
-    totals_wrap.hAlign = "LEFT"
-    totals_wrap.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (-1, -1), BODY),
-        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-    ]))
-    story.append(totals_wrap)
+    story.append(totals_table)
 
     story.append(Spacer(1, 0.8 * cm))
     if _zahlung_an_kunde(invoice) and _zahlungs_empfaenger(invoice, company):
@@ -597,12 +632,11 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         payment_text = invoice.payment_terms or d.fallback_gutschrift_ohne
     else:
         payment_text = invoice.payment_terms or d.fallback_zahlbar
-    story.append(Paragraph(payment_text, small))
-    _epc_qr_anhaengen(story, invoice, company, small, d)
+    story.extend(_zahlungsblock(invoice, company, small, d, payment_text, BODY))
 
     if invoice.notes:
         story.append(Spacer(1, 0.5 * cm))
-        story.append(Paragraph(invoice.notes, small))
+        story.append(Paragraph(_description_markup(invoice.notes), small))
 
     _canvasmaker = leinwand(BODY, d.seite_muster, fuss, rechts=A4[0] - 2 * cm)
 
