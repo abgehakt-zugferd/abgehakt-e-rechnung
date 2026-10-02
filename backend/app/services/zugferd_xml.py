@@ -93,6 +93,16 @@ def _rate_percent_xml(rate: Decimal, tax_cat: str, indent: str) -> str:
     return indent + f"<ram:RateApplicablePercent>{_fmt_amount(rate)}</ram:RateApplicablePercent>"
 
 
+def _seller_item_id_xml(item) -> str:
+    """BT-155 vor `ram:Name` (CII-Sequenz GlobalID, SellerAssignedID, …, Name).
+    Ohne schemeID (CII-DT-005). Ohne Nummer kein Element."""
+    nummer = (getattr(item, "artikelnummer", None) or "").strip()
+    if not nummer:
+        return ""
+    return f"""
+                <ram:SellerAssignedID>{_esc(nummer)}</ram:SellerAssignedID>"""
+
+
 def _line_items_xml(invoice: Invoice) -> str:
     inv_cat = getattr(invoice, "tax_category", "S")
     parts = []
@@ -110,7 +120,7 @@ def _line_items_xml(invoice: Invoice) -> str:
             <ram:AssociatedDocumentLineDocument>
                 <ram:LineID>{item.position}</ram:LineID>
             </ram:AssociatedDocumentLineDocument>
-            <ram:SpecifiedTradeProduct>
+            <ram:SpecifiedTradeProduct>{_seller_item_id_xml(item)}
                 <ram:Name>{_esc(item.description)}</ram:Name>
             </ram:SpecifiedTradeProduct>
             <ram:SpecifiedLineTradeAgreement>
@@ -263,6 +273,18 @@ def _electronic_address_xml(email) -> str:
                 <ram:URIUniversalCommunication>
                     <ram:URIID schemeID="EM">{_esc(email)}</ram:URIID>
                 </ram:URIUniversalCommunication>"""
+
+
+def _buyer_id_xml(customer) -> str:
+    """BT-46, die Kundennummer. Erstes Kind von `BuyerTradeParty` (CII-Sequenz
+    ID, GlobalID, Name). Das PDF druckt sie im Kopf; ohne sie hier sagten PDF und
+    XML Verschiedenes. Ohne Nummer kein Element, ein leeres wäre schema-ungültig.
+    """
+    nummer = (getattr(customer, "customer_number", None) or "").strip() if customer else ""
+    if not nummer:
+        return ""
+    return f"""
+                <ram:ID>{_esc(nummer)}</ram:ID>"""
 
 
 def _buyer_reference_xml(invoice: Invoice) -> str:
@@ -561,7 +583,7 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
                     <ram:CountryID>{_esc(company.country)}</ram:CountryID>
                 </ram:PostalTradeAddress>{_electronic_address_xml(company.email)}{_seller_tax_xml(company, inv_cat)}
             </ram:SellerTradeParty>
-            <ram:BuyerTradeParty>
+            <ram:BuyerTradeParty>{_buyer_id_xml(customer)}
                 <ram:Name>{_esc(customer.name if customer else "")}</ram:Name>
                 <ram:PostalTradeAddress>
                     <ram:PostcodeCode>{_esc(customer.zip_code if customer else "")}</ram:PostcodeCode>

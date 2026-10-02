@@ -242,3 +242,16 @@ def test_ohne_firma_bleibt_der_datenlieferant_leer_statt_falsch(tmp_path):
 
     assert "abgehakt" not in index.lower()
     assert "Musterstadt" not in index
+
+
+def test_positionen_csv_fuehrt_die_artikelnummer_als_letzte_spalte(tmp_path):
+    """Hinten angehängt: bestehende Spaltenpositionen bleiben für Prüfsoftware gleich."""
+    c = _customer()
+    inv = _invoice(c)
+    inv.items[0].artikelnummer = "00950"
+
+    zf = _build(tmp_path, customer=c, invoices=[inv])
+
+    kopf = zf.read("positionen.csv").decode("utf-8-sig").splitlines()[0].split(";")
+    assert kopf[-1] == "artikelnummer"
+    assert _read_csv(zf, "positionen.csv")[0]["artikelnummer"] == "00950"

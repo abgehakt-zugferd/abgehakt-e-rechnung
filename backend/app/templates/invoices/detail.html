@@ -234,7 +234,8 @@
                                 <td style="padding:8px 12px; color:var(--text-dim);">{{ item.position }}</td>
                                 {# pre-line: ohne das kollabieren die Umbrueche und die
                                    Detailseite saehe anders aus als das PDF. #}
-                                <td style="padding:8px 12px; color:var(--text); white-space:pre-line;">{{ item.description }}</td>
+                                <td style="padding:8px 12px; color:var(--text); white-space:pre-line;">{{ item.description }}{% if item.artikelnummer %}
+<span style="color:var(--text-dim); font-size:var(--fs-klein);">Art.-Nr. {{ item.artikelnummer }}</span>{% endif %}</td>
                                 <td style="padding:8px 12px; text-align:right; color:var(--text-dim); white-space:nowrap;">{{ item.quantity|menge }} {{ item.unit }}</td>
                                 <td style="padding:8px 12px; text-align:right; color:var(--text-dim); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text); white-space:nowrap;">{{ item.unit_price|euro }}</td>
                                 <td style="padding:8px 12px; text-align:right; color:var(--text-dim); white-space:nowrap;">{{ item.tax_rate|int }} %</td>

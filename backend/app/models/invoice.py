@@ -145,6 +145,9 @@ class InvoiceItem(Base):
     invoice_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    # BT-155, eigene Artikel- oder Leistungsnummer; optional. Grenzen und
+    # Normalisierung: services/positionsangaben.py.
+    artikelnummer: Mapped[Optional[str]] = mapped_column(String(50))
     unit: Mapped[str] = mapped_column(String(20), nullable=False, default="Stück", server_default="Stück")
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
