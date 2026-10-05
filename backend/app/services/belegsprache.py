@@ -119,6 +119,7 @@ class Belegdarstellung:
     label_verwendungszweck: str
     label_scan_to_pay: str
     label_ust_id: str
+    label_artikelnummer: str
     label_steuernummer: str
     stempel_entwurf: str
     fallback_gutschrift_ueberweisung: str
@@ -213,6 +214,7 @@ _DE = Belegdarstellung(
     label_verwendungszweck="Verwendungszweck:",
     label_scan_to_pay="Zum Überweisen scannen.",
     label_ust_id="USt-IdNr.:",
+    label_artikelnummer="Art.-Nr.",
     label_steuernummer="Steuernummer:",
     stempel_entwurf="ENTWURF",
     fallback_gutschrift_ueberweisung=(
@@ -261,6 +263,7 @@ _EN = Belegdarstellung(
     label_verwendungszweck="Reference:",
     label_scan_to_pay="Scan to pay",
     label_ust_id="VAT ID:",
+    label_artikelnummer="Item no.",
     label_steuernummer="Tax number:",
     stempel_entwurf="DRAFT",
     fallback_gutschrift_ueberweisung=(

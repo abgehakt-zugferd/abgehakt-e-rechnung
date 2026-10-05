@@ -16,7 +16,7 @@ from app.database import get_db
 from app.models.customer import Customer
 from app.models.company import Company
 from app.models.invoice import Invoice, InvoiceItem, ValidationResult, InvoiceSendLog
-from app.services import belegsperre
+from app.services import belegsperre, positionsangaben
 from app.services.belegart import (
     InvoiceTypeNotSelectable,
     UnknownInvoiceTypeError,
@@ -169,6 +169,15 @@ def _pruefe_einheiten(raw_items) -> None:
             ) from None
 
 
+def _pruefe_positionsangaben(raw_items) -> None:
+    """Wie `_pruefe_einheiten`: vor Nummernvergabe bzw. Speichern, sonst 400."""
+    for i, raw in enumerate(raw_items, 1):
+        try:
+            positionsangaben.aus_formular(raw, i)
+        except positionsangaben.PositionsangabeUngueltig as fehler:
+            raise HTTPException(400, str(fehler)) from None
+
+
 def _replace_items(db: Session, invoice: Invoice, raw_items) -> tuple[Decimal, Decimal]:
     """Positionen der Rechnung durch `raw_items` ersetzen (Position 1..n, lückenlos),
     liefert Netto- und Steuersumme.
@@ -197,6 +206,7 @@ def _replace_items(db: Session, invoice: Invoice, raw_items) -> tuple[Decimal, D
             invoice_id=invoice.id,
             position=i,
             description=_normalize_description(raw["description"]),
+            **positionsangaben.aus_formular(raw, i),
             unit=unit,
             quantity=qty,
             unit_price=price,
@@ -315,6 +325,7 @@ def _items_as_json(invoice: Invoice) -> str:
             "net_amount": float(item.net_amount),
             "tax_amount": float(item.tax_amount),
             "gross_amount": float(item.gross_amount),
+            **positionsangaben.fuer_formular(item),
         }
         for item in sorted(invoice.items, key=lambda i: i.position)
     ]).replace("</", "<\\/")
@@ -485,6 +496,7 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
     raw_items = json.loads(items_json)
     # Vor Nummernvergabe: unbekannte Einheit darf weder Zaehler noch Zeile anfassen.
     _pruefe_einheiten(raw_items)
+    _pruefe_positionsangaben(raw_items)
 
     invoice_number = generate_next_invoice_number(db, issue_date=issue_date)
 
@@ -608,6 +620,7 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
 
     try:
         _pruefe_einheiten(rohe_positionen)
+        _pruefe_positionsangaben(rohe_positionen)
     except HTTPException as fehler:
         return _bearbeiten_mit_fehler(request, db, invoice, fehler.detail)
 

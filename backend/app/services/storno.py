@@ -12,6 +12,7 @@ Nutzerdaten bleiben unverändert.
 from datetime import date
 
 from app.models.invoice import Invoice, InvoiceItem
+from app.services import positionsangaben
 from app.services.archive_frist import berechne_archive_until
 from app.services.belegsprache import darstellung, resolve_belegsprache
 
@@ -50,6 +51,7 @@ def build_storno(original: Invoice, invoice_number: str, today: date) -> Invoice
         InvoiceItem(
             position=item.position,
             description=item.description,
+            **positionsangaben.kopie(item),
             unit=item.unit,
             quantity=item.quantity,
             unit_price=item.unit_price,

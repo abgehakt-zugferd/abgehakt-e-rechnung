@@ -262,6 +262,15 @@ def _zeigt_steuer(invoice: Invoice) -> bool:
     return getattr(invoice, "tax_category", "S") not in TAX_NOTICE_KATEGORIEN
 
 
+def _beschreibung_mit_angaben(item, d: Belegdarstellung) -> str:
+    """Beschreibung plus optionale Zusatzangaben der Position als kleine Zeile darunter."""
+    markup = _description_markup(item.description)
+    nummer = (getattr(item, "artikelnummer", None) or "").strip()
+    if nummer:
+        markup += f'<br/><font size="7">{escape(d.label_artikelnummer)} {escape(nummer)}</font>'
+    return markup
+
+
 def _build_item_rows(invoice: Invoice, d: Belegdarstellung) -> list[list]:
     """Zeilen für die Positionstabelle. Die Beschreibung wird als Paragraph
     ausgegeben, damit sie in ihrer Spalte umbricht statt überzulaufen."""
@@ -279,7 +288,7 @@ def _build_item_rows(invoice: Invoice, d: Belegdarstellung) -> list[list]:
     for item in invoice.items:
         zeile = [
             str(item.position),
-            Paragraph(_description_markup(item.description), desc_style),
+            Paragraph(_beschreibung_mit_angaben(item, d), desc_style),
             # NICHT `str(x.normalize())`: das kippt bei durch zehn teilbaren
             # Mengen in die Exponentialform — 120 Stunden stünden als "1.2E+2"
             # auf der Rechnung an den Kunden.
