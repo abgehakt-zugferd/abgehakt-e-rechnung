@@ -26,6 +26,7 @@ from app.services.pdf_fonts import register_fonts
 from app.services.bankverbindung import iban_fuer_ausgabe
 from app.services.epc_qr import build_epc_payload, qr_png_bytes
 from app.services.pflichtangaben import pflichtangaben
+from app.services.pdf_spalten import spaltenbreiten
 from app.services.iban import IbanProfil
 from app.services.zugferd_xml import EXEMPTION_REASONS
 from app.services.belegart import belegart
@@ -39,6 +40,10 @@ from app.services.belegsprache import Belegdarstellung, darstellung, resolve_bel
 LOGO_DATEINAME = "logo.png"
 LOGO_TARGET_HEIGHT = 30    # pt — Zielhöhe im Header
 LOGO_MAX_WIDTH = 120       # pt — Deckel, damit eine Wortmarke den Header nicht sprengt
+
+
+TABELLE_GROESSE = 8.5
+TABELLE_POLSTER = 4
 
 
 def _logo_path() -> Path | None:
@@ -494,14 +499,14 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     ))
     story.append(Spacer(1, 0.5 * cm))
 
-    col_widths = [0.9 * cm, None, 1.3 * cm, 1.3 * cm, 2.3 * cm]
-    if _zeigt_steuer(invoice):
-        col_widths.append(1.4 * cm)
-    col_widths.append(2.6 * cm)
-    col_widths[1] = W - sum(w for w in col_widths if w is not None)
-    letzte = len(col_widths) - 1
-
     item_rows = _build_item_rows(invoice, d)
+    # Aus dem Inhalt, nicht aus festen Zentimetern (services/pdf_spalten.py).
+    # Größe und Polsterung müssen zum TableStyle darunter passen.
+    col_widths = spaltenbreiten(
+        item_rows[0], item_rows[1:], W, schrift=BODY, fett=BOLD,
+        groesse=TABELLE_GROESSE, polster=2 * TABELLE_POLSTER,
+    )
+    letzte = len(col_widths) - 1
 
     items_table = Table(item_rows, colWidths=col_widths, repeatRows=1)
     items_table.hAlign = "LEFT"
@@ -510,7 +515,7 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         ("FONTNAME", (0, 0), (-1, 0), BOLD),
         ("BACKGROUND", (0, 0), (-1, 0), INK),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("FONTSIZE", (0, 0), (-1, -1), TABELLE_GROESSE),
         ("ALIGN", (0, 0), (0, -1), "CENTER"),
         ("ALIGN", (2, 0), (2, -1), "RIGHT"),
         ("ALIGN", (4, 0), (letzte, -1), "RIGHT"),
@@ -519,8 +524,8 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), TABELLE_POLSTER),
+        ("RIGHTPADDING", (0, 0), (-1, -1), TABELLE_POLSTER),
     ]))
     story.append(items_table)
     story.append(Spacer(1, 0.5 * cm))
