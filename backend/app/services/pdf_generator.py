@@ -14,7 +14,6 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable,
     Image, Flowable,
 )
-from reportlab.pdfgen.canvas import Canvas
 from reportlab.lib.enums import TA_RIGHT, TA_LEFT, TA_CENTER
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
@@ -25,7 +24,7 @@ from app.services.adresse import bereinige_adresszeile2
 from app.services.pdf_fonts import register_fonts
 from app.services.bankverbindung import iban_fuer_ausgabe
 from app.services.epc_qr import build_epc_payload, qr_png_bytes
-from app.services.pflichtangaben import pflichtangaben
+from app.services.pdf_fuss import Fuss, leinwand
 from app.services.pdf_spalten import spaltenbreiten
 from app.services.iban import IbanProfil
 from app.services.zugferd_xml import EXEMPTION_REASONS
@@ -356,13 +355,17 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     PIXEL = fonts["pixel"]
     RETRO = fonts["retro"]
 
+    # Fester Fuß auf jeder Seite (services/pdf_fuss.py); seine gemessene Höhe
+    # bestimmt, wo der Textfluss endet.
+    fuss = Fuss(company, d, schrift=BODY, breite=A4[0] - 4 * cm, links=2 * cm,
+                mit_bank=not _ist_gutschrift(invoice))
     doc = SimpleDocTemplate(
         str(output_path),
         pagesize=A4,
         rightMargin=2 * cm,
         leftMargin=2 * cm,
         topMargin=2 * cm,
-        bottomMargin=2.5 * cm,
+        bottomMargin=fuss.unterer_rand,
     )
 
     normal = ParagraphStyle("Normal", fontName=BODY, fontSize=9, leading=13, textColor=INK)
@@ -601,21 +604,7 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         story.append(Spacer(1, 0.5 * cm))
         story.append(Paragraph(invoice.notes, small))
 
-    story.append(Spacer(1, 0.8 * cm))
-    story.append(HRFlowable(width=W, thickness=0.5, color=BORDER, spaceAfter=6))
-    footer_parts = []
-    if company.vat_id:
-        footer_parts.append(f"{d.label_ust_id} {company.vat_id}")
-    if company.tax_number:
-        footer_parts.append(f"{d.label_steuernummer} {company.tax_number}")
-    if footer_parts:
-        story.append(Paragraph("  ·  ".join(footer_parts), small))
-    for zeile in pflichtangaben(company, d.code).zeilen:
-        story.append(Paragraph(escape(zeile), small))
-
-    def _canvasmaker(*args, **kwargs):
-        kwargs["initialFontName"] = BODY
-        return Canvas(*args, **kwargs)
+    _canvasmaker = leinwand(BODY, d.seite_muster, fuss, rechts=A4[0] - 2 * cm)
 
     if draft:
         wasserzeichen = _draft_watermark(BODY, d.stempel_entwurf)
