@@ -168,3 +168,87 @@ def test_steuerzeichen_in_der_artikelnummer_werden_vor_der_nummernvergabe_abgele
     assert antwort.status_code == 400
     assert "Position 1: Artikelnummer darf keine Steuerzeichen" in antwort.text
     assert pg_session.execute(text("SELECT invoice_counter FROM company")).scalar() == zaehler_vorher
+
+
+def test_leistungszeitraum_wird_gespeichert_und_beim_bearbeiten_wieder_angeboten(pg_session, client):
+    from datetime import date
+
+    kunde = _kunde(pg_session)
+
+    antwort = _anlegen(client, kunde, [
+        _position(leistung_von="2026-07-01", leistung_bis="2026-07-31"),
+        _position(leistung_von="", leistung_bis=""),
+    ])
+
+    assert antwort.status_code == 303
+    pg_session.expire_all()
+    inv = pg_session.query(Invoice).filter(Invoice.customer_id == kunde.id).one()
+    items = sorted(inv.items, key=lambda i: i.position)
+    assert (items[0].leistung_von, items[0].leistung_bis) == (date(2026, 7, 1), date(2026, 7, 31))
+    assert (items[1].leistung_von, items[1].leistung_bis) == (None, None)
+
+    formular = _formular_positionen(client.get(f"/invoices/{inv.id}/bearbeiten").text)
+    assert [(p["leistung_von"], p["leistung_bis"]) for p in formular] == [
+        ("2026-07-01", "2026-07-31"), ("", "")]
+
+
+@pytest.mark.parametrize("von, bis, meldung", [
+    ("2026-07-01", "", "Position 1: Leistungszeitraum braucht Beginn und Ende."),
+    ("", "2026-07-31", "Position 1: Leistungszeitraum braucht Beginn und Ende."),
+    ("2026-07-31", "2026-07-01", "Position 1: Leistungszeitraum beginnt nach seinem Ende."),
+    ("2026-02-30", "2026-03-01", "Position 1: Leistungszeitraum ist kein gültiges Datum."),
+])
+def test_unvollstaendiger_leistungszeitraum_wird_vor_der_nummernvergabe_abgelehnt(
+        pg_session, client, von, bis, meldung):
+    kunde = _kunde(pg_session)
+    zaehler_vorher = pg_session.execute(text("SELECT invoice_counter FROM company")).scalar()
+
+    antwort = _anlegen(client, kunde, [_position(leistung_von=von, leistung_bis=bis)])
+
+    assert antwort.status_code == 400
+    assert meldung in antwort.text
+    assert pg_session.execute(text("SELECT invoice_counter FROM company")).scalar() == zaehler_vorher
+    pg_session.expire_all()
+    assert pg_session.query(Invoice).filter(Invoice.customer_id == kunde.id).count() == 0
+
+
+def test_vorlage_laesst_positionszeitraeume_weg_behaelt_aber_die_artikelnummer(pg_session, client):
+    """Eine Vorlage ist für die NÄCHSTE Rechnung; der Juli von damals gehört nicht hinein.
+    Verschoben wird nichts: ohne bekannten Rhythmus wäre jede Verschiebung geraten."""
+    kunde = _kunde(pg_session)
+    _anlegen(client, kunde, [_position(artikelnummer="00950",
+                                       leistung_von="2026-07-01", leistung_bis="2026-07-31")])
+    inv = pg_session.query(Invoice).filter(Invoice.customer_id == kunde.id).one()
+
+    formular = _formular_positionen(client.get(f"/invoices/neu?vorlage={inv.id}").text)
+
+    assert [(p["artikelnummer"], p["leistung_von"], p["leistung_bis"]) for p in formular] == [
+        ("00950", "", "")]
+
+
+def test_storno_uebernimmt_den_positionszeitraum():
+    from datetime import date
+
+    from app.services.storno import build_storno
+    from tests.factories import orm_invoice, orm_item
+
+    juli = orm_item(1, "1", "100.00", "19")
+    juli.leistung_von, juli.leistung_bis = date(2026, 7, 1), date(2026, 7, 31)
+    original = orm_invoice([juli], invoice_number="RE-2026-900")
+
+    storno = build_storno(original, "RE-2026-901", date(2026, 8, 1))
+
+    assert (storno.items[0].leistung_von, storno.items[0].leistung_bis) == (
+        date(2026, 7, 1), date(2026, 7, 31))
+
+
+def test_formular_und_detailseite_kennen_den_positionszeitraum(pg_session, client):
+    seite = client.get("/invoices/neu").text
+    assert 'x-model="item.leistung_von"' in seite
+    assert 'x-model="item.leistung_bis"' in seite
+    assert "leistung_von: ''" in seite and "leistung_bis: ''" in seite
+
+    kunde = _kunde(pg_session)
+    _anlegen(client, kunde, [_position(leistung_von="2026-07-01", leistung_bis="2026-07-31")])
+    inv = pg_session.query(Invoice).filter(Invoice.customer_id == kunde.id).one()
+    assert "Leistungszeitraum 01.07.2026 – 31.07.2026" in client.get(f"/invoices/{inv.id}").text

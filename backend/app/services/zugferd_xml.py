@@ -103,6 +103,23 @@ def _seller_item_id_xml(item) -> str:
                 <ram:SellerAssignedID>{_esc(nummer)}</ram:SellerAssignedID>"""
 
 
+def _line_period_xml(item) -> str:
+    """BT-134/135 zwischen ApplicableTradeTax und LineMonetarySummation (CII-Sequenz)."""
+    von = getattr(item, "leistung_von", None)
+    bis = getattr(item, "leistung_bis", None)
+    if not von or not bis:
+        return ""
+    return f"""
+                <ram:BillingSpecifiedPeriod>
+                    <ram:StartDateTime>
+                        <udt:DateTimeString format="102">{_fmt_date(von)}</udt:DateTimeString>
+                    </ram:StartDateTime>
+                    <ram:EndDateTime>
+                        <udt:DateTimeString format="102">{_fmt_date(bis)}</udt:DateTimeString>
+                    </ram:EndDateTime>
+                </ram:BillingSpecifiedPeriod>"""
+
+
 def _line_items_xml(invoice: Invoice) -> str:
     inv_cat = getattr(invoice, "tax_category", "S")
     parts = []
@@ -135,7 +152,7 @@ def _line_items_xml(invoice: Invoice) -> str:
                 <ram:ApplicableTradeTax>
                     <ram:TypeCode>VAT</ram:TypeCode>{exemption_block}
                     <ram:CategoryCode>{tax_cat}</ram:CategoryCode>{rate_line}
-                </ram:ApplicableTradeTax>
+                </ram:ApplicableTradeTax>{_line_period_xml(item)}
                 <ram:SpecifiedTradeSettlementLineMonetarySummation>
                     <ram:LineTotalAmount>{_fmt_amount(item.net_amount)}</ram:LineTotalAmount>
                 </ram:SpecifiedTradeSettlementLineMonetarySummation>

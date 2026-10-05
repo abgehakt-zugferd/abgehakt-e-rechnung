@@ -244,7 +244,7 @@ def test_ohne_firma_bleibt_der_datenlieferant_leer_statt_falsch(tmp_path):
     assert "Musterstadt" not in index
 
 
-def test_positionen_csv_fuehrt_die_artikelnummer_als_letzte_spalte(tmp_path):
+def test_positionen_csv_haengt_die_artikelnummer_hinter_die_bisherigen_spalten(tmp_path):
     """Hinten angehängt: bestehende Spaltenpositionen bleiben für Prüfsoftware gleich."""
     c = _customer()
     inv = _invoice(c)
@@ -253,5 +253,19 @@ def test_positionen_csv_fuehrt_die_artikelnummer_als_letzte_spalte(tmp_path):
     zf = _build(tmp_path, customer=c, invoices=[inv])
 
     kopf = zf.read("positionen.csv").decode("utf-8-sig").splitlines()[0].split(";")
-    assert kopf[-1] == "artikelnummer"
+    assert kopf.index("artikelnummer") == kopf.index("brutto") + 1
     assert _read_csv(zf, "positionen.csv")[0]["artikelnummer"] == "00950"
+
+
+def test_positionen_csv_fuehrt_den_positionszeitraum_hinten_als_datum(tmp_path):
+    c = _customer()
+    inv = _invoice(c)
+    inv.items[0].leistung_von = date(2026, 7, 1)
+    inv.items[0].leistung_bis = date(2026, 7, 31)
+
+    zf = _build(tmp_path, customer=c, invoices=[inv])
+
+    kopf = zf.read("positionen.csv").decode("utf-8-sig").splitlines()[0].split(";")
+    assert kopf[-3:] == ["artikelnummer", "leistung_von", "leistung_bis"]
+    zeile = _read_csv(zf, "positionen.csv")[0]
+    assert (zeile["leistung_von"], zeile["leistung_bis"]) == ("2026-07-01", "2026-07-31")
