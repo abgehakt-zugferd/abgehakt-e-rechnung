@@ -47,8 +47,25 @@ if [ "${DATENWACHE_UEBERSTIMMT:-0}" = "1" ]; then
 fi
 
 muster_datei="${ZEMP_ECHTDATEN_MUSTER:-$HOME/.zemp/echtdaten-muster.txt}"
-befunde=$(mktemp)
-trap 'rm -f "$befunde"' EXIT
+# Fail closed: Ohne Ablage fuer Befunde schreibt `>> ""` ins Leere, und die Wache
+# meldet am Ende "nichts gefunden" - ein Push mit IBAN oder privatem Schluessel
+# ginge durch (test_werkstatt.sh). Die Vorlage steht in $TMPDIR, weil `mktemp`
+# ohne Vorlage $TMPDIR uebergeht.
+befunde=$(mktemp "${TMPDIR:-/tmp}/datenwache.XXXXXX") \
+    && [ -n "$befunde" ] && [ -f "$befunde" ] || {
+    echo "datenwache: keine Befundablage anlegbar (mktemp) - Push GESPERRT." >&2
+    exit 1
+}
+# Die Zwischenablage fuer pruefe_ausser_konstruiert entsteht HIER und nicht in
+# der Funktion: Die Funktion laeuft am Ende einer Pipeline, ein exit dort beendet
+# nur die Subshell, und die USt-/Steuernummer-Pruefung winkte dann durch.
+echt=$(mktemp "${TMPDIR:-/tmp}/datenwache-echt.XXXXXX") \
+    && [ -n "$echt" ] && [ -f "$echt" ] || {
+    rm -f "$befunde"
+    echo "datenwache: keine Zwischenablage anlegbar (mktemp) - Push GESPERRT." >&2
+    exit 1
+}
+trap 'rm -f "$befunde" "$echt"' EXIT
 
 # Erzeugt eine Ziffernfolge: Startziffer $1, Schritt $2 (+1/-1/0), Laenge $3.
 # Schritt wrappt ueber % 10 (9+1 -> 0). POSIX-Arithmetik, kein grep -P.
@@ -92,7 +109,7 @@ pruefe_ausser_konstruiert() {
     roh_ere=$4
     ziffern_sed=$5
     treffer=$(grep -nE -- "$muster" 2>/dev/null) || return 0
-    echt=$(mktemp)
+    : > "$echt"
     printf '%s\n' "$treffer" | while IFS= read -r zeile; do
         [ -z "$zeile" ] && continue
         inhalt=${zeile#*:}

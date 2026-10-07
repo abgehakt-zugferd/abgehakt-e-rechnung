@@ -16,7 +16,10 @@ set -u
 hier=$(cd "$(dirname "$0")" && pwd)
 hook="$hier/pre-push"
 fehl=0
-werkstatt=$(mktemp -d)
+werkstatt=$(mktemp -d "${TMPDIR:-/tmp}/waechter.XXXXXX") && [ -d "$werkstatt" ] || {
+    echo "ABBRUCH: keine Werkstatt anlegbar (mktemp) - nichts gemessen." >&2
+    exit 2
+}
 trap 'rm -rf "$werkstatt"' EXIT
 
 # Ein Spiegel, der KEIN Repo ist: nur so scheitert rev-parse noch, nachdem der

@@ -9,11 +9,22 @@ hier=$(cd "$(dirname "$0")" && pwd)
 wache="$hier/datenwache.sh"
 leer=0000000000000000000000000000000000000000
 fehl=0
-werkstatt=$(mktemp -d)
+# Ohne Werkstatt sofort abbrechen. Scheitert mktemp, sind alle Pfade leer, und
+# `git -C ""` arbeitet im UMGEBENDEN Repo: commit_mit committete dann dort
+# (test_werkstatt.sh). Die Vorlage steht in $TMPDIR, weil `mktemp -d` ohne
+# Vorlage $TMPDIR uebergeht.
+werkstatt=$(mktemp -d "${TMPDIR:-/tmp}/datenwache.XXXXXX") \
+    && [ -n "$werkstatt" ] && [ -d "$werkstatt" ] || {
+    echo "ABBRUCH: keine Werkstatt anlegbar (mktemp) - die Suite laeuft nicht." >&2
+    exit 2
+}
 trap 'rm -rf "$werkstatt"' EXIT
 
 neues_repo() {
-    d=$(mktemp -d "$werkstatt/repo.XXXXXX")
+    d=$(mktemp -d "$werkstatt/repo.XXXXXX") && [ -n "$d" ] && [ -d "$d" ] || {
+        echo "ABBRUCH: kein Wegwerf-Repo in der Werkstatt anlegbar." >&2
+        exit 2
+    }
     git -C "$d" init -q
     git -C "$d" config user.name probe
     git -C "$d" config user.email probe@example.invalid
@@ -21,6 +32,12 @@ neues_repo() {
 }
 
 commit_mit() {
+    # neues_repo laeuft in $( ), sein exit beendet nur die Subshell. Ein leeres
+    # $1 kommt also hier an und darf nie zu `git -C "" commit` werden.
+    case "$1" in "$werkstatt"/repo.*) ;; *)
+        echo "ABBRUCH: commit_mit ausserhalb der Werkstatt ($1)." >&2
+        exit 2 ;;
+    esac
     printf '%s\n' "$3" > "$1/$2"
     git -C "$1" add -f "$2"
     git -C "$1" commit -qm "probe" >/dev/null
