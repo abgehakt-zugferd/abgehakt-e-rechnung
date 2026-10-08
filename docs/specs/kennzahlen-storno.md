@@ -40,17 +40,23 @@ markieren").
 Die Gutschrift wird nach ihrem eigenen Ausstellungsdatum gezaehlt, nicht nach dem des Originals.
 Liegen beide in verschiedenen Zeitraeumen, zeigt die Uebersicht im ersten Zeitraum das Original,
 im zweiten die Minderung. Das bildet die Belege ab; ob es die steuerliche Periodisierung trifft,
-ist eine Frage an die Steuerberatung (siehe `docs/specs/ersatzrechnung.md`, Grenzen).
+ist eine Frage an die Steuerberatung (Issue #141, Abgrenzung).
 
 ## Schnitt
 
-Die oeffentlichen Funktionen behalten Namen und Signatur; `main.py` aendert sich nicht.
-Neu ist eine Stelle, die beide Fragen beantwortet, statt sie in jeder Funktion neu zu formulieren:
+Die oeffentlichen Funktionen in `dashboard_kennzahlen.py` behalten Namen und Signatur; `main.py`
+aendert sich nicht. Die Regel steht an einer Stelle, im Modul `services/storno_wirkung.py`:
 
-- `_wirksam_storniert()`: SQL-Bedingung (EXISTS) fuer "zu dieser Rechnung besteht eine
-  gestellte Gutschrift". Eine Quelle fuer alle Kennzahlen.
-- `_summe_gutschriften(db, feld, von, bis, *, topf)`: summiert gestellte 381 nach dem Typ ihres
-  Originals (`standard`, `self_billing`).
+- `WIRKSAM_STORNIERT`: SQL-Bedingung (EXISTS) an `Invoice` fuer "zu dieser Rechnung besteht eine
+  gestellte oder ausgezahlte Gutschrift". Eine Quelle fuer Kennzahlen und Rechnungsliste.
+- `summe_gutschriften(db, feld, seit, *, topf, bis, ausgezahlt)`: summiert gestellte 381 nach dem
+  Typ ihres Originals (`None` fuer die Standardrechnung samt Altbestand ohne Original,
+  `self_billing`); mit `ausgezahlt` nur Rueckzahlungen zu bezahlten Originalen nach `bezahlt_am`.
+
+**Kachel und Liste** (`docs/specs/uebersicht-kennzahlen.md`: beide zeigen dieselbe Zahl): Die
+Rechnungsliste kennt den Filter `storno=ohne` mit derselben Bedingung. Die Kacheln "Offene
+Forderungen" und "Ueberfaellig" verlinken mit `storno=ohne`. Der Filter ist wie die anderen
+sichtbar, aufhebbar und bleibt beim Blaettern erhalten.
 
 ## Ist-Umsatz (nach Gegenpruefung)
 
@@ -95,3 +101,13 @@ Uebernommen: Ist-Umsatz nach Auszahlung (oben), Abnahmefall 9. Verworfen: "cance
 zaehlt nicht" (braechte das Minus aus #141 zurueck; das Programm selbst raet nach einem Storno,
 das Original auf storniert zu setzen, `bezahlt_am.py`), "Bestandstest widerspricht" (eine
 Gutschrift ohne Original hebt keine Rechnung auf). Zwei Befunde wiederholten bekannte Punkte.
+
+Zweite Gegenpruefung durch Fable auf dem fertigen Diff, zehn Befunde. Uebernommen: Kachel und Liste
+(oben), drei Testluecken mit benannter Mutation (Ist-Umsatz nach Auszahlungsmonat, stornierte
+Gutschrift in der USt, Auszahlung ohne Zahlungseingang), doppelte Topfbedingung entfernt, Warnung
+zur Alias-Korrelation, dieser Abschnitt "Schnitt". Offen und eigener Auftrag: `bezahlt_am` und
+`create_storno` verstehen unter "Gutschrift zum Original" alles ausser `discarded`, die Kennzahlen
+nur `issued`/`paid`; eine selbst stornierte Gutschrift laesst das Original danach dauerhaft offen,
+weder bezahlbar noch erneut stornierbar. Offen fuer den Betreiber: einmalige Gegenprobe der
+Bestandsdaten auf Gutschriften mit Original und abweichendem Betrag (zwischen 11.08. und 23.08.2026
+waren sie technisch moeglich).
