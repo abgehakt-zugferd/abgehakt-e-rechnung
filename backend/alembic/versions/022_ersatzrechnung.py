@@ -30,9 +30,15 @@ def upgrade() -> None:
     op.create_index(
         "ix_invoices_ersetzt_invoice_id", "invoices", ["ersetzt_invoice_id"],
     )
+    op.create_index(
+        "uq_invoices_eine_aktive_ersatzrechnung_pro_original", "invoices",
+        ["ersetzt_invoice_id"], unique=True,
+        postgresql_where=sa.text("status <> 'discarded' AND ersetzt_invoice_id IS NOT NULL"),
+    )
 
 
 def downgrade() -> None:
+    op.drop_index("uq_invoices_eine_aktive_ersatzrechnung_pro_original", table_name="invoices")
     op.drop_index("ix_invoices_ersetzt_invoice_id", table_name="invoices")
     op.drop_constraint("invoices_ersetzt_invoice_id_fkey", "invoices", type_="foreignkey")
     op.drop_column("invoices", "ersetzt_invoice_id")

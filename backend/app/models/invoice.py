@@ -34,6 +34,16 @@ class Invoice(Base):
                 "status <> 'discarded' AND original_invoice_id IS NOT NULL"
             ),
         ),
+        # Pro Original hoechstens eine nicht verworfene Ersatzrechnung, aus demselben
+        # Grund und mit derselben Ausnahme wie oben (docs/specs/ersatzrechnung.md).
+        Index(
+            "uq_invoices_eine_aktive_ersatzrechnung_pro_original",
+            "ersetzt_invoice_id",
+            unique=True,
+            postgresql_where=text(
+                "status <> 'discarded' AND ersetzt_invoice_id IS NOT NULL"
+            ),
+        ),
     )
 
     id: Mapped[uuid.UUID] = _id_col

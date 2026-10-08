@@ -148,3 +148,28 @@ def test_verworfener_ersatz_zaehlt_nicht(pg_session, client):
     r = client.post("/invoices/neu", data=_payload(kunde, original.id))
 
     assert r.status_code == 303, r.text
+
+
+def _ersatz_entwurf(pg_session, kunde, original, *, status="draft"):
+    inv = Invoice(invoice_number=f"RE-ERS-{uuid.uuid4().hex[:6]}", customer_id=kunde.id,
+                  issue_date=date(2026, 7, 10), due_date=date(2026, 7, 24),
+                  currency="EUR", tax_category="S", status=status,
+                  ersetzt_invoice_id=original.id)
+    pg_session.add(inv)
+    return inv
+
+
+def test_datenbank_haelt_hoechstens_einen_aktiven_ersatz_pro_original(pg_session):
+    """Zweite Schicht unter der Vorabpruefung: zwei ueberlappende Anfragen."""
+    from sqlalchemy.exc import IntegrityError
+
+    kunde = _kunde(pg_session)
+    original = _stornierte(pg_session, kunde)
+    _ersatz_entwurf(pg_session, kunde, original, status="discarded")
+    _ersatz_entwurf(pg_session, kunde, original)
+    pg_session.commit()
+
+    _ersatz_entwurf(pg_session, kunde, original)
+    with pytest.raises(IntegrityError):
+        pg_session.commit()
+    pg_session.rollback()
