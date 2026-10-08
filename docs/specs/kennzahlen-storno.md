@@ -114,6 +114,6 @@ Gutschrift in der USt, Auszahlung ohne Zahlungseingang), doppelte Topfbedingung 
 zur Alias-Korrelation, dieser Abschnitt "Schnitt". Offen und eigener Auftrag: `bezahlt_am` und
 `create_storno` verstehen unter "Gutschrift zum Original" alles ausser `discarded`, die Kennzahlen
 nur `issued`/`paid`; eine selbst stornierte Gutschrift laesst das Original danach dauerhaft offen,
-weder bezahlbar noch erneut stornierbar. Offen fuer den Betreiber: einmalige Gegenprobe der
-Bestandsdaten auf Gutschriften mit Original und abweichendem Betrag (zwischen 11.08. und 23.08.2026
-waren sie technisch moeglich).
+weder bezahlbar noch erneut stornierbar. Gegenprobe der Bestandsdaten auf Gutschriften mit
+Original und abweichendem Betrag (zwischen 11.08. und 23.08.2026 technisch moeglich): am 08.10.2026
+gemessen, kein Treffer (siehe Grundsatz).
