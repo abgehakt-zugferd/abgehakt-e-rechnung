@@ -24,6 +24,7 @@ from app.services.belegart import (
 )
 from app.services.zugferd_xml import COMPLIANT_PROFILES
 from app.services.steuerstatus import pruefe_honorargutschrift
+from app.services.ersatzrechnung import pruefe_finalisierbar
 
 
 VALID_TAX_RATES = {Decimal("0"), Decimal("7"), Decimal("19")}
@@ -453,6 +454,9 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
     # nicht weiter waechst und keine zirkulaeren Imports entstehen.
     if invoice_type == "self_billing":
         errors.extend(pruefe_honorargutschrift(invoice))
+
+    # Ersatzrechnung (docs/specs/ersatzrechnung.md): Regeln im eigenen Modul.
+    errors.extend(pruefe_finalisierbar(invoice))
 
     # Empfehlungen
     if not invoice.payment_terms:

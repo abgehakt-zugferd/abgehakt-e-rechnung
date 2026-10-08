@@ -173,3 +173,31 @@ def test_datenbank_haelt_hoechstens_einen_aktiven_ersatz_pro_original(pg_session
     with pytest.raises(IntegrityError):
         pg_session.commit()
     pg_session.rollback()
+
+
+def _ersatz_ueber_formular(pg_session, client, kunde, original):
+    daten = _payload(kunde, original.id)
+    daten["delivery_date"] = "2026-07-08"
+    r = client.post("/invoices/neu", data=daten)
+    assert r.status_code == 303, r.text
+    pg_session.expire_all()
+    return (pg_session.query(Invoice)
+            .filter(Invoice.ersetzt_invoice_id == original.id,
+                    Invoice.status != "discarded").one())
+
+
+def test_ersatz_ist_erst_nach_gestellter_gutschrift_finalisierbar(pg_session, client):
+    kunde = _kunde(pg_session)
+    original = _beleg(pg_session, kunde)
+    _gutschrift(pg_session, original, status="draft")
+    ersatz = _ersatz_ueber_formular(pg_session, client, kunde, original)
+
+    r = client.post(f"/invoices/{ersatz.id}/finalisieren")
+
+    assert r.status_code == 400, r.text
+    # Das Finalisieren zeigt Meldungstexte, nicht Codes.
+    assert f"Gutschrift zu Rechnung {original.invoice_number} ist noch nicht gestellt" in r.text
+    pg_session.expire_all()
+    row = pg_session.get(Invoice, ersatz.id)
+    assert row.status == "draft"
+    assert row.zugferd_xml is None

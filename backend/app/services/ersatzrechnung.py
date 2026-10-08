@@ -84,3 +84,28 @@ def pruefe_ersetzbar(db: Session, kennung: str | uuid.UUID) -> Invoice:
             "Entwurf zaehlt nicht.",
         )
     return original
+
+
+def _issue(code: str, message: str):
+    from app.services.validator import Issue
+    return Issue(code, "error", message, "ersetzt_invoice_id")
+
+
+def pruefe_finalisierbar(invoice: Invoice) -> list:
+    """Befunde fuer den Validator. Verbindlich ist diese Pruefung, nicht die beim
+    Anlegen: die Gutschrift kann dazwischen verworfen worden sein."""
+    original = getattr(invoice, "ersetzte_rechnung", None)
+    if original is None:
+        return []
+    gestellt = any(
+        g.invoice_type == "credit_note" and g.status in ("issued", "paid")
+        for g in original.storno_invoices
+    )
+    if gestellt:
+        return []
+    return [_issue(
+        "ERSATZ_GUTSCHRIFT_NICHT_GESTELLT",
+        f"Die Gutschrift zu Rechnung {original.invoice_number} ist noch nicht gestellt. "
+        "Erst danach darf die Ersatzrechnung gestellt werden; sonst stuende sie neben "
+        "einem ungeminderten Original.",
+    )]
