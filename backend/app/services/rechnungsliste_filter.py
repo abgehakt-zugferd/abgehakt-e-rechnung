@@ -9,6 +9,7 @@ from sqlalchemy.orm import Query
 from app.models.customer import Customer
 from app.models.invoice import Invoice
 from app.services.beleg_status import ohne_erstversand_bedingung
+from app.services.storno_wirkung import WIRKSAM_STORNIERT
 from app.zeit import heute as kalender_heute
 
 
@@ -17,6 +18,7 @@ class Listenfilter:
     art: str
     faellig: str
     versand: str
+    storno: str
 
 
 def filtere_rechnungsliste(
@@ -27,6 +29,7 @@ def filtere_rechnungsliste(
     art: str = "",
     faellig: str = "",
     versand: str = "",
+    storno: str = "",
     heute: date | None = None,
 ) -> tuple[Query, Listenfilter]:
     """Wendet Status-, Such- und Auswahlfilter an; unbekannte Werte werden geleert."""
@@ -58,4 +61,10 @@ def filtere_rechnungsliste(
     else:
         versand = ""
 
-    return query, Listenfilter(art=art, faellig=faellig, versand=versand)
+    if storno == "ohne":
+        # dieselbe Bedingung wie die Kacheln der Uebersicht (Issue #141)
+        query = query.filter(~WIRKSAM_STORNIERT)
+    else:
+        storno = ""
+
+    return query, Listenfilter(art=art, faellig=faellig, versand=versand, storno=storno)

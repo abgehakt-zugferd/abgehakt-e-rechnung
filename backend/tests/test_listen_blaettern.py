@@ -170,3 +170,12 @@ def test_das_archiv_bleibt_neueste_zuerst(tmp_path, monkeypatch):
     zeiten = [d["geaendert"] for d in seite.dateien]
     assert zeiten == sorted(zeiten, reverse=True)
     assert seite.dateien[0]["name"] == f"RE-2026-{archive.SEITENGROESSE + 2:04d}.pdf"
+
+
+def test_das_blaettern_behaelt_den_stornofilter(pg_session):
+    """Kachel "Offene Forderungen" verlinkt mit storno=ohne (Issue #141)."""
+    _rechnungen(pg_session, SEITENGROESSE + 5, status="issued")
+
+    html = _client(pg_session).get("/invoices/?status=issued&storno=ohne&seite=2").text
+
+    assert "storno=ohne" in html, "Der Zurueck-Verweis verliert den Stornofilter"
