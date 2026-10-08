@@ -96,12 +96,50 @@ def _summe_feld(
     ) or Decimal("0")
 
 
+def _summe_gutschriften(
+    db: Session,
+    feld,
+    seit: date,
+    *,
+    topf: str | None,
+    bis: date | None = None,
+) -> Decimal:
+    """Summiert gestellte Gutschriften, deren Original in `topf` zaehlt.
+
+    Eine Gutschrift gehoert in denselben Topf wie ihr Original (Issue #141):
+    `topf` None ist die gewoehnliche Rechnung, sonst der `invoice_type` des
+    Originals. Gutschriften ohne Original (Altbestand) zaehlen zur
+    gewoehnlichen Rechnung. Gezaehlt wird nach dem Datum der Gutschrift.
+    """
+    original = aliased(Invoice)
+    if topf is None:
+        topf_filter = or_(Invoice.original_invoice_id.is_(None),
+                          original.invoice_type.is_(None))
+    else:
+        topf_filter = original.invoice_type == topf
+    bedingungen = [
+        Invoice.status.in_(_AUSGESTELLT),
+        Invoice.invoice_type == "credit_note",
+        topf_filter,
+        Invoice.issue_date >= seit,
+    ]
+    if bis is not None:
+        bedingungen.append(Invoice.issue_date <= bis)
+    return (
+        db.query(func.coalesce(func.sum(feld), 0))
+        .select_from(Invoice)
+        .outerjoin(original, Invoice.original_invoice_id == original.id)
+        .filter(*bedingungen)
+        .scalar()
+    ) or Decimal("0")
+
+
 def schuldige_umsatzsteuer(
     db: Session, von: date, bis: date | None = None,
 ) -> Decimal:
     """Ausgewiesene USt auf gestellten Belegen im Zeitraum, netto nach Gutschriften."""
     ust = _summe_feld(db, Invoice.tax_total, von, art=None, bis=bis)
-    gutschrift_ust = _summe_feld(db, Invoice.tax_total, von, art="credit_note", bis=bis)
+    gutschrift_ust = _summe_gutschriften(db, Invoice.tax_total, von, topf=None, bis=bis)
     return (ust - gutschrift_ust).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
@@ -113,7 +151,7 @@ def schuldige_umsatzsteuer_ytd(db: Session, seit: date) -> Decimal:
 def nettoumsatz_ytd(db: Session, seit: date) -> Decimal:
     """Nettoumsatz gestellter Belege im Zeitraum, abzueglich Gutschriften."""
     netto = _summe_feld(db, Invoice.net_total, seit, art=None)
-    gutschrift_netto = _summe_feld(db, Invoice.net_total, seit, art="credit_note")
+    gutschrift_netto = _summe_gutschriften(db, Invoice.net_total, seit, topf=None)
     return (netto - gutschrift_netto).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 

@@ -81,3 +81,14 @@ def test_von_hand_storniert_ohne_gutschrift_zaehlt_wie_bisher_nicht(pg_session):
     _beleg(pg_session, status="cancelled")
 
     assert nettoumsatz_ytd(pg_session, JAHRESBEGINN) == Decimal("0.00")
+
+
+def test_gutschrift_zu_anzahlungsrechnung_mindert_den_umsatz_nicht(pg_session):
+    """Die 386 zaehlt nirgends; ihre Gutschrift darf deshalb auch nichts abziehen."""
+    from app.services.dashboard_kennzahlen import nettoumsatz_ytd, schuldige_umsatzsteuer
+
+    anzahlung = _beleg(pg_session, art="prepayment")
+    _gutschrift(pg_session, anzahlung)
+
+    assert nettoumsatz_ytd(pg_session, JAHRESBEGINN) == Decimal("0.00")
+    assert schuldige_umsatzsteuer(pg_session, JAHRESBEGINN) == Decimal("0.00")
