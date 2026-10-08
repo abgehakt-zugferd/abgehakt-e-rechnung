@@ -59,6 +59,8 @@ def test_gutschrift_entwurf_oder_stornierte_gutschrift_wirkt_nicht(pg_session):
     _gutschrift(pg_session, aufgehoben, status="cancelled")
 
     assert offene_forderungen(pg_session).betrag == Decimal("238.00")
+    from app.services.dashboard_kennzahlen import schuldige_umsatzsteuer
+    assert schuldige_umsatzsteuer(pg_session, date(2026, 1, 1)) == Decimal("38.00")
 
 
 JAHRESBEGINN = date(2026, 1, 1)
@@ -137,3 +139,33 @@ def test_gutschrift_zaehlt_im_quartal_ihrer_ausstellung(pg_session):
 
     assert schuldige_umsatzsteuer(pg_session, date(2026, 7, 1), date(2026, 9, 30)) == Decimal("19.00")
     assert schuldige_umsatzsteuer(pg_session, date(2026, 10, 1)) == Decimal("-19.00")
+
+
+def _auszahlen(pg_session, gutschrift, am):
+    gutschrift.status = "paid"
+    gutschrift.bezahlt_am = am
+    pg_session.commit()
+
+
+def test_ist_umsatz_zaehlt_die_rueckzahlung_im_monat_der_auszahlung(pg_session):
+    """Nach bezahlt_am der Gutschrift, nicht nach ihrem Ausstellungsdatum."""
+    from app.services.dashboard_kennzahlen import umsatz_im_zeitraum
+
+    original = _beleg(pg_session, status="paid", ausgestellt=date(2026, 3, 1))
+    gutschrift = _gutschrift(pg_session, original, ausgestellt=date(2026, 3, 10))
+    _auszahlen(pg_session, gutschrift, date(2026, 4, 2))
+
+    assert umsatz_im_zeitraum(pg_session, date(2026, 1, 1), date(2026, 3, 31)) == Decimal("100.00")
+    assert umsatz_im_zeitraum(pg_session, date(2026, 4, 1)) == Decimal("-100.00")
+
+
+def test_ausgezahlte_gutschrift_zu_unbezahlter_rechnung_mindert_den_ist_umsatz_nicht(pg_session):
+    """Ohne Zahlungseingang gibt es nichts zurueckzuzahlen."""
+    from app.services.dashboard_kennzahlen import umsatz_im_zeitraum
+
+    original = _beleg(pg_session)
+    gutschrift = _gutschrift(pg_session, original)
+    _auszahlen(pg_session, gutschrift, date(2026, 9, 5))
+
+    assert umsatz_im_zeitraum(pg_session, JAHRESBEGINN) == Decimal("0.00")
+    assert offene_forderungen(pg_session).betrag == Decimal("0")
