@@ -156,10 +156,11 @@ def nettoumsatz_ytd(db: Session, seit: date) -> Decimal:
 
 
 def vorsteuer_honorargutschriften(db: Session, seit: date) -> Decimal:
-    """Ausgewiesene USt auf gestellten Honorargutschriften (389) seit `seit`."""
-    return _summe_feld(db, Invoice.tax_total, seit, art="self_billing").quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP,
-    )
+    """Ausgewiesene USt auf gestellten Honorargutschriften (389) seit `seit`,
+    abzueglich ihrer Stornierungen (Issue #141)."""
+    vorsteuer = _summe_feld(db, Invoice.tax_total, seit, art="self_billing")
+    storniert = _summe_gutschriften(db, Invoice.tax_total, seit, topf="self_billing")
+    return (vorsteuer - storniert).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def geschaetzte_steuerabgaben(
