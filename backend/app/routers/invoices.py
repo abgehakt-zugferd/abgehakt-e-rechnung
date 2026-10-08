@@ -40,6 +40,7 @@ from app.services.einheiten import (
     resolve_einheit,
 )
 from app.services.invoice_number import generate_next_invoice_number
+from app.services.ersatzrechnung import ErsatzNichtMoeglich, pruefe_ersetzbar
 from app.services import empfaenger
 from app.services.archive_frist import berechne_archive_until
 from app.config import get_settings
@@ -498,8 +499,15 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
     _pruefe_einheiten(raw_items)
     _pruefe_positionsangaben(raw_items)
 
+    # Vor Nummernvergabe: eine abgelehnte Ersatzrechnung darf weder Zaehler noch
+    # Zeile anfassen (docs/specs/ersatzrechnung.md).
     roh_ersetzt = form.get("ersetzt_invoice_id")
     ersetzt_id = uuid.UUID(roh_ersetzt) if roh_ersetzt else None
+    if ersetzt_id is not None:
+        try:
+            pruefe_ersetzbar(db, ersetzt_id)
+        except ErsatzNichtMoeglich as fehler:
+            raise HTTPException(400, str(fehler)) from fehler
 
     invoice_number = generate_next_invoice_number(db, issue_date=issue_date)
 
