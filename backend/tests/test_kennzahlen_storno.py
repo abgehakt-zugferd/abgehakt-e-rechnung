@@ -59,3 +59,25 @@ def test_gutschrift_entwurf_oder_stornierte_gutschrift_wirkt_nicht(pg_session):
     _gutschrift(pg_session, aufgehoben, status="cancelled")
 
     assert offene_forderungen(pg_session).betrag == Decimal("238.00")
+
+
+JAHRESBEGINN = date(2026, 1, 1)
+
+
+def test_original_zusaetzlich_von_hand_storniert_zaehlt_nur_einmal(pg_session):
+    """Status und Gutschrift sind zwei Wege zur selben Aufhebung; sie addieren sich nicht."""
+    from app.services.dashboard_kennzahlen import nettoumsatz_ytd, schuldige_umsatzsteuer
+
+    original = _beleg(pg_session, status="cancelled")
+    _gutschrift(pg_session, original)
+
+    assert nettoumsatz_ytd(pg_session, JAHRESBEGINN) == Decimal("0.00")
+    assert schuldige_umsatzsteuer(pg_session, JAHRESBEGINN) == Decimal("0.00")
+
+
+def test_von_hand_storniert_ohne_gutschrift_zaehlt_wie_bisher_nicht(pg_session):
+    from app.services.dashboard_kennzahlen import nettoumsatz_ytd
+
+    _beleg(pg_session, status="cancelled")
+
+    assert nettoumsatz_ytd(pg_session, JAHRESBEGINN) == Decimal("0.00")

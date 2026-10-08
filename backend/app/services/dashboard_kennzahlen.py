@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
-from sqlalchemy import exists, func
+from sqlalchemy import and_, exists, func, or_
 from sqlalchemy.orm import Session, aliased
 
 from app.models.company import Company
@@ -76,8 +76,14 @@ def _summe_feld(
         typ_filter = Invoice.invoice_type.is_(None)
     else:
         typ_filter = Invoice.invoice_type == art
+    gestellt = Invoice.status.in_(_AUSGESTELLT)
+    if art != "credit_note":
+        # Von Hand auf cancelled gesetzt, aber schon per Gutschrift aufgehoben:
+        # das Original zaehlt, die Gutschrift zieht ab. Sonst wirkte die
+        # Stornierung doppelt (Issue #141).
+        gestellt = or_(gestellt, and_(Invoice.status == "cancelled", _WIRKSAM_STORNIERT))
     bedingungen = [
-        Invoice.status.in_(_AUSGESTELLT),
+        gestellt,
         typ_filter,
         Invoice.issue_date >= seit,
     ]
