@@ -39,6 +39,13 @@
     </div>
     {% endif %}
 
+    {% if ersetzt %}
+    <div style="margin-bottom:16px; padding:12px 16px; border:2px solid var(--border); font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--gold);">
+        Ersetzt Rechnung {{ ersetzt.invoice_number }} vom {{ ersetzt.issue_date.strftime('%d.%m.%Y') }}.
+        Die stornierte Rechnung steht im Beleg als Bezug (BT-25). Empfänger und Positionen sind vorbelegt und änderbar.
+    </div>
+    {% endif %}
+
     {% if not invoice %}
     <!-- Ersetzt das Formular, wenn es als bereits abgeschickter History-Eintrag
          zurückkommt (Zurück-Button). Siehe Makro am Seitenende. -->
@@ -78,6 +85,9 @@
           action="{% if invoice %}/invoices/{{ invoice.id }}/bearbeiten{% else %}/invoices/neu{% endif %}"
           @submit="prepareSubmit">
         <input type="hidden" name="items_json" :value="JSON.stringify(items)">
+        {% if ersetzt %}
+        <input type="hidden" name="ersetzt_invoice_id" value="{{ ersetzt.id }}">
+        {% endif %}
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
             <!-- Left: main data -->
@@ -286,7 +296,9 @@
                        steht serverseitig, dieses Feld ist nur ihre Anzeige.
                        Bei Neuanlage aus Vorlage startet die Auswahl immer bei
                        Standard: die Belegart der Vorlage wird nie vererbt. #}
-                    {% set aktuelle_belegart = ((invoice.invoice_type if invoice else None) or "standard") %}
+                    {# Ausnahme Ersatzrechnung: dort traegt die Vorbelegung die Belegart des
+                       Originals (docs/specs/ersatzrechnung.md). #}
+                    {% set aktuelle_belegart = ((invoice.invoice_type if invoice else (vorbelegung.invoice_type if vorbelegung else None)) or "standard") %}
                     <div>
                         <label class="label">Belegart</label>
                         <select name="invoice_type" class="input">

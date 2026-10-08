@@ -378,11 +378,41 @@ def list_invoices(
     })
 
 
+def _vorbelegung_aus(quelle: Invoice, customers) -> tuple[SimpleNamespace, str, str | None]:
+    """Formularwerte aus einer bestehenden Rechnung (docs/specs/kopieren.md, Feldvertrag).
+
+    Kein invoice_type, kein original_invoice_id, kein ersetzt_invoice_id, keine
+    uebergabe_beleg_*: die gehoeren nicht in die Vorbelegung. document_language
+    wird vererbt (docs/specs/belegsprache.md). Die Ersatzrechnung setzt die
+    Belegart danach ausdruecklich selbst.
+    """
+    kunde_hinweis = None
+    waehlbare_ids = {c.id for c in customers}
+    kunde_id = quelle.customer_id if quelle.customer_id in waehlbare_ids else None
+    if quelle.customer_id is not None and kunde_id is None:
+        kunde_hinweis = "Vorlagenkunde nicht waehlbar"
+    vorbelegung = SimpleNamespace(
+        customer_id=kunde_id,
+        tax_category=quelle.tax_category,
+        buyer_reference=quelle.buyer_reference,
+        buyer_order_reference=quelle.buyer_order_reference,
+        service_period_start=quelle.service_period_start,
+        service_period_end=quelle.service_period_end,
+        delivery_date=quelle.delivery_date,
+        payment_terms=quelle.payment_terms,
+        notes=quelle.notes,
+        document_language=getattr(quelle, "document_language", None) or "de",
+        invoice_type=None,
+    )
+    return vorbelegung, _items_as_json(quelle, vorlage=True), kunde_hinweis
+
+
 @router.get("/neu", response_class=HTMLResponse)
 def new_invoice_form(
     request: Request,
     db: Session = Depends(get_db),
     vorlage: str | None = None,
+    ersetzt: str | None = None,
 ):
     customers = db.query(Customer).filter(Customer.deleted_at.is_(None), Customer.is_active == True).order_by(Customer.name).all()
     company = db.query(Company).filter(Company.id == 1).first()
@@ -412,27 +442,19 @@ def new_invoice_form(
             if quelle is None:
                 error = "Vorlage nicht gefunden"
             else:
-                waehlbare_ids = {c.id for c in customers}
-                kunde_id = quelle.customer_id if quelle.customer_id in waehlbare_ids else None
-                if quelle.customer_id is not None and kunde_id is None:
-                    kunde_hinweis = "Vorlagenkunde nicht waehlbar"
-                # Kein invoice_type, kein original_invoice_id, keine uebergabe_beleg_*:
-                # die gehoeren nicht in die Vorbelegung (Feldvertrag).
-                # document_language wird vererbt (docs/specs/belegsprache.md);
-                # invoice_type bleibt weiterhin nie geerbt.
-                vorbelegung = SimpleNamespace(
-                    customer_id=kunde_id,
-                    tax_category=quelle.tax_category,
-                    buyer_reference=quelle.buyer_reference,
-                    buyer_order_reference=quelle.buyer_order_reference,
-                    service_period_start=quelle.service_period_start,
-                    service_period_end=quelle.service_period_end,
-                    delivery_date=quelle.delivery_date,
-                    payment_terms=quelle.payment_terms,
-                    notes=quelle.notes,
-                    document_language=getattr(quelle, "document_language", None) or "de",
-                )
-                items_json = _items_as_json(quelle, vorlage=True)
+                vorbelegung, items_json, kunde_hinweis = _vorbelegung_aus(quelle, customers)
+
+    # Ersatzrechnung (docs/specs/ersatzrechnung.md): Vorbelegung wie beim Kopieren,
+    # dazu Bezug und, anders als beim Kopieren, die Belegart des Originals.
+    ersetzt_beleg = None
+    if ersetzt is not None:
+        try:
+            ersetzt_beleg = pruefe_ersetzbar(db, ersetzt)
+        except ErsatzNichtMoeglich as fehler:
+            error = str(fehler)
+        else:
+            vorbelegung, items_json, kunde_hinweis = _vorbelegung_aus(ersetzt_beleg, customers)
+            vorbelegung.invoice_type = ersetzt_beleg.invoice_type
 
     delivery_default = today.isoformat()
     if vorbelegung and getattr(vorbelegung, "delivery_date", None):
@@ -457,7 +479,8 @@ def new_invoice_form(
         "belegart_waehlbar": True,
         "error": error,
         "kunde_hinweis": kunde_hinweis,
-    }, status_code=404 if error else 200)
+        "ersetzt": ersetzt_beleg,
+    }, status_code=(400 if ersetzt is not None else 404) if error else 200)
     # Nach dem Absenden liegt der History-Eintrag dieses Formulars direkt hinter der
     # Detailseite. Ohne `no-store` gibt der Browser ihn beim Zurück-Button gefüllt aus
     # dem Cache zurück — er sähe aus wie ein Editor für den gerade gespeicherten
