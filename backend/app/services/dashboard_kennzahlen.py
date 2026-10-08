@@ -69,6 +69,7 @@ def _summe_feld(
     """Summiert ein Betragsfeld gestellter Belege einer Art seit `seit`.
 
     `art` ist `invoice_type`; None steht fuer die gewoehnliche Rechnung.
+    Gutschriften summiert `_summe_gutschriften`, nicht diese Funktion.
     Betraege werden ohne Ruecksicht auf `invoices.currency` addiert. Das ist eine
     bestehende Vereinfachung: gemischte Waehrungen werden nicht getrennt.
     """
@@ -76,12 +77,11 @@ def _summe_feld(
         typ_filter = Invoice.invoice_type.is_(None)
     else:
         typ_filter = Invoice.invoice_type == art
-    gestellt = Invoice.status.in_(_AUSGESTELLT)
-    if art != "credit_note":
-        # Von Hand auf cancelled gesetzt, aber schon per Gutschrift aufgehoben:
-        # das Original zaehlt, die Gutschrift zieht ab. Sonst wirkte die
-        # Stornierung doppelt (Issue #141).
-        gestellt = or_(gestellt, and_(Invoice.status == "cancelled", _WIRKSAM_STORNIERT))
+    # Von Hand auf cancelled gesetzt, aber schon per Gutschrift aufgehoben: das
+    # Original zaehlt, die Gutschrift zieht ab. Sonst wirkte die Stornierung
+    # doppelt (Issue #141).
+    gestellt = or_(Invoice.status.in_(_AUSGESTELLT),
+                   and_(Invoice.status == "cancelled", _WIRKSAM_STORNIERT))
     bedingungen = [
         gestellt,
         typ_filter,
