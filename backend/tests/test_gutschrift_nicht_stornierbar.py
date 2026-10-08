@@ -33,3 +33,25 @@ def test_gestellte_gutschrift_laesst_sich_nicht_stornieren_und_zeigt_den_weg(pg_
     assert original.invoice_number in r.text
     pg_session.expire_all()
     assert pg_session.get(Invoice, gs.id).status == "issued"
+
+
+def test_waechter_sperrt_das_stornieren_einer_gutschrift_auf_jedem_weg(pg_session):
+    """Zweite Schicht unter der Route: auch Skript oder Shell kommen nicht vorbei.
+    `paid` ist im Waechter ohnehin Endzustand; offen war nur issued -> cancelled."""
+    from app.services.invoice_guard import InvoiceStateError
+
+    gs = gutschrift(pg_session, beleg(pg_session, kunde(pg_session)))
+
+    gs.status = "cancelled"
+    with pytest.raises(InvoiceStateError, match="Gutschrift"):
+        pg_session.flush()
+    pg_session.rollback()
+
+
+def test_waechter_laesst_rechnungen_weiter_stornieren(pg_session):
+    original = beleg(pg_session, kunde(pg_session))
+
+    original.status = "cancelled"
+    pg_session.commit()
+
+    assert original.status == "cancelled"

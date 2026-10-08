@@ -172,6 +172,14 @@ def _before_flush(session: Session, flush_context, instances) -> None:
                 raise InvoiceStateError(
                     f"Illegaler Statusübergang {old_status!r} → {new_status!r}."
                 )
+            # Eine gestellte Gutschrift ist endgueltig (Issue #142): storniert,
+            # lebte das Original wieder auf und steckte fest. Die Route sagt
+            # vorher freundlich, was stattdessen zu tun ist (storno.pruefe_stornierbar).
+            if new_status == "cancelled" and obj.invoice_type == "credit_note":
+                raise InvoiceStateError(
+                    "Eine gestellte Gutschrift ist endgueltig und laesst sich nicht "
+                    "stornieren (#142). Korrektur ueber eine neue Rechnung zum Original."
+                )
             # Bezahlt heisst: mit Zahlungsdatum. Ohne fiele der Beleg still aus Umsatz
             # und Geldeingang, und nachtragen liesse es sich nicht mehr.
             if new_status == "paid" and obj.bezahlt_am is None:
