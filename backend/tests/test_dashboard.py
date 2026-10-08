@@ -303,6 +303,14 @@ def test_dashboard_kachel_und_hinweis_links_stimmen_mit_liste(pg_session, client
     for _ in range(5):
         _inv(pg_session, "cancelled", "0")
     _gutschrift(pg_session, "issued", "25.00")
+    # Wirksam storniert (#141): weder offen noch ueberfaellig, auch nicht in der Liste.
+    storniert = _inv(pg_session, "issued", "40.00", due=heute - timedelta(days=5))
+    pg_session.add(Invoice(
+        invoice_number=f"GS-{uuid.uuid4().hex[:6]}", customer_id=storniert.customer_id,
+        issue_date=heute, due_date=heute, currency="EUR", net_total=Decimal("40.00"),
+        tax_total=Decimal("0"), gross_total=Decimal("40.00"), status="issued",
+        invoice_type="credit_note", original_invoice_id=storniert.id,
+    ))
     pg_session.commit()
 
     html = client.get("/dashboard").text

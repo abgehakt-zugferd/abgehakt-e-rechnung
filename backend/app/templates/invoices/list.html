@@ -43,13 +43,17 @@
                 <option value="" {% if not versand %}selected{% endif %}>Alle Versand</option>
                 <option value="offen" {% if versand == 'offen' %}selected{% endif %}>Ohne Versand</option>
             </select>
+            <select name="storno" class="input" style="width:180px;">
+                <option value="" {% if not storno %}selected{% endif %}>Alle Stornostände</option>
+                <option value="ohne" {% if storno == 'ohne' %}selected{% endif %}>Ohne Stornierte</option>
+            </select>
             <button type="submit" class="btn-secondary">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM16 10a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1h2a1 1 0 001-1v-2z"/>
                 </svg>
                 SUCHEN
             </button>
-            {% if q or status_filter or art or faellig or versand %}
+            {% if q or status_filter or art or faellig or versand or storno %}
             <a href="/invoices" class="btn-secondary">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -131,7 +135,7 @@
         <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:16px; font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">
             <span>{{ gesamt }} Rechnung{{ '' if gesamt == 1 else 'en' }}{% if seiten > 1 %}, Seite {{ seite }} von {{ seiten }}{% endif %}</span>
             {% if seiten > 1 %}
-            {% set basis = '?' + ('status=' ~ status_filter ~ '&' if status_filter else '') + ('q=' ~ q ~ '&' if q else '') + ('art=' ~ art ~ '&' if art else '') + ('faellig=' ~ faellig ~ '&' if faellig else '') + ('versand=' ~ versand ~ '&' if versand else '') %}
+            {% set basis = '?' + ('status=' ~ status_filter ~ '&' if status_filter else '') + ('q=' ~ q ~ '&' if q else '') + ('art=' ~ art ~ '&' if art else '') + ('faellig=' ~ faellig ~ '&' if faellig else '') + ('versand=' ~ versand ~ '&' if versand else '') + ('storno=' ~ storno ~ '&' if storno else '') %}
             <span style="display:flex; gap:12px;">
                 {% if seite > 1 %}
                 <a href="{{ basis }}seite={{ seite - 1 }}" style="color:var(--gold);">← ZURÜCK</a>

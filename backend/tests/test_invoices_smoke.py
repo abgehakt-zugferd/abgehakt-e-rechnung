@@ -3,6 +3,7 @@ Smoke-Tests für die Lese-Routen (#98 P2): GET /invoices/ (Liste, inkl. Status-/
 Suchfilter) und GET /invoices/{id} (Detail) waren ungetestet — ein Template-/
 Query-Bruch dort fiel bisher durch kein Netz. pg_session, echtes Rendering.
 """
+import re
 import uuid
 from datetime import date, datetime, timezone
 from app.zeit import heute as kalender_heute
@@ -141,9 +142,10 @@ def test_liste_unbekannte_art_und_faellig_werden_ignoriert(pg_session):
 def test_liste_zeigt_aktive_filter_sichtbar_und_aufhebbar(pg_session):
     _invoice(pg_session, number="RE-FILT-1", status="issued")
     r = _client(pg_session).get(
-        "/invoices/?status=issued&art=rechnung&faellig=ueberfaellig&versand=offen"
+        "/invoices/?status=issued&art=rechnung&faellig=ueberfaellig&versand=offen&storno=ohne"
     )
     assert r.status_code == 200
+    assert re.search(r'<option value="ohne"[^>]*selected', r.text), "Stornofilter nicht sichtbar"
     assert 'name="art"' in r.text
     assert 'value="rechnung"' in r.text
     assert "selected" in r.text

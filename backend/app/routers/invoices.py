@@ -347,6 +347,7 @@ def list_invoices(
     art: str = "",
     faellig: str = "",
     versand: str = "",
+    storno: str = "",
 ):
     # `outerjoin`, nicht `join`: die Verbindung dient nur der Suche nach dem
     # Kundennamen. Ein INNER JOIN wuerde jeden Entwurf ohne Kunden (#141) lautlos
@@ -354,6 +355,7 @@ def list_invoices(
     query = db.query(Invoice).outerjoin(Customer)
     query, filtern = filtere_rechnungsliste(
         query, status=status, q=q, art=art, faellig=faellig, versand=versand,
+        storno=storno,
     )
 
     # Gezählt wird in der Datenbank, geladen wird nur die Seite. Die Zahl unten
@@ -371,6 +373,7 @@ def list_invoices(
     return templates.TemplateResponse("invoices/list.html", {
         "request": request, "invoices": invoices, "status_filter": status, "q": q,
         "art": filtern.art, "faellig": filtern.faellig, "versand": filtern.versand,
+        "storno": filtern.storno,
         "seite": seite, "seiten": seiten, "gesamt": gesamt,
     })
 
