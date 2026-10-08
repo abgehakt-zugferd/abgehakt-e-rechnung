@@ -729,6 +729,12 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
     # nicht über EffectiveSettings.
     app_config = db.query(AppConfig).filter(AppConfig.id == 1).first()
     cc_default, cc_herkunft = _cc_vorbelegung(invoice, app_config)
+    # Knopf nur, wenn das Anlegen auch durchginge: dieselbe Regel, keine zweite.
+    try:
+        pruefe_ersetzbar(db, invoice.id)
+        ersetzbar = True
+    except ErsatzNichtMoeglich:
+        ersetzbar = False
     return templates.TemplateResponse("invoices/detail.html", {
         "request": request,
         "invoice": invoice,
@@ -740,6 +746,7 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
         "cc_herkunft": cc_herkunft,
         "protokoll": aenderungsprotokoll.protokoll_fuer(db, invoice_id),
         "heute": heute(),
+        "ersetzbar": ersetzbar,
     })
 
 

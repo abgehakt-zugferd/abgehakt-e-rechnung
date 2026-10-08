@@ -64,3 +64,28 @@ def test_kopie_einer_ersatzrechnung_erbt_den_bezug_nicht(pg_session, client):
     assert r.status_code == 200, r.text
     assert 'name="ersetzt_invoice_id"' not in r.text
     assert "Ersetzt Rechnung" not in r.text
+
+
+def test_detailseite_bietet_ersatz_nur_an_wenn_er_moeglich_ist(pg_session, client):
+    from tests.helpers.ersatzrechnung import stornierte
+
+    k = kunde(pg_session)
+    storniert = stornierte(pg_session, k)
+    offen = beleg(pg_session, k)
+
+    assert f'href="/invoices/neu?ersetzt={storniert.id}"' in client.get(
+        f"/invoices/{storniert.id}").text
+    assert "/invoices/neu?ersetzt=" not in client.get(f"/invoices/{offen.id}").text
+
+
+def test_detailseite_des_ersatzes_nennt_die_ersetzte_rechnung(pg_session, client):
+    from tests.helpers.ersatzrechnung import ersatz_ueber_formular, stornierte
+
+    k = kunde(pg_session)
+    original = stornierte(pg_session, k)
+    ersatz = ersatz_ueber_formular(pg_session, client, k, original)
+
+    text = client.get(f"/invoices/{ersatz.id}").text
+
+    assert f'href="/invoices/{original.id}"' in text
+    assert f"Ersetzt Rechnung {original.invoice_number}" in text
