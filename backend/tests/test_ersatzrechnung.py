@@ -199,3 +199,22 @@ def test_zurueckholen_ohne_konkurrenz_geht(pg_session, client):
     assert client.post(f"/invoices/{erster.id}/verwerfen").status_code == 303
 
     assert client.post(f"/invoices/{erster.id}/zurueckholen").status_code == 303
+
+
+def test_bearbeiten_behaelt_den_bezug_und_lehnt_einen_neuen_ab(pg_session, client):
+    kunde = _kunde(pg_session)
+    original = _stornierte(pg_session, kunde)
+    andere = _stornierte(pg_session, kunde)
+    ersatz = _ersatz_ueber_formular(pg_session, client, kunde, original)
+    daten = _payload(kunde, None)
+    del daten["ersetzt_invoice_id"]
+
+    assert client.post(f"/invoices/{ersatz.id}/bearbeiten", data=daten).status_code == 303
+    pg_session.expire_all()
+    assert pg_session.get(Invoice, ersatz.id).ersetzt_invoice_id == original.id
+
+    daten["ersetzt_invoice_id"] = str(andere.id)
+    r = client.post(f"/invoices/{ersatz.id}/bearbeiten", data=daten)
+    assert r.status_code == 400, r.text
+    pg_session.expire_all()
+    assert pg_session.get(Invoice, ersatz.id).ersetzt_invoice_id == original.id

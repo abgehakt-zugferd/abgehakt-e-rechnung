@@ -623,6 +623,14 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
     # fehlendes Feld heisst "unveraendert", ein mitgesendetes Feld wird
     # abgelehnt, nicht ignoriert — das Formular bietet dort kein Typfeld, also
     # ist ein mitgesendeter Wert immer ein manipulierter POST.
+    # Der Ersatzbezug entsteht nur beim Anlegen (docs/specs/ersatzrechnung.md). Das
+    # Bearbeitungsformular traegt kein solches Feld; ein mitgesendetes ist manipuliert.
+    if form.get("ersetzt_invoice_id") is not None:
+        return _bearbeiten_mit_fehler(
+            request, db, invoice,
+            "ERSATZ_BEZUG_UNVERAENDERLICH: Der Bezug einer Ersatzrechnung wird beim "
+            "Anlegen gesetzt und danach nicht mehr geaendert.",
+        )
     typ_manuell_waehlbar = _belegart_waehlbar(invoice)
     roh_typ = form.get("invoice_type")
     if roh_typ is not None:
