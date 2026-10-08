@@ -40,9 +40,8 @@ from app.services.einheiten import (
     resolve_einheit,
 )
 from app.services.invoice_number import generate_next_invoice_number
-from app.services.ersatzrechnung import (
-    ErsatzNichtMoeglich, pruefe_ersetzbar, pruefe_gutschrift_stornierbar,
-)
+from app.services.ersatzrechnung import ErsatzNichtMoeglich, pruefe_ersetzbar
+from app.services.storno import GutschriftNichtStornierbar, pruefe_stornierbar
 from app.services import empfaenger
 from app.services.archive_frist import berechne_archive_until
 from app.config import get_settings
@@ -1162,9 +1161,11 @@ def update_status(
         except (BezahltAmFehler, BezahltTrotzGutschrift) as exc:
             raise HTTPException(400, str(exc)) from exc
     if new_status == "cancelled":
+        # Freundliche Antwort mit dem richtigen Weg; verbindlich sperrt der
+        # invoice_guard (Issue #142).
         try:
-            pruefe_gutschrift_stornierbar(db, invoice)
-        except ErsatzNichtMoeglich as exc:
+            pruefe_stornierbar(invoice)
+        except GutschriftNichtStornierbar as exc:
             raise HTTPException(400, str(exc)) from exc
 
     invoice.status = new_status

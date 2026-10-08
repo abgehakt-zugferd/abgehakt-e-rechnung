@@ -63,3 +63,35 @@ def build_storno(original: Invoice, invoice_number: str, today: date) -> Invoice
         for item in original.items
     ]
     return storno
+
+
+class GutschriftNichtStornierbar(ValueError):
+    """Eine gestellte Gutschrift ist endgueltig (Issue #142, Entscheidung vom
+    08.10.2026). Der Text sagt, was stattdessen zu tun ist; der Code steht vorn,
+    damit er in der HTTP-400-Antwort sichtbar ist."""
+
+    code = "GUTSCHRIFT_NICHT_STORNIERBAR"
+
+
+def pruefe_stornierbar(invoice: Invoice) -> None:
+    """Wirft GutschriftNichtStornierbar, wenn `invoice` eine Gutschrift ist.
+
+    Die Gutschrift ist selbst die Korrektur. Stornierte man sie, lebte das Original
+    wieder auf, liesse sich aber weder bezahlen noch erneut stornieren (#142). Der
+    richtige Weg bei einer falschen Gutschrift ist eine neue Rechnung zum Original.
+    """
+    if invoice.invoice_type != "credit_note":
+        return
+    original = invoice.original_invoice
+    if original is not None:
+        weg = (
+            f"War sie falsch, stelle zur Rechnung {original.invoice_number} eine neue "
+            "Rechnung: auf deren Seite ueber „Ersatzrechnung anlegen“. Die "
+            "Ersatzrechnung verweist im Beleg auf die stornierte Rechnung."
+        )
+    else:
+        weg = "War sie falsch, stelle eine neue Rechnung."
+    raise GutschriftNichtStornierbar(
+        f"{GutschriftNichtStornierbar.code}: Die Gutschrift {invoice.invoice_number} "
+        f"ist endgueltig; sie ist selbst die Korrektur. {weg}"
+    )
