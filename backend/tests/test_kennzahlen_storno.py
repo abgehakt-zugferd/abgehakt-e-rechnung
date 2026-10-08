@@ -50,3 +50,12 @@ def test_wirksam_stornierte_rechnung_ist_nicht_mehr_offen(pg_session):
     ueberfaellig = ueberfaellige_forderungen(pg_session, HEUTE)
     assert ueberfaellig.betrag == Decimal("0")
     assert ueberfaellig.aeltester_tage is None
+
+
+def test_gutschrift_entwurf_oder_stornierte_gutschrift_wirkt_nicht(pg_session):
+    entwurf = _beleg(pg_session)
+    _gutschrift(pg_session, entwurf, status="draft")
+    aufgehoben = _beleg(pg_session)
+    _gutschrift(pg_session, aufgehoben, status="cancelled")
+
+    assert offene_forderungen(pg_session).betrag == Decimal("238.00")
