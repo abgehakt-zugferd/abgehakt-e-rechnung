@@ -218,3 +218,18 @@ def test_bearbeiten_behaelt_den_bezug_und_lehnt_einen_neuen_ab(pg_session, clien
     assert r.status_code == 400, r.text
     pg_session.expire_all()
     assert pg_session.get(Invoice, ersatz.id).ersetzt_invoice_id == original.id
+
+
+def test_bezug_ist_nach_dem_finalisieren_unveraenderlich(pg_session):
+    from app.services.invoice_guard import InvoiceStateError
+
+    kunde = _kunde(pg_session)
+    original = _stornierte(pg_session, kunde)
+    andere = _stornierte(pg_session, kunde)
+    ersatz = _ersatz_entwurf(pg_session, kunde, original, status="issued")
+    pg_session.commit()
+
+    ersatz.ersetzt_invoice_id = andere.id
+    with pytest.raises(InvoiceStateError):
+        pg_session.flush()
+    pg_session.rollback()
