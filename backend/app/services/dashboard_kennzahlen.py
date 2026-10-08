@@ -14,26 +14,17 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
-from sqlalchemy import and_, exists, func, or_
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy import and_, func, or_
+from sqlalchemy.orm import Session
 
 from app.models.company import Company
 from app.models.invoice import Invoice
 from app.services.beleg_status import nicht_versendet_bedingung
 from app.services.steuer_ruecklage import steuerruecklage_anteil
+from app.services.storno_wirkung import WIRKSAM_STORNIERT, summe_gutschriften
 
 _AUSGESTELLT = ("issued", "paid")
 _STANDARD = Invoice.invoice_type.is_(None)
-
-# Eine Stornierung wirkt in jeder Kennzahl genau einmal (Issue #141,
-# docs/specs/kennzahlen-storno.md). Wirksam ist eine gestellte Gutschrift; sie
-# spiegelt ihr Original vollstaendig (STORNO_AMOUNT_MISMATCH im Validator).
-_Gutschrift = aliased(Invoice)
-_WIRKSAM_STORNIERT = exists().where(
-    _Gutschrift.original_invoice_id == Invoice.id,
-    _Gutschrift.invoice_type == "credit_note",
-    _Gutschrift.status.in_(_AUSGESTELLT),
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +60,7 @@ def _summe_feld(
     """Summiert ein Betragsfeld gestellter Belege einer Art seit `seit`.
 
     `art` ist `invoice_type`; None steht fuer die gewoehnliche Rechnung.
-    Gutschriften summiert `_summe_gutschriften`, nicht diese Funktion.
+    Gutschriften summiert `storno_wirkung.summe_gutschriften`, nicht diese Funktion.
     Betraege werden ohne Ruecksicht auf `invoices.currency` addiert. Das ist eine
     bestehende Vereinfachung: gemischte Waehrungen werden nicht getrennt.
     """
@@ -81,7 +72,7 @@ def _summe_feld(
     # Original zaehlt, die Gutschrift zieht ab. Sonst wirkte die Stornierung
     # doppelt (Issue #141).
     gestellt = or_(Invoice.status.in_(_AUSGESTELLT),
-                   and_(Invoice.status == "cancelled", _WIRKSAM_STORNIERT))
+                   and_(Invoice.status == "cancelled", WIRKSAM_STORNIERT))
     bedingungen = [
         gestellt,
         typ_filter,
@@ -96,59 +87,12 @@ def _summe_feld(
     ) or Decimal("0")
 
 
-def _summe_gutschriften(
-    db: Session,
-    feld,
-    seit: date,
-    *,
-    topf: str | None,
-    bis: date | None = None,
-    ausgezahlt: bool = False,
-) -> Decimal:
-    """Summiert gestellte Gutschriften, deren Original in `topf` zaehlt.
-
-    Eine Gutschrift gehoert in denselben Topf wie ihr Original (Issue #141):
-    `topf` None ist die gewoehnliche Rechnung, sonst der `invoice_type` des
-    Originals. Gutschriften ohne Original (Altbestand) zaehlen zur
-    gewoehnlichen Rechnung. Gezaehlt wird nach dem Datum der Gutschrift.
-
-    Mit `ausgezahlt` zaehlen nur Rueckzahlungen: ausgezahlte (paid) Gutschriften
-    zu einem bezahlten Original, nach ihrem `bezahlt_am` (`bis` inklusive). Ohne
-    bezahltes Original ist nie Geld hereingekommen, das zurueckgehen koennte.
-    """
-    original = aliased(Invoice)
-    if topf is None:
-        topf_filter = or_(Invoice.original_invoice_id.is_(None),
-                          original.invoice_type.is_(None))
-    else:
-        topf_filter = original.invoice_type == topf
-    if ausgezahlt:
-        topf_filter = and_(topf_filter, original.status == "paid")
-    datum = Invoice.bezahlt_am if ausgezahlt else Invoice.issue_date
-    status = ("paid",) if ausgezahlt else _AUSGESTELLT
-    bedingungen = [
-        Invoice.status.in_(status),
-        Invoice.invoice_type == "credit_note",
-        topf_filter,
-        datum >= seit,
-    ]
-    if bis is not None:
-        bedingungen.append(datum <= bis)
-    return (
-        db.query(func.coalesce(func.sum(feld), 0))
-        .select_from(Invoice)
-        .outerjoin(original, Invoice.original_invoice_id == original.id)
-        .filter(*bedingungen)
-        .scalar()
-    ) or Decimal("0")
-
-
 def schuldige_umsatzsteuer(
     db: Session, von: date, bis: date | None = None,
 ) -> Decimal:
     """Ausgewiesene USt auf gestellten Belegen im Zeitraum, netto nach Gutschriften."""
     ust = _summe_feld(db, Invoice.tax_total, von, art=None, bis=bis)
-    gutschrift_ust = _summe_gutschriften(db, Invoice.tax_total, von, topf=None, bis=bis)
+    gutschrift_ust = summe_gutschriften(db, Invoice.tax_total, von, topf=None, bis=bis)
     return (ust - gutschrift_ust).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
@@ -160,7 +104,7 @@ def schuldige_umsatzsteuer_ytd(db: Session, seit: date) -> Decimal:
 def nettoumsatz_ytd(db: Session, seit: date) -> Decimal:
     """Nettoumsatz gestellter Belege im Zeitraum, abzueglich Gutschriften."""
     netto = _summe_feld(db, Invoice.net_total, seit, art=None)
-    gutschrift_netto = _summe_gutschriften(db, Invoice.net_total, seit, topf=None)
+    gutschrift_netto = summe_gutschriften(db, Invoice.net_total, seit, topf=None)
     return (netto - gutschrift_netto).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
@@ -168,7 +112,7 @@ def vorsteuer_honorargutschriften(db: Session, seit: date) -> Decimal:
     """Ausgewiesene USt auf gestellten Honorargutschriften (389) seit `seit`,
     abzueglich ihrer Stornierungen (Issue #141)."""
     vorsteuer = _summe_feld(db, Invoice.tax_total, seit, art="self_billing")
-    storniert = _summe_gutschriften(db, Invoice.tax_total, seit, topf="self_billing")
+    storniert = summe_gutschriften(db, Invoice.tax_total, seit, topf="self_billing")
     return (vorsteuer - storniert).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
@@ -221,12 +165,12 @@ def offene_forderungen(db: Session) -> OffenePosten:
     """Gestellte, nicht wirksam stornierte Standardrechnungen: Anzahl und Bruttosumme."""
     anzahl = (
         db.query(func.count(Invoice.id))
-        .filter(Invoice.status == "issued", _STANDARD, ~_WIRKSAM_STORNIERT)
+        .filter(Invoice.status == "issued", _STANDARD, ~WIRKSAM_STORNIERT)
         .scalar()
     ) or 0
     betrag = (
         db.query(func.coalesce(func.sum(Invoice.gross_total), 0))
-        .filter(Invoice.status == "issued", _STANDARD, ~_WIRKSAM_STORNIERT)
+        .filter(Invoice.status == "issued", _STANDARD, ~WIRKSAM_STORNIERT)
         .scalar()
     ) or Decimal("0")
     return OffenePosten(anzahl=anzahl, betrag=betrag)
@@ -237,7 +181,7 @@ def ueberfaellige_forderungen(db: Session, heute: date) -> Ueberfaellig:
     filter_ = (
         Invoice.status == "issued",
         _STANDARD,
-        ~_WIRKSAM_STORNIERT,
+        ~WIRKSAM_STORNIERT,
         Invoice.due_date < heute,
     )
     anzahl = db.query(func.count(Invoice.id)).filter(*filter_).scalar() or 0
@@ -311,7 +255,7 @@ def umsatz_im_zeitraum(
         .filter(*bedingungen)
         .scalar()
     ) or Decimal("0")
-    ausgezahlt = _summe_gutschriften(
+    ausgezahlt = summe_gutschriften(
         db, Invoice.net_total, von, topf=None, bis=bis, ausgezahlt=True,
     )
     return eingang - ausgezahlt
