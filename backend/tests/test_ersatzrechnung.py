@@ -120,3 +120,31 @@ def test_nur_eine_gestellte_rechnung_ist_ersetzbar(pg_session, client, lage):
 
     _abgelehnt_ohne_wirkung(pg_session, client, _payload(kunde, quelle.id),
                             "ERSATZ_ORIGINAL_KEINE_RECHNUNG")
+
+
+def _stornierte(pg_session, kunde):
+    original = _beleg(pg_session, kunde)
+    _gutschrift(pg_session, original)
+    return original
+
+
+def test_zweite_ersatzrechnung_zum_selben_original_wird_abgelehnt(pg_session, client):
+    kunde = _kunde(pg_session)
+    original = _stornierte(pg_session, kunde)
+    assert client.post("/invoices/neu", data=_payload(kunde, original.id)).status_code == 303
+
+    _abgelehnt_ohne_wirkung(pg_session, client, _payload(kunde, original.id),
+                            "ERSATZ_SCHON_VORHANDEN")
+
+
+def test_verworfener_ersatz_zaehlt_nicht(pg_session, client):
+    kunde = _kunde(pg_session)
+    original = _stornierte(pg_session, kunde)
+    assert client.post("/invoices/neu", data=_payload(kunde, original.id)).status_code == 303
+    pg_session.expire_all()
+    erster = pg_session.query(Invoice).filter(Invoice.ersetzt_invoice_id == original.id).one()
+    assert client.post(f"/invoices/{erster.id}/verwerfen").status_code == 303
+
+    r = client.post("/invoices/neu", data=_payload(kunde, original.id))
+
+    assert r.status_code == 303, r.text

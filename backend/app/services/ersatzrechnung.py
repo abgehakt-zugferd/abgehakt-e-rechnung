@@ -69,4 +69,18 @@ def pruefe_ersetzbar(db: Session, kennung: str | uuid.UUID) -> Invoice:
             "Ersatzrechnung entsteht erst, wenn die falsche Rechnung storniert ist; "
             "sonst stuenden zwei Rechnungen ueber dieselbe Leistung in den Buechern.",
         )
+    vorhandene = (
+        db.query(Invoice.invoice_number)
+        .filter(Invoice.ersetzt_invoice_id == original.id,
+                Invoice.status != "discarded")
+        .first()
+    )
+    if vorhandene is not None:
+        raise ErsatzNichtMoeglich(
+            "ERSATZ_SCHON_VORHANDEN",
+            f"Rechnung {original.invoice_number} wird bereits durch "
+            f"{vorhandene.invoice_number} ersetzt. Ist die Ersatzrechnung selbst "
+            "falsch, wird sie storniert und ihrerseits ersetzt; ein verworfener "
+            "Entwurf zaehlt nicht.",
+        )
     return original
