@@ -116,23 +116,3 @@ def pruefe_finalisierbar(invoice: Invoice) -> list:
         "Erst danach darf die Ersatzrechnung gestellt werden; sonst stuende sie neben "
         "einem ungeminderten Original.",
     )]
-
-
-def pruefe_gutschrift_stornierbar(db: Session, gutschrift: Invoice) -> None:
-    """Eine Gutschrift, deren Original ersetzt ist, bleibt bestehen. Ihre
-    Stornierung liesse das Original neben seiner Ersatzrechnung wieder aufleben."""
-    if gutschrift.invoice_type != "credit_note" or gutschrift.original_invoice_id is None:
-        return
-    ersatz = (
-        db.query(Invoice.invoice_number)
-        .filter(Invoice.ersetzt_invoice_id == gutschrift.original_invoice_id,
-                Invoice.status != "discarded")
-        .first()
-    )
-    if ersatz is not None:
-        raise ErsatzNichtMoeglich(
-            "ERSATZ_GUTSCHRIFT_GEBUNDEN",
-            f"Die Gutschrift {gutschrift.invoice_number} gehoert zur Ersatzrechnung "
-            f"{ersatz.invoice_number} und kann nicht storniert werden; sonst gaelte "
-            "die ersetzte Rechnung wieder neben ihrem Ersatz.",
-        )

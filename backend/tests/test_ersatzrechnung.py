@@ -163,18 +163,10 @@ def test_gutschrift_mit_ersatz_laesst_sich_nicht_stornieren(pg_session, client):
     r = client.post(f"/invoices/{gutschrift.id}/status", data={"new_status": "cancelled"})
 
     assert r.status_code == 400, r.text
-    assert "ERSATZ_GUTSCHRIFT_GEBUNDEN" in r.text
+    # Seit #142 ist jede gestellte Gutschrift endgueltig, nicht nur die mit Ersatz.
+    assert "GUTSCHRIFT_NICHT_STORNIERBAR" in r.text
     pg_session.expire_all()
     assert pg_session.get(Invoice, gutschrift.id).status == "issued"
-
-
-def test_gutschrift_ohne_ersatz_bleibt_stornierbar(pg_session, client):
-    kunde = _kunde(pg_session)
-    gutschrift = _gutschrift(pg_session, _beleg(pg_session, kunde))
-
-    r = client.post(f"/invoices/{gutschrift.id}/status", data={"new_status": "cancelled"})
-
-    assert r.status_code == 303, r.text
 
 
 def test_zurueckholen_eines_ersatzes_prueft_den_bezug_erneut(pg_session, client):
