@@ -57,7 +57,9 @@ Neu ist eine Stelle, die beide Fragen beantwortet, statt sie in jeder Funktion n
 `umsatz_im_zeitraum` zaehlt bezahlte Standardrechnungen nach `bezahlt_am` (Entscheidung vom
 2026-09-30: Umsatz ist, was bezahlt wurde). Eine Gutschrift mit Status `paid` ist die Auszahlung
 an den Kunden und traegt ihr eigenes `bezahlt_am`. Neu zieht `umsatz_im_zeitraum` solche
-ausgezahlten Gutschriften im Topf der Standardrechnung nach ihrem `bezahlt_am` ab. Eine gestellte,
+ausgezahlten Gutschriften nach ihrem `bezahlt_am` ab, aber nur, wenn ihr Original eine bezahlte
+Standardrechnung ist: nur dann ist Geld hereingekommen, das zurueckgeht. Eine ausgezahlte
+Gutschrift ohne Original laesst den Ist-Umsatz unberuehrt (Bestandstest zu #5). Eine gestellte,
 noch nicht ausgezahlte Gutschrift mindert den Ist-Umsatz nicht: das Geld ist noch da.
 
 `bezahlt_im_zeitraum` bleibt der Geldeingang brutto. Eine Rueckzahlung ist ein Geldausgang; ihn

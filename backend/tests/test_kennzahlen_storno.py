@@ -105,3 +105,25 @@ def test_gutschrift_zu_honorargutschrift_mindert_die_vorsteuer_nicht_die_ust(pg_
 
     assert vorsteuer_honorargutschriften(pg_session, JAHRESBEGINN) == Decimal("0.00")
     assert schuldige_umsatzsteuer(pg_session, JAHRESBEGINN) == Decimal("0.00")
+
+
+def test_ausgezahlte_gutschrift_wirkt_wie_gestellte(pg_session):
+    original = _beleg(pg_session)
+    _gutschrift(pg_session, original, status="paid")
+
+    assert offene_forderungen(pg_session).betrag == Decimal("0")
+
+
+def test_ist_umsatz_sinkt_erst_mit_der_auszahlung_der_gutschrift(pg_session):
+    """Gestellt heisst: das Geld ist noch da. Ausgezahlt heisst: es ist zurueck."""
+    from app.services.dashboard_kennzahlen import umsatz_im_zeitraum
+
+    original = _beleg(pg_session, status="paid")
+    gutschrift = _gutschrift(pg_session, original, ausgestellt=date(2026, 9, 20))
+    assert umsatz_im_zeitraum(pg_session, JAHRESBEGINN) == Decimal("100.00")
+
+    gutschrift.status = "paid"
+    gutschrift.bezahlt_am = date(2026, 9, 25)
+    pg_session.commit()
+
+    assert umsatz_im_zeitraum(pg_session, JAHRESBEGINN) == Decimal("0.00")

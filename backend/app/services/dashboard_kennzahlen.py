@@ -103,6 +103,7 @@ def _summe_gutschriften(
     *,
     topf: str | None,
     bis: date | None = None,
+    ausgezahlt: bool = False,
 ) -> Decimal:
     """Summiert gestellte Gutschriften, deren Original in `topf` zaehlt.
 
@@ -110,6 +111,10 @@ def _summe_gutschriften(
     `topf` None ist die gewoehnliche Rechnung, sonst der `invoice_type` des
     Originals. Gutschriften ohne Original (Altbestand) zaehlen zur
     gewoehnlichen Rechnung. Gezaehlt wird nach dem Datum der Gutschrift.
+
+    Mit `ausgezahlt` zaehlen nur Rueckzahlungen: ausgezahlte (paid) Gutschriften
+    zu einem bezahlten Original, nach ihrem `bezahlt_am` (`bis` inklusive). Ohne
+    bezahltes Original ist nie Geld hereingekommen, das zurueckgehen koennte.
     """
     original = aliased(Invoice)
     if topf is None:
@@ -117,14 +122,18 @@ def _summe_gutschriften(
                           original.invoice_type.is_(None))
     else:
         topf_filter = original.invoice_type == topf
+    if ausgezahlt:
+        topf_filter = and_(topf_filter, original.status == "paid")
+    datum = Invoice.bezahlt_am if ausgezahlt else Invoice.issue_date
+    status = ("paid",) if ausgezahlt else _AUSGESTELLT
     bedingungen = [
-        Invoice.status.in_(_AUSGESTELLT),
+        Invoice.status.in_(status),
         Invoice.invoice_type == "credit_note",
         topf_filter,
-        Invoice.issue_date >= seit,
+        datum >= seit,
     ]
     if bis is not None:
-        bedingungen.append(Invoice.issue_date <= bis)
+        bedingungen.append(datum <= bis)
     return (
         db.query(func.coalesce(func.sum(feld), 0))
         .select_from(Invoice)
@@ -288,6 +297,7 @@ def umsatz_im_zeitraum(
 
     Entscheidung des Betreibers vom 2026-09-30: Umsatz ist, was bezahlt wurde.
     Gestellte, unbezahlte Rechnungen sind offene Forderungen und zaehlen hier nicht.
+    Ausgezahlte Gutschriften mindern ihn nach ihrem `bezahlt_am` (Issue #141).
     """
     bedingungen = [
         Invoice.status == "paid",
@@ -296,11 +306,15 @@ def umsatz_im_zeitraum(
     ]
     if bis is not None:
         bedingungen.append(Invoice.bezahlt_am <= bis)
-    return (
+    eingang = (
         db.query(func.coalesce(func.sum(Invoice.net_total), 0))
         .filter(*bedingungen)
         .scalar()
     ) or Decimal("0")
+    ausgezahlt = _summe_gutschriften(
+        db, Invoice.net_total, von, topf=None, bis=bis, ausgezahlt=True,
+    )
+    return eingang - ausgezahlt
 
 
 def vorjahres_stichtag(heute: date) -> date:
