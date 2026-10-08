@@ -242,3 +242,27 @@ def test_gutschrift_ohne_ersatz_bleibt_stornierbar(pg_session, client):
     r = client.post(f"/invoices/{gutschrift.id}/status", data={"new_status": "cancelled"})
 
     assert r.status_code == 303, r.text
+
+
+def test_zurueckholen_eines_ersatzes_prueft_den_bezug_erneut(pg_session, client):
+    kunde = _kunde(pg_session)
+    original = _stornierte(pg_session, kunde)
+    erster = _ersatz_ueber_formular(pg_session, client, kunde, original)
+    assert client.post(f"/invoices/{erster.id}/verwerfen").status_code == 303
+    _ersatz_ueber_formular(pg_session, client, kunde, original)
+
+    r = client.post(f"/invoices/{erster.id}/zurueckholen")
+
+    assert r.status_code == 400, r.text
+    assert "ERSATZ_SCHON_VORHANDEN" in r.text
+    pg_session.expire_all()
+    assert pg_session.get(Invoice, erster.id).status == "discarded"
+
+
+def test_zurueckholen_ohne_konkurrenz_geht(pg_session, client):
+    kunde = _kunde(pg_session)
+    original = _stornierte(pg_session, kunde)
+    erster = _ersatz_ueber_formular(pg_session, client, kunde, original)
+    assert client.post(f"/invoices/{erster.id}/verwerfen").status_code == 303
+
+    assert client.post(f"/invoices/{erster.id}/zurueckholen").status_code == 303

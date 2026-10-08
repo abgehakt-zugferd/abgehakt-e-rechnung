@@ -1159,6 +1159,13 @@ def restore_draft(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(404, "Rechnung nicht gefunden")
     if invoice.status != "discarded":
         raise HTTPException(400, "Nur verworfene Entwürfe können zurückgeholt werden.")
+    # Ein zurueckgeholter Ersatz wird wieder aktiv; inzwischen kann ein anderer
+    # Ersatz oder keine Gutschrift mehr da sein (docs/specs/ersatzrechnung.md).
+    if invoice.ersetzt_invoice_id is not None:
+        try:
+            pruefe_ersetzbar(db, invoice.ersetzt_invoice_id)
+        except ErsatzNichtMoeglich as fehler:
+            raise HTTPException(400, str(fehler)) from fehler
     invoice.status = "draft"
     db.commit()
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
