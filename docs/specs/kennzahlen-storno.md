@@ -19,7 +19,13 @@ auch die Gutschrift nicht.
 
 Grundlage: Eine Gutschrift spiegelt ihr Original immer vollstaendig (`STORNO_AMOUNT_MISMATCH` im
 Validator, `build_storno` kopiert die Summen). Eine wirksame Gutschrift hebt das Original also
-ganz auf, nie teilweise.
+ganz auf, nie teilweise. Gegenprobe der Bestandsdaten am 08.10.2026: keine Gutschrift mit Original
+und keinerlei Beleg vom Typ Gutschrift oder Honorargutschrift im Bestand.
+
+Diese Grundlage ist eine Grenze, die nicht aufgeweicht werden darf, ohne die Kennzahlen mitzuziehen.
+Ein Teilstorno (etwa "80 % bei Ruecktritt") laeuft deshalb als volle Gutschrift plus neue Rechnung
+ueber den verbleibenden Teil (Stornogebuehr), nicht als Teilgutschrift. Ob eine Stornogebuehr
+umsatzsteuerpflichtiges Entgelt oder echter Schadensersatz ist, klaert die Steuerberatung.
 
 ## Regeln je Kennzahl
 
