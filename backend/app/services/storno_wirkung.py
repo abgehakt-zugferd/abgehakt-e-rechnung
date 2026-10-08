@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import and_, exists, func, or_
+from sqlalchemy import and_, exists, func
 from sqlalchemy.orm import Session, aliased
 
 from app.models.invoice import Invoice
@@ -21,6 +21,9 @@ _AUSGESTELLT = ("issued", "paid")
 _Gutschrift = aliased(Invoice)
 
 # SQL-Bedingung an `Invoice`: zu dieser Rechnung besteht eine wirksame Gutschrift.
+# Sie korreliert fest auf die Basistabelle `Invoice`. Eine Abfrage, deren aeussere
+# Entitaet ein `aliased(Invoice)` ist, bekaeme ein unkorreliertes EXISTS (wahr,
+# sobald irgendeine Gutschrift existiert); dort die Bedingung neu bilden.
 WIRKSAM_STORNIERT = exists().where(
     _Gutschrift.original_invoice_id == Invoice.id,
     _Gutschrift.invoice_type == "credit_note",
@@ -50,8 +53,9 @@ def summe_gutschriften(
     """
     original = aliased(Invoice)
     if topf is None:
-        topf_filter = or_(Invoice.original_invoice_id.is_(None),
-                          original.invoice_type.is_(None))
+        # Ohne Original ist der Alias im LEFT JOIN NULL; die eine Bedingung deckt
+        # die Standardrechnung und den Altbestand zugleich ab.
+        topf_filter = original.invoice_type.is_(None)
     else:
         topf_filter = original.invoice_type == topf
     if ausgezahlt:
