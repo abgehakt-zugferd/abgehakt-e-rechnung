@@ -33,6 +33,7 @@ _RECHNUNGEN_COLS = [
     ("kundennummer", "A"), ("kundenname", "A"),
     ("nettobetrag", ("N", 2)), ("steuerbetrag", ("N", 2)), ("bruttobetrag", ("N", 2)),
     ("waehrung", "A"), ("steuerkategorie", "A"), ("original_rechnungsnummer", "A"),
+    ("ersetzt_rechnungsnummer", "A"),
     ("aufbewahrung_bis", "D"), ("datev_versendet_am", "A"), ("erstellt_am", "A"),
 ]
 _POSITIONEN_COLS = [
@@ -80,6 +81,7 @@ def _rechnungen_csv(invoices: Sequence[Invoice]) -> str:
     rows = []
     for inv in invoices:
         original = inv.original_invoice.invoice_number if inv.original_invoice else ""
+        ersetzt = inv.ersetzte_rechnung.invoice_number if inv.ersetzte_rechnung else ""
         rows.append([
             inv.invoice_number, _fmt(inv.invoice_type), inv.status,
             _fmt(inv.issue_date), _fmt(inv.due_date), _fmt(inv.delivery_date),
@@ -87,7 +89,7 @@ def _rechnungen_csv(invoices: Sequence[Invoice]) -> str:
             inv.customer.customer_number if inv.customer else "",
             inv.customer.name if inv.customer else "",
             _fmt(inv.net_total), _fmt(inv.tax_total), _fmt(inv.gross_total),
-            inv.currency, inv.tax_category, original,
+            inv.currency, inv.tax_category, original, ersetzt,
             _fmt(inv.archive_until), _fmt(inv.datev_sent_at), _fmt(inv.created_at),
         ])
     return _csv_bytes(header, rows)
@@ -151,7 +153,8 @@ Enthaltene Tabellen
   Gestellte Belege (issued/paid/cancelled) sind Buchungsbelege; verworfene Entwuerfe
   (discarded) stehen mit in der CSV, weil ihre Nummer schon beim Anlegen vergeben
   wurde und die Zeile die Nummernluecke fuer den Pruefer erklaert. Stornos/
-  Gutschriften referenzieren das Original in "original_rechnungsnummer".
+  Gutschriften referenzieren das Original in "original_rechnungsnummer",
+  Ersatzrechnungen die stornierte Rechnung in "ersetzt_rechnungsnummer".
 - positionen.csv: Einzelpositionen, verknüpft über "rechnungsnummer".
 - kunden.csv      ({n_customers} Zeilen): Stammdaten der referenzierten Kunden
   (inkl. soft-gelöschter, erkennbar an "geloescht_am").

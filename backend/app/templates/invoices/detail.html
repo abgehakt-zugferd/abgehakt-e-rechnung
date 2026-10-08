@@ -136,8 +136,18 @@
             <button type="submit" class="btn-secondary">↩ GUTSCHRIFT ERSTELLEN</button>
         </form>
         {% endif %}
+        {% if ersetzbar %}
+        <a href="/invoices/neu?ersetzt={{ invoice.id }}" class="btn-secondary">ERSATZRECHNUNG ANLEGEN</a>
+        {% endif %}
         <a href="/invoices/neu?vorlage={{ invoice.id }}" class="btn-secondary">ALS VORLAGE</a>
     </div>
+
+    {% if invoice.ersetzte_rechnung %}
+    <div style="margin-bottom:16px; padding:12px 16px; border:2px solid var(--border); font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--gold);">
+        <a href="/invoices/{{ invoice.ersetzte_rechnung.id }}" style="color:var(--gold); text-decoration:underline;">Ersetzt Rechnung {{ invoice.ersetzte_rechnung.invoice_number }}</a>
+        vom {{ invoice.ersetzte_rechnung.issue_date.strftime('%d.%m.%Y') }}.
+    </div>
+    {% endif %}
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <!-- Left column -->

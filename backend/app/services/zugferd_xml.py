@@ -493,10 +493,14 @@ def _reference_xml(invoice: Invoice) -> str:
     Der TypeCode (BT-3) der Storno-/Gutschriftrechnung wird separat über _get_type_code
     auf 381 gesetzt.
     """
-    if not invoice.original_invoice_id:
+    # Folgebeleg (381/384/389) oder Ersatzrechnung (380/386, docs/specs/ersatzrechnung.md):
+    # beide verweisen per BT-25 auf genau eine vorausgegangene Rechnung.
+    if invoice.original_invoice_id:
+        original = invoice.original_invoice
+    elif getattr(invoice, "ersetzt_invoice_id", None):
+        original = invoice.ersetzte_rechnung
+    else:
         return ""
-
-    original = invoice.original_invoice
     if not original:
         return ""
 

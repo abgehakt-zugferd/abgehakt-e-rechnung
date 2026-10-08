@@ -34,6 +34,16 @@ class Invoice(Base):
                 "status <> 'discarded' AND original_invoice_id IS NOT NULL"
             ),
         ),
+        # Pro Original hoechstens eine nicht verworfene Ersatzrechnung, aus demselben
+        # Grund und mit derselben Ausnahme wie oben (docs/specs/ersatzrechnung.md).
+        Index(
+            "uq_invoices_eine_aktive_ersatzrechnung_pro_original",
+            "ersetzt_invoice_id",
+            unique=True,
+            postgresql_where=text(
+                "status <> 'discarded' AND ersetzt_invoice_id IS NOT NULL"
+            ),
+        ),
     )
 
     id: Mapped[uuid.UUID] = _id_col
@@ -104,6 +114,15 @@ class Invoice(Base):
         nullable=True,
         index=True
     )
+    # Ersatzrechnung (docs/specs/ersatzrechnung.md): eine gewoehnliche Rechnung, die
+    # eine stornierte ersetzt (BT-25). Bewusst nicht original_invoice_id: die gehoert
+    # den Folgebelegen 381/384/389 und ist bei 380/386 verboten.
+    ersetzt_invoice_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("invoices.id"),
+        nullable=True,
+        index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -126,12 +145,20 @@ class Invoice(Base):
         "Invoice",
         remote_side=[_id_col],
         back_populates="storno_invoices",
-        uselist=False
+        uselist=False,
+        foreign_keys="Invoice.original_invoice_id",
+    )
+    ersetzte_rechnung: Mapped[Optional["Invoice"]] = relationship(
+        "Invoice",
+        remote_side=[_id_col],
+        uselist=False,
+        foreign_keys="Invoice.ersetzt_invoice_id",
     )
     # P5: Liste aller Stornorechnungen zu dieser Rechnung
     storno_invoices: Mapped[list["Invoice"]] = relationship(
         "Invoice",
-        back_populates="original_invoice"
+        back_populates="original_invoice",
+        foreign_keys="Invoice.original_invoice_id",
     )
 
 

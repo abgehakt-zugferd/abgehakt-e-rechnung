@@ -130,6 +130,8 @@ class Belegdarstellung:
     # Storno-automatisierte Texte (Muster mit {nummer} und {datum})
     storno_zahlungsbedingungen: str
     storno_bemerkung: str
+    # Ersatzrechnung (docs/specs/ersatzrechnung.md), Muster mit {nummer} und {datum}
+    ersatz_hinweis: str
 
     # Steuerhinweise PDF (E/K/O lokalisiert; AE immer zweisprachig)
     hinweis_ae: str
@@ -226,6 +228,7 @@ _DE = Belegdarstellung(
     fallback_zahlbar="Zahlbar ohne Abzug.",
     storno_zahlungsbedingungen="Gutschrift/Storno zur Rechnung {nummer}.",
     storno_bemerkung="Storno zur Rechnung {nummer} vom {datum}.",
+    ersatz_hinweis="Ersetzt Rechnung {nummer} vom {datum}.",
     hinweis_ae=AE_HINWEIS,
     hinweis_e="Kein Ausweis von Umsatzsteuer, da Kleinunternehmer gemäß § 19 UStG.",
     hinweis_k=(
@@ -276,6 +279,7 @@ _EN = Belegdarstellung(
     fallback_zahlbar="Payable without deduction.",
     storno_zahlungsbedingungen="Credit note / cancellation of invoice {nummer}.",
     storno_bemerkung="Cancellation of invoice {nummer} dated {datum}.",
+    ersatz_hinweis="Replaces invoice {nummer} dated {datum}.",
     hinweis_ae=AE_HINWEIS,
     hinweis_e=(
         "No VAT charged as the supplier is a small business under "

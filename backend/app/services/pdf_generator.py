@@ -634,6 +634,15 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         payment_text = invoice.payment_terms or d.fallback_zahlbar
     story.extend(_zahlungsblock(invoice, company, small, d, payment_text, BODY))
 
+    # Ersatzrechnung: Hinweis aus dem Bezug, nicht aus den Bemerkungen, damit
+    # er mit ihnen nicht geloescht werden kann (docs/specs/ersatzrechnung.md).
+    ersetzt = getattr(invoice, "ersetzte_rechnung", None)
+    if ersetzt is not None:
+        story.append(Spacer(1, 0.5 * cm))
+        story.append(Paragraph(_description_markup(d.ersatz_hinweis.format(
+            nummer=ersetzt.invoice_number, datum=d.format_datum(ersetzt.issue_date),
+        )), small))
+
     if invoice.notes:
         story.append(Spacer(1, 0.5 * cm))
         story.append(Paragraph(_description_markup(invoice.notes), small))

@@ -40,6 +40,9 @@ from app.services.einheiten import (
     resolve_einheit,
 )
 from app.services.invoice_number import generate_next_invoice_number
+from app.services.ersatzrechnung import (
+    ErsatzNichtMoeglich, pruefe_ersetzbar, pruefe_gutschrift_stornierbar,
+)
 from app.services import empfaenger
 from app.services.archive_frist import berechne_archive_until
 from app.config import get_settings
@@ -378,11 +381,41 @@ def list_invoices(
     })
 
 
+def _vorbelegung_aus(quelle: Invoice, customers) -> tuple[SimpleNamespace, str, str | None]:
+    """Formularwerte aus einer bestehenden Rechnung (docs/specs/kopieren.md, Feldvertrag).
+
+    Kein invoice_type, kein original_invoice_id, kein ersetzt_invoice_id, keine
+    uebergabe_beleg_*: die gehoeren nicht in die Vorbelegung. document_language
+    wird vererbt (docs/specs/belegsprache.md). Die Ersatzrechnung setzt die
+    Belegart danach ausdruecklich selbst.
+    """
+    kunde_hinweis = None
+    waehlbare_ids = {c.id for c in customers}
+    kunde_id = quelle.customer_id if quelle.customer_id in waehlbare_ids else None
+    if quelle.customer_id is not None and kunde_id is None:
+        kunde_hinweis = "Vorlagenkunde nicht waehlbar"
+    vorbelegung = SimpleNamespace(
+        customer_id=kunde_id,
+        tax_category=quelle.tax_category,
+        buyer_reference=quelle.buyer_reference,
+        buyer_order_reference=quelle.buyer_order_reference,
+        service_period_start=quelle.service_period_start,
+        service_period_end=quelle.service_period_end,
+        delivery_date=quelle.delivery_date,
+        payment_terms=quelle.payment_terms,
+        notes=quelle.notes,
+        document_language=getattr(quelle, "document_language", None) or "de",
+        invoice_type=None,
+    )
+    return vorbelegung, _items_as_json(quelle, vorlage=True), kunde_hinweis
+
+
 @router.get("/neu", response_class=HTMLResponse)
 def new_invoice_form(
     request: Request,
     db: Session = Depends(get_db),
     vorlage: str | None = None,
+    ersetzt: str | None = None,
 ):
     customers = db.query(Customer).filter(Customer.deleted_at.is_(None), Customer.is_active == True).order_by(Customer.name).all()
     company = db.query(Company).filter(Company.id == 1).first()
@@ -412,27 +445,19 @@ def new_invoice_form(
             if quelle is None:
                 error = "Vorlage nicht gefunden"
             else:
-                waehlbare_ids = {c.id for c in customers}
-                kunde_id = quelle.customer_id if quelle.customer_id in waehlbare_ids else None
-                if quelle.customer_id is not None and kunde_id is None:
-                    kunde_hinweis = "Vorlagenkunde nicht waehlbar"
-                # Kein invoice_type, kein original_invoice_id, keine uebergabe_beleg_*:
-                # die gehoeren nicht in die Vorbelegung (Feldvertrag).
-                # document_language wird vererbt (docs/specs/belegsprache.md);
-                # invoice_type bleibt weiterhin nie geerbt.
-                vorbelegung = SimpleNamespace(
-                    customer_id=kunde_id,
-                    tax_category=quelle.tax_category,
-                    buyer_reference=quelle.buyer_reference,
-                    buyer_order_reference=quelle.buyer_order_reference,
-                    service_period_start=quelle.service_period_start,
-                    service_period_end=quelle.service_period_end,
-                    delivery_date=quelle.delivery_date,
-                    payment_terms=quelle.payment_terms,
-                    notes=quelle.notes,
-                    document_language=getattr(quelle, "document_language", None) or "de",
-                )
-                items_json = _items_as_json(quelle, vorlage=True)
+                vorbelegung, items_json, kunde_hinweis = _vorbelegung_aus(quelle, customers)
+
+    # Ersatzrechnung (docs/specs/ersatzrechnung.md): Vorbelegung wie beim Kopieren,
+    # dazu Bezug und, anders als beim Kopieren, die Belegart des Originals.
+    ersetzt_beleg = None
+    if ersetzt is not None:
+        try:
+            ersetzt_beleg = pruefe_ersetzbar(db, ersetzt)
+        except ErsatzNichtMoeglich as fehler:
+            error = str(fehler)
+        else:
+            vorbelegung, items_json, kunde_hinweis = _vorbelegung_aus(ersetzt_beleg, customers)
+            vorbelegung.invoice_type = ersetzt_beleg.invoice_type
 
     delivery_default = today.isoformat()
     if vorbelegung and getattr(vorbelegung, "delivery_date", None):
@@ -457,7 +482,8 @@ def new_invoice_form(
         "belegart_waehlbar": True,
         "error": error,
         "kunde_hinweis": kunde_hinweis,
-    }, status_code=404 if error else 200)
+        "ersetzt": ersetzt_beleg,
+    }, status_code=(400 if ersetzt is not None else 404) if error else 200)
     # Nach dem Absenden liegt der History-Eintrag dieses Formulars direkt hinter der
     # Detailseite. Ohne `no-store` gibt der Browser ihn beim Zurück-Button gefüllt aus
     # dem Cache zurück — er sähe aus wie ein Editor für den gerade gespeicherten
@@ -501,6 +527,15 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
     _pruefe_einheiten(raw_items)
     _pruefe_positionsangaben(raw_items)
 
+    # Vor Nummernvergabe: eine abgelehnte Ersatzrechnung darf weder Zaehler noch
+    # Zeile anfassen (docs/specs/ersatzrechnung.md).
+    ersetzt_id = None
+    if form.get("ersetzt_invoice_id"):
+        try:
+            ersetzt_id = pruefe_ersetzbar(db, form.get("ersetzt_invoice_id")).id
+        except ErsatzNichtMoeglich as fehler:
+            raise HTTPException(400, str(fehler)) from fehler
+
     invoice_number = generate_next_invoice_number(db, issue_date=issue_date)
 
     invoice = Invoice(
@@ -520,6 +555,7 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
         tax_category=tax_category,
         invoice_type=invoice_type,
         document_language=document_language,
+        ersetzt_invoice_id=ersetzt_id,
     )
     db.add(invoice)
     db.flush()
@@ -590,6 +626,14 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
     # fehlendes Feld heisst "unveraendert", ein mitgesendetes Feld wird
     # abgelehnt, nicht ignoriert — das Formular bietet dort kein Typfeld, also
     # ist ein mitgesendeter Wert immer ein manipulierter POST.
+    # Der Ersatzbezug entsteht nur beim Anlegen (docs/specs/ersatzrechnung.md). Das
+    # Bearbeitungsformular traegt kein solches Feld; ein mitgesendetes ist manipuliert.
+    if form.get("ersetzt_invoice_id") is not None:
+        return _bearbeiten_mit_fehler(
+            request, db, invoice,
+            "ERSATZ_BEZUG_UNVERAENDERLICH: Der Bezug einer Ersatzrechnung wird beim "
+            "Anlegen gesetzt und danach nicht mehr geaendert.",
+        )
     typ_manuell_waehlbar = _belegart_waehlbar(invoice)
     roh_typ = form.get("invoice_type")
     if roh_typ is not None:
@@ -696,6 +740,12 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
     # nicht über EffectiveSettings.
     app_config = db.query(AppConfig).filter(AppConfig.id == 1).first()
     cc_default, cc_herkunft = _cc_vorbelegung(invoice, app_config)
+    # Knopf nur, wenn das Anlegen auch durchginge: dieselbe Regel, keine zweite.
+    try:
+        pruefe_ersetzbar(db, invoice.id)
+        ersetzbar = True
+    except ErsatzNichtMoeglich:
+        ersetzbar = False
     return templates.TemplateResponse("invoices/detail.html", {
         "request": request,
         "invoice": invoice,
@@ -707,6 +757,7 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
         "cc_herkunft": cc_herkunft,
         "protokoll": aenderungsprotokoll.protokoll_fuer(db, invoice_id),
         "heute": heute(),
+        "ersetzbar": ersetzbar,
     })
 
 
@@ -1110,6 +1161,11 @@ def update_status(
             vorbereiten_bezahlt(db, invoice, bezahlt_am, heute=heute())
         except (BezahltAmFehler, BezahltTrotzGutschrift) as exc:
             raise HTTPException(400, str(exc)) from exc
+    if new_status == "cancelled":
+        try:
+            pruefe_gutschrift_stornierbar(db, invoice)
+        except ErsatzNichtMoeglich as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     invoice.status = new_status
     db.commit()
@@ -1144,6 +1200,13 @@ def restore_draft(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(404, "Rechnung nicht gefunden")
     if invoice.status != "discarded":
         raise HTTPException(400, "Nur verworfene Entwürfe können zurückgeholt werden.")
+    # Ein zurueckgeholter Ersatz wird wieder aktiv; inzwischen kann ein anderer
+    # Ersatz oder keine Gutschrift mehr da sein (docs/specs/ersatzrechnung.md).
+    if invoice.ersetzt_invoice_id is not None:
+        try:
+            pruefe_ersetzbar(db, invoice.ersetzt_invoice_id)
+        except ErsatzNichtMoeglich as fehler:
+            raise HTTPException(400, str(fehler)) from fehler
     invoice.status = "draft"
     db.commit()
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
