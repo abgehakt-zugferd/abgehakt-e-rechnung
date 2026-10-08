@@ -127,3 +127,13 @@ def test_ist_umsatz_sinkt_erst_mit_der_auszahlung_der_gutschrift(pg_session):
     pg_session.commit()
 
     assert umsatz_im_zeitraum(pg_session, JAHRESBEGINN) == Decimal("0.00")
+
+
+def test_gutschrift_zaehlt_im_quartal_ihrer_ausstellung(pg_session):
+    from app.services.dashboard_kennzahlen import schuldige_umsatzsteuer
+
+    original = _beleg(pg_session, ausgestellt=date(2026, 9, 1))
+    _gutschrift(pg_session, original, ausgestellt=date(2026, 10, 5))
+
+    assert schuldige_umsatzsteuer(pg_session, date(2026, 7, 1), date(2026, 9, 30)) == Decimal("19.00")
+    assert schuldige_umsatzsteuer(pg_session, date(2026, 10, 1)) == Decimal("-19.00")
