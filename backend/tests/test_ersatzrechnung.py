@@ -218,3 +218,27 @@ def test_ein_beleg_traegt_nie_beide_bezuege(pg_session):
     fehler, _ = validate_invoice(gutschrift, pg_session.get(Company, 1))
 
     assert "ERSATZ_DOPPELTER_BEZUG" in [f.code for f in fehler]
+
+
+def test_gutschrift_mit_ersatz_laesst_sich_nicht_stornieren(pg_session, client):
+    """Sonst lebte das Original neben seinem Ersatz wieder auf."""
+    kunde = _kunde(pg_session)
+    original = _beleg(pg_session, kunde)
+    gutschrift = _gutschrift(pg_session, original)
+    _ersatz_ueber_formular(pg_session, client, kunde, original)
+
+    r = client.post(f"/invoices/{gutschrift.id}/status", data={"new_status": "cancelled"})
+
+    assert r.status_code == 400, r.text
+    assert "ERSATZ_GUTSCHRIFT_GEBUNDEN" in r.text
+    pg_session.expire_all()
+    assert pg_session.get(Invoice, gutschrift.id).status == "issued"
+
+
+def test_gutschrift_ohne_ersatz_bleibt_stornierbar(pg_session, client):
+    kunde = _kunde(pg_session)
+    gutschrift = _gutschrift(pg_session, _beleg(pg_session, kunde))
+
+    r = client.post(f"/invoices/{gutschrift.id}/status", data={"new_status": "cancelled"})
+
+    assert r.status_code == 303, r.text
