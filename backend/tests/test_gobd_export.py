@@ -132,6 +132,20 @@ def test_storno_row_references_original_number(tmp_path):
     assert rows["RE-2026-002"]["rechnungstyp"] == "credit_note"
 
 
+def test_ersatz_row_references_replaced_number(tmp_path):
+    """docs/specs/ersatzrechnung.md: die Ersatzrechnung nennt die ersetzte Rechnung."""
+    c = _customer()
+    original = _invoice(c)
+    ersatz = _invoice(c, number="RE-2026-003")
+    ersatz.ersetzt_invoice_id = original.id
+    ersatz.ersetzte_rechnung = original
+    zf = _build(tmp_path, customer=c, invoices=[original, ersatz])
+    rows = {r["rechnungsnummer"]: r for r in _read_csv(zf, "rechnungen.csv")}
+    assert rows["RE-2026-003"]["ersetzt_rechnungsnummer"] == "RE-2026-001"
+    assert rows["RE-2026-003"]["original_rechnungsnummer"] == ""
+    assert rows["RE-2026-001"]["ersetzt_rechnungsnummer"] == ""
+
+
 def test_positionen_csv_links_items_to_invoice_number(tmp_path):
     zf = _build(tmp_path)
     rows = _read_csv(zf, "positionen.csv")
