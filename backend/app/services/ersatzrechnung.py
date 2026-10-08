@@ -23,12 +23,30 @@ class ErsatzNichtMoeglich(ValueError):
         super().__init__(f"{code}: {text}")
 
 
-def pruefe_ersetzbar(db: Session, original_id: uuid.UUID) -> Invoice:
-    """Liefert die zu ersetzende Rechnung oder wirft ErsatzNichtMoeglich."""
-    original = db.get(Invoice, original_id)
+def _lade(db: Session, kennung: str | uuid.UUID) -> Invoice:
+    try:
+        original_id = kennung if isinstance(kennung, uuid.UUID) else uuid.UUID(str(kennung))
+    except ValueError:
+        original = None
+    else:
+        original = db.get(Invoice, original_id)
+    if original is None:
+        raise ErsatzNichtMoeglich(
+            "ERSATZ_ORIGINAL_UNBEKANNT",
+            f"Die zu ersetzende Rechnung {kennung!s} gibt es nicht.",
+        )
+    return original
+
+
+def pruefe_ersetzbar(db: Session, kennung: str | uuid.UUID) -> Invoice:
+    """Liefert die zu ersetzende Rechnung oder wirft ErsatzNichtMoeglich.
+
+    `kennung` darf der rohe Formularwert sein; eine unbrauchbare Kennung ist
+    eine Ablehnung wie jede andere, kein Serverfehler."""
+    original = _lade(db, kennung)
     gutschrift = (
         db.query(Invoice.id)
-        .filter(Invoice.original_invoice_id == original_id,
+        .filter(Invoice.original_invoice_id == original.id,
                 Invoice.invoice_type == "credit_note",
                 Invoice.status != "discarded")
         .first()

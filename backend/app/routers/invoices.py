@@ -501,11 +501,10 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
 
     # Vor Nummernvergabe: eine abgelehnte Ersatzrechnung darf weder Zaehler noch
     # Zeile anfassen (docs/specs/ersatzrechnung.md).
-    roh_ersetzt = form.get("ersetzt_invoice_id")
-    ersetzt_id = uuid.UUID(roh_ersetzt) if roh_ersetzt else None
-    if ersetzt_id is not None:
+    ersetzt_id = None
+    if form.get("ersetzt_invoice_id"):
         try:
-            pruefe_ersetzbar(db, ersetzt_id)
+            ersetzt_id = pruefe_ersetzbar(db, form.get("ersetzt_invoice_id")).id
         except ErsatzNichtMoeglich as fehler:
             raise HTTPException(400, str(fehler)) from fehler
 

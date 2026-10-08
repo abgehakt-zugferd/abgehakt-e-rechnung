@@ -94,3 +94,11 @@ def test_ersatz_ohne_gutschrift_wird_vor_der_nummernvergabe_abgelehnt(pg_session
 
     _abgelehnt_ohne_wirkung(pg_session, client, _payload(kunde, original.id),
                             "ERSATZ_OHNE_GUTSCHRIFT")
+
+
+@pytest.mark.parametrize("kennung", ["kaputt", str(uuid.uuid4())])
+def test_ersatz_zu_unbekannter_rechnung_wird_abgelehnt(pg_session, client, kennung):
+    kunde = _kunde(pg_session)
+
+    _abgelehnt_ohne_wirkung(pg_session, client, _payload(kunde, kennung),
+                            "ERSATZ_ORIGINAL_UNBEKANNT")
