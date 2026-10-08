@@ -498,6 +498,9 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
     _pruefe_einheiten(raw_items)
     _pruefe_positionsangaben(raw_items)
 
+    roh_ersetzt = form.get("ersetzt_invoice_id")
+    ersetzt_id = uuid.UUID(roh_ersetzt) if roh_ersetzt else None
+
     invoice_number = generate_next_invoice_number(db, issue_date=issue_date)
 
     invoice = Invoice(
@@ -517,6 +520,7 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
         tax_category=tax_category,
         invoice_type=invoice_type,
         document_language=document_language,
+        ersetzt_invoice_id=ersetzt_id,
     )
     db.add(invoice)
     db.flush()
