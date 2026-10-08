@@ -123,11 +123,30 @@
             </label>
             <button type="submit" class="btn-success">✓ ALS BEZAHLT MARKIEREN</button>
         </form>
+        {% if invoice.invoice_type != 'credit_note' %}
         <form method="post" action="/invoices/{{ invoice.id }}/status"
               onsubmit="return confirm('Rechnung als storniert markieren? (nur Status, kein Gutschrift-Beleg)')">
             <input type="hidden" name="new_status" value="cancelled">
             <button type="submit" class="btn-danger">✗ ALS STORNIERT MARKIEREN</button>
         </form>
+        {% endif %}
+        {% endif %}
+
+        {% if invoice.invoice_type == 'credit_note' and invoice.status in ('issued', 'paid') %}
+        {# Issue #142: eine gestellte Gutschrift ist endgueltig. Nicht nur sperren, den Weg zeigen. #}
+        <div data-hinweis="gutschrift-endgueltig" style="flex-basis:100%; padding:10px 14px; border:2px solid var(--border); font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+            Diese Gutschrift ist endgültig; sie ist selbst die Korrektur und lässt sich nicht stornieren.
+            {% if invoice.original_invoice %}
+            War sie falsch, stelle zur Rechnung
+            <a href="/invoices/{{ invoice.original_invoice.id }}" style="color:var(--gold); text-decoration:underline;">{{ invoice.original_invoice.invoice_number }}</a>
+            eine neue Rechnung.
+            {% if original_ersetzbar %}
+            <a href="/invoices/neu?ersetzt={{ invoice.original_invoice.id }}" class="btn-secondary" style="margin-left:6px;">ERSATZRECHNUNG ANLEGEN</a>
+            {% endif %}
+            {% else %}
+            War sie falsch, stelle eine neue Rechnung.
+            {% endif %}
+        </div>
         {% endif %}
 
         {% if invoice.status in ('issued', 'paid') and invoice.invoice_type != 'credit_note' %}

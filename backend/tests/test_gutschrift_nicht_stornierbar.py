@@ -55,3 +55,22 @@ def test_waechter_laesst_rechnungen_weiter_stornieren(pg_session):
     pg_session.commit()
 
     assert original.status == "cancelled"
+
+
+def test_detailseite_einer_gutschrift_bietet_kein_stornieren_sondern_den_weg(pg_session, client):
+    original = beleg(pg_session, kunde(pg_session))
+    gs = gutschrift(pg_session, original)
+
+    text = client.get(f"/invoices/{gs.id}").text
+
+    assert 'name="new_status" value="cancelled"' not in text
+    assert "endgültig" in text
+    assert f'href="/invoices/neu?ersetzt={original.id}"' in text
+
+
+def test_detailseite_einer_rechnung_bietet_das_stornieren_weiter_an(pg_session, client):
+    rechnung = beleg(pg_session, kunde(pg_session))
+
+    text = client.get(f"/invoices/{rechnung.id}").text
+
+    assert 'name="new_status" value="cancelled"' in text

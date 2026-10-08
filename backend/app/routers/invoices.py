@@ -745,6 +745,15 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
         ersetzbar = True
     except ErsatzNichtMoeglich:
         ersetzbar = False
+    # Gutschrift (#142): statt "stornieren" den Weg zur Ersatzrechnung zeigen,
+    # wenn sie fuer das Original angelegt werden kann.
+    original_ersetzbar = False
+    if invoice.invoice_type == "credit_note" and invoice.original_invoice_id:
+        try:
+            pruefe_ersetzbar(db, invoice.original_invoice_id)
+            original_ersetzbar = True
+        except ErsatzNichtMoeglich:
+            pass
     return templates.TemplateResponse("invoices/detail.html", {
         "request": request,
         "invoice": invoice,
@@ -757,6 +766,7 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
         "protokoll": aenderungsprotokoll.protokoll_fuer(db, invoice_id),
         "heute": heute(),
         "ersetzbar": ersetzbar,
+        "original_ersetzbar": original_ersetzbar,
     })
 
 
