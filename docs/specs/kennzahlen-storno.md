@@ -52,11 +52,19 @@ Neu ist eine Stelle, die beide Fragen beantwortet, statt sie in jeder Funktion n
 - `_summe_gutschriften(db, feld, von, bis, *, topf)`: summiert gestellte 381 nach dem Typ ihres
   Originals (`standard`, `self_billing`).
 
+## Ist-Umsatz (nach Gegenpruefung)
+
+`umsatz_im_zeitraum` zaehlt bezahlte Standardrechnungen nach `bezahlt_am` (Entscheidung vom
+2026-09-30: Umsatz ist, was bezahlt wurde). Eine Gutschrift mit Status `paid` ist die Auszahlung
+an den Kunden und traegt ihr eigenes `bezahlt_am`. Neu zieht `umsatz_im_zeitraum` solche
+ausgezahlten Gutschriften im Topf der Standardrechnung nach ihrem `bezahlt_am` ab. Eine gestellte,
+noch nicht ausgezahlte Gutschrift mindert den Ist-Umsatz nicht: das Geld ist noch da.
+
+`bezahlt_im_zeitraum` bleibt der Geldeingang brutto. Eine Rueckzahlung ist ein Geldausgang; ihn
+dort abzuziehen, ergaebe im Monat der Rueckzahlung eine negative Zahl unter "Bezahlt diesen Monat".
+
 ## Nicht Teil dieses Auftrags
 
-- `umsatz_im_zeitraum` und `bezahlt_im_zeitraum` (Geldeingang nach `bezahlt_am`): eine bezahlte,
-  danach stornierte Rechnung zaehlt dort weiter. Die Rueckzahlung kennt das Programm nicht; das
-  ist die offene Frage "bereits bezahltes Original" an die Steuerberatung.
 - `nicht_versendet_anzahl`: ein storniertes, nie versendetes Original zaehlt als "nicht versendet",
   die Gutschrift dazu gar nicht. Versand ist eine eigene Frage.
 - Waehrungen werden weiter ohne Umrechnung addiert (bestehende Vereinfachung).
@@ -75,3 +83,13 @@ Integrationstests mit `pg_session` und festen Sollwerten:
 7. Gutschrift ohne Original (Altbestand, bestehende Tests): wird weiter abgezogen.
 8. Original und Gutschrift in verschiedenen Quartalen: Quartals-USt zeigt jeweils nur den eigenen
    Beleg.
+9. Gutschrift mit Status `paid` (ausgezahlt) wirkt wie `issued`: offen 0,00.
+10. Original bezahlt, Gutschrift ausgezahlt: Ist-Umsatz des Jahres 0,00; vor der Auszahlung 100,00.
+
+## Gegenpruefung (08.10.2026)
+
+Vibe (`mistral-medium-3.5`) hat sieben Befunde geliefert, Cursor und Codex hatten kein Kontingent.
+Uebernommen: Ist-Umsatz nach Auszahlung (oben), Abnahmefall 9. Verworfen: "cancelled-Original
+zaehlt nicht" (braechte das Minus aus #141 zurueck; das Programm selbst raet nach einem Storno,
+das Original auf storniert zu setzen, `bezahlt_am.py`), "Bestandstest widerspricht" (eine
+Gutschrift ohne Original hebt keine Rechnung auf). Zwei Befunde wiederholten bekannte Punkte.
