@@ -111,9 +111,10 @@ Gutschrift ohne Original hebt keine Rechnung auf). Zwei Befunde wiederholten bek
 Zweite Gegenpruefung durch Fable auf dem fertigen Diff, zehn Befunde. Uebernommen: Kachel und Liste
 (oben), drei Testluecken mit benannter Mutation (Ist-Umsatz nach Auszahlungsmonat, stornierte
 Gutschrift in der USt, Auszahlung ohne Zahlungseingang), doppelte Topfbedingung entfernt, Warnung
-zur Alias-Korrelation, dieser Abschnitt "Schnitt". Offen und eigener Auftrag: `bezahlt_am` und
-`create_storno` verstehen unter "Gutschrift zum Original" alles ausser `discarded`, die Kennzahlen
-nur `issued`/`paid`; eine selbst stornierte Gutschrift laesst das Original danach dauerhaft offen,
-weder bezahlbar noch erneut stornierbar. Gegenprobe der Bestandsdaten auf Gutschriften mit
+zur Alias-Korrelation, dieser Abschnitt "Schnitt". Als eigener Auftrag erledigt (#142): eine
+selbst stornierte Gutschrift liess das Original dauerhaft offen, weder bezahlbar noch erneut
+stornierbar. Seitdem ist eine gestellte Gutschrift endgueltig; die unterschiedlichen Lesarten
+von "Gutschrift zum Original" (`bezahlt_am`, `create_storno`: alles ausser `discarded`;
+Kennzahlen: `issued`/`paid`) fallen damit fuer gestellte Gutschriften zusammen. Gegenprobe der Bestandsdaten auf Gutschriften mit
 Original und abweichendem Betrag (zwischen 11.08. und 23.08.2026 technisch moeglich): am 08.10.2026
 gemessen, kein Treffer (siehe Grundsatz).

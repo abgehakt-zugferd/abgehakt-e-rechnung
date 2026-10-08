@@ -107,9 +107,11 @@ Ersatz-Entwurf stehen, der nicht finalisierbar ist. Das ist gewollt und kein Wet
 6. `POST /{id}/zurueckholen` eines verworfenen Ersatz-Entwurfs prueft erneut mit
    `pruefe_ersetzbar` (der eigene Entwurf zaehlt nicht mit). Gibt es inzwischen einen anderen
    Ersatz, antwortet es 400 mit `ERSATZ_SCHON_VORHANDEN` statt am Index mit 500.
-7. `POST /{id}/status` auf `cancelled` fuer eine Gutschrift wird abgelehnt
-   (`ERSATZ_GUTSCHRIFT_GEBUNDEN`), solange zu ihrem Original eine nicht verworfene Ersatzrechnung
-   besteht. Sonst lebte das Original neben seinem Ersatz wieder auf.
+7. `POST /{id}/status` auf `cancelled` fuer eine Gutschrift wird abgelehnt. Urspruenglich nur
+   bei bestehender Ersatzrechnung (`ERSATZ_GUTSCHRIFT_GEBUNDEN`); seit #142 ist jede gestellte
+   Gutschrift endgueltig (`GUTSCHRIFT_NICHT_STORNIERBAR`, `storno.pruefe_stornierbar`, dazu der
+   `invoice_guard`). Die Meldung und die Detailseite der Gutschrift zeigen den Weg: eine neue
+   Rechnung zum Original, als Ersatzrechnung.
 
 ## Naht fuer den Durchstich
 
