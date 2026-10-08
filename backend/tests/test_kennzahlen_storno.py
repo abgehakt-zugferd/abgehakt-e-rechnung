@@ -17,7 +17,7 @@ HEUTE = date(2026, 10, 8)
 
 def _beleg(pg_session, *, status="issued", art=None, original=None,
            netto="100.00", steuer="19.00", ausgestellt=date(2026, 9, 1),
-           faellig=date(2026, 9, 15)):
+           faellig=date(2026, 9, 15), ersetzt=None):
     kunde = Customer(customer_number=f"K-{uuid.uuid4().hex[:8]}", name="Probe Kunde",
                      address_line1="Weg 1", zip_code="80331", city="Muenchen", country="DE")
     pg_session.add(kunde)
@@ -28,6 +28,7 @@ def _beleg(pg_session, *, status="issued", art=None, original=None,
                   net_total=netto, tax_total=steuer, gross_total=netto + steuer,
                   status=status, invoice_type=art,
                   original_invoice_id=original.id if original else None,
+                  ersetzt_invoice_id=ersetzt.id if ersetzt else None,
                   bezahlt_am=ausgestellt if status == "paid" else None)
     pg_session.add(inv)
     pg_session.commit()
@@ -169,3 +170,19 @@ def test_ausgezahlte_gutschrift_zu_unbezahlter_rechnung_mindert_den_ist_umsatz_n
 
     assert umsatz_im_zeitraum(pg_session, JAHRESBEGINN) == Decimal("0.00")
     assert offene_forderungen(pg_session).betrag == Decimal("0")
+
+
+def test_ersatzrechnung_zaehlt_allein_als_offene_forderung(pg_session):
+    """Das Beispiel aus #141: Original, Gutschrift und Ersatzrechnung (#140).
+
+    Erwartet 119,00 offen, nicht 238,00; Nettoumsatz 100,00, nicht 200,00 und nicht 0,00.
+    """
+    from app.services.dashboard_kennzahlen import nettoumsatz_ytd
+
+    original = _beleg(pg_session)
+    _gutschrift(pg_session, original)
+    _beleg(pg_session, ausgestellt=date(2026, 9, 3), faellig=date(2026, 9, 17), ersetzt=original)
+
+    offen = offene_forderungen(pg_session)
+    assert (offen.anzahl, offen.betrag) == (1, Decimal("119.00"))
+    assert nettoumsatz_ytd(pg_session, JAHRESBEGINN) == Decimal("100.00")
