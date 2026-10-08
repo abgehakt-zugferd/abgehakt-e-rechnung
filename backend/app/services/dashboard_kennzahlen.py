@@ -14,8 +14,8 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
-from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy import exists, func
+from sqlalchemy.orm import Session, aliased
 
 from app.models.company import Company
 from app.models.invoice import Invoice
@@ -24,6 +24,16 @@ from app.services.steuer_ruecklage import steuerruecklage_anteil
 
 _AUSGESTELLT = ("issued", "paid")
 _STANDARD = Invoice.invoice_type.is_(None)
+
+# Eine Stornierung wirkt in jeder Kennzahl genau einmal (Issue #141,
+# docs/specs/kennzahlen-storno.md). Wirksam ist eine gestellte Gutschrift; sie
+# spiegelt ihr Original vollstaendig (STORNO_AMOUNT_MISMATCH im Validator).
+_Gutschrift = aliased(Invoice)
+_WIRKSAM_STORNIERT = exists().where(
+    _Gutschrift.original_invoice_id == Invoice.id,
+    _Gutschrift.invoice_type == "credit_note",
+    _Gutschrift.status.in_(_AUSGESTELLT),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,15 +164,15 @@ def belegzaehlung(db: Session) -> Belegzaehlung:
 
 
 def offene_forderungen(db: Session) -> OffenePosten:
-    """Gestellte Standardrechnungen: Anzahl und Bruttosumme."""
+    """Gestellte, nicht wirksam stornierte Standardrechnungen: Anzahl und Bruttosumme."""
     anzahl = (
         db.query(func.count(Invoice.id))
-        .filter(Invoice.status == "issued", _STANDARD)
+        .filter(Invoice.status == "issued", _STANDARD, ~_WIRKSAM_STORNIERT)
         .scalar()
     ) or 0
     betrag = (
         db.query(func.coalesce(func.sum(Invoice.gross_total), 0))
-        .filter(Invoice.status == "issued", _STANDARD)
+        .filter(Invoice.status == "issued", _STANDARD, ~_WIRKSAM_STORNIERT)
         .scalar()
     ) or Decimal("0")
     return OffenePosten(anzahl=anzahl, betrag=betrag)
@@ -173,6 +183,7 @@ def ueberfaellige_forderungen(db: Session, heute: date) -> Ueberfaellig:
     filter_ = (
         Invoice.status == "issued",
         _STANDARD,
+        ~_WIRKSAM_STORNIERT,
         Invoice.due_date < heute,
     )
     anzahl = db.query(func.count(Invoice.id)).filter(*filter_).scalar() or 0
