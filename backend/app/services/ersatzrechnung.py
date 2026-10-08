@@ -12,6 +12,8 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.models.invoice import Invoice
+from app.services.belegart import belegart
+from app.services.invoice_guard import FINALIZED
 
 
 class ErsatzNichtMoeglich(ValueError):
@@ -44,6 +46,15 @@ def pruefe_ersetzbar(db: Session, kennung: str | uuid.UUID) -> Invoice:
     `kennung` darf der rohe Formularwert sein; eine unbrauchbare Kennung ist
     eine Ablehnung wie jede andere, kein Serverfehler."""
     original = _lade(db, kennung)
+    # Ersetzt wird nur eine gestellte, eigenstaendige Rechnung. Ein Folgebeleg
+    # (381/384/389) hat seinen eigenen Korrekturweg; ein Entwurf ist noch frei
+    # bearbeitbar und braucht keinen Ersatz.
+    if original.status not in FINALIZED or belegart(original.invoice_type).braucht_original:
+        raise ErsatzNichtMoeglich(
+            "ERSATZ_ORIGINAL_KEINE_RECHNUNG",
+            f"Beleg {original.invoice_number} ist keine gestellte Rechnung und "
+            "kann deshalb nicht ersetzt werden.",
+        )
     gutschrift = (
         db.query(Invoice.id)
         .filter(Invoice.original_invoice_id == original.id,

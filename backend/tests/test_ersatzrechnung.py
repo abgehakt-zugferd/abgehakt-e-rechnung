@@ -102,3 +102,21 @@ def test_ersatz_zu_unbekannter_rechnung_wird_abgelehnt(pg_session, client, kennu
 
     _abgelehnt_ohne_wirkung(pg_session, client, _payload(kunde, kennung),
                             "ERSATZ_ORIGINAL_UNBEKANNT")
+
+
+@pytest.mark.parametrize("lage", ["gutschrift", "honorargutschrift", "entwurf", "verworfen"])
+def test_nur_eine_gestellte_rechnung_ist_ersetzbar(pg_session, client, lage):
+    kunde = _kunde(pg_session)
+    if lage == "gutschrift":
+        quelle = _gutschrift(pg_session, _beleg(pg_session, kunde))
+    elif lage == "honorargutschrift":
+        quelle = _beleg(pg_session, kunde, invoice_type="self_billing",
+                        original=_beleg(pg_session, kunde))
+    else:
+        quelle = _beleg(pg_session, kunde,
+                        status="draft" if lage == "entwurf" else "discarded")
+    # Eine Gutschrift auf die Quelle, damit nicht die Gutschrift-Regel antwortet.
+    _gutschrift(pg_session, quelle)
+
+    _abgelehnt_ohne_wirkung(pg_session, client, _payload(kunde, quelle.id),
+                            "ERSATZ_ORIGINAL_KEINE_RECHNUNG")
