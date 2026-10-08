@@ -201,3 +201,20 @@ def test_ersatz_ist_erst_nach_gestellter_gutschrift_finalisierbar(pg_session, cl
     row = pg_session.get(Invoice, ersatz.id)
     assert row.status == "draft"
     assert row.zugferd_xml is None
+
+
+def test_ein_beleg_traegt_nie_beide_bezuege(pg_session):
+    """`_reference_xml` schreibt nur einen BT-25; der zweite Bezug ginge still verloren."""
+    from app.services.validator import validate_invoice
+
+    kunde = _kunde(pg_session)
+    original = _beleg(pg_session, kunde)
+    andere = _stornierte(pg_session, kunde)
+    gutschrift = _beleg(pg_session, kunde, status="draft", invoice_type="credit_note",
+                        original=original)
+    gutschrift.ersetzt_invoice_id = andere.id
+    pg_session.commit()
+
+    fehler, _ = validate_invoice(gutschrift, pg_session.get(Company, 1))
+
+    assert "ERSATZ_DOPPELTER_BEZUG" in [f.code for f in fehler]

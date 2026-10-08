@@ -94,6 +94,13 @@ def _issue(code: str, message: str):
 def pruefe_finalisierbar(invoice: Invoice) -> list:
     """Befunde fuer den Validator. Verbindlich ist diese Pruefung, nicht die beim
     Anlegen: die Gutschrift kann dazwischen verworfen worden sein."""
+    if getattr(invoice, "ersetzt_invoice_id", None) and getattr(invoice, "original_invoice_id", None):
+        return [_issue(
+            "ERSATZ_DOPPELTER_BEZUG",
+            "Ein Beleg verweist entweder als Folgebeleg auf sein Original oder als "
+            "Ersatzrechnung auf eine stornierte Rechnung, nie auf beides: die "
+            "E-Rechnung traegt nur einen Bezug (BT-25).",
+        )]
     original = getattr(invoice, "ersetzte_rechnung", None)
     if original is None:
         return []
