@@ -25,6 +25,7 @@ from app.services.belegart import (
 from app.services.zugferd_xml import COMPLIANT_PROFILES
 from app.services.steuerstatus import pruefe_honorargutschrift
 from app.services.ersatzrechnung import pruefe_finalisierbar
+from app.services.belegsummen import belegsummen
 
 
 VALID_TAX_RATES = {Decimal("0"), Decimal("7"), Decimal("19")}
@@ -344,18 +345,71 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
                     f"items[{item.position}].tax_amount",
                 ))
 
-    # Gesamtbeträge prüfen
-    if invoice.items:
-        expected_net_total = sum(i.net_amount for i in invoice.items).quantize(Decimal("0.01"), ROUND_HALF_UP)
-        expected_tax_total = sum(i.tax_amount for i in invoice.items).quantize(Decimal("0.01"), ROUND_HALF_UP)
-        expected_gross = (expected_net_total + expected_tax_total).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    # Abzug auf Belegebene (BG-20). Wie tax_category mit getattr gelesen, damit
+    # Testattrappen ohne die Felder weiter laufen. Betrag und Grund sind ein Paar:
+    # EN 16931 BR-33 verlangt den Grund zum Abzug.
+    abzug_betrag = getattr(invoice, "abzug_betrag", None)
+    abzug_grund = getattr(invoice, "abzug_grund", None)
+    abzug_fehler = False
+    if abzug_betrag is not None or abzug_grund is not None:
+        if (abzug_betrag is None) != (abzug_grund is None):
+            errors.append(Issue(
+                "ABZUG_UNVOLLSTAENDIG", "error",
+                "Abzug unvollständig: Betrag und Grund müssen zusammen gesetzt werden "
+                "(EN 16931 BR-33 verlangt einen Grund zum Abzug).",
+                "abzug_betrag",
+            ))
+            abzug_fehler = True
+        elif abzug_betrag <= Decimal("0"):
+            errors.append(Issue(
+                "ABZUG_NICHT_POSITIV", "error",
+                "Der Abzug muss größer als 0,00 € sein.",
+                "abzug_betrag",
+            ))
+            abzug_fehler = True
+        elif art is not None and art.intern in {"self_billing", "prepayment"}:
+            errors.append(Issue(
+                "ABZUG_BELEGART", "error",
+                "Bei Anzahlungsrechnung (386) und Honorargutschrift (389) ist ein "
+                "Abzug auf Belegebene unzulässig.",
+                "abzug_betrag",
+            ))
+            abzug_fehler = True
+        elif invoice.items:
+            # Summen aus belegsummen, derselben Quelle wie im Router: hier wird
+            # nichts selbst nachgerechnet.
+            positionen_netto = belegsummen(invoice.items, None).positionen_netto
+            if len({i.tax_rate for i in invoice.items}) > 1:
+                errors.append(Issue(
+                    "ABZUG_SATZ_UNEINDEUTIG", "error",
+                    "Abzug setzt voraus, dass alle Positionen denselben Steuersatz "
+                    "tragen; sonst ließe sich die Steuer auf der verminderten Basis "
+                    "nicht eindeutig berechnen.",
+                    "abzug_betrag",
+                ))
+                abzug_fehler = True
+            if abzug_betrag >= positionen_netto:
+                errors.append(Issue(
+                    "ABZUG_ZU_HOCH", "error",
+                    f"Abzug {abzug_betrag} erreicht oder übersteigt die "
+                    f"Positionssumme {positionen_netto}.",
+                    "abzug_betrag",
+                ))
+                abzug_fehler = True
 
-        if abs(invoice.net_total - expected_net_total) > Decimal("0.02"):
-            errors.append(Issue("NET_TOTAL_MISMATCH", "error", f"Nettosumme {invoice.net_total} stimmt nicht (erwartet {expected_net_total}).", "net_total"))
-        if abs(invoice.tax_total - expected_tax_total) > Decimal("0.02"):
-            errors.append(Issue("TAX_TOTAL_MISMATCH", "error", f"Steuersumme {invoice.tax_total} stimmt nicht (erwartet {expected_tax_total}).", "tax_total"))
-        if abs(invoice.gross_total - expected_gross) > Decimal("0.02"):
-            errors.append(Issue("GROSS_TOTAL_MISMATCH", "error", f"Bruttosumme {invoice.gross_total} stimmt nicht (erwartet {expected_gross}).", "gross_total"))
+    # Gesamtbeträge prüfen. Erwartungswerte aus belegsummen (BG-20): dieselbe
+    # Quelle wie im Router. Liegt ein ABZUG-Fehler vor, ist unklar, auf welcher
+    # Basis die gespeicherten Summen stehen; der Vergleich entfällt, statt
+    # Meldungen zu einem bereits abgelehnten Abzug zu häufen.
+    if invoice.items:
+        if not abzug_fehler:
+            summen = belegsummen(invoice.items, abzug_betrag)
+            if abs(invoice.net_total - summen.steuerbasis) > Decimal("0.02"):
+                errors.append(Issue("NET_TOTAL_MISMATCH", "error", f"Nettosumme {invoice.net_total} stimmt nicht (erwartet {summen.steuerbasis}).", "net_total"))
+            if abs(invoice.tax_total - summen.steuer) > Decimal("0.02"):
+                errors.append(Issue("TAX_TOTAL_MISMATCH", "error", f"Steuersumme {invoice.tax_total} stimmt nicht (erwartet {summen.steuer}).", "tax_total"))
+            if abs(invoice.gross_total - summen.brutto) > Decimal("0.02"):
+                errors.append(Issue("GROSS_TOTAL_MISMATCH", "error", f"Bruttosumme {invoice.gross_total} stimmt nicht (erwartet {summen.brutto}).", "gross_total"))
         if tax_category in {"AE", "K"} and invoice.tax_total != Decimal("0"):
             errors.append(Issue(
                 "TAX_AMOUNT_MUST_BE_ZERO", "error",

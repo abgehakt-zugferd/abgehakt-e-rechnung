@@ -4,7 +4,7 @@ import shutil
 import tempfile
 import os
 from datetime import date, timedelta, timezone, datetime
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from types import SimpleNamespace
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
@@ -40,6 +40,7 @@ from app.services.einheiten import (
     resolve_einheit,
 )
 from app.services.invoice_number import generate_next_invoice_number
+from app.services.belegsummen import Belegsummen, belegsummen
 from app.services.ersatzrechnung import ErsatzNichtMoeglich, pruefe_ersetzbar
 from app.services.storno import GutschriftNichtStornierbar, pruefe_stornierbar
 from app.services import empfaenger
@@ -180,9 +181,66 @@ def _pruefe_positionsangaben(raw_items) -> None:
             raise HTTPException(400, str(fehler)) from None
 
 
-def _replace_items(db: Session, invoice: Invoice, raw_items) -> tuple[Decimal, Decimal]:
-    """Positionen der Rechnung durch `raw_items` ersetzen (Position 1..n, lückenlos),
-    liefert Netto- und Steuersumme.
+def _abzug_aus_form(form) -> tuple[Decimal | None, str | None]:
+    """Abzugspaar aus dem Formular; beide leer heisst kein Abzug (None, None).
+
+    Nur eines der Felder gesetzt ist eine unvollständige Eingabe, ein nicht
+    parsebarer Betrag ebenfalls. Beides wird HIER gemeldet und nicht erst von
+    belegsummen, damit /neu vor der Nummernvergabe ablehnen kann. Der Grund
+    wird nicht ersetzt oder erfindbar gemacht: fehlt er, wird abgelehnt.
+    """
+    roh_betrag = (form.get("abzug_betrag") or "").strip()
+    roh_grund = (form.get("abzug_grund") or "").strip()
+    if not roh_betrag and not roh_grund:
+        return None, None
+    if not roh_betrag or not roh_grund:
+        raise HTTPException(
+            400,
+            "Abzug unvollständig: Betrag und Grund müssen zusammen gesetzt "
+            "oder beide leer sein.",
+        )
+    try:
+        # Komma und Punkt als Dezimaltrenner; hier centgenau runden wie belegsummen.
+        betrag = Decimal(roh_betrag.replace(",", ".")).quantize(
+            Decimal("0.01"), ROUND_HALF_UP,
+        )
+    except (InvalidOperation, OverflowError):
+        raise HTTPException(400, f"Abzugsbetrag {roh_betrag!r} ist keine Zahl.") from None
+    return betrag, roh_grund
+
+
+def _positionen_aus_formular(raw_items) -> list[InvoiceItem]:
+    """Positionen aus dem Formular bauen (Position 1..n, lückenlos), ohne DB.
+
+    Die Betragsrechnung liegt bei `_calc_item`; dies ist die einzige Stelle, die
+    Formularpositionen in InvoiceItem überführt. Ohne DB, weil /neu die Summen
+    vor der Nummernvergabe prüfen muss.
+    """
+    positionen = []
+    for i, raw in enumerate(raw_items, 1):
+        qty = Decimal(str(raw["quantity"]))
+        price = Decimal(str(raw["unit_price"]))
+        tax_rate = Decimal(str(raw["tax_rate"]))
+        net, tax, gross = _calc_item(qty, price, tax_rate)
+        # Nach _pruefe_einheiten: getrimmter Katalogwert, kein Default auf Stück.
+        unit = str(raw.get("unit") or "").strip()
+        positionen.append(InvoiceItem(
+            position=i,
+            description=_normalize_description(raw["description"]),
+            **positionsangaben.aus_formular(raw, i),
+            unit=unit,
+            quantity=qty,
+            unit_price=price,
+            tax_rate=tax_rate,
+            net_amount=net,
+            tax_amount=tax,
+            gross_amount=gross,
+        ))
+    return positionen
+
+
+def _replace_items(db: Session, invoice: Invoice, positionen: list[InvoiceItem]) -> None:
+    """Positionen der Rechnung durch `positionen` ersetzen.
 
     Bestehende Zeilen werden EINZELN über `db.delete()` entfernt, nie über ein
     Bulk-`query().delete()` — das umginge den `invoice_guard` (before_flush) und das
@@ -195,37 +253,23 @@ def _replace_items(db: Session, invoice: Invoice, raw_items) -> tuple[Decimal, D
     # gleiche `position`-Werte innerhalb eines Flushs kollidieren.
     db.flush()
 
-    net_total = Decimal("0")
-    tax_total = Decimal("0")
-    for i, raw in enumerate(raw_items, 1):
-        qty = Decimal(str(raw["quantity"]))
-        price = Decimal(str(raw["unit_price"]))
-        tax_rate = Decimal(str(raw["tax_rate"]))
-        net, tax, gross = _calc_item(qty, price, tax_rate)
-        # Nach _pruefe_einheiten: getrimmter Katalogwert, kein Default auf Stück.
-        unit = str(raw.get("unit") or "").strip()
-        db.add(InvoiceItem(
-            invoice_id=invoice.id,
-            position=i,
-            description=_normalize_description(raw["description"]),
-            **positionsangaben.aus_formular(raw, i),
-            unit=unit,
-            quantity=qty,
-            unit_price=price,
-            tax_rate=tax_rate,
-            net_amount=net,
-            tax_amount=tax,
-            gross_amount=gross,
-        ))
-        net_total += net
-        tax_total += tax
-    return net_total, tax_total
+    for item in positionen:
+        item.invoice_id = invoice.id
+        db.add(item)
 
 
-def _apply_totals(invoice: Invoice, net_total: Decimal, tax_total: Decimal) -> None:
-    invoice.net_total = net_total.quantize(Decimal("0.01"))
-    invoice.tax_total = tax_total.quantize(Decimal("0.01"))
-    invoice.gross_total = (net_total + tax_total).quantize(Decimal("0.01"))
+def _apply_totals(
+    invoice: Invoice, summen: Belegsummen,
+    abzug_betrag: Decimal | None, abzug_grund: str | None,
+) -> None:
+    """Summen aus belegsummen schreiben; net_total ist die Steuerbasis (#147):
+    mit Abzug enthält sie die Minderung, damit Kleinbetragsgrenze, Zahlungs-QR
+    und Kennzahlen ohne Sonderfall stimmen."""
+    invoice.net_total = summen.steuerbasis
+    invoice.tax_total = summen.steuer
+    invoice.gross_total = summen.brutto
+    invoice.abzug_betrag = abzug_betrag
+    invoice.abzug_grund = abzug_grund
     # GoBD: Aufbewahrungsfrist endet am 31.12. des (Ausstellungsjahr + 8), § 147 Abs. 4 AO.
     invoice.archive_until = berechne_archive_until(invoice.issue_date)
 
@@ -526,6 +570,16 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
     _pruefe_einheiten(raw_items)
     _pruefe_positionsangaben(raw_items)
 
+    # Abzug und Summen vor Nummernvergabe pruefen: ein ValueError aus belegsummen
+    # (Abzug zu hoch, nicht positiv, uneindeutiger Steuersatz, ohne Positionen)
+    # darf den Zaehler genauso wenig erhoehen wie eine unvollstaendige Eingabe.
+    abzug_betrag, abzug_grund = _abzug_aus_form(form)
+    positionen = _positionen_aus_formular(raw_items)
+    try:
+        summen = belegsummen(positionen, abzug_betrag)
+    except ValueError as fehler:
+        raise HTTPException(400, str(fehler)) from None
+
     # Vor Nummernvergabe: eine abgelehnte Ersatzrechnung darf weder Zaehler noch
     # Zeile anfassen (docs/specs/ersatzrechnung.md).
     ersetzt_id = None
@@ -559,8 +613,8 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
     db.add(invoice)
     db.flush()
 
-    net_total, tax_total = _replace_items(db, invoice, raw_items)
-    _apply_totals(invoice, net_total, tax_total)
+    _replace_items(db, invoice, positionen)
+    _apply_totals(invoice, summen, abzug_betrag, abzug_grund)
 
     db.commit()
     return RedirectResponse(url=f"/invoices/{invoice.id}", status_code=303)
@@ -687,8 +741,20 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
     invoice.buyer_order_reference = form.get("buyer_order_reference", "").strip() or None
     invoice.notes = form.get("notes", "").strip() or None
 
-    net_total, tax_total = _replace_items(db, invoice, rohe_positionen)
-    _apply_totals(invoice, net_total, tax_total)
+    # Abzug: unvollstaendiges Paar und unparsebarer Betrag wie oben, Wertefehler
+    # aus belegsummen. Hier gibt es keinen Zaehler zu schuetzen, aber dieselbe
+    # Meldung ueber das Formular statt eines 500ers.
+    try:
+        abzug_betrag, abzug_grund = _abzug_aus_form(form)
+        positionen = _positionen_aus_formular(rohe_positionen)
+        summen = belegsummen(positionen, abzug_betrag)
+    except HTTPException as fehler:
+        return _bearbeiten_mit_fehler(request, db, invoice, fehler.detail)
+    except ValueError as fehler:
+        return _bearbeiten_mit_fehler(request, db, invoice, str(fehler))
+
+    _replace_items(db, invoice, positionen)
+    _apply_totals(invoice, summen, abzug_betrag, abzug_grund)
 
     # Nachprüfen mit den NEUEN Positionen: `_replace_items` hat sie erst in die Session
     # gelegt, die geladene `items`-Beziehung zeigt sonst noch den alten Stand.
