@@ -70,8 +70,11 @@ Unverträglichkeit mit der funktions-scoped `pg_session`-Fixture).
 | **Mustang CLI** | `Dockerfile` → `ARG MUSTANG_VERSION` + `MUSTANG_SHA256` (aktuell 2.24.0) | 2.24.0 | aktuell | Upgrade = Nummer **und** SHA-256 im Dockerfile, Rebuild, volle Mustang-E2E (`test_finalize_e2e`, Schema, Storno). CLI-Flags (`--format zf`, `--no-additional-attachments`) vorab gegen die Release notes prüfen. Rezept + Fallstricke: unten. |
 | Python-Basis | `python:3.11-slim` mit Digest-Pin | 3.11 weiterhin; 3.12/3.13 verfügbar | Digest hält das Basisabbild fest | Major-Python-Sprung separat entscheiden |
 | PostgreSQL | `postgres:16-alpine` | 16.x (Tag floatet) | Patch via Image-Pull | Major 17 = eigene Migration |
-| Ghostscript | apt `ghostscript=10.05.1~dfsg-1+deb13u2` | n/a | Pin | PDF/A-3-Pfad; beim nächsten Debian-Point-Release laut brechen (zusammen mit Base-Digest anheben) |
+| Ghostscript | apt `ghostscript=10.05.1~dfsg-1+deb13u3` | n/a | Pin | PDF/A-3-Pfad; beim nächsten Debian-Point-Release laut brechen (zusammen mit Base-Digest anheben). Am 2026-10-15 so gebrochen: `deb13u2` war aus `trixie-security` verschwunden, jeder frische Bau scheiterte mit apt-Exit 100; lokal verdeckt durch den Schichten-Cache |
 | JRE | apt `default-jre-headless=2:1.21-76` | n/a | Pin | nur für Mustang; beim nächsten Debian-Point-Release laut brechen |
+| curl | apt `curl=8.14.1-2+deb13u7` | n/a | Pin | Mustang-Download beim Bau und Healthcheck; Sicherheitsstand von `trixie-security`, mit Ghostscript zusammen anheben |
+
+Aktuelle Kandidaten ermitteln, ohne zu bauen: `docker run --rm <Base-Digest aus dem Dockerfile> sh -c "apt-get update -qq; apt-cache policy ghostscript default-jre-headless curl"`.
 | DB-Backup-Image | `prodrigestivill/postgres-backup-local:16-alpine` | an PG 16 gekoppelt | | |
 
 ### Frontend (im Image, seit 2026-08-08 kein CDN mehr)
