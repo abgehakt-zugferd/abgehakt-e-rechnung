@@ -85,3 +85,6 @@ docker-compose.override.yml
 
 # Docker-Betriebsnotizen: gelten nur fuer diesen Rechner, nicht fuer das oeffentliche Projekt
 docs/docker-issues.md
+
+# Echte Fremdbelege als Anschauungsmaterial (IBAN, Steuernummern): nur lokal
+/beispiel*/
