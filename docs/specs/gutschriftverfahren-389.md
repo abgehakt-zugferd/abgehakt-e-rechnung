@@ -62,6 +62,8 @@ Fünf Befunde, jeder am Quelltext belegt:
 3. **`zugferd_xml.py:54`**: Der für 389 formulierte Befreiungstext lautet „Kein Ausweis von
    Umsatzsteuer gemäß § 19 UStG (Kleinunternehmer **Beteiligung**)". Er setzt voraus, dass
    der Beteiligte der Leistende ist. Der Verkäufer-Knoten behauptet das Gegenteil.
+   Behoben in #148: der Befreiungshinweis trägt den neuen Wortlaut nach
+   § 34a Satz 1 Nr. 5 UStDV, „Steuerbefreiung für Kleinunternehmer gemäß § 19 UStG.".
 4. **`models/customer.py`**: Ein Kunde hat `vat_id` und seit dem Steuerstatus-Auftrag auch
    `tax_number` (Feld, Formular, Prüfung beim Finalisieren). **Offen bleibt die XML-Ausgabe**
    mit getauschten Rollen (`zugferd_xml.py` unberührt). Die Firma hat beides schon länger
