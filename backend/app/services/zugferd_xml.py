@@ -19,6 +19,7 @@ from app.services.belegart import (  # noqa: F401
     UnknownInvoiceTypeError,
     belegart,
 )
+from app.services.belegsummen import Belegsummen, belegsummen
 from app.services.einheiten import resolve_einheit
 from app.services.belegsprache import resolve_belegsprache
 from app.services.pflichtangaben import pflichtangaben
@@ -162,7 +163,7 @@ def _line_items_xml(invoice: Invoice) -> str:
     return "\n".join(parts)
 
 
-def _tax_summaries_xml(invoice: Invoice) -> str:
+def _tax_summaries_xml(invoice: Invoice, summen: Belegsummen) -> str:
     inv_cat = getattr(invoice, "tax_category", "S")
     grouped: dict[Decimal, dict] = defaultdict(lambda: {"basis": Decimal("0"), "tax": Decimal("0")})
     for item in invoice.items:
@@ -187,15 +188,47 @@ def _tax_summaries_xml(invoice: Invoice) -> str:
                     "</ram:ExemptionReasonCode>"
                 )
         rate_line = _rate_percent_xml(rate, inv_cat, "\n                ")
+        # Bei Abzug rechnet belegsummen die Steuer neu auf der verminderten Basis;
+        # dann gibt es per Definition nur einen Satz, also genau diese Gruppe.
+        basis = summen.steuerbasis if summen.abzug > 0 else totals["basis"]
+        tax = summen.steuer if summen.abzug > 0 else totals["tax"]
         # CII-Sequenz: ExemptionReasonCode nach CategoryCode, vor RateApplicablePercent
         parts.append(f"""
             <ram:ApplicableTradeTax>
-                <ram:CalculatedAmount>{_fmt_amount(totals['tax'])}</ram:CalculatedAmount>
+                <ram:CalculatedAmount>{_fmt_amount(tax)}</ram:CalculatedAmount>
                 <ram:TypeCode>VAT</ram:TypeCode>{exemption_block}
-                <ram:BasisAmount>{_fmt_amount(totals['basis'])}</ram:BasisAmount>
+                <ram:BasisAmount>{_fmt_amount(basis)}</ram:BasisAmount>
                 <ram:CategoryCode>{tax_cat}</ram:CategoryCode>{code_block}{rate_line}
             </ram:ApplicableTradeTax>""")
     return "\n".join(parts)
+
+
+def _allowance_charge_xml(invoice: Invoice, summen: Belegsummen) -> str:
+    """BG-20 (EN 16931): Abzug auf Belegebene, genau ein Element (#147).
+
+    CII-Sequenz in ApplicableHeaderTradeSettlement: nach BillingSpecifiedPeriod,
+    vor SpecifiedTradePaymentTerms. ChargeIndicator false macht den Betrag zum
+    Abzug; der Steuersatz kommt von den Positionen, belegsummen erzwingt bei
+    Abzug einen einheitlichen Satz.
+    """
+    if summen.abzug <= 0:
+        return ""
+    inv_cat = getattr(invoice, "tax_category", "S")
+    satz = invoice.items[0].tax_rate
+    grund = getattr(invoice, "abzug_grund", None)
+    rate_line = _rate_percent_xml(satz, inv_cat, "\n                    ")
+    return f"""
+            <ram:SpecifiedTradeAllowanceCharge>
+                <ram:ChargeIndicator>
+                    <udt:Indicator>false</udt:Indicator>
+                </ram:ChargeIndicator>
+                <ram:ActualAmount>{_fmt_amount(summen.abzug)}</ram:ActualAmount>
+                <ram:Reason>{_esc(grund)}</ram:Reason>
+                <ram:CategoryTradeTax>
+                    <ram:TypeCode>VAT</ram:TypeCode>
+                    <ram:CategoryCode>{_item_tax_category(satz, inv_cat)}</ram:CategoryCode>{rate_line}
+                </ram:CategoryTradeTax>
+            </ram:SpecifiedTradeAllowanceCharge>"""
 
 
 def _seller_id_xml(company: Company, tax_category: str = "S") -> str:
@@ -559,6 +592,18 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
     customer = invoice.customer
     inv_cat = getattr(invoice, "tax_category", "S")
 
+    # Einzige Stelle der Summenrechnung ist belegsummen; die gespeicherten
+    # invoice.net_total/tax_total/gross_total enthalten einen Abzug bereits
+    # (net_total = Steuerbasis nach Abzug) und taugen deshalb nicht als
+    # Positionssumme (#147).
+    abzug_betrag = getattr(invoice, "abzug_betrag", None)
+    summen = belegsummen(invoice.items, abzug_betrag)
+    allowance_total = ""
+    if summen.abzug > 0:
+        allowance_total = (
+            f"\n                <ram:AllowanceTotalAmount>{_fmt_amount(summen.abzug)}</ram:AllowanceTotalAmount>"
+        )
+
     addr2_buyer = ""
     if customer:
         buyer_line2 = bereinige_adresszeile2(customer.name, customer.address_line2)
@@ -620,15 +665,16 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
             <ram:PaymentReference>{_esc(invoice.invoice_number)}</ram:PaymentReference>
             <ram:InvoiceCurrencyCode>{_esc(invoice.currency)}</ram:InvoiceCurrencyCode>
 {_settlement_payment_xml(invoice, company)}
-{_tax_summaries_xml(invoice)}
+{_tax_summaries_xml(invoice, summen)}
 {_billing_period_xml(invoice)}
+{_allowance_charge_xml(invoice, summen)}
 {_payment_terms_xml(invoice)}
             <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
-                <ram:LineTotalAmount>{_fmt_amount(invoice.net_total)}</ram:LineTotalAmount>
-                <ram:TaxBasisTotalAmount>{_fmt_amount(invoice.net_total)}</ram:TaxBasisTotalAmount>
-                <ram:TaxTotalAmount currencyID="{_esc(invoice.currency)}">{_fmt_amount(invoice.tax_total)}</ram:TaxTotalAmount>
-                <ram:GrandTotalAmount>{_fmt_amount(invoice.gross_total)}</ram:GrandTotalAmount>
-                <ram:DuePayableAmount>{_fmt_amount(invoice.gross_total)}</ram:DuePayableAmount>
+                <ram:LineTotalAmount>{_fmt_amount(summen.positionen_netto)}</ram:LineTotalAmount>{allowance_total}
+                <ram:TaxBasisTotalAmount>{_fmt_amount(summen.steuerbasis)}</ram:TaxBasisTotalAmount>
+                <ram:TaxTotalAmount currencyID="{_esc(invoice.currency)}">{_fmt_amount(summen.steuer)}</ram:TaxTotalAmount>
+                <ram:GrandTotalAmount>{_fmt_amount(summen.brutto)}</ram:GrandTotalAmount>
+                <ram:DuePayableAmount>{_fmt_amount(summen.brutto)}</ram:DuePayableAmount>
             </ram:SpecifiedTradeSettlementHeaderMonetarySummation>{_reference_xml(invoice)}
         </ram:ApplicableHeaderTradeSettlement>
     </rsm:SupplyChainTradeTransaction>

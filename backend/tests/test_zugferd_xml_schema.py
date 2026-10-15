@@ -333,3 +333,26 @@ def test_rechnung_mit_bestellnummer_ist_schema_valid():
         f"Rechnung mit Bestellnummer nicht schema-valide:\n"
         f"{result['errors']}\n{result['raw'][-1500:]}"
     )
+
+
+def test_abzug_auf_belegebene_ist_schema_valid():
+    """#147 A3: BG-20-Abzug als SpecifiedTradeAllowanceCharge muss Mustang
+    genügen; nur die Schema-Validierung prüft die Element-Reihenfolge im
+    Settlement (ApplicableTradeTax, BillingSpecifiedPeriod, AllowanceCharge,
+    PaymentTerms, MonetarySummation).
+
+    Die ORM-Felder abzug_betrag/abzug_grund entstehen erst im Parallelschritt,
+    deshalb werden sie hier am Objekt gesetzt statt im Konstruktor.
+    """
+    cust = Customer(**CUSTOMER_VARIANTS["de_minimal"])
+    # 2 x 100.00 netto, Abzug 100.00: Steuerbasis 100.00, Steuer 19.00.
+    inv = _invoice(cust, net_total=Decimal("100.00"), tax_total=Decimal("19.00"),
+                  gross_total=Decimal("119.00"))
+    inv.abzug_betrag = Decimal("100.00")
+    inv.abzug_grund = "Anrechnung Vorleistung"
+
+    result = _validate(inv, _company())
+    assert result["is_valid"], (
+        f"Abzug auf Belegebene nicht schema-valide:\n"
+        f"{result['errors']}\n{result['raw'][-1500:]}"
+    )
