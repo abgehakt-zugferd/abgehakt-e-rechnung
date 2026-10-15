@@ -895,6 +895,33 @@ class TestTaxCategories:
         )
         assert line_code is None
 
+    def test_self_billing_e_exemption_reason_wortlaut_34a(self):
+        """#148: Befreiungshinweis bei 389 + Kategorie E folgt dem Wortlaut des
+        § 34a Satz 1 Nr. 5 UStDV ('Steuerbefreiung für Kleinunternehmer'), nicht
+        dem irreführenden 'Kleinunternehmer Beteiligung'."""
+        item = _item(
+            tax_rate=Decimal("0.00"),
+            net_amount=Decimal("500.00"),
+            tax_amount=Decimal("0.00"),
+            gross_amount=Decimal("500.00"),
+        )
+        inv = _invoice(
+            invoice_type="self_billing",
+            tax_category="E",
+            items=[item],
+            net_total=Decimal("500.00"),
+            tax_total=Decimal("0.00"),
+            gross_total=Decimal("500.00"),
+        )
+        root = ET.fromstring(generate_xml(inv, _company()))
+        reason = root.find(
+            ".//ram:ApplicableHeaderTradeSettlement/ram:ApplicableTradeTax/ram:ExemptionReason",
+            NS,
+        )
+        assert reason is not None
+        assert reason.text == "Steuerbefreiung für Kleinunternehmer gemäß § 19 UStG."
+        assert "Beteiligung" not in reason.text
+
     def test_inland_zero_rate_uses_z_not_ae(self):
         item = _item(
             tax_rate=Decimal("0.00"),

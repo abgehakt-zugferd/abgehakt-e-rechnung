@@ -53,8 +53,9 @@ EXEMPTION_REASONS = {
 }
 
 # Gutschriftverfahren (389): Kleinunternehmer ist der Beteiligte, nicht der Aussteller.
+# Wortlaut nach § 34a Satz 1 Nr. 5 UStDV (#148).
 EXEMPTION_SELF_BILLING_E = (
-    "Kein Ausweis von Umsatzsteuer gemäß § 19 UStG (Kleinunternehmer Beteiligung)."
+    "Steuerbefreiung für Kleinunternehmer gemäß § 19 UStG."
 )
 
 
