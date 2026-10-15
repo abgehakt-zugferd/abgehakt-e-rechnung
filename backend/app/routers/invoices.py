@@ -424,13 +424,15 @@ def list_invoices(
     })
 
 
-def _vorbelegung_aus(quelle: Invoice, customers) -> tuple[SimpleNamespace, str, str | None]:
+def _vorbelegung_aus(quelle: Invoice, customers, mit_abzug: bool = False) -> tuple[SimpleNamespace, str, str | None]:
     """Formularwerte aus einer bestehenden Rechnung (docs/specs/kopieren.md, Feldvertrag).
 
     Kein invoice_type, kein original_invoice_id, kein ersetzt_invoice_id, keine
     uebergabe_beleg_*: die gehoeren nicht in die Vorbelegung. document_language
     wird vererbt (docs/specs/belegsprache.md). Die Ersatzrechnung setzt die
-    Belegart danach ausdruecklich selbst.
+    Belegart danach ausdruecklich selbst. Der Abzug wird nur mit mit_abzug=True
+    uebernommen: eine Kopie wuerde die einmalige Anrechnung still verdoppeln,
+    die Ersatzrechnung ersetzt dagegen dieselbe Leistung.
     """
     kunde_hinweis = None
     waehlbare_ids = {c.id for c in customers}
@@ -442,6 +444,8 @@ def _vorbelegung_aus(quelle: Invoice, customers) -> tuple[SimpleNamespace, str, 
         tax_category=quelle.tax_category,
         buyer_reference=quelle.buyer_reference,
         buyer_order_reference=quelle.buyer_order_reference,
+        abzug_betrag=quelle.abzug_betrag if mit_abzug else None,
+        abzug_grund=quelle.abzug_grund if mit_abzug else None,
         service_period_start=quelle.service_period_start,
         service_period_end=quelle.service_period_end,
         delivery_date=quelle.delivery_date,
@@ -499,7 +503,8 @@ def new_invoice_form(
         except ErsatzNichtMoeglich as fehler:
             error = str(fehler)
         else:
-            vorbelegung, items_json, kunde_hinweis = _vorbelegung_aus(ersetzt_beleg, customers)
+            vorbelegung, items_json, kunde_hinweis = _vorbelegung_aus(
+                ersetzt_beleg, customers, mit_abzug=True)
             vorbelegung.invoice_type = ersetzt_beleg.invoice_type
 
     delivery_default = today.isoformat()

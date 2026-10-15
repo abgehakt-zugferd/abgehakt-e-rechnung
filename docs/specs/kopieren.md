@@ -40,6 +40,7 @@ Die Naht liegt zwischen der gelesenen Vorlagenrechnung und den Vorbelegungswerte
 | Status | nein | Neuanlage ist Entwurf; Status ist kein Formularfeld der Neuanlage. |
 | Rechnungsnummer | nein | Erst beim Speichern vergeben; Anzeige nur wenn `invoice` gesetzt (Bearbeiten). |
 | Belegart (`invoice_type`) | nein, nie | Wer Gutschrift, Korrektur, Gutschriftverfahren oder spaeter Vorausrechnung als Vorlage nimmt, will Positionen und Kopfdaten, nicht den Typ. Ein still geerbtes `credit_note` (oder `prepayment`) faellt erst beim Empfaenger auf. Der bestehende POST setzt keine Belegart; das bleibt so. |
+| Abzug (`abzug_betrag`, `abzug_grund`) | nein | Abzugsbetrag und Abzugsgrund werden nicht vorbelegt: der Abzug ist typischerweise eine einmalige Anrechnung, eine Kopie wuerde ihn still verdoppeln. Die Ersatzrechnung uebernimmt beide, weil sie dieselbe Rechnung ersetzt (docs/specs/ersatzrechnung.md). |
 | Waehrung, Profil, Summen, XML/PDF, DATEV, Archivfrist | nein | Werden beim Speichern bzw. Finalisieren gesetzt, nicht im Anlegeformular vorgegeben. |
 | `original_invoice_id`, `ersetzt_invoice_id`, `uebergabe_beleg_*` | nein | Keine Formularfelder; Uebernahme wuerde die neue Rechnung an Storno-, Ersatz- oder Belegketten haengen und die Belegsperre faelschlich aktivieren. Die Ersatzrechnung hat ihren eigenen Einstieg (`docs/specs/ersatzrechnung.md`). |
 

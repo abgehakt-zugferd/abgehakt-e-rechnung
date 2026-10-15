@@ -245,20 +245,81 @@
 
                     <!-- Totals -->
                     <div style="border-top:2px solid var(--border-hi); padding-top:12px;">
+                        {# Ohne Abzug unveraendert: Nettobetrag, je Satz eine Steuerzeile,
+                           Brutto. Mit Abzug heisst dieselbe Zeile Positionssumme, und
+                           Netto/Steuer/Brutto entstehen darunter aus dem Abzug. #}
                         <div class="flex justify-between" style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:4px;">
-                            <span>Nettobetrag</span>
+                            <span x-text="abzugAktiv ? 'Positionssumme' : 'Nettobetrag'"></span>
                             <span x-text="formatEur(netTotal)" style="font-family:'Share Tech Mono',monospace;"></span>
                         </div>
-                        <template x-for="[rate, info] in Object.entries(taxSummary)" :key="rate">
-                            <div class="flex justify-between" style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:4px;">
-                                <span x-text="`zzgl. ${rate}% MwSt. auf ${formatEur(info.basis)}`"></span>
-                                <span x-text="formatEur(info.tax)" style="font-family:'Share Tech Mono',monospace;"></span>
+                        {# Abzug als Paar: der Server lehnt einen Betrag ohne Grund ab.
+                           Vorbelegt beim Bearbeiten und bei der Ersatzrechnung; die Kopie
+                           traegt ihn bewusst nicht (einmalige Anrechnung, #147). #}
+                        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+                            <div>
+                                <label class="label">Abzug (netto)</label>
+                                <input type="text" inputmode="decimal" name="abzug_betrag"
+                                       x-ref="abzugBetrag" @input="calcTotals()"
+                                       value="{{ (belegung.abzug_betrag if belegung and belegung.abzug_betrag is not none else '') }}"
+                                       class="input" style="font-size:var(--fs-gross); padding:6px 8px; max-width:160px; text-align:right;">
+                            </div>
+                            <div style="flex:1; min-width:180px;">
+                                <label class="label">Grund des Abzugs</label>
+                                <input type="text" name="abzug_grund" maxlength="200"
+                                       value="{{ (belegung.abzug_grund if belegung and belegung.abzug_grund else '') }}"
+                                       class="input" style="font-size:var(--fs-gross); padding:6px 8px;">
+                            </div>
+                        </div>
+                        <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5; margin:0 0 8px;">
+                            Nur bei einheitlichem Steuersatz; z. B. Anrechnung einer bereits berechneten Leistung.
+                        </p>
+                        {# Mit Abzug: Abzugszeile, dann Netto/Steuer/Brutto auf der
+                           verminderten Basis. Bei mehreren Saetzen oder Abzug in Hoehe der
+                           Positionssumme wird nicht gerechnet, nur ein Hinweis gezeigt;
+                           der Server lehnt beim Speichern ohnehin ab. #}
+                        <template x-if="abzugAktiv">
+                            <div>
+                                <div class="flex justify-between" style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:4px;">
+                                    <span>Abzug</span>
+                                    <span x-text="formatEur(-abzugWert)" style="font-family:'Share Tech Mono',monospace;"></span>
+                                </div>
+                                <template x-if="abzugRechnet">
+                                    <div>
+                                        <div class="flex justify-between" style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:4px;">
+                                            <span>Netto</span>
+                                            <span x-text="formatEur(netNachAbzug)" style="font-family:'Share Tech Mono',monospace;"></span>
+                                        </div>
+                                        <div class="flex justify-between" style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:4px;">
+                                            <span x-text="`zzgl. ${abzugSatz}% MwSt.`"></span>
+                                            <span x-text="formatEur(steuerNachAbzug)" style="font-family:'Share Tech Mono',monospace;"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="abzugAktiv && !abzugRechnet">
+                                    <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--amber); line-height:1.5; margin:4px 0;">
+                                        Abzug nicht anrechenbar: nur bei genau einem Steuersatz und kleiner als die Positionssumme. Der Server lehnt das Speichern ab.
+                                    </p>
+                                </template>
                             </div>
                         </template>
-                        <div class="flex justify-between" style="border-top:1px solid var(--border); padding-top:10px; margin-top:6px;">
+                        <div x-show="!abzugAktiv">
+                            <template x-for="[rate, info] in Object.entries(taxSummary)" :key="rate">
+                                <div class="flex justify-between" style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:4px;">
+                                    <span x-text="`zzgl. ${rate}% MwSt. auf ${formatEur(info.basis)}`"></span>
+                                    <span x-text="formatEur(info.tax)" style="font-family:'Share Tech Mono',monospace;"></span>
+                                </div>
+                            </template>
+                        </div>
+                        <div class="flex justify-between" style="border-top:1px solid var(--border); padding-top:10px; margin-top:6px;" x-show="!abzugAktiv">
                             <span style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--gold);">RECHNUNGSBETRAG (BRUTTO)</span>
                             <span x-text="formatEur(grossTotal)" style="font-family:'Press Start 2P',monospace; font-size:var(--fs-text); color:var(--gold); text-shadow:0 0 14px rgba(255,215,0,0.3);"></span>
                         </div>
+                        <template x-if="abzugRechnet">
+                            <div class="flex justify-between" style="border-top:1px solid var(--border); padding-top:10px; margin-top:6px;">
+                                <span style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--gold);">RECHNUNGSBETRAG (BRUTTO)</span>
+                                <span x-text="formatEur(bruttoNachAbzug)" style="font-family:'Press Start 2P',monospace; font-size:var(--fs-text); color:var(--gold); text-shadow:0 0 14px rgba(255,215,0,0.3);"></span>
+                            </div>
+                        </template>
                     </div>
                 </div>
 
@@ -402,6 +463,13 @@ function invoiceForm() {
         netTotal: 0,
         grossTotal: 0,
         taxSummary: {},
+        abzugAktiv: false,
+        abzugWert: 0,
+        abzugRechnet: false,
+        abzugSatz: 0,
+        netNachAbzug: 0,
+        steuerNachAbzug: 0,
+        bruttoNachAbzug: 0,
 
         init() {
             const lies = (id, fallback) => {
@@ -505,6 +573,24 @@ function invoiceForm() {
             this.netTotal = Math.round(net * 100) / 100;
             this.grossTotal = Math.round(gross * 100) / 100;
             this.taxSummary = summary;
+
+            // Abzug: Feldwert wie im Server mit Komma oder Punkt, leer heisst keiner.
+            // Ohne Abzug bleibt die Anzeige wie bisher. Mit Abzug entsteht die Steuer
+            // auf der verminderten Basis mit dem einen Satz; bei mehreren Saetzen oder
+            // Abzug ab Positionssumme wird nur der Hinweis gezeigt, der Server lehnt
+            // beim Speichern ohnehin ab.
+            const roh = (this.$refs.abzugBetrag ? this.$refs.abzugBetrag.value : '').trim();
+            this.abzugAktiv = roh !== '';
+            this.abzugWert = this.abzugAktiv ? (parseFloat(roh.replace(',', '.')) || 0) : 0;
+            const saetze = Object.keys(this.taxSummary);
+            this.abzugRechnet = this.abzugAktiv && saetze.length === 1
+                && this.abzugWert < this.netTotal;
+            if (this.abzugRechnet) {
+                this.abzugSatz = parseFloat(saetze[0]) || 0;
+                this.netNachAbzug = Math.round((this.netTotal - this.abzugWert) * 100) / 100;
+                this.steuerNachAbzug = Math.round(this.netNachAbzug * this.abzugSatz / 100 * 100) / 100;
+                this.bruttoNachAbzug = this.netNachAbzug + this.steuerNachAbzug;
+            }
         },
 
         autoGrow(event) {
