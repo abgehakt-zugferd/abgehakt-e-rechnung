@@ -25,6 +25,7 @@ from app.services.belegart import (
 from app.services.zugferd_xml import COMPLIANT_PROFILES
 from app.services.steuerstatus import pruefe_honorargutschrift
 from app.services.ersatzrechnung import pruefe_finalisierbar
+from app.services.steuerkategorie_land import kategorie_passt_zum_land
 
 
 VALID_TAX_RATES = {Decimal("0"), Decimal("7"), Decimal("19")}
@@ -200,6 +201,14 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
                 f"Rechnungsbetrag {gross:.2f} € übersteigt 10.000 €. "
                 f"Bei B2B-Geschäften wird die Angabe der USt-IdNr. des Leistungsempfängers empfohlen.",
                 "customer.vat_id"
+            ))
+        # Steuerkategorie gegen das Land des Kunden (#145): Warnung, kein harter
+        # Fehler, weil Ausnahmen im Einzelfall zulässig bleiben. Die Regeln und
+        # Warntexte stehen im Modul steuerkategorie_land.py.
+        hinweis = kategorie_passt_zum_land(tax_category, customer.country)
+        if hinweis:
+            warnings.append(Issue(
+                "TAX_CATEGORY_COUNTRY_MISMATCH", "warning", hinweis, "tax_category"
             ))
         if customer.vat_id:
             _ust_id_validator_issues(

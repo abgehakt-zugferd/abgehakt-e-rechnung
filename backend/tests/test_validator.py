@@ -757,6 +757,44 @@ class TestTaxCategory:
         assert "SELLER_TAX_ID_MISSING" not in _codes(errors)
 
 
+# ── Steuerkategorie vs. Kundenland (#145) ───────────────────────────────────
+
+def _drittland_rechnung(kategorie):
+    """Rechnung an einen Kunden in den USA, sonst valide: 0 % Steuer, weil die
+    Kategorien AE und O steuerfrei sind (sonst TAX_CATEGORY_RATE_MISMATCH als
+    Fehler, der mit der hier geprüften Warnung nichts zu tun hat)."""
+    item = _item(tax_rate=Decimal("0.00"), net_amount=Decimal("200.00"),
+                 tax_amount=Decimal("0.00"), gross_amount=Decimal("200.00"))
+    return _invoice(
+        tax_category=kategorie,
+        items=[item],
+        net_total=Decimal("200.00"), tax_total=Decimal("0.00"),
+        gross_total=Decimal("200.00"),
+        customer=_customer(country="US"),
+    )
+
+
+def test_ae_an_drittlandkunde_warnt_als_warning():
+    """Kategorie AE an einen Kunden mit country='US': Reverse Charge gilt nur
+    innerhalb der EU. Warnung (TAX_CATEGORY_COUNTRY_MISMATCH), kein harter Fehler,
+    denn Ausnahmen bleiben möglich und die Rechnung muss finalisierbar bleiben."""
+    errors, warnings = validate_invoice(_drittland_rechnung("AE"), _company())
+    assert "TAX_CATEGORY_COUNTRY_MISMATCH" in _codes(warnings)
+    assert "TAX_CATEGORY_COUNTRY_MISMATCH" not in _codes(errors)
+    issue = next(w for w in warnings if w.code == "TAX_CATEGORY_COUNTRY_MISMATCH")
+    assert issue.severity == "warning"
+    assert issue.field == "tax_category"
+    assert "außerhalb der EU" in issue.message
+
+
+def test_o_an_drittlandkunde_warnt_nicht():
+    """Dieselbe Rechnung mit Kategorie O: für das Drittland ist O der Normalfall,
+    also bleibt die Warnung aus."""
+    errors, warnings = validate_invoice(_drittland_rechnung("O"), _company())
+    assert "TAX_CATEGORY_COUNTRY_MISMATCH" not in _codes(warnings)
+    assert "TAX_CATEGORY_COUNTRY_MISMATCH" not in _codes(errors)
+
+
 # ── Konsistenz invoice_type ↔ original_invoice_id (ROADMAP Punkt 3) ──────────
 import uuid
 
