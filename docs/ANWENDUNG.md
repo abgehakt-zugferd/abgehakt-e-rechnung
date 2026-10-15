@@ -372,6 +372,26 @@ Abrechnungsgutschriften entstehen auf ihren jeweiligen eigenen Wegen und lassen 
 
 ---
 
+## Abzug auf Belegebene
+
+Im Summenbereich des Entwurfs können Sie einen **Abzug (netto)** mit **Grund** eintragen,
+etwa wenn eine bereits berechnete Leistung auf eine spätere Rechnung angerechnet wird. Betrag
+und Grund gehören zusammen; ein Betrag ohne Grund wird nicht gespeichert. Der Abzug muss
+größer als 0,00 € und kleiner als die Summe der Positionen sein.
+
+Das Programm rechnet die Steuer dann auf der verminderten Basis: Positionssumme minus Abzug
+ergibt den Nettobetrag, darauf der Steuersatz. Deshalb setzt ein Abzug voraus, dass alle
+Positionen denselben Steuersatz tragen. Bei Anzahlungsrechnungen und Honorargutschriften
+(Typ 389) ist kein Abzug möglich.
+
+PDF und Detailseite zeigen Positionssumme, Abzug mit Grund, Nettobetrag, Steuer und
+Endbetrag. In der E-Rechnung steht der Abzug als Nachlass auf Belegebene (EN 16931 BG-20),
+im GoBD-Export in den letzten beiden Spalten von `rechnungen.csv`. Eine Stornorechnung und
+eine Ersatzrechnung übernehmen den Abzug; eine Vorlage nicht, weil eine Anrechnung in der
+Regel einmalig ist.
+
+---
+
 ## Bestellnummer des Kunden
 
 Tragen Sie im Rechnungsformular unter **Bestellnummer** die Nummer der Bestellung oder
