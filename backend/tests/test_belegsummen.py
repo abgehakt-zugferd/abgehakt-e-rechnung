@@ -18,7 +18,7 @@ def _position(netto, steuer, satz):
 
 def test_ohne_abzug_summiert_positionssteuern_statt_neu_zu_rechnen():
     # Jede Position einzeln gerundet: 6.34 * 19 % = 1.2046 -> 1.20, Summe 2.40.
-    # Auf der Summe gerecht waere 12.68 * 19 % = 2.4092 -> 2.41, ein Cent mehr.
+    # Auf der Summe gerechnet waere 12.68 * 19 % = 2.4092 -> 2.41, ein Cent mehr.
     positionen = [
         _position("6.34", "1.20", "19"),
         _position("6.34", "1.20", "19"),
@@ -78,3 +78,12 @@ def test_abzug_kleiner_als_positionen_netto_erforderlich():
 def test_abzug_ohne_positionen_abgelehnt():
     with pytest.raises(ValueError):
         belegsummen([], Decimal("10.00"))
+
+
+def test_abzug_rundet_halben_cent_kaufmaennisch_auf():
+    # 10.50 * 19 % = 1.995: kaufmaennisch 2.00, abgeschnitten waeren es 1.99.
+    positionen = [_position("20.50", "3.90", "19")]
+    summen = belegsummen(positionen, Decimal("10.00"))
+    assert summen.steuerbasis == Decimal("10.50")
+    assert summen.steuer == Decimal("2.00")
+    assert summen.brutto == Decimal("12.50")

@@ -1,4 +1,4 @@
-"""Belegsummen mit optionalem Abzug auf Belagebene (EN 16931 BG-20).
+"""Belegsummen mit optionalem Abzug auf Belegebene (EN 16931 BG-20).
 
 Diese Funktion ist die einzige Stelle, an der Positionssumme, Abzug,
 Steuerbasis, Steuer und Brutto eines Belegs gerechnet werden. Ohne Abzug
