@@ -141,9 +141,9 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
     elif tax_category == "O" and not company.tax_number:
         errors.append(Issue(
             "SELLER_TAX_NUMBER_REQUIRED_FOR_O", "error",
-            "Bei Steuerbefreiung nach § 4 Nr. 21 UStG (Kategorie O) muss die Steuernummer "
-            "in den Einstellungen hinterlegt sein (EN16931 BR-CO-26). Die USt-IdNr. allein "
-            "genügt hier nicht.",
+            "Bei Kategorie O (nicht im Inland steuerbar, § 3a Abs. 2 UStG) muss die "
+            "Steuernummer in den Einstellungen hinterlegt sein (EN16931 BR-CO-26). "
+            "Die USt-IdNr. allein genügt hier nicht.",
             "company.tax_number",
         ))
     elif tax_category == "AE" and not company.vat_id:

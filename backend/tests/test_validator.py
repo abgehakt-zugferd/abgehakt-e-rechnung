@@ -691,6 +691,24 @@ class TestTaxCategory:
         errors, _ = validate_invoice(inv, _company(tax_number=None, vat_id="DE123456789"))
         assert "SELLER_TAX_NUMBER_REQUIRED_FOR_O" in _codes(errors)
 
+    def test_steuerkategorie_o_meldung_nennt_3a_abs_2(self):
+        """#146: Kategorie O meint 'nicht im Steuergebiet des Ausstellers steuerbar'
+        (§ 3a Abs. 2 UStG, siehe EXEMPTION_REASONS['O'] in zugferd_xml.py), nicht die
+        Steuerbefreiung nach § 4 Nr. 21 UStG."""
+        item = _item(tax_rate=Decimal("0.00"), net_amount=Decimal("200.00"),
+                     tax_amount=Decimal("0.00"), gross_amount=Decimal("200.00"))
+        inv = _invoice(
+            tax_category="O",
+            items=[item],
+            net_total=Decimal("200.00"),
+            tax_total=Decimal("0.00"),
+            gross_total=Decimal("200.00"),
+        )
+        errors, _ = validate_invoice(inv, _company(tax_number=None, vat_id="DE123456789"))
+        issue = next(e for e in errors if e.code == "SELLER_TAX_NUMBER_REQUIRED_FOR_O")
+        assert "§ 3a Abs. 2 UStG" in issue.message
+        assert "§ 4 Nr. 21" not in issue.message
+
     def test_steuerkategorie_ae_verlangt_verkaeufer_ust_id(self):
         """§ 14a Abs. 1 Satz 3 UStG: bei AE reicht die Steuernummer des Leistenden nicht."""
         item = _item(tax_rate=Decimal("0.00"), net_amount=Decimal("200.00"),
