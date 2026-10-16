@@ -111,6 +111,8 @@ class Belegdarstellung:
 
     # Summen
     label_netto: str
+    label_positionssumme: str
+    abzugzeile_muster: str  # mit {grund}
     label_gutschriftbetrag: str
     label_rechnungsbetrag: str
     steuerzeile_muster: str  # mit {satz} und {basis}
@@ -186,6 +188,9 @@ class Belegdarstellung:
     def steuerzeile(self, satz: str, basis: str) -> str:
         return self.steuerzeile_muster.format(satz=satz, basis=basis)
 
+    def abzugzeile(self, grund: str) -> str:
+        return self.abzugzeile_muster.format(grund=grund)
+
 
 _DE = Belegdarstellung(
     code="de",
@@ -211,6 +216,8 @@ _DE = Belegdarstellung(
     label_mwst="MwSt.",
     label_betrag="Betrag",
     label_netto="Nettobetrag",
+    label_positionssumme="Positionssumme",
+    abzugzeile_muster="Abzug: {grund}",
     label_gutschriftbetrag="Gutschriftbetrag",
     label_rechnungsbetrag="Rechnungsbetrag",
     steuerzeile_muster="zzgl. {satz} MwSt. auf {basis}",
@@ -262,6 +269,8 @@ _EN = Belegdarstellung(
     label_mwst="VAT",
     label_betrag="Amount",
     label_netto="Net amount",
+    label_positionssumme="Subtotal",
+    abzugzeile_muster="Allowance: {grund}",
     label_gutschriftbetrag="Credit note amount",
     label_rechnungsbetrag="Invoice total",
     steuerzeile_muster="plus {satz} VAT on {basis}",

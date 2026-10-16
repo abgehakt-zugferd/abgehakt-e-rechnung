@@ -586,6 +586,75 @@ def test_monetary_summation_bt106_112():
     assert tax_total.get("currencyID") == "EUR"
 
 
+# ── Tests: Abzug auf Belegebene (BG-20) ────────────────────────────────────
+
+def test_bg20_abzug_liefert_allowancecharge_und_reduzierte_summen():
+    """#147 A3: 19 % auf 1000.00 netto, Abzug 100.00 → Summen 1000.00/100.00/
+    900.00/171.00/1071.00. Ohne den Abzug wären Steuerbasis und Steuer höher;
+    net_total im Stub ist die Steuerbasis NACH Abzug."""
+    inv = _invoice(
+        items=[_item(net_amount=Decimal("1000.00"),
+                     tax_amount=Decimal("190.00"),
+                     gross_amount=Decimal("1190.00"))],
+        net_total=Decimal("900.00"),
+        tax_total=Decimal("171.00"),
+        gross_total=Decimal("1071.00"),
+        abzug_betrag=Decimal("100.00"),
+        abzug_grund="Anrechnung Vorleistung",
+    )
+    root = _parse(generate_xml(inv, _company()))
+
+    allowance = ".//ram:ApplicableHeaderTradeSettlement/ram:SpecifiedTradeAllowanceCharge"
+    assert len(_findall(root, allowance)) == 1
+    assert _text(root, f"{allowance}/ram:ChargeIndicator/udt:Indicator") == "false"
+    assert _text(root, f"{allowance}/ram:ActualAmount") == "100.00"
+    assert _text(root, f"{allowance}/ram:Reason") == "Anrechnung Vorleistung"
+    assert _text(root, f"{allowance}/ram:CategoryTradeTax/ram:TypeCode") == "VAT"
+    assert _text(root, f"{allowance}/ram:CategoryTradeTax/ram:CategoryCode") == "S"
+    assert _text(root, f"{allowance}/ram:CategoryTradeTax/ram:RateApplicablePercent") == "19.00"
+
+    summation = ".//ram:SpecifiedTradeSettlementHeaderMonetarySummation"
+    assert _text(root, f"{summation}/ram:LineTotalAmount") == "1000.00"
+    assert _text(root, f"{summation}/ram:AllowanceTotalAmount") == "100.00"
+    assert _text(root, f"{summation}/ram:TaxBasisTotalAmount") == "900.00"
+    assert _text(root, f"{summation}/ram:TaxTotalAmount") == "171.00"
+    assert _text(root, f"{summation}/ram:GrandTotalAmount") == "1071.00"
+    assert _text(root, f"{summation}/ram:DuePayableAmount") == "1071.00"
+
+    # BG-23 rechnet auf der Steuerbasis nach Abzug
+    bg23 = ".//ram:ApplicableHeaderTradeSettlement/ram:ApplicableTradeTax"
+    assert _text(root, f"{bg23}/ram:BasisAmount") == "900.00"
+    assert _text(root, f"{bg23}/ram:CalculatedAmount") == "171.00"
+
+
+def test_bg20_abzug_kategorie_o_ohne_steuersatz():
+    """BR-O-05 gilt auch im Abzug: Kategorie O trägt keinen RateApplicablePercent."""
+    inv = _invoice(
+        items=[_item(tax_rate=Decimal("0"), net_amount=Decimal("1000.00"),
+                     tax_amount=Decimal("0.00"), gross_amount=Decimal("1000.00"))],
+        tax_category="O",
+        net_total=Decimal("900.00"),
+        tax_total=Decimal("0.00"),
+        gross_total=Decimal("900.00"),
+        abzug_betrag=Decimal("100.00"),
+        abzug_grund="Anrechnung Vorleistung",
+    )
+    root = _parse(generate_xml(inv, _company()))
+    allowance = ".//ram:ApplicableHeaderTradeSettlement/ram:SpecifiedTradeAllowanceCharge"
+    assert _text(root, f"{allowance}/ram:CategoryTradeTax/ram:CategoryCode") == "O"
+    assert _find(root, f"{allowance}/ram:CategoryTradeTax/ram:RateApplicablePercent") is None
+
+
+def test_ohne_abzug_kein_allowancecharge_und_kein_allowance_total():
+    """Ohne abzug_betrag bleibt die Ausgabe wie zuvor: kein BG-20-Element, kein
+    AllowanceTotalAmount."""
+    root = _parse(generate_xml(_invoice(), _company()))
+    assert _find(root, ".//ram:SpecifiedTradeAllowanceCharge") is None
+    assert _find(
+        root, ".//ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:AllowanceTotalAmount"
+    ) is None
+
+
 # ── Tests: Sonderfälle / Sicherheit ───────────────────────────────────────
 
 def test_xml_escaping_special_characters():

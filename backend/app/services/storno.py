@@ -42,6 +42,10 @@ def build_storno(original: Invoice, invoice_number: str, today: date) -> Invoice
         net_total=original.net_total,
         tax_total=original.tax_total,
         gross_total=original.gross_total,
+        # Abzug wie die Summen 1:1 (#147): die Gutschrift hebt den Beleg
+        # einschichtlich seines Abzugs vollstaendig auf.
+        abzug_betrag=original.abzug_betrag,
+        abzug_grund=original.abzug_grund,
         archive_until=berechne_archive_until(today),
         buyer_reference=original.buyer_reference,
         buyer_order_reference=original.buyer_order_reference,
