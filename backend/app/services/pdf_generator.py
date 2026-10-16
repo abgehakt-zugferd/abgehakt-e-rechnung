@@ -30,6 +30,7 @@ from app.services.iban import IbanProfil
 from app.services.zugferd_xml import EXEMPTION_REASONS
 from app.services.belegart import belegart
 from app.services.belegsprache import Belegdarstellung, darstellung, resolve_belegsprache
+from app.services.belegsummen import belegsummen
 
 # ── Firmenlogo ───────────────────────────────────────────────────────────────
 # Das Logo gehört der Nutzerin, nicht dem Auslieferungs-Image (#99 §4.3, L4):
@@ -585,28 +586,58 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         tax_groups[item.tax_rate]["basis"] += item.net_amount
         tax_groups[item.tax_rate]["tax"] += item.tax_amount
 
+    # Eine Quelle der Belegsummen (#147): belegsummen rechnet Positionssumme,
+    # Abzug, Steuerbasis, Steuer und Brutto. Die gespeicherten net/gross_total
+    # enthalten einen Abzug bereits, taugen also nicht als Positionssumme.
+    summen = belegsummen(invoice.items, getattr(invoice, "abzug_betrag", None))
+    mit_abzug = summen.abzug > 0
+
     totals_data = []
-    totals_data.append([Paragraph(d.label_netto, small), Paragraph(money(invoice.net_total), right)])
+    if mit_abzug:
+        totals_data.append([Paragraph(d.label_positionssumme, small),
+                            Paragraph(money(summen.positionen_netto), right)])
+        grund = getattr(invoice, "abzug_grund", None) or ""
+        totals_data.append([Paragraph(escape(d.abzugzeile(grund)), small),
+                            Paragraph("-" + money(summen.abzug), right)])
+        netto_anzeige = money(summen.steuerbasis)
+        endbetrag = money(summen.brutto)
+    else:
+        netto_anzeige = money(invoice.net_total)
+        endbetrag = money(invoice.gross_total)
+    totals_data.append([Paragraph(d.label_netto, small), Paragraph(netto_anzeige, right)])
     if _zeigt_steuer(invoice):
-        for rate in sorted(tax_groups.keys()):
-            g = tax_groups[rate]
-            label = d.steuerzeile(_pct(rate), money(g["basis"]))
-            totals_data.append([Paragraph(label, small), Paragraph(money(g["tax"]), right)])
+        if mit_abzug:
+            # belegsummen setzt fuer einen Abzug einen einheitlichen Steuersatz
+            # voraus: genau eine Steuerzeile, auf der Basis nach Abzug wie im XML.
+            satz = next(iter(tax_groups))
+            label = d.steuerzeile(_pct(satz), money(summen.steuerbasis))
+            totals_data.append([Paragraph(label, small), Paragraph(money(summen.steuer), right)])
+        else:
+            for rate in sorted(tax_groups.keys()):
+                g = tax_groups[rate]
+                label = d.steuerzeile(_pct(rate), money(g["basis"]))
+                totals_data.append([Paragraph(label, small), Paragraph(money(g["tax"]), right)])
     summen_label = (
         d.label_gutschriftbetrag if _ist_gutschrift(invoice) else d.label_rechnungsbetrag
     )
     totals_data.append([
         Paragraph(f"<b>{summen_label}</b>", small_bold),
-        Paragraph(f"<b>{money(invoice.gross_total)}</b>", right_bold)
+        Paragraph(f"<b>{endbetrag}</b>", right_bold)
     ])
 
     # Kompakt und rechtsbündig, der Endbetrag getönt (Vorbild DATEV-Rechnung).
     # Die Betragsspalte ist so breit wie ihr breitester Betrag: in festen 3,2 cm
     # brach „EUR 12,345.67“ im Endbetrag auf zwei Zeilen um (Code-Review 2026-10-02).
-    betraege = [money(invoice.net_total)] + [money(g["tax"]) for g in tax_groups.values()]
+    if mit_abzug:
+        betraege = [money(summen.positionen_netto), "-" + money(summen.abzug),
+                    money(summen.steuerbasis)]
+        if _zeigt_steuer(invoice):
+            betraege.append(money(summen.steuer))
+    else:
+        betraege = [money(invoice.net_total)] + [money(g["tax"]) for g in tax_groups.values()]
     betrag_breite = max(
         [pdfmetrics.stringWidth(b, BODY, right.fontSize) for b in betraege]
-        + [pdfmetrics.stringWidth(money(invoice.gross_total), BOLD, right_bold.fontSize)]
+        + [pdfmetrics.stringWidth(endbetrag, BOLD, right_bold.fontSize)]
     ) + 12
     totals_table = Table(totals_data, colWidths=[SUMMEN_BREITE * 0.6,
                                                  max(SUMMEN_BREITE * 0.4, betrag_breite)])

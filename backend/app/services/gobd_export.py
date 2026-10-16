@@ -35,6 +35,9 @@ _RECHNUNGEN_COLS = [
     ("waehrung", "A"), ("steuerkategorie", "A"), ("original_rechnungsnummer", "A"),
     ("ersetzt_rechnungsnummer", "A"),
     ("aufbewahrung_bis", "D"), ("datev_versendet_am", "A"), ("erstellt_am", "A"),
+    # Hinten angehängt (2026-10, #147), damit bestehende Spaltenpositionen bleiben:
+    # Abzug auf Belegebene (EN 16931 BG-20) mit Begründung.
+    ("abzug_betrag", ("N", 2)), ("abzug_grund", "A"),
 ]
 _POSITIONEN_COLS = [
     ("rechnungsnummer", "A"), ("position", ("N", 0)), ("beschreibung", "A"),
@@ -91,6 +94,7 @@ def _rechnungen_csv(invoices: Sequence[Invoice]) -> str:
             _fmt(inv.net_total), _fmt(inv.tax_total), _fmt(inv.gross_total),
             inv.currency, inv.tax_category, original, ersetzt,
             _fmt(inv.archive_until), _fmt(inv.datev_sent_at), _fmt(inv.created_at),
+            _fmt(inv.abzug_betrag), _fmt(inv.abzug_grund),
         ])
     return _csv_bytes(header, rows)
 

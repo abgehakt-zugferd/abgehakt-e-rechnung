@@ -175,6 +175,8 @@ def zugferd_invoice_stub(**kwargs):
         invoice_type=None,
         original_invoice_id=None,
         original_invoice=None,
+        abzug_betrag=None,
+        abzug_grund=None,
     ), **kwargs)
 
 

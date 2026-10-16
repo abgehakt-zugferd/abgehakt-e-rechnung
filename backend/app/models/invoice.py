@@ -44,6 +44,15 @@ class Invoice(Base):
                 "status <> 'discarded' AND ersetzt_invoice_id IS NOT NULL"
             ),
         ),
+        # Abzug (BG-20, #147): immer als Paar. Kein Abzug heisst beide NULL;
+        # gesetzt heisst Betrag positiv und Grund gefuellt. Der Grund ist
+        # Pflicht (EN 16931 BR-33) und wird im Router verlangt, nicht hier
+        # ersetzt. Identisch zu Migration 023 (alembic check).
+        CheckConstraint(
+            "(abzug_betrag IS NULL AND abzug_grund IS NULL) "
+            "OR (abzug_betrag > 0 AND abzug_grund IS NOT NULL)",
+            name="ck_invoices_abzug_beide_oder_gueltig",
+        ),
     )
 
     id: Mapped[uuid.UUID] = _id_col
@@ -75,6 +84,11 @@ class Invoice(Base):
     net_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")
     tax_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")
     gross_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")
+    # Abzug auf Belegebene (BG-20, #147). net/tax/gross_total enthalten ihn
+    # bereits: net_total ist die Steuerbasis, tax_total die Steuer auf der
+    # verminderten Basis. Rechnet nur services/belegsummen.py.
+    abzug_betrag: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    abzug_grund: Mapped[Optional[str]] = mapped_column(Text)
     # draft → issued → paid / cancelled
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="draft", server_default="draft", index=True

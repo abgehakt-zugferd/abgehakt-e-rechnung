@@ -277,6 +277,18 @@
                 </div>
                 <!-- Totals -->
                 <div style="border-top:2px solid var(--border-hi); padding-top:14px; font-family:'VT323',monospace; font-size:var(--fs-gross);">
+                    {# Abzug auf Belegebene (#147): net_total ist die Basis NACH Abzug,
+                       deshalb steht die Summe der Positionen als eigene Zeile davor. #}
+                    {% if invoice.abzug_betrag %}
+                    <div class="flex justify-between" style="color:var(--text-dim); margin-bottom:4px;">
+                        <span>Positionssumme</span>
+                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ (invoice.net_total + invoice.abzug_betrag)|euro }}</span>
+                    </div>
+                    <div class="flex justify-between" style="color:var(--text-dim); margin-bottom:4px;">
+                        <span>Abzug: {{ invoice.abzug_grund }}</span>
+                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ invoice.abzug_betrag|euro }}</span>
+                    </div>
+                    {% endif %}
                     <div class="flex justify-between" style="color:var(--text-dim); margin-bottom:4px;">
                         <span>Nettobetrag</span>
                         <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ invoice.net_total|euro }}</span>
