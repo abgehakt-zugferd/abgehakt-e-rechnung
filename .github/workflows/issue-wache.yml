@@ -3,8 +3,10 @@
 # Muster echter Daten (#49, #154). In Issues und Pull Requests gehoeren nur
 # erfundene Testdaten.
 #
-# Bekannte Grenze: Reviews und Review-Kommentare aus Forks laufen ohne Secret,
-# dort greifen nur die eingebauten Muster.
+# Bekannte Grenze: Reviews und Review-Kommentare aus Forks laufen ohne Secret
+# und mit nur lesendem Token. Dort greifen nur die eingebauten Muster, und ein
+# Treffer kann weder Label noch Kommentar setzen: der Lauf endet rot, das ist
+# dann das Signal.
 #
 # Zusatzmuster (Klarnamen, eigene Nummernkreise) NIE hier eintragen. Sie kommen
 # aus dem Actions-Secret ECHTDATEN_MUSTER (eine Regex je Zeile, '#' als Kommentar).
