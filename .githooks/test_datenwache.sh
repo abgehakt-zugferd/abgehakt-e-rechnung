@@ -40,7 +40,7 @@ commit_mit() {
     esac
     printf '%s\n' "$3" > "$1/$2"
     git -C "$1" add -f "$2"
-    git -C "$1" commit -qm "probe" >/dev/null
+    git -C "$1" commit -qm "${4:-probe}" >/dev/null
     git -C "$1" rev-parse HEAD
 }
 
@@ -257,6 +257,22 @@ printf '# Kommentar\nProbe-Autorin\n' > "$m"
 r=$(neues_repo); s=$(commit_mit "$r" a.txt "Probe-Autorin bekommt 25 Prozent")
 lauf "$r" "$s" "$leer" "$m"
 befund "zusatzmuster_greifen" 1 "Zusatzmuster"
+
+# Issue #154: Commit-Nachrichten werden wie Diff-Zeilen geprueft; die
+# Musterklasse traegt den Zusatz " (Commit-Nachricht)".
+mn="$werkstatt/muster-nachricht.txt"
+printf '# Kommentar\nProbe-Klarname\n' > "$mn"
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "harmlos" "Erwaehnung Probe-Klarname im Entwurf")
+lauf "$r" "$s" "$leer" "$mn"
+befund "zusatzmuster_in_commit_nachricht_wird_erkannt" 1 "Zusatzmuster (Commit-Nachricht)"
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "harmlos" "Nachweis $(_ust_probe)")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "ust_in_commit_nachricht_wird_erkannt" 1 "USt-IdNr-Format (Commit-Nachricht)"
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "harmloser Text" "harmlose Nachricht")
+lauf "$r" "$s" "$leer" /nicht/da
+befund "saubere_commit_nachricht_laeuft_durch" 0 ""
 
 r=$(neues_repo); commit_mit "$r" a.txt "harmlos" >/dev/null
 lauf "$r" "$leer" "$leer" /nicht/da
