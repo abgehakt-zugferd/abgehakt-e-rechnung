@@ -25,6 +25,7 @@ from app.services.belegart import (
 from app.services.zugferd_xml import COMPLIANT_PROFILES
 from app.services.steuerstatus import pruefe_honorargutschrift
 from app.services.ersatzrechnung import pruefe_finalisierbar
+from app.services.steuerkategorie_land import kategorie_passt_zum_land
 from app.services.belegsummen import belegsummen
 
 
@@ -142,9 +143,9 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
     elif tax_category == "O" and not company.tax_number:
         errors.append(Issue(
             "SELLER_TAX_NUMBER_REQUIRED_FOR_O", "error",
-            "Bei Steuerbefreiung nach § 4 Nr. 21 UStG (Kategorie O) muss die Steuernummer "
-            "in den Einstellungen hinterlegt sein (EN16931 BR-CO-26). Die USt-IdNr. allein "
-            "genügt hier nicht.",
+            "Bei Kategorie O (nicht im Inland steuerbar, § 3a Abs. 2 UStG) muss die "
+            "Steuernummer in den Einstellungen hinterlegt sein (EN16931 BR-CO-26). "
+            "Die USt-IdNr. allein genügt hier nicht.",
             "company.tax_number",
         ))
     elif tax_category == "AE" and not company.vat_id:
@@ -201,6 +202,14 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
                 f"Rechnungsbetrag {gross:.2f} € übersteigt 10.000 €. "
                 f"Bei B2B-Geschäften wird die Angabe der USt-IdNr. des Leistungsempfängers empfohlen.",
                 "customer.vat_id"
+            ))
+        # Steuerkategorie gegen das Land des Kunden (#145): Warnung, kein harter
+        # Fehler, weil Ausnahmen im Einzelfall zulässig bleiben. Die Regeln und
+        # Warntexte stehen im Modul steuerkategorie_land.py.
+        hinweis = kategorie_passt_zum_land(tax_category, customer.country)
+        if hinweis:
+            warnings.append(Issue(
+                "TAX_CATEGORY_COUNTRY_MISMATCH", "warning", hinweis, "tax_category"
             ))
         if customer.vat_id:
             _ust_id_validator_issues(

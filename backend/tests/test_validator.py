@@ -691,6 +691,24 @@ class TestTaxCategory:
         errors, _ = validate_invoice(inv, _company(tax_number=None, vat_id="DE123456789"))
         assert "SELLER_TAX_NUMBER_REQUIRED_FOR_O" in _codes(errors)
 
+    def test_steuerkategorie_o_meldung_nennt_3a_abs_2(self):
+        """#146: Kategorie O meint 'nicht im Steuergebiet des Ausstellers steuerbar'
+        (§ 3a Abs. 2 UStG, siehe EXEMPTION_REASONS['O'] in zugferd_xml.py), nicht die
+        Steuerbefreiung nach § 4 Nr. 21 UStG."""
+        item = _item(tax_rate=Decimal("0.00"), net_amount=Decimal("200.00"),
+                     tax_amount=Decimal("0.00"), gross_amount=Decimal("200.00"))
+        inv = _invoice(
+            tax_category="O",
+            items=[item],
+            net_total=Decimal("200.00"),
+            tax_total=Decimal("0.00"),
+            gross_total=Decimal("200.00"),
+        )
+        errors, _ = validate_invoice(inv, _company(tax_number=None, vat_id="DE123456789"))
+        issue = next(e for e in errors if e.code == "SELLER_TAX_NUMBER_REQUIRED_FOR_O")
+        assert "§ 3a Abs. 2 UStG" in issue.message
+        assert "§ 4 Nr. 21" not in issue.message
+
     def test_steuerkategorie_ae_verlangt_verkaeufer_ust_id(self):
         """§ 14a Abs. 1 Satz 3 UStG: bei AE reicht die Steuernummer des Leistenden nicht."""
         item = _item(tax_rate=Decimal("0.00"), net_amount=Decimal("200.00"),
@@ -737,6 +755,44 @@ class TestTaxCategory:
         )
         assert "SELLER_VAT_ID_REQUIRED" not in _codes(errors)
         assert "SELLER_TAX_ID_MISSING" not in _codes(errors)
+
+
+# ── Steuerkategorie vs. Kundenland (#145) ───────────────────────────────────
+
+def _drittland_rechnung(kategorie):
+    """Rechnung an einen Kunden in den USA, sonst valide: 0 % Steuer, weil die
+    Kategorien AE und O steuerfrei sind (sonst TAX_CATEGORY_RATE_MISMATCH als
+    Fehler, der mit der hier geprüften Warnung nichts zu tun hat)."""
+    item = _item(tax_rate=Decimal("0.00"), net_amount=Decimal("200.00"),
+                 tax_amount=Decimal("0.00"), gross_amount=Decimal("200.00"))
+    return _invoice(
+        tax_category=kategorie,
+        items=[item],
+        net_total=Decimal("200.00"), tax_total=Decimal("0.00"),
+        gross_total=Decimal("200.00"),
+        customer=_customer(country="US"),
+    )
+
+
+def test_ae_an_drittlandkunde_warnt_als_warning():
+    """Kategorie AE an einen Kunden mit country='US': Reverse Charge gilt nur
+    innerhalb der EU. Warnung (TAX_CATEGORY_COUNTRY_MISMATCH), kein harter Fehler,
+    denn Ausnahmen bleiben möglich und die Rechnung muss finalisierbar bleiben."""
+    errors, warnings = validate_invoice(_drittland_rechnung("AE"), _company())
+    assert "TAX_CATEGORY_COUNTRY_MISMATCH" in _codes(warnings)
+    assert "TAX_CATEGORY_COUNTRY_MISMATCH" not in _codes(errors)
+    issue = next(w for w in warnings if w.code == "TAX_CATEGORY_COUNTRY_MISMATCH")
+    assert issue.severity == "warning"
+    assert issue.field == "tax_category"
+    assert "außerhalb der EU" in issue.message
+
+
+def test_o_an_drittlandkunde_warnt_nicht():
+    """Dieselbe Rechnung mit Kategorie O: für das Drittland ist O der Normalfall,
+    also bleibt die Warnung aus."""
+    errors, warnings = validate_invoice(_drittland_rechnung("O"), _company())
+    assert "TAX_CATEGORY_COUNTRY_MISMATCH" not in _codes(warnings)
+    assert "TAX_CATEGORY_COUNTRY_MISMATCH" not in _codes(errors)
 
 
 # ── Konsistenz invoice_type ↔ original_invoice_id (ROADMAP Punkt 3) ──────────
