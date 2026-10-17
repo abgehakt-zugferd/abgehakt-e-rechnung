@@ -175,7 +175,7 @@ def _before_flush(session: Session, flush_context, instances) -> None:
             # Eine gestellte Gutschrift ist endgueltig (Issue #142): storniert,
             # lebte das Original wieder auf und steckte fest. Die Route sagt
             # vorher freundlich, was stattdessen zu tun ist (storno.pruefe_stornierbar).
-            if new_status == "cancelled" and obj.invoice_type == "credit_note":
+            if new_status == "cancelled" and obj.invoice_type in {"credit_note", "self_billing_storno"}:
                 raise InvoiceStateError(
                     "Eine gestellte Gutschrift ist endgueltig und laesst sich nicht "
                     "stornieren (#142). Korrektur ueber eine neue Rechnung zum Original."

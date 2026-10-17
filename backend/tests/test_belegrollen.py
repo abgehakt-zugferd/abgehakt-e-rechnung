@@ -62,7 +62,7 @@ class TestBesetzungJeBelegart:
         assert rollen.erwerber.name == "Probe Kunde AG"
         assert rollen.erwerber.kennung == "K-389"
 
-    @pytest.mark.parametrize("art", ["self_billing", "self-billing"])
+    @pytest.mark.parametrize("art", ["self_billing", "self-billing", "self_billing_storno"])
     def test_bei_389_ist_der_kunde_verkaeufer(self, art):
         """§ 14 Abs. 2 UStG: der Leistungsempfänger stellt aus, der Leistende
         ist der Verkäufer (BG-4), die eigene Firma der Erwerber (BG-7)."""

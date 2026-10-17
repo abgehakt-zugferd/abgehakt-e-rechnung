@@ -183,11 +183,11 @@ def test_titel_und_steuerhinweise_sprachmatrix():
     en = darstellung("en")
     assert de.titel(None) == "RECHNUNG"
     assert de.titel("prepayment") == "ANZAHLUNGSRECHNUNG"
-    assert de.titel("credit_note") == "GUTSCHRIFT"
+    assert de.titel("credit_note") == "STORNORECHNUNG"
     assert de.titel("correction") == "KORREKTURRECHNUNG"
     assert en.titel(None) == "INVOICE"
     assert en.titel("prepayment") == "PREPAYMENT INVOICE"
-    assert en.titel("credit_note") == "CREDIT NOTE"
+    assert en.titel("credit_note") == "CANCELLATION INVOICE"
     assert en.titel("correction") == "CORRECTIVE INVOICE"
     assert de.steuerhinweis("AE") == AE_HINWEIS
     assert en.steuerhinweis("AE") == AE_HINWEIS
@@ -304,7 +304,7 @@ def test_s3_reihenfolge_en_dann_de_aendert_nichts(pg_session, tmp_path):
 @pytest.mark.parametrize("typ,de_titel,en_titel", [
     (None, "RECHNUNG", "INVOICE"),
     ("prepayment", "ANZAHLUNGSRECHNUNG", "PREPAYMENT INVOICE"),
-    ("credit_note", "GUTSCHRIFT", "CREDIT NOTE"),
+    ("credit_note", "STORNORECHNUNG", "CANCELLATION INVOICE"),
     ("correction", "KORREKTURRECHNUNG", "CORRECTIVE INVOICE"),
 ])
 def test_s4_acht_titel(pg_session, tmp_path, typ, de_titel, en_titel):
@@ -333,7 +333,7 @@ def test_s4_storno_englischer_rechnung_bleibt_englisch(pg_session, tmp_path):
     assert "vom " not in storno.notes
     storno.customer = kunde
     text = _pdf_text(storno, company, tmp_path, "storno-en.pdf")
-    assert "CREDIT NOTE" in text
+    assert "CANCELLATION INVOICE" in text
 
 
 # ── S5 ─────────────────────────────────────────────────────────────────────
@@ -663,7 +663,7 @@ def test_schablonentexte_vollstaendig_in_belegdarstellung():
     """Vollstaendige Liste der PDF-Schablonen; Befund, wenn etwas fehlt."""
     en = darstellung("en")
     erwartet = {
-        "INVOICE", "PREPAYMENT INVOICE", "CREDIT NOTE", "CORRECTIVE INVOICE",
+        "INVOICE", "PREPAYMENT INVOICE", "CANCELLATION INVOICE", "CORRECTIVE INVOICE",
         "Invoice number", "Invoice date", "Date of supply", "Period of supply",
         "Expected period of supply", "Due date", "Customer number", "Your reference",
         "Purchase order number", "Customer VAT ID", "No.", "Description", "Quantity",

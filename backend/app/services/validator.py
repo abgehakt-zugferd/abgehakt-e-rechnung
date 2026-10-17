@@ -336,6 +336,12 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
                     "ITEM_PRICE_NEGATIVE", "error",
                     f"Position {item.position}: Negativer Einzelpreis ist nicht erlaubt.", f"items[{item.position}].unit_price"
                 ))
+            if item.unit_price == 0 and art is not None and art.intern == "self_billing":
+                errors.append(Issue(
+                    "ITEM_PRICE_ZERO", "error",
+                    f"Position {item.position}: Einzelpreis muss bei einer Honorargutschrift größer als 0 sein.",
+                    f"items[{item.position}].unit_price",
+                ))
             rate = item.tax_rate.quantize(Decimal("0"))
             if rate not in VALID_TAX_RATES:
                 errors.append(Issue(
@@ -508,7 +514,7 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
     # `original_invoice` fehlt bei Testattrappen und bei einer noch nicht
     # geladenen Beziehung; dann greift die Regel nicht. Die Referenz als solche
     # verlangt bereits ORIGINAL_INVOICE_REQUIRED oben.
-    if invoice_type == "credit_note":
+    if invoice_type in {"credit_note", "self_billing_storno"}:
         original = getattr(invoice, "original_invoice", None)
         if original is not None:
             for feld, bezeichnung in (("net_total", "Nettobetrag"),

@@ -245,8 +245,15 @@ class TitleBand(Flowable):
         # Band, Titel sitzt auf derselben Linie.
         baseline = (self.height - self.number_size) / 2 + self.number_size * 0.20
 
+        # Lange Belegtitel (insbesondere der englische 389-Titel) dürfen die
+        # rechtsbündige Nummer nicht überdrucken. Den Platz an der tatsächlich
+        # gezeichneten Nummer messen, statt je Belegart Schriftgrößen zu pflegen.
+        nummer_breite = pdfmetrics.stringWidth(self.number, self.number_font, self.number_size)
+        titel_breite = pdfmetrics.stringWidth(self.title, self.title_font, self.title_size)
+        platz = self.width - 2 * self.pad - nummer_breite - 8
+        titel_groesse = self.title_size * min(1, max(1, platz) / max(1, titel_breite))
         c.setFillColor(self.title_color)
-        c.setFont(self.title_font, self.title_size)
+        c.setFont(self.title_font, titel_groesse)
         c.drawString(self.pad, baseline, self.title)
 
         c.setFillColor(self.number_color)
@@ -621,7 +628,7 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
                 label = d.steuerzeile(_pct(rate), money(g["basis"]))
                 totals_data.append([Paragraph(label, small), Paragraph(money(g["tax"]), right)])
     summen_label = (
-        d.label_gutschriftbetrag if _ist_gutschrift(invoice) else d.label_rechnungsbetrag
+        d.label_gutschriftbetrag if belegart(invoice.invoice_type).intern == "self_billing" else d.label_rechnungsbetrag
     )
     totals_data.append([
         Paragraph(f"<b>{summen_label}</b>", small_bold),
@@ -666,6 +673,9 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         payment_text = invoice.payment_terms or d.fallback_gutschrift_ohne
     else:
         payment_text = invoice.payment_terms or d.fallback_zahlbar
+    if belegart(invoice.invoice_type).intern == "credit_note" and not invoice.payment_terms:
+        payment_text = ("Stornorechnung zur ursprünglichen Rechnung." if d.code == "de"
+                        else "Cancellation of the original invoice.")
     story.extend(_zahlungsblock(invoice, company, small, d, payment_text, BODY))
 
     # Ersatzrechnung: Hinweis aus dem Bezug, nicht aus den Bemerkungen, damit

@@ -85,6 +85,7 @@ class Belegdarstellung:
     # Belegtitel
     titel_rechnung: str
     titel_anzahlung: str
+    titel_storno: str
     titel_gutschrift: str
     titel_korrektur: str
 
@@ -162,19 +163,28 @@ class Belegdarstellung:
 
     def titel(self, belegart_intern: str | None) -> str:
         """Sichtbarer Belegtitel zum fachlichen internen Wert (nach belegart())."""
+        from app.services.belegart import belegart
+
         mapping = {
             None: self.titel_rechnung,
-            "standard": self.titel_rechnung,
-            "invoice": self.titel_rechnung,
             "prepayment": self.titel_anzahlung,
-            "credit_note": self.titel_gutschrift,
-            "credit": self.titel_gutschrift,
-            "storno": self.titel_gutschrift,
+            "credit_note": self.titel_storno,
             "correction": self.titel_korrektur,
             "self_billing": self.titel_gutschrift,
-            "self-billing": self.titel_gutschrift,
+            "self_billing_storno": SELF_BILLING_STORNO_TITEL[self.code],
         }
-        return mapping[belegart_intern]
+        return mapping[belegart(belegart_intern).intern]
+
+    def bezeichnung(self, art: str | None) -> str:
+        """Name in der Oberfläche; der PDF-Titel enthält die Pflichtangabe."""
+        from app.services.belegart import belegart
+
+        intern = belegart(art).intern
+        if intern == "self_billing_storno":
+            return self.titel(intern)
+        if intern == "self_billing":
+            return "Honorargutschrift" if self.code == "de" else "Self-billed Invoice"
+        return self.titel(art).capitalize() if self.code == "de" else self.titel(art).title()
 
     def steuerhinweis(self, kategorie: str) -> str | None:
         hinweise = {
@@ -192,10 +202,17 @@ class Belegdarstellung:
         return self.abzugzeile_muster.format(grund=grund)
 
 
+# vorläufig, Prüfung durch Steuerberatung offen (#156)
+SELF_BILLING_STORNO_TITEL = {
+    "de": "Stornierung der Gutschrift",
+    "en": "Cancellation of self-billed invoice",
+}
+
 _DE = Belegdarstellung(
     code="de",
     titel_rechnung="RECHNUNG",
     titel_anzahlung="ANZAHLUNGSRECHNUNG",
+    titel_storno="STORNORECHNUNG",
     titel_gutschrift="GUTSCHRIFT",
     titel_korrektur="KORREKTURRECHNUNG",
     label_rechnungsnummer="Rechnungsnummer:",
@@ -233,7 +250,7 @@ _DE = Belegdarstellung(
     ),
     fallback_gutschrift_ohne="Gutschrift ohne Zahlungsaufforderung.",
     fallback_zahlbar="Zahlbar ohne Abzug.",
-    storno_zahlungsbedingungen="Gutschrift/Storno zur Rechnung {nummer}.",
+    storno_zahlungsbedingungen="Storno zur Rechnung {nummer}.",
     storno_bemerkung="Storno zur Rechnung {nummer} vom {datum}.",
     ersatz_hinweis="Ersetzt Rechnung {nummer} vom {datum}.",
     hinweis_ae=AE_HINWEIS,
@@ -249,7 +266,8 @@ _EN = Belegdarstellung(
     code="en",
     titel_rechnung="INVOICE",
     titel_anzahlung="PREPAYMENT INVOICE",
-    titel_gutschrift="CREDIT NOTE",
+    titel_storno="CANCELLATION INVOICE",
+    titel_gutschrift="SELF-BILLED INVOICE (Gutschrift)",
     titel_korrektur="CORRECTIVE INVOICE",
     label_rechnungsnummer="Invoice number:",
     label_rechnungsdatum="Invoice date:",
@@ -286,7 +304,7 @@ _EN = Belegdarstellung(
     ),
     fallback_gutschrift_ohne="Credit note without payment request.",
     fallback_zahlbar="Payable without deduction.",
-    storno_zahlungsbedingungen="Credit note / cancellation of invoice {nummer}.",
+    storno_zahlungsbedingungen="Cancellation of invoice {nummer}.",
     storno_bemerkung="Cancellation of invoice {nummer} dated {datum}.",
     ersatz_hinweis="Replaces invoice {nummer} dated {datum}.",
     hinweis_ae=AE_HINWEIS,

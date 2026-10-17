@@ -352,8 +352,8 @@
                     </div>
 
                     {% if belegart_waehlbar %}
-                    {# Belegart: nur die manuelle Teilmenge (Standard/Anzahlung).
-                       Systembelege (381/384/389) bekommen kein Feld; die Sperre
+                    {# Belegart: nur die manuelle Teilmenge (Standard/Anzahlung/Honorargutschrift).
+                       Systembelege und importierte 389 bekommen kein Feld; die Sperre
                        steht serverseitig, dieses Feld ist nur ihre Anzeige.
                        Bei Neuanlage aus Vorlage startet die Auswahl immer bei
                        Standard: die Belegart der Vorlage wird nie vererbt. #}
@@ -364,7 +364,7 @@
                         <label class="label">Belegart</label>
                         <select name="invoice_type" class="input">
                             {% for art in manuelle_belegarten() %}
-                            <option value="{{ art.form_wert }}" {% if aktuelle_belegart == art.form_wert %}selected{% endif %}>{{ art.label }}</option>
+                            <option value="{{ art.form_wert }}" {% if aktuelle_belegart == (art.intern or "standard") %}selected{% endif %}>{{ art.label }}</option>
                             {% endfor %}
                         </select>
                         <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
@@ -373,6 +373,7 @@
                             geplantem Leistungszeitraum: Leistungszeitraum von/bis wird
                             dann zur Pflichtangabe, ein Leistungsdatum entfällt.
                             Standard bleibt die Standardrechnung.
+                            Honorargutschrift: Sie stellen die Rechnung über eine Leistung aus, die Sie empfangen haben.
                         </p>
                     </div>
                     {% endif %}

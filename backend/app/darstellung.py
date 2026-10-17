@@ -69,6 +69,7 @@ def registriere_darstellungsfilter(templates: Jinja2Templates) -> None:
     nicht beim Start auf, sondern erst beim Aufruf seiner Seite. Dagegen steht
     die Drift-Wache in `tests/test_geldformat.py`.
     """
+    templates.env.filters["beleg_bezeichnung"] = _DE.bezeichnung
     templates.env.filters["euro"] = euro
     templates.env.filters["betrag"] = betrag
     templates.env.filters["menge"] = menge

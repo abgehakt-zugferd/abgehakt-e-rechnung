@@ -47,8 +47,8 @@ def pruefe_ersetzbar(db: Session, kennung: str | uuid.UUID) -> Invoice:
     eine Ablehnung wie jede andere, kein Serverfehler."""
     original = _lade(db, kennung)
     # Ersetzt wird nur eine gestellte, eigenstaendige Rechnung. Ein Folgebeleg
-    # (381/384) hat seinen eigenen Korrekturweg; 389 bleibt bis zum eigenen
-    # Korrekturschritt ausgeschlossen. Ein Entwurf ist noch frei
+    # (381/384) hat seinen eigenen Korrekturweg; 389 wird storniert und als
+    # neue 389 ausgestellt, bleibt also von Ersatzrechnungen ausgeschlossen (#156). Ein Entwurf ist noch frei
     # bearbeitbar und braucht keinen Ersatz.
     if original.status not in FINALIZED or belegart(original.invoice_type).bt3 not in {"380", "386"}:
         raise ErsatzNichtMoeglich(

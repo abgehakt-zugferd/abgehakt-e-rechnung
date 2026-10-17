@@ -75,6 +75,6 @@ def besetzung(invoice, firma, kunde) -> Besetzung:
     art = belegart(getattr(invoice, "invoice_type", None))
     eigene = _partei(firma, firma=True)
     gegenpartei = _partei(kunde, firma=False)
-    if art.intern == "self_billing":
+    if art.intern in {"self_billing", "self_billing_storno"}:
         return Besetzung(gegenpartei, eigene, False)
     return Besetzung(eigene, gegenpartei, True)

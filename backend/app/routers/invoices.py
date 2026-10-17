@@ -308,14 +308,17 @@ def _run_validation(db: Session, invoice: Invoice, company: Company) -> Validati
 def _belegart_waehlbar(invoice: Invoice | None) -> bool:
     """Ob das Formular ein Belegart-Feld anbietet (Spec vorabrechnung.md, Option B).
 
-    Nur fuer manuell waehlbare Arten (Standard/Anzahlung). Systembelege
-    (381/384/389) bekommen kein editierbares Typfeld; ein unbekannter
+    Nur fuer manuell waehlbare Arten ohne gebundene Herkunft. Systembelege
+    (381/384 und 389-Storno) oder importierte 389 bekommen kein editierbares
+    Typfeld; ein unbekannter
     gespeicherter Typ wird fail-closed wie ein Systembeleg behandelt.
     Die Sperre steht serverseitig in den POST-Handlern — das fehlende Feld
     im HTML ist nur die ehrliche Anzeige davon, keine Sperre.
     """
     if invoice is None:
         return True
+    if belegsperre.gilt(invoice):
+        return False
     try:
         return belegart(invoice.invoice_type).manuell_waehlbar
     except UnknownInvoiceTypeError:
@@ -345,10 +348,10 @@ def _get_draft(db: Session, invoice_id: uuid.UUID) -> Invoice:
     #
     # Die Tür geht hier zu und nicht erst beim Finalisieren: wer erst zehn Minuten
     # Positionen ändert und dann abgewiesen wird, hat zehn Minuten verloren.
-    if invoice.invoice_type == "credit_note":
+    if invoice.invoice_type in {"credit_note", "self_billing_storno"}:
         raise HTTPException(
             400,
-            "Eine Gutschrift lässt sich nicht bearbeiten. Sie übernimmt die Beträge "
+            "Eine Stornorechnung lässt sich nicht bearbeiten. Sie übernimmt die Beträge "
             "der Originalrechnung unverändert; anders wäre sie keine Stornierung "
             "mehr. Stimmt etwas nicht, verwirf diesen Entwurf und beginne neu.",
         )
@@ -557,7 +560,7 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
     # Belegart vor Feldregeln und Nummernvergabe (Spec: Reihenfolge beim
     # Schreiben). Eine abgelehnte Wahl darf weder Zaehler noch Zeile anfassen.
     # Fehlendes Feld = Standard (abwaertskompatibel); die Waehlbarkeitspruefung
-    # ist eigener Schritt, nicht Mitgliedschaft in der Typtabelle (381/389
+    # ist eigener Schritt, nicht Mitgliedschaft in der Typtabelle (381/384
     # waeren sonst waehlbar).
     try:
         invoice_type = manuelle_belegart(form.get("invoice_type"))
@@ -679,8 +682,8 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
     delivery_date, service_period_start, service_period_end = parse_leistungszeit_from_form(form)
 
     # Belegart: vor jeder Feld- oder Positionsaenderung entscheiden (Spec:
-    # Reihenfolge beim Schreiben). Ein normaler Entwurf darf zwischen Standard
-    # und Anzahlung wechseln. Ein Systembeleg (381/384/389) behaelt seine Art:
+    # Reihenfolge beim Schreiben). Ein normaler Entwurf darf zwischen den manuellen Arten
+    # wechseln. Ein Systembeleg oder importierter 389 behaelt seine Art:
     # fehlendes Feld heisst "unveraendert", ein mitgesendetes Feld wird
     # abgelehnt, nicht ignoriert — das Formular bietet dort kein Typfeld, also
     # ist ein mitgesendeter Wert immer ein manipulierter POST.
@@ -1301,7 +1304,7 @@ def create_storno(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(404, "Rechnung nicht gefunden")
     if original.status not in ("issued", "paid"):
         raise HTTPException(400, "Nur finalisierte Rechnungen (issued/paid) können storniert werden.")
-    if original.invoice_type == "credit_note":
+    if original.invoice_type in {"credit_note", "self_billing_storno"}:
         raise HTTPException(400, "Eine Stornorechnung kann nicht erneut storniert werden.")
 
     # Pro Original höchstens EINE Gutschrift (#7). Zwei Gutschriften zum selben

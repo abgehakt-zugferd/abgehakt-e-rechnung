@@ -66,7 +66,7 @@ def exemption_reason(invoice: Invoice) -> str | None:
     cat = getattr(invoice, "tax_category", "S")
     if cat not in EXEMPTION_REASONS:
         return None
-    if getattr(invoice, "invoice_type", None) == "self_billing" and cat == "E":
+    if belegart(getattr(invoice, "invoice_type", None)).intern in {"self_billing", "self_billing_storno"} and cat == "E":
         return EXEMPTION_SELF_BILLING_E
     return EXEMPTION_REASONS[cat]
 
@@ -551,7 +551,11 @@ def _reference_xml(invoice: Invoice) -> str:
 def _notes_xml(invoice: Invoice) -> str:
     # BT-22 ist beim Gutschriftverfahren Pflicht und darf nicht von frei
     # bearbeitbaren Nutzernotizen abhängen.
-    notizen = ["Gutschrift"] if belegart(invoice.invoice_type).bt3 == "389" else []
+    art = belegart(invoice.invoice_type).intern
+    notizen = ["Gutschrift"] if art == "self_billing" else []
+    if art == "self_billing_storno":
+        original = invoice.original_invoice
+        notizen.append(f"Stornierung der Gutschrift Nr. {original.invoice_number}")
     if invoice.notes:
         notizen.append(invoice.notes)
     return "".join(f"""

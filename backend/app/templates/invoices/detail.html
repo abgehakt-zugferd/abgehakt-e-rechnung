@@ -18,6 +18,7 @@
             </a>
             <div>
                 <h1 style="font-size:var(--fs-gross);">{{ invoice.invoice_number }}</h1>
+                <p>{{ invoice.invoice_type|beleg_bezeichnung }}</p>
                 <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">{{ invoice.customer.name if invoice.customer else '–' }}</p>
             </div>
         </div>
@@ -32,7 +33,7 @@
         {# Eine Gutschrift spiegelt ihr Original und ist deshalb nicht bearbeitbar (#8).
            Der Router weist den Aufruf ohnehin ab; hier verschwindet nur der Knopf,
            der ins Leere fuehrte. #}
-        {% if invoice.invoice_type != 'credit_note' %}
+        {% if invoice.invoice_type not in ('credit_note', 'self_billing_storno') %}
         <a href="/invoices/{{ invoice.id }}/bearbeiten" class="btn-secondary">✎ BEARBEITEN</a>
         {% endif %}
         <a href="/invoices/{{ invoice.id }}/vorschau" class="btn-secondary">👁 VORSCHAU</a>
@@ -123,9 +124,9 @@
             </label>
             <button type="submit" class="btn-success">✓ ALS BEZAHLT MARKIEREN</button>
         </form>
-        {% if invoice.invoice_type != 'credit_note' %}
+        {% if invoice.invoice_type not in ('credit_note', 'self_billing_storno') %}
         <form method="post" action="/invoices/{{ invoice.id }}/status"
-              onsubmit="return confirm('Rechnung als storniert markieren? (nur Status, kein Gutschrift-Beleg)')">
+              onsubmit="return confirm('Rechnung als storniert markieren? (nur Status, kein Stornobeleg)')">
             <input type="hidden" name="new_status" value="cancelled">
             <button type="submit" class="btn-danger">✗ ALS STORNIERT MARKIEREN</button>
         </form>
@@ -135,7 +136,7 @@
         {% if invoice.invoice_type == 'credit_note' and invoice.status in ('issued', 'paid') %}
         {# Issue #142: eine gestellte Gutschrift ist endgueltig. Nicht nur sperren, den Weg zeigen. #}
         <div data-hinweis="gutschrift-endgueltig" style="flex-basis:100%; padding:10px 14px; border:2px solid var(--border); font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
-            Diese Gutschrift ist endgültig; sie ist selbst die Korrektur und lässt sich nicht stornieren.
+            Diese Stornorechnung ist endgültig; sie ist selbst die Korrektur und lässt sich nicht stornieren.
             {% if invoice.original_invoice %}
             War sie falsch, stelle zur Rechnung
             <a href="/invoices/{{ invoice.original_invoice.id }}" style="color:var(--gold); text-decoration:underline;">{{ invoice.original_invoice.invoice_number }}</a>
@@ -149,10 +150,10 @@
         </div>
         {% endif %}
 
-        {% if invoice.status in ('issued', 'paid') and invoice.invoice_type != 'credit_note' %}
+        {% if invoice.status in ('issued', 'paid') and invoice.invoice_type not in ('credit_note', 'self_billing_storno') %}
         <form method="post" action="/invoices/{{ invoice.id }}/storno"
-              onsubmit="return confirm('Gutschrift/Storno-Rechnung zu diesem Beleg erzeugen? Die Originalrechnung bleibt erhalten.')">
-            <button type="submit" class="btn-secondary">↩ GUTSCHRIFT ERSTELLEN</button>
+              onsubmit="return confirm('Stornorechnung zu diesem Beleg erzeugen? Die Originalrechnung bleibt erhalten.')">
+            <button type="submit" class="btn-secondary">↩ STORNO ERSTELLEN</button>
         </form>
         {% endif %}
         {% if ersetzbar %}

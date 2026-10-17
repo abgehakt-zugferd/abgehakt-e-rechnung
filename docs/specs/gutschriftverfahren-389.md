@@ -1,6 +1,6 @@
 # Auftrag: Gutschriftverfahren (BT-3 389) als eigener Belegweg
 
-**Status:** teilweise umgesetzt.
+**Status:** Schritte 1 und 2 implementiert; Gateway-Prüfung mit PostgreSQL und Mustang für Schritt 2 noch offen. BT-3 und Titel des 389-Stornos sind vorläufig, Prüfung durch Steuerberatung offen (#156).
 
 Umgesetzt:
 
@@ -12,15 +12,16 @@ Umgesetzt:
 - Originalbezug: `self_billing` trägt `braucht_original=False`; ein Bezug wird abgewiesen.
 - Pflichtangabe „Gutschrift" als systemseitige BT-22-Note, unabhängig von Nutzernotizen.
 
+- Titeltrennung: 381 heißt Stornorechnung / Cancellation Invoice; 389 heißt in der Oberfläche Honorargutschrift, im PDF Gutschrift / Self-billed Invoice (Gutschrift).
+- Manuelle Anlage über `honorargutschrift`; die Herkunft entscheidet über gebundene Felder.
+- Nullpreis einer 389-Position wird mit `ITEM_PRICE_ZERO` abgewiesen.
+- Storno einer 389 als eigene Belegart `self_billing_storno`, mit Originalbezug und unveränderter Rollenbesetzung.
+
 Offen:
 
-- Eigener Titel für 381: `Belegdarstellung.titel` in `belegsprache.py` bildet `credit_note` und `self_billing` auf denselben Titel ab.
-- Storno-Sperre für 389: `pruefe_stornierbar` in `storno.py` und `create_storno` in `routers/invoices.py` sperren nur `credit_note`.
-- Manuelle Anlage: `self_billing` steht in `belegart.py` auf `manuell_waehlbar=False`.
 - Herleitung speichern: `InvoiceItem` hat keine Spalten für `basis_netto` und `satz`.
 - Art-Filter `honorargutschrift`: `filtere_rechnungsliste` in `rechnungsliste_filter.py` kennt nur `rechnung` und `gutschrift`.
 - Kennzahl offene Auszahlungen: `dashboard_kennzahlen.py` führt keine solche Kennzahl.
-- Ablehnung des Nullbetrags: der Validator kennt `ITEM_PRICE_NEGATIVE`, aber keine Ablehnung eines Nettobetrags von null bei 389.
 
 ## Anlass
 
@@ -47,10 +48,10 @@ Sonderfall, sondern das Wesen des Verfahrens.
 
 ## Namen: drei Dinge dürfen nicht gleich heißen
 
-Heute drucken 381 und 389 denselben Titel. `Belegdarstellung.titel` in `belegsprache.py`
-bildet `credit_note` und `self_billing` beide auf `titel_gutschrift` ab, also auf
-`GUTSCHRIFT` beziehungsweise `CREDIT NOTE`. Damit ist
-am fertigen Beleg nicht zu erkennen, welcher der beiden Fälle vorliegt.
+Vor Schritt 2 druckten 381 und 389 denselben Titel. `Belegdarstellung.titel`
+trennt sie jetzt und löst Aliase ausschließlich über `belegart` auf.
+Der englische 389-Titel lautet `Self-billed Invoice (Gutschrift)`, damit die
+Pflichtangabe auch in dieser Sprache sichtbar bleibt.
 
 Das ist mehr als unschön. Die Angabe „Gutschrift" ist nach § 14 Abs. 4 S. 1 Nr. 10 UStG die
 **Pflichtangabe für das Gutschriftverfahren**. Steht sie auf einer Stornorechnung, behauptet
@@ -209,8 +210,7 @@ Befunde) und im PDF-Erzeuger. Das Modul trägt also etwas, statt nur durchzureic
    Der XML-Rückimport sucht den externen Kunden bei TypeCode 389 deshalb im
    Verkäuferblock, bei den übrigen Typen im Erwerberblock. Ersatzrechnungen
    bleiben ausdrücklich auf 380 und 386 als ersetzbare Belegarten beschränkt;
-   die Originalbezugspflicht entscheidet darüber nicht. Die Korrektur einer
-   falschen 389 durch Storno und Neuausstellung folgt in einem eigenen Schritt.
+   die Originalbezugspflicht entscheidet darüber nicht. Eine falsche 389 wird storniert und danach als neue 389 ausgestellt (Punkt 7).
 3. **Der Kunde bekommt eine Steuernummer.** Umgesetzt: Feld `Customer.tax_number`, Migration,
    Formularfeld, Speicherung, Prüfung beim Finalisieren einer 389. **Noch offen:** Ausgabe als
    `FC`-Registrierung in der XML (Rollenbesetzung). Nach § 9 des Übergabeformats darf sie
@@ -236,14 +236,28 @@ Befunde) und im PDF-Erzeuger. Das Modul trägt also etwas, statt nur durchzureic
    Der **Beteiligungssatz** ist nicht der Umsatzsteuersatz. Beide müssen getrennt dargestellt
    werden, und die Mengen- und Einzelpreisspalten der PDF-Tabelle in `pdf_generator.py`
    bleiben davon unberührt, tragen also weiter Menge 1 und den Nettobetrag.
-7. **Ein finalisierter 389 lässt sich nicht stornieren.** `pruefe_stornierbar` und
-   `create_storno` sperren heute nur `credit_note`. Solange keine fachlich richtige
-   Korrektur eines Gutschriftverfahrens
-   definiert ist, wird `self_billing` dort mitgesperrt, mit einer Meldung, die auf den
-   Korrekturlauf der Gegenseite verweist.
+7. **Ein finalisierter 389 lässt sich stornieren.** Entscheidung des Auftraggebers
+   vom 2026-10-17: Eine falsche 389 wird storniert und danach neu ausgestellt.
+   `pruefe_stornierbar` und `create_storno` erlauben dies. Das Storno ist die eigene,
+   nicht manuell wählbare Belegart `self_billing_storno`, mit `braucht_original=True`
+   und BT-25-Bezug auf die 389. `belegrollen.besetzung` behält die Rollen des Originals.
+   Beträge bleiben positiv; Zahlungsbedingungen und Bemerkung entstehen automatisch
+   als „Storno zur Gutschrift … vom …“. BT-22 trägt unabhängig von Nutzernotizen
+   „Stornierung der Gutschrift Nr. …“.
+   Code `261` in `belegart.py` und Titel „Stornierung der Gutschrift“ /
+   „Cancellation of self-billed invoice“ in `belegsprache.py` sind jeweils zentral
+   gehalten und vorläufig, Prüfung durch Steuerberatung offen (#156).
+   Der Ende-zu-Ende-Test finalisiert eine 389, storniert sie und finalisiert das Storno.
+   Mustang muss `is_valid` und `XML:valid` liefern. Lehnt Mustang 261 im Profil EN16931
+   ab, wird die genaue Meldung festgehalten und ausschließlich die Code-Konstante auf
+   381 umgestellt; 381 mit getauschten Rollen wäre ausdrücklich eine Notlösung.
+   Diese Messung steht bis zum Gateway-Lauf aus. Ersatzrechnungen bleiben für 389
+   ausgeschlossen; die Neuausstellung ist eine neue 389.
+
 8. **Die Bearbeitungssperre bleibt, wie sie ist.** `_get_draft` weist `credit_note` ab;
    `self_billing` fällt nicht darunter und soll es nicht, dafür gibt es `belegsperre.py`.
-   Zu prüfen ist nur, dass die Meldung für 381 ihren Wortlaut behält.
+   Auch das 389-Storno bleibt als Spiegel des Originals gegen Bearbeitung gesperrt.
+   Die Meldung für 381 nennt es Stornorechnung.
 9. **Eine Honorargutschrift lässt sich von Hand anlegen und bearbeiten.**
    `belegart.py` stellt `self_billing` auf `manuell_waehlbar=True` mit dem Formularwert
    `honorargutschrift` und der Beschriftung aus der Namenstabelle oben. Damit ist die
@@ -256,7 +270,7 @@ Befunde) und im PDF-Erzeuger. Das Modul trägt also etwas, statt nur durchzureic
    `herleitung` ist bei ihr **optional**: es gibt keinen signierten Auftrag, gegen den sie
    zu prüfen wäre. Wird sie eingegeben, gilt dieselbe Rechenprobe wie beim Import.
    Alles andere gilt unverändert: Rollenbesetzung, Pflichtangabe, Steuerprüfung nach
-   `ust_status`, kein Originalbezug, kein Nullbetrag, keine Stornierbarkeit.
+   `ust_status`, kein Originalbezug, kein Nullbetrag; Storno und Neuausstellung nach Punkt 7.
 
 ## Was ausdrücklich NICHT gilt
 
@@ -273,8 +287,8 @@ Mit der Gegenstelle abgestimmt:
   Bemessungsgrundlage.
 - **Keine negativen Positionen und kein Nullbetrag.** Ein negativer Anteil wird beim
   Sender zum Verlustvortrag, ein Anteil unter der Mindestauszahlung zu einem Eintrag in
-  `vortraege[]`. Der Validator lehnt heute negative Preise ab (`ITEM_PRICE_NEGATIVE`),
-  aber nicht die Null; für 389 ist auch sie abzuweisen.
+  `vortraege[]`. Der Validator lehnt negative Preise ab (`ITEM_PRICE_NEGATIVE`) und für 389
+  auch den Einzelpreis null (`ITEM_PRICE_ZERO`).
 - **Keine Kosten als Minusposten.** Übergabeformat § 8: Verwaltungsgebühr und Direktkosten
   sind in der Bemessungsgrundlage abgezogen und gehören, wenn sie berechnet werden, auf eine
   eigene Rechnung mit 19 %. Ebenso **keine KSA-Zeile**, § 32 KSVG verbietet die Abwälzung.
@@ -404,7 +418,7 @@ Neu, mindestens:
   aufgefallen sind.
 - `test_herleitung_ueberlebt_bearbeitung.py`: Kriterium 6, ausdrücklich mit einem
   Bearbeitungsschritt dazwischen.
-- `test_storno_389_gesperrt.py`: Umfang 7.
+- `test_storno_389.py`: Nullpreis und Umfang 7; zusätzlich der vollständige Stornoweg in `test_finalize_389_e2e.py`.
 - `test_honorargutschrift_manuell.py`: Kriterium 9, mit beiden Herkünften.
 - `test_belegtitel_trennung.py`: Kriterium 10, gegen das erzeugte PDF, nicht gegen die
   Titelkonstante.
@@ -427,9 +441,6 @@ brechen, nicht nur einen.
   der bereits bekannten `herleitung` braucht dagegen **keine** Formatänderung.
 - **Eine Vertragsnummer auf dem Beleg.** Das Übergabeformat führt keine; eine
   Vertragsnummer gilt zwischen den Parteien und gehört nicht auf diesen Beleg.
-- **Korrektur eines finalisierten 389.** Heute ist ein Korrekturlauf beim Sender ein Ersatz
-  des ganzen Laufs. Bis geklärt ist, was das für einen bereits gestellten Beleg bedeutet,
-  ist der Stornoweg gesperrt (Umfang 7).
 - **Ein Nachweis der Bemessungsgrundlage bei der manuellen Anlage.** Wer von Hand eine
   Honorargutschrift schreibt, verantwortet die Summe selbst; das Programm prüft sie gegen
   nichts. Die Rechenprobe greift nur, wenn eine `herleitung` eingegeben oder aus einem

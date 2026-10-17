@@ -131,3 +131,37 @@ def test_scheitert_eine_stufe_liegt_nichts_im_archiv(pg_session):
         (settings.storage_path / "pdfs" / f"{nummer}_visual.pdf").unlink(missing_ok=True)
         (settings.storage_path / "xml" / f"{nummer}.xml").unlink(missing_ok=True)
         app.dependency_overrides.clear()
+
+
+def test_389_finalisieren_stornieren_storno_finalisieren(client, pg_session):
+    from xml.etree import ElementTree as ET
+    from app.services.belegart import belegart
+    from tests.test_validator_389 import _kunde, _entwurf
+    from tests.helpers.finalize_pipeline import cleanup
+
+    original = _entwurf(pg_session, _kunde(pg_session))
+    nummern = [original.invoice_number]
+    try:
+        result = client.post(f'/invoices/{original.id}/finalisieren')
+        assert result.status_code == 303, result.text
+        result = client.post(f'/invoices/{original.id}/storno')
+        assert result.status_code == 303, result.text
+        pg_session.expire_all()
+        storno = pg_session.query(Invoice).filter(Invoice.original_invoice_id == original.id).one()
+        nummern.append(storno.invoice_number)
+        assert storno.invoice_type == 'self_billing_storno'
+        result = client.post(f'/invoices/{storno.id}/finalisieren')
+        assert result.status_code == 303, result.text
+        pg_session.refresh(storno)
+        assert storno.status == 'issued'
+        ns = {'ram': 'urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100'}
+        xml = ET.fromstring(storno.zugferd_xml)
+        assert xml.find('.//ram:TypeCode', ns).text == belegart(storno.invoice_type).bt3
+        assert xml.find('.//ram:InvoiceReferencedDocument/ram:IssuerAssignedID', ns).text == original.invoice_number
+        assert xml.find('.//ram:SellerTradeParty/ram:Name', ns).text == original.customer.name
+        report = mustang.validate(settings.storage_path / 'pdfs' / storno.pdf_filename)
+        assert report['is_valid'], f"{report['errors']}\n{report['raw']}"
+        assert 'XML:valid' in report['raw'], report['raw']
+    finally:
+        for nummer in nummern:
+            cleanup(nummer)

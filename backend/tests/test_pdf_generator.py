@@ -18,8 +18,8 @@ def test_document_title_standard():
 
 
 def test_document_title_credit_note():
-    assert _document_title(SimpleNamespace(invoice_type="credit_note")) == "GUTSCHRIFT"
-    assert _document_title(SimpleNamespace(invoice_type="storno")) == "GUTSCHRIFT"
+    assert _document_title(SimpleNamespace(invoice_type="credit_note")) == "STORNORECHNUNG"
+    assert _document_title(SimpleNamespace(invoice_type="storno")) == "STORNORECHNUNG"
 
 
 def test_document_title_correction():
@@ -125,26 +125,26 @@ def test_header_ohne_doppelten_firmennamen_in_adresszeile2(tmp_path):
     assert text.count("duplikat test gmbh") == 4
 
 
-def test_credit_note_pdf_shows_gutschrift_title(tmp_path):
+def test_credit_note_pdf_shows_stornorechnung_title(tmp_path):
     out = tmp_path / "storno.pdf"
     inv = _sample_invoice(_sample_customer(), invoice_type="credit_note", original_invoice_id=1)
     pdf_generator.generate_pdf(inv, _sample_company(), out)
     text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages)
-    assert "GUTSCHRIFT" in text
+    assert "STORNORECHNUNG" in text
 
 
-def test_credit_note_pdf_zeigt_gutschriftbetrag_ohne_zahlungsblock(tmp_path):
+def test_credit_note_pdf_zeigt_rechnungsbetrag_ohne_zahlungsblock(tmp_path):
     """#18: Gutschrift darf keine Zahlungsaufforderung (IBAN/Verwendungszweck) suggerieren."""
     out = tmp_path / "storno.pdf"
     inv = _sample_invoice(_sample_customer(), invoice_type="credit_note", original_invoice_id=1)
-    inv.payment_terms = "Gutschrift/Storno zur Rechnung RE-2026-001."
+    inv.payment_terms = "Storno zur Rechnung RE-2026-001."
     pdf_generator.generate_pdf(inv, _sample_company(), out)
     text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages)
-    assert "Gutschriftbetrag" in text
-    assert "Rechnungsbetrag" not in text
+    assert "Gutschriftbetrag" not in text
+    assert "Rechnungsbetrag" in text
     assert "IBAN:" not in text
     assert "Verwendungszweck:" not in text
-    assert "Gutschrift/Storno zur Rechnung RE-2026-001." in text
+    assert "Storno zur Rechnung RE-2026-001." in text
 
 
 def test_standard_pdf_behält_zahlungsblock(tmp_path):
