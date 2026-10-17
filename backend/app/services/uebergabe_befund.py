@@ -233,7 +233,7 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
                                      erwartet="basis_netto und satz als Zahlen")]
             # Kaufmaennisch runden. Pythons Standard waere ROUND_HALF_EVEN und
             # machte aus 174.325 eine 174.32 - der gueltige Auftrag flaege raus.
-            erwartet = (basis * satz / 100).quantize(_CENT, rounding=ROUND_HALF_UP)
+            erwartet = herleitungsbetrag(basis, satz)
             if erwartet != netto:
                 return [Feststellung(
                     "SUMME_STIMMT_NICHT", f"{pfad}.positionen[{lfd}].netto",
@@ -410,3 +410,8 @@ def beleg_beurteilen(
     return Belegurteil(
         beleg_sha256=sha, angenommen=True, nutzlast=nutzlast, **rest, **_anzeige(nutzlast),
     )
+
+
+def herleitungsbetrag(basis: Decimal, satz: Decimal) -> Decimal:
+    """Gemeinsame kaufmaennische Rechenprobe fuer Import und manuelle Anlage."""
+    return (basis * satz / 100).quantize(_CENT, rounding=ROUND_HALF_UP)

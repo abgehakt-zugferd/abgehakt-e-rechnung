@@ -36,12 +36,13 @@ den Tag ihrer letzten Änderung (Migration 018, #130). Die Umsatzkennzahlen der
 
 ### Neue Belegarten und Belegwege
 
-- **Gutschriftverfahren (389), erste Bausteine**: Steuerstatus und Steuernummer am Kunden,
-  Vorsteuer aus solchen Gutschriften mindert die geschätzten Steuerabgaben, Befreiungshinweis
-  für Kleinunternehmer nach § 34a UStDV (#123, #126, #149). **Noch nicht nutzbar**: Rollentausch
-  in der XML, Pflichtangabe „Gutschrift“, Storno-Sperre und manuelle Anlage fehlen, und ein
-  übergebener 389-Entwurf lässt sich noch nicht finalisieren. Den Stand führt
-  `docs/specs/gutschriftverfahren-389.md`.
+- **Gutschriftverfahren (389) nutzbar (#156)**: Rollenbesetzung in XML und PDF,
+  Pflichtangabe „Gutschrift“, getrennte Titel, manuelle Anlage und Storno mit Bezug
+  auf die 389. Die Stornoform (BT-3 261 und Titel) bleibt bis zur steuerlichen
+  Prüfung vorläufig. Herleitung je Position wird gespeichert, bei Bearbeitung
+  erhalten und im PDF getrennt vom Umsatzsteuersatz gezeigt. Eigene Listenfilter
+  und die Kennzahl Offene Auszahlungen ergänzen die Vorsteuer.
+  PostgreSQL- und Mustang-Abnahme erfolgen im Gateway.
 - **Anzahlungsrechnung (386)** als bewusst wählbare Belegart (#108).
 - **Ersatzrechnung** zu einer stornierten Rechnung, mit Verweis auf die
   Vorgängerrechnung (BT-25) (#140). Eine gestellte Gutschrift ist endgültig; das
@@ -93,6 +94,10 @@ den Tag ihrer letzten Änderung (Migration 018, #130). Die Umsatzkennzahlen der
   Stornierung per Gutschrift wirkt genau einmal (#143).
 
 ### Korrekturen
+
+- **Anzahlungsrechnungen in Kennzahlen (#157)**: 386 zählt nach `bezahlt_am` zu
+  Umsatz, Bezahlt und schuldiger Umsatzsteuer; gestellt und unbezahlt zu offenen
+  Forderungen. Wirksame Stornos einer 389 heben Auszahlung und Vorsteuer einmal auf.
 
 - „Heute“ ist Europe/Berlin, nicht die UTC-Uhr des Containers (#132).
 - Zwei Klicks auf *Finalisieren* erzeugen nicht mehr zwei Belege; ein Beleg wird

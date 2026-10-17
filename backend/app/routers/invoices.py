@@ -209,6 +209,30 @@ def _abzug_aus_form(form) -> tuple[Decimal | None, str | None]:
     return betrag, roh_grund
 
 
+def _herleitung_aus_formular(raw, netto):
+    from decimal import InvalidOperation
+    from app.services.uebergabe_befund import herleitungsbetrag
+
+    werte = [str(raw.get(feld) or "").strip() for feld in ("basis_netto", "satz")]
+    if not any(werte):
+        return {"basis_netto": None, "satz": None}
+    try:
+        basis, satz = map(Decimal, werte)
+        if (not basis.is_finite() or not satz.is_finite()
+                or basis != basis.quantize(Decimal("0.01"))
+                or satz != satz.quantize(Decimal("0.01"))
+                or abs(basis) >= Decimal("10000000000") or abs(satz) >= 1000):
+            raise ValueError
+        if herleitungsbetrag(basis, satz) != netto:
+            raise ValueError
+    except (InvalidOperation, ValueError):
+        raise HTTPException(status_code=400, detail=
+            "Herleitung: Bemessungsgrundlage und Beteiligungssatz gemeinsam "
+            "mit höchstens zwei Nachkommastellen eingeben; der Betrag muss "
+            "Bemessungsgrundlage × Beteiligungssatz / 100 entsprechen.")
+    return {"basis_netto": basis, "satz": satz}
+
+
 def _positionen_aus_formular(raw_items) -> list[InvoiceItem]:
     """Positionen aus dem Formular bauen (Position 1..n, lückenlos), ohne DB.
 
@@ -222,12 +246,14 @@ def _positionen_aus_formular(raw_items) -> list[InvoiceItem]:
         price = Decimal(str(raw["unit_price"]))
         tax_rate = Decimal(str(raw["tax_rate"]))
         net, tax, gross = _calc_item(qty, price, tax_rate)
+        herleitung = _herleitung_aus_formular(raw, net)
         # Nach _pruefe_einheiten: getrimmter Katalogwert, kein Default auf Stück.
         unit = str(raw.get("unit") or "").strip()
         positionen.append(InvoiceItem(
             position=i,
             description=_normalize_description(raw["description"]),
             **positionsangaben.aus_formular(raw, i),
+            **herleitung,
             unit=unit,
             quantity=qty,
             unit_price=price,
@@ -370,6 +396,8 @@ def _items_as_json(invoice: Invoice, *, vorlage: bool = False) -> str:
             "unit": item.unit,
             "quantity": dezimal_klartext(item.quantity),
             "unit_price": str(item.unit_price),
+            "basis_netto": str(item.basis_netto) if item.basis_netto is not None else "",
+            "satz": str(item.satz) if item.satz is not None else "",
             "tax_rate": dezimal_klartext(item.tax_rate),
             "net_amount": float(item.net_amount),
             "tax_amount": float(item.tax_amount),

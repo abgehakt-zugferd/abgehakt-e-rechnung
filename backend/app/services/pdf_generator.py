@@ -301,7 +301,7 @@ def _zeigt_steuer(invoice: Invoice) -> bool:
     return getattr(invoice, "tax_category", "S") not in TAX_NOTICE_KATEGORIEN
 
 
-def _beschreibung_mit_angaben(item, d: Belegdarstellung) -> str:
+def _beschreibung_mit_angaben(item, d: Belegdarstellung, waehrung: str = "EUR") -> str:
     """Beschreibung plus optionale Zusatzangaben der Position als kleine Zeile darunter."""
     markup = _description_markup(item.description)
     nummer = (getattr(item, "artikelnummer", None) or "").strip()
@@ -312,6 +312,12 @@ def _beschreibung_mit_angaben(item, d: Belegdarstellung) -> str:
     if von and bis:
         zeitraum = f"{d.label_leistungszeitraum} {d.format_datum(von)} – {d.format_datum(bis)}"
         markup += f'<br/><font size="7">{escape(zeitraum)}</font>'
+    basis = getattr(item, "basis_netto", None)
+    satz = getattr(item, "satz", None)
+    if basis is not None and satz is not None:
+        # Beteiligungssatz gehoert zur Herleitung, nie zur Umsatzsteuerspalte.
+        herleitung = f"Bemessungsgrundlage {d.format_betrag(basis, waehrung)} × {d.format_menge(satz)} %"
+        markup += f'<br/><font size="7">{escape(herleitung)}</font>'
     return markup
 
 
@@ -332,7 +338,7 @@ def _build_item_rows(invoice: Invoice, d: Belegdarstellung) -> list[list]:
     for item in invoice.items:
         zeile = [
             str(item.position),
-            Paragraph(_beschreibung_mit_angaben(item, d), desc_style),
+            Paragraph(_beschreibung_mit_angaben(item, d, waehrung), desc_style),
             # NICHT `str(x.normalize())`: das kippt bei durch zehn teilbaren
             # Mengen in die Exponentialform — 120 Stunden stünden als "1.2E+2"
             # auf der Rechnung an den Kunden.

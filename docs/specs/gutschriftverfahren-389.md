@@ -1,6 +1,8 @@
 # Auftrag: Gutschriftverfahren (BT-3 389) als eigener Belegweg
 
-**Status:** Schritte 1 und 2 implementiert; Gateway-Prüfung mit PostgreSQL und Mustang für Schritt 2 noch offen. BT-3 und Titel des 389-Stornos sind vorläufig, Prüfung durch Steuerberatung offen (#156).
+**Status:** Schritte 1 bis 3 und #157 implementiert; PostgreSQL-, Migrationsketten-
+und Mustang-Abnahme im Gateway noch offen. BT-3 und Titel des 389-Stornos bleiben
+vorläufig, Prüfung durch Steuerberatung offen (#156).
 
 Umgesetzt:
 
@@ -17,11 +19,12 @@ Umgesetzt:
 - Nullpreis einer 389-Position wird mit `ITEM_PRICE_ZERO` abgewiesen.
 - Storno einer 389 als eigene Belegart `self_billing_storno`, mit Originalbezug und unveränderter Rollenbesetzung.
 
-Offen:
-
-- Herleitung speichern: `InvoiceItem` hat keine Spalten für `basis_netto` und `satz`.
-- Art-Filter `honorargutschrift`: `filtere_rechnungsliste` in `rechnungsliste_filter.py` kennt nur `rechnung` und `gutschrift`.
-- Kennzahl offene Auszahlungen: `dashboard_kennzahlen.py` führt keine solche Kennzahl.
+- Herleitung je Position gespeichert, beim Bearbeiten gebunden, im PDF sichtbar.
+- Art-Filter `honorargutschrift` für genau die 389; eigene Auswahl
+  `honorargutschrift_storno` für ihre Stornos. Damit bleibt Kriterium 11 wörtlich
+  erfüllt, und die Gegenbelege sind dennoch auffindbar.
+- Offene Auszahlungen und Vorsteuer berücksichtigen wirksame 389-Stornos.
+- Anzahlungen (386) zählen zu Forderungen, nach Zahlung zu Umsatz, Bezahlt und USt (#157).
 
 ## Anlass
 
@@ -228,7 +231,7 @@ Befunde) und im PDF-Erzeuger. Das Modul trägt also etwas, statt nur durchzureic
 6. **Die Herleitung wird gespeichert, gebunden und sichtbar.** Der Auftrag trägt je Position
    optional `herleitung {basis_netto, satz}`; Abgehakt rechnet sie schon nach und lehnt bei
    Abweichung ab (die Rechenprobe in `uebergabe_befund.py`, Übergabeformat § 8, „der
-   Prüfhaken"). Heute werden beide Zahlen beim Anlegen verworfen. Sie gehören als Spalten
+   Prüfhaken"). Vor Schritt 3 wurden beide Zahlen beim Anlegen verworfen. Sie gehören als Spalten
    an `InvoiceItem`, in
    die gebundenen Felder von `belegsperre.py` und auf den Beleg. Sonst verliert sie der
    erste erlaubte Text- oder Steueredit, weil `_replace_items` in `routers/invoices.py`
@@ -305,7 +308,7 @@ abzuführender Betrag. Das Programm ist aber durchgehend auf Ausgangsrechnungen 
 `docs/ANWENDUNG.md` begründet die Kennzahl „Schuldige Umsatzsteuer" ausdrücklich damit,
 dass es keine Eingangsrechnungen kenne. Ein 389 ist genau die eine Ausnahme davon.
 
-**Gemessener Ist-Stand.** Heute ist die Behandlung nicht falsch, sondern uneinheitlich:
+**Ausgangslage vor Schritt 3.** Die folgende Tabelle dokumentiert den früheren Stand:
 
 | Kennzahl | filtert auf | 389 enthalten? |
 |---|---|---|

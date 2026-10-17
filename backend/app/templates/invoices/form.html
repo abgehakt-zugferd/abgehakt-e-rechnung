@@ -177,6 +177,11 @@
                                     </div>
 
                                     <div>
+                                        <label class="label">Bemessungsgrundlage netto / Beteiligungssatz (optional)</label>
+                                        <input type="number" x-model="item.basis_netto" step="0.01" placeholder="Bemessungsgrundlage netto" class="input"
+                                               {% if aus_beleg %}readonly{% endif %}>
+                                        <input type="number" x-model="item.satz" step="0.01" placeholder="Beteiligungssatz %" class="input"
+                                               {% if aus_beleg %}readonly{% endif %}>
                                         <label class="label">Artikel-/Leistungsnummer (optional)</label>
                                         <input type="text" x-model="item.artikelnummer" maxlength="50"
                                                class="input font-mono" style="font-size:var(--fs-gross); padding:6px 8px; max-width:220px;">
@@ -531,6 +536,8 @@ function invoiceForm() {
         addItem() {
             this.items.push({
                 description: '',
+                basis_netto: '',
+                satz: '',
                 artikelnummer: '',
                 leistung_von: '',
                 leistung_bis: '',

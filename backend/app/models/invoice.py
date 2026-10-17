@@ -179,6 +179,8 @@ class Invoice(Base):
 class InvoiceItem(Base):
     __tablename__ = "invoice_items"
     __table_args__ = (
+        CheckConstraint("(basis_netto IS NULL) = (satz IS NULL)",
+                        name="ck_invoice_items_herleitung_beide_oder_keine"),
         CheckConstraint(
             "(leistung_von IS NULL) = (leistung_bis IS NULL)",
             name="ck_invoice_items_leistung_beide_oder_keiner",
@@ -205,6 +207,8 @@ class InvoiceItem(Base):
     leistung_von: Mapped[Optional[date]] = mapped_column(Date)
     leistung_bis: Mapped[Optional[date]] = mapped_column(Date)
     unit: Mapped[str] = mapped_column(String(20), nullable=False, default="Stück", server_default="Stück")
+    basis_netto: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    satz: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2))
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     tax_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=19, server_default="19")

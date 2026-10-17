@@ -207,14 +207,15 @@ Zeitzone des Servers.
 | Kennzahl | Bedeutung |
 |---|---|
 | Rechnungen gesamt | Alle Belege in der Datenbank (jeden Status) |
-| Offene Forderungen | Anzahl und Bruttosumme der gestellten (`issued`), noch nicht bezahlten Standardrechnungen. Gutschriften zählen nicht mit; Rechnungen, zu denen eine gestellte oder bezahlte Gutschrift existiert, ebensowenig, egal welchen Status das Original trägt (services/storno_wirkung.py, `WIRKSAM_STORNIERT`). |
-| Bezahlt diesen Monat | Brutto-Summe bezahlter Standardrechnungen mit `bezahlt_am` ab Monatsanfang (Zahlungsdatum; ohne obere Datumsgrenze). Ausgezahlte Gutschriften mindern diese Zahl nicht. Die Kachel nennt zusätzlich den Wert des Vormonats. |
-| Bezahlt Vormonat | Brutto-Summe bezahlter Standardrechnungen des vorherigen Kalendermonats nach `bezahlt_am`; steht als Zusatz unter der Zahl von „Bezahlt diesen Monat“ |
-| Umsatz lfd. Jahr | Netto-Summe bezahlter Standardrechnungen mit `bezahlt_am` seit Jahresanfang (ohne obere Datumsgrenze). Gestellte, unbezahlte Rechnungen zählen nicht; sie bleiben offene Forderungen. Ausgezahlte Gutschriften (bezahlt, zu einem bezahlten Original) mindern ihn, gerechnet nach dem Zahlungsdatum der Gutschrift (dashboard_kennzahlen.py, `umsatz_im_zeitraum`). |
-| Schuldige Umsatzsteuer | Summe der **ausgewiesenen USt** gestellter und bezahlter Standardrechnungen seit Jahresanfang, abzüglich gestellter und bezahlter Gutschriften (`credit_note`), **ohne Vorsteuerabzug** und ohne obere Datumsgrenze (das Programm kennt keine fremden Eingangsrechnungen; die Vorsteuer aus selbst ausgestellten Honorargutschriften mindert erst die geschätzten Steuerabgaben). Die Kachel zeigt daneben die schuldige USt des laufenden Kalenderquartals als eigene Zeile (`Q1` bis `Q4` mit Jahr). |
-| Gesch. Steuerabgaben | Schuldige USt abzüglich der **Vorsteuer aus Honorargutschriften** (389, gestellt oder bezahlt, seit Jahresanfang) plus pauschale **KSt/GewSt-Rücklage** auf den positiven Nettosaldo aus Standardrechnungen und Gutschriften (Anteil in den Einstellungen). Unter der Zahl rechnet die Kachel die Bestandteile vor: USt, abzüglich Vorsteuer aus Honorargutschriften, plus KSt/GewSt-Rücklage mit ihrem Anteil in Prozent auf den Nettoumsatz. |
+| Offene Auszahlungen | Anzahl und Bruttosumme gestellter, unbezahlter Honorargutschriften (389), ohne wirksam stornierte. Verweist auf `art=honorargutschrift&status=issued&storno=ohne`. |
+| Offene Forderungen | Anzahl und Bruttosumme der gestellten (`issued`), noch nicht bezahlten Standard- und Anzahlungsrechnungen. Gutschriften zählen nicht mit; Rechnungen, zu denen eine gestellte oder bezahlte Gutschrift existiert, ebensowenig, egal welchen Status das Original trägt (services/storno_wirkung.py, `WIRKSAM_STORNIERT`). |
+| Bezahlt diesen Monat | Brutto-Summe bezahlter Standard- und Anzahlungsrechnungen mit `bezahlt_am` ab Monatsanfang (Zahlungsdatum; ohne obere Datumsgrenze). Ausgezahlte Gutschriften mindern diese Zahl nicht. Die Kachel nennt zusätzlich den Wert des Vormonats. |
+| Bezahlt Vormonat | Brutto-Summe bezahlter Standard- und Anzahlungsrechnungen des vorherigen Kalendermonats nach `bezahlt_am`; steht als Zusatz unter der Zahl von „Bezahlt diesen Monat“ |
+| Umsatz lfd. Jahr | Netto-Summe bezahlter Standard- und Anzahlungsrechnungen mit `bezahlt_am` seit Jahresanfang (ohne obere Datumsgrenze). Gestellte, unbezahlte Rechnungen zählen nicht; sie bleiben offene Forderungen. Ausgezahlte Gutschriften (bezahlt, zu einem bezahlten Original) mindern ihn, gerechnet nach dem Zahlungsdatum der Gutschrift (dashboard_kennzahlen.py, `umsatz_im_zeitraum`). |
+| Schuldige Umsatzsteuer | Summe der **ausgewiesenen USt** gestellter und bezahlter Standard- und Anzahlungsrechnungen seit Jahresanfang (386 erst nach Zahlung, zeitlich nach `bezahlt_am`), abzüglich gestellter und bezahlter Gutschriften (`credit_note`), **ohne Vorsteuerabzug** und ohne obere Datumsgrenze (das Programm kennt keine fremden Eingangsrechnungen; die Vorsteuer aus selbst ausgestellten Honorargutschriften mindert erst die geschätzten Steuerabgaben). Die Kachel zeigt daneben die schuldige USt des laufenden Kalenderquartals als eigene Zeile (`Q1` bis `Q4` mit Jahr). |
+| Gesch. Steuerabgaben | Schuldige USt abzüglich der **Vorsteuer aus Honorargutschriften** (389, gestellt oder bezahlt, seit Jahresanfang) plus pauschale **KSt/GewSt-Rücklage** auf den positiven Nettosaldo aus Standard- und Anzahlungsrechnungen und Gutschriften (Anteil in den Einstellungen). Unter der Zahl rechnet die Kachel die Bestandteile vor: USt, abzüglich Vorsteuer aus Honorargutschriften, plus KSt/GewSt-Rücklage mit ihrem Anteil in Prozent auf den Nettoumsatz. |
 | Überfällige Forderungen | Davon jene (ohne wirksam stornierte), deren Fälligkeitsdatum vor heute liegt, mit Anzahl, Bruttosumme und dem Alter der ältesten in Tagen. |
-| Nicht versendete Belege | Anzahl der gestellten Standardrechnungen ohne Erstversand. Diese Zahl wird in der Datenbank gezählt, nicht im Speicher. |
+| Nicht versendete Belege | Anzahl der gestellten Standard- und Anzahlungsrechnungen ohne Erstversand. Diese Zahl wird in der Datenbank gezählt, nicht im Speicher. |
 | Umsatzvergleich | Dem Umsatz des laufenden Jahres stellt die Übersicht den Umsatz zum selben Kalendertag des Vorjahres gegenüber und nennt die Abweichung in Prozent. Fehlt ein Vergleichswert, weil der Vorjahreswert null ist, entfällt die Prozentangabe. |
 | Letzte Rechnungen | Unter den Kacheln listet die Seite die zehn neuesten Belege mit Nummer, Kunde, Datum, Betrag und Status; der Verweis **ALLE RECHNUNGEN** führt in die Liste. |
 
@@ -236,7 +237,7 @@ In der Rechnungsliste und auf der Detailseite unterscheidet der Status **Versend
 |---|---|
 | Suche | Rechnungsnummer oder Kundenname, als Teiltreffer |
 | Status | Entwurf, Gestellt, Bezahlt, Storniert, Verworfen |
-| Art | Rechnung oder Gutschrift |
+| Art | Rechnung (Standard und Anzahlung), Stornorechnung, Honorargutschrift (`honorargutschrift`, nur 389), Storno zur Honorargutschrift (`honorargutschrift_storno`) |
 | Frist | **Überfällig**: Fälligkeitsdatum liegt vor heute |
 | Versand | **Ohne Versand**: ohne Erstversand, unabhängig vom Status |
 | Stornostand | **Ohne Stornierte**: blendet Belege aus, zu denen eine gestellte oder bezahlte Gutschrift existiert (Parameter `storno=ohne`, dieselbe Bedingung wie die Kacheln der Übersicht) |
@@ -520,6 +521,12 @@ gehört sie zu einem per DEL ausgeblendeten Kunden, wird der Auftrag abgelehnt.
 ---
 
 ## Anzahlungsrechnung
+
+Unbezahlte, gestellte Anzahlungsrechnungen zählen zu offenen Forderungen. Nach
+Zahlung zählen sie nach `bezahlt_am` zu Umsatz, Bezahlt und schuldiger Umsatzsteuer
+(Mindest-Istversteuerung, #157). Ihr Ausstellungsdatum bestimmt diese Zahlungssummen
+nicht. 389 bleibt davon getrennt; sein gestelltes Storno hebt die Vorsteuer und
+die offene Auszahlung genau einmal auf.
 
 Wählen Sie beim Entwurf unter **Belegart** die **Anzahlungsrechnung**, wenn Sie eine Zahlung
 vor der Leistung anfordern. Der Beleg erhält beim Finalisieren TypeCode 386 und im PDF den

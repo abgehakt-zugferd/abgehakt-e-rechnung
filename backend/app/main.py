@@ -291,6 +291,8 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     quarter_number = (today.month - 1) // 3 + 1
 
     zaehlung = belegzaehlung(db)
+    from app.services.dashboard_kennzahlen import offene_auszahlungen
+    auszahlungen = offene_auszahlungen(db)
     offen = offene_forderungen(db)
     ueberfaellig = ueberfaellige_forderungen(db, today)
     paid_this_month = bezahlt_im_zeitraum(db, month_start, None)
@@ -321,6 +323,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         "request": request,
         "company": company,
         "total_invoices": zaehlung.gesamt,
+        "offene_auszahlungen": auszahlungen,
         "open_invoices": offen.anzahl,
         "open_amount": offen.betrag,
         "draft_count": zaehlung.entwurf,

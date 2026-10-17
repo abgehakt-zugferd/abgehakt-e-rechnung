@@ -63,6 +63,8 @@ def build_storno(original: Invoice, invoice_number: str, today: date) -> Invoice
             position=item.position,
             description=item.description,
             **positionsangaben.kopie(item),
+            basis_netto=getattr(item, "basis_netto", None),
+            satz=getattr(item, "satz", None),
             unit=item.unit,
             quantity=item.quantity,
             unit_price=item.unit_price,

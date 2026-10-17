@@ -11,12 +11,13 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import and_, exists, func
+from sqlalchemy import and_, exists, func, or_
 from sqlalchemy.orm import Session, aliased
 
 from app.models.invoice import Invoice
 
 _AUSGESTELLT = ("issued", "paid")
+STORNO_BELEGARTEN = ("credit_note", "self_billing_storno")
 
 _Gutschrift = aliased(Invoice)
 
@@ -26,7 +27,7 @@ _Gutschrift = aliased(Invoice)
 # sobald irgendeine Gutschrift existiert); dort die Bedingung neu bilden.
 WIRKSAM_STORNIERT = exists().where(
     _Gutschrift.original_invoice_id == Invoice.id,
-    _Gutschrift.invoice_type == "credit_note",
+    _Gutschrift.invoice_type.in_(STORNO_BELEGARTEN),
     _Gutschrift.status.in_(_AUSGESTELLT),
 )
 
@@ -36,7 +37,7 @@ def summe_gutschriften(
     feld,
     seit: date,
     *,
-    topf: str | None,
+    topf: str | tuple | None,
     bis: date | None = None,
     ausgezahlt: bool = False,
 ) -> Decimal:
@@ -52,19 +53,32 @@ def summe_gutschriften(
     bezahltes Original ist nie Geld hereingekommen, das zurueckgehen koennte.
     """
     original = aliased(Invoice)
-    if topf is None:
+    if isinstance(topf, tuple):
+        topf_filter = or_(
+            original.invoice_type.is_(None) if None in topf else False,
+            original.invoice_type.in_([art for art in topf if art is not None]),
+        )
+    elif topf is None:
         # Ohne Original ist der Alias im LEFT JOIN NULL; die eine Bedingung deckt
         # die Standardrechnung und den Altbestand zugleich ab.
         topf_filter = original.invoice_type.is_(None)
     else:
         topf_filter = original.invoice_type == topf
+    if isinstance(topf, tuple) and "prepayment" in topf:
+        # Ohne vereinnahmte Anzahlung entstand keine Umsatzsteuer. Ihr Storno
+        # darf deshalb auch keinen Steuerabzug erzeugen (#157).
+        topf_filter = and_(topf_filter, or_(
+            original.invoice_type.is_(None),
+            original.invoice_type != "prepayment",
+            original.bezahlt_am.is_not(None),
+        ))
     if ausgezahlt:
         topf_filter = and_(topf_filter, original.status == "paid")
     datum = Invoice.bezahlt_am if ausgezahlt else Invoice.issue_date
     status = ("paid",) if ausgezahlt else _AUSGESTELLT
     bedingungen = [
         Invoice.status.in_(status),
-        Invoice.invoice_type == "credit_note",
+        Invoice.invoice_type.in_(STORNO_BELEGARTEN),
         topf_filter,
         datum >= seit,
     ]

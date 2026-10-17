@@ -499,11 +499,11 @@ die niemand prüft.
   wann Sie die Grenze reißen und in die Regelbesteuerung wechseln müssen. Diesen Wechsel
   müssen Sie selbst im Blick behalten. Der Steuertyp wird pro Rechnung gewählt, es gibt
   keine dauerhafte Einstellung dafür.
-- **Die Kennzahlen der Übersicht zählen nur Standardrechnungen.** Schuldige Umsatzsteuer,
-  Bezahlt und Umsatz erfassen Standardrechnungen samt der Gutschriften, die sie mindern;
-  Anzahlungsrechnungen (TypeCode 386) fehlen in diesen Zahlen und müssen für die
-  Umsatzsteuer-Voranmeldung selbst mitgerechnet werden. Die Zahlen sind eine Schätzung
-  für die Übersicht und ersetzen keine Umsatzsteuer-Voranmeldung.
+- **Kennzahlen einschließlich Anzahlungsrechnungen (behoben, #157).** Bezahlte
+  Anzahlungsrechnungen (386) zählen nach Zahlungsdatum zu Umsatz, Bezahlt und schuldiger
+  Umsatzsteuer; unbezahlte zu offenen Forderungen. Honorargutschriften (389) haben
+  eigene offene Auszahlungen und Vorsteuer. Die Übersicht ersetzt keine
+  Umsatzsteuer-Voranmeldung.
 - **Deutsche Steuersätze im Formular.** Wählbar sind 0, 7 und 19 Prozent; die Regelprüfung
   vergleicht den auf ganze Prozent gerundeten Satz. Für Kunden im EU-Ausland
   deckt das die üblichen Fälle ab, weil dort in der Regel gar keine deutsche Umsatzsteuer

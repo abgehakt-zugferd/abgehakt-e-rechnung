@@ -25,6 +25,8 @@ GESPERRTE_FELDER = (
     "Beteiligter",
     "Leistungszeitraum",
     "Netto-Beträge der Positionen",
+    "Bemessungsgrundlage netto",
+    "Beteiligungssatz",
 )
 
 
@@ -56,6 +58,9 @@ def positionen_binden(invoice, rohe_positionen: list) -> list:
         neu["quantity"] = str(alt.quantity)
         neu["unit_price"] = str(alt.unit_price)
         neu["unit"] = alt.unit
+        for feld in ("basis_netto", "satz"):
+            wert = getattr(alt, feld, None)
+            neu[feld] = str(wert) if wert is not None else ""
         # Positionszeitraeume gehoeren zum Leistungszeitraum: aus dem Bestand,
         # damit kein Formularwert dem signierten Beleg widerspricht.
         von = getattr(alt, "leistung_von", None)

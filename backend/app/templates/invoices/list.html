@@ -33,6 +33,8 @@
             <select name="art" class="input" style="width:180px;">
                 <option value="" {% if not art %}selected{% endif %}>Alle Arten</option>
                 <option value="rechnung" {% if art == 'rechnung' %}selected{% endif %}>Rechnung</option>
+                <option value="honorargutschrift" {% if art == 'honorargutschrift' %}selected{% endif %}>Honorargutschrift</option>
+                <option value="honorargutschrift_storno" {% if art == 'honorargutschrift_storno' %}selected{% endif %}>Storno zur Honorargutschrift</option>
                 <option value="gutschrift" {% if art == 'gutschrift' %}selected{% endif %}>Stornorechnung</option>
             </select>
             <select name="faellig" class="input" style="width:180px;">

@@ -44,7 +44,13 @@ def filtere_rechnungsliste(
         )
 
     if art == "rechnung":
-        query = query.filter(Invoice.invoice_type.is_(None))
+        from app.services.dashboard_kennzahlen import UMSATZ_BELEGARTEN_FILTER
+        query = query.filter(UMSATZ_BELEGARTEN_FILTER)
+    elif art == "honorargutschrift":
+        query = query.filter(Invoice.invoice_type == "self_billing")
+    elif art == "honorargutschrift_storno":
+        # Eigene Auswahl: der reine 389-Filter bleibt auch fuer die Kachel eindeutig.
+        query = query.filter(Invoice.invoice_type == "self_billing_storno")
     elif art == "gutschrift":
         query = query.filter(Invoice.invoice_type == "credit_note")
     else:

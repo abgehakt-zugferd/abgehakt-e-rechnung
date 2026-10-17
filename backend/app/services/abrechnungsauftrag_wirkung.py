@@ -153,6 +153,8 @@ def entwuerfe_anlegen(
                 invoice_id=entwurf.id,
                 position=lfd,
                 description=str(position.get("bezeichnung", "")).strip(),
+                basis_netto=(position.get("herleitung") or {}).get("basis_netto"),
+                satz=(position.get("herleitung") or {}).get("satz"),
                 unit="Pauschal",
                 quantity=Decimal("1"),
                 unit_price=netto,
