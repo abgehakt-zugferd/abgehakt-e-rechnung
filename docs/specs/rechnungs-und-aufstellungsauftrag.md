@@ -43,9 +43,14 @@ Nutzers, wie bei jeder anderen Rechnung.
 5. **Kopf- und Fußtext je Kunde**, mit dem Platzhalter `{leistungsmonat}` (MM/JJJJ aus dem
    Leistungszeitraum). Dort stehen Vertragsgrundlage, der Hinweis auf den Bericht als
    Einzelaufstellung und der Reverse-Charge-Vermerk, so wie der Kunde ihn erwartet.
-6. **Versandweg je Kunde:** `standard` (Kunde plus Blindkopie an die Buchhaltung) oder
-   `nur_buchhaltung`. Der Versand bleibt ein Klick; der Weg ist vorgewählt. Das
-   Versandprotokoll vermerkt, dass nur an die Buchhaltung ging.
+6. **Versand an Buchhaltung und Kunde sind zwei Schritte** (Entscheidung 2026-10-17). Das
+   gilt für jede Rechnung, nicht nur für Belege aus Aufträgen. „An die Buchhaltung“ schickt
+   das PDF an die Upload-Adresse der Buchhaltung, „An den Kunden“ an den Kunden. Beide
+   Schritte haben je einen eigenen Vermerk (Zeitpunkt des ersten Versands) und eigene
+   Zeilen im Versandprotokoll. Ein Beleg, der an die Buchhaltung, aber noch nicht an den
+   Kunden ging, ist gestellt, dokumentiert und gilt als „nicht versendet“. Wer an den Kunden
+   sendet und die Buchhaltung noch nicht beliefert hat, kann beides in einem Schritt
+   auslösen; die Vermerke bleiben getrennt.
 7. **Auftragsschlüssel.** Jeder Beleg aus einem Auftrag speichert dessen
    `auftragsschluessel`. Solange zu einem Schlüssel ein Beleg besteht, der weder storniert
    noch verworfen ist, lehnt Abgehakt einen neuen Auftrag mit `AUFTRAG_SCHON_GERECHNET` ab;
@@ -98,11 +103,10 @@ Eine Gegenrede hat den Plan gegen Format, Code und Steuerrecht gelesen. Daraus f
     Betroffen von `due_date IS NULL` sind PDF, XML (BT-9 entfällt), das Bearbeiten-Formular
     und die Kennzahlen: ein Beleg ohne Fälligkeit ist nie überfällig, das steht in
     `uebersicht-kennzahlen.md`.
-16. **Versand nur an die Buchhaltung.** Empfänger ist die Upload-Adresse der Buchhaltung,
-    keine Blindkopie, eine neutrale Mailschablone ohne Anrede des Kunden. Das
-    Versandprotokoll trägt den Weg in einer eigenen Spalte. Am Kunden steht bei
-    `nur_buchhaltung` ein Textfeld für die Vereinbarung mit dem Empfänger (Rechtsfrage,
-    siehe unten).
+16. **Versand an die Buchhaltung.** Empfänger ist die Upload-Adresse, keine Blindkopie,
+    eine neutrale Mailschablone ohne Anrede des Kunden. Das Versandprotokoll trägt das Ziel
+    (`buchhaltung` oder `kunde`) in einer eigenen Spalte. Die Kennzahl und der Listenfilter
+    „nicht versendet“ beziehen sich auf den Kunden.
 17. **Storno der Aufstellung ist eine eigene Zeile** mit eigener Nummer und Verweis auf
     das Original, wie bei Rechnungen; das Original wird `cancelled`. Damit laufen Nummer,
     Sperre, Versand, Export und Schlüsselfreigabe über denselben Weg.
@@ -161,20 +165,22 @@ Formatvektoren.
 1. **Leser § 8a** samt Vektorgruppe `rechnungsauftraege/` und
    `dokument_zu_auftragsschluessel` in der Empfangslage (Testlage).
 2. **Kundenvorgaben und Fälligkeit**: `auftrag_steuer`, Kopf- und Fußtext, Zahlungshinweis,
-   Versandweg samt Vereinbarungsfeld, Belegsprache; Kopie an die Rechnung; `due_date`
+   Belegsprache; Kopie an die Rechnung; `due_date`
    nullable mit CHECK und allen betroffenen Stellen.
 3. **Positionsgruppen**: Spalte an der Position, PDF mit Überschrift und Zwischensumme,
    BT-127 in der XML, Bindung über die Belegsperre; negative Positionen bei Auftragsentwürfen.
 4. **Wirkung § 8a**: Entwurf 380, beide Schlüsselspalten mit Index und Freigabe,
    `AUFTRAG_SCHON_GERECHNET` aus der Datenbank, Zurückholen, Wettlauf,
    Ausstellungsdatum beim Finalisieren, Warnung § 14a.
-5. **Versand nur an die Buchhaltung** samt Protokollspalte und Schablone.
+5. **Versand entkoppeln**: Buchhaltung und Kunde als zwei Schritte mit eigenen Vermerken,
+   Protokollspalte, Schablone, Kennzahl und Filter; Migration für den Bestand (bisheriger
+   Erstversand gilt für beide).
 6. **Leser § 8b** samt Anlagenprüfung und Vektorgruppe `aufstellungen/`.
 7. **Abrechnungsaufstellung**, in sieben Teilen:
    a) Modell, Migration, Guard, Trigger, Audit, zweiter Nummernkreis;
    b) Wirkung (Entwurf) und Anlagenkopie;
    c) PDF/A und Finalisieren;
-   d) Versand und Protokoll;
+   d) Versand an die Buchhaltung über den entkoppelten Schritt aus 5;
    e) Storno als eigene Zeile;
    f) GoBD-Export und Archivansicht;
    g) Liste und Detailseite.
