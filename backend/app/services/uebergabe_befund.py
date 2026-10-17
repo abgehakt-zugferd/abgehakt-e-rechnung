@@ -47,6 +47,7 @@ from app.services.uebergabe_schluessel import (
     schluessel_laden,
 )
 from app.services.uebergabebeleg import (
+    ABSENDER_TANTIEMEN,
     EMPFAENGER_ABGEHAKT,
     UebergabeFehler,
     kanonisch,
@@ -422,6 +423,7 @@ def beleg_beurteilen(
     *,
     schluessel_wurzel: Optional[Path] = None,
     eigener_name: str = EMPFAENGER_ABGEHAKT,
+    erwarteter_absender: str = ABSENDER_TANTIEMEN,
     lesbare_arten: Sequence[str] = LESBARE_ARTEN,
 ) -> Belegurteil:
     """Beurteilt die Bytes eines Belegs. Schreibt nichts, aendert nichts."""
@@ -588,6 +590,20 @@ def beleg_beurteilen(
         return abgelehnt(Feststellung("NUTZLASTART_UNBEKANNT", "$.nutzlast_art",
                                       erwartet=", ".join(lesbare_arten),
                                       erhalten=str(beleg["nutzlast_art"])), **rest)
+
+    # § 1: Der Abrechnungsauftrag ist die Richtung von EINEM Absender zu diesem
+    # Empfaenger. Der Schluesselordner allein genuegt nicht: Ein Schluessel,
+    # der fuer einen anderen Absender (eine andere Richtung) liegt, machte
+    # seinen Inhaber still zum Absender von Auftraegen. WERT_UNBRAUCHBAR und
+    # nicht SCHLUESSEL_UNBEKANNT: Das Feld ist bekannt und der Schluessel kann
+    # voellig gueltig sein - unbrauchbar ist der WERT, der ausserhalb des
+    # Absenders liegt, dessen Auftraege dieser Leser liest. Einen eigenen
+    # Absender-Code fuehrt der geschlossene Vorrat (§ 11) nicht.
+    if beleg["absender"] != erwarteter_absender:
+        return abgelehnt(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.absender",
+            erwartet=erwarteter_absender, erhalten=str(beleg["absender"]),
+        ), **rest)
 
     funde = _auftrag_pruefen(nutzlast, lage)
     if funde:

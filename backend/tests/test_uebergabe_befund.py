@@ -743,3 +743,58 @@ def test_je_grund_ein_befund_ueber_alle_gutschriften(schluessel):
     assert _codes(urteil) == ["WERT_UNBRAUCHBAR", "SUMME_STIMMT_NICHT"]
     assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].typcode"
     assert urteil.feststellungen[1].pfad == "$.nutzlast.gutschriften[1].summe.netto"
+
+
+# ── § 1: Der Abrechnungsauftrag ist eine RICHTUNG, nicht nur eine Nutzlast
+# (#169). Ein Schluessel, der fuer einen anderen Absender liegt, macht seinen
+# Inhaber nicht zum Absender von Auftraegen an diesen Empfaenger.
+
+FREMDER_ABSENDER = "probe-konto"
+FREMDER_SCHLUESSEL_ID = "fremd-2026-09"
+
+
+def _fremder_schluessel(wurzel):
+    """Ein gueltiger Schluessel fuer einen anderen Absender, im selben Ordner.
+
+    Dass er liegt und die Signatur prueft, ist der Punkt: Der Leser soll am
+    FELD absender abgelehnt werden und nicht daran, dass der Schluessel fehlt.
+    """
+    privat = Ed25519PrivateKey.generate()
+    ordner = wurzel / FREMDER_ABSENDER
+    ordner.mkdir(parents=True, exist_ok=True)
+    (ordner / f"{FREMDER_SCHLUESSEL_ID}.pub").write_bytes(
+        privat.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+    )
+    (ordner / f"{FREMDER_SCHLUESSEL_ID}.json").write_text(
+        json.dumps({
+            "schluessel_id": FREMDER_SCHLUESSEL_ID,
+            "absender": FREMDER_ABSENDER,
+            "verfahren": "Ed25519",
+            "gueltig_von": "2026-09-01T00:00:00Z",
+            "gueltig_bis": None,
+        }),
+        encoding="utf-8",
+    )
+    return privat.sign
+
+
+def test_ein_auftrag_von_einem_fremden_absender_wird_abgelehnt(schluessel):
+    """Der Schluessel liegt, das Beiblatt passt, die Signatur stimmt - und der
+    Absender ist trotzdem nicht der, dessen Auftraege dieser Empfaenger liest.
+    Bisher genuegte der Schluesselordner, und jeder Absender mit einem dort
+    liegenden Schluessel haette Auftraege annehmen lassen."""
+    _, wurzel = schluessel
+    roh = _beleg(
+        schluessel, _auftrag(),
+        absender=FREMDER_ABSENDER,
+        schluessel_id=FREMDER_SCHLUESSEL_ID,
+        signierer=_fremder_schluessel(wurzel),
+    )
+
+    urteil = _urteil(schluessel, roh)
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.absender"
+    assert urteil.feststellungen[0].erwartet == ABSENDER_TANTIEMEN
+    assert urteil.feststellungen[0].erhalten == FREMDER_ABSENDER
