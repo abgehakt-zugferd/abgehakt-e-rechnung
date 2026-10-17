@@ -42,7 +42,7 @@ def summe_gutschriften(
     seit: date,
     *,
     topf: str | tuple | None,
-    bis: date | None = None,
+    bis_ausschliesslich: date | None = None,
     ausgezahlt: bool = False,
 ) -> Decimal:
     """Summiert gestellte Gutschriften, deren Original in `topf` zaehlt.
@@ -53,8 +53,11 @@ def summe_gutschriften(
     gewoehnlichen Rechnung. Gezaehlt wird nach dem Datum der Gutschrift.
 
     Mit `ausgezahlt` zaehlen nur Rueckzahlungen: ausgezahlte (paid) Gutschriften
-    zu einem bezahlten Original, nach ihrem `bezahlt_am` (`bis` inklusive). Ohne
-    bezahltes Original ist nie Geld hereingekommen, das zurueckgehen koennte.
+    zu einem bezahlten Original, nach ihrem `bezahlt_am`. Ohne bezahltes
+    Original ist nie Geld hereingekommen, das zurueckgehen koennte.
+
+    Der Zeitraum ist halboffen [seit, bis_ausschliesslich) wie bei allen
+    Kennzahlen (Issue #160): angrenzende Zeitraeume greifen nicht ineinander.
     """
     original = aliased(Invoice)
     if isinstance(topf, tuple):
@@ -86,8 +89,8 @@ def summe_gutschriften(
         topf_filter,
         datum >= seit,
     ]
-    if bis is not None:
-        bedingungen.append(datum <= bis)
+    if bis_ausschliesslich is not None:
+        bedingungen.append(datum < bis_ausschliesslich)
     return (
         db.query(func.coalesce(func.sum(feld), 0))
         .select_from(Invoice)

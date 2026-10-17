@@ -2,7 +2,7 @@ import http
 import mimetypes
 import warnings
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from app.zeit import heute as kalender_heute
 from fastapi import FastAPI, Request, Depends
@@ -298,7 +298,9 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     paid_this_month = bezahlt_im_zeitraum(db, month_start, None)
     paid_previous_month = bezahlt_im_zeitraum(db, previous_month_start, month_start)
     revenue_ytd = umsatz_im_zeitraum(db, year_start, None)
-    revenue_prev_ytd = umsatz_im_zeitraum(db, prev_year_start, prev_year_end)
+    # Halboffen [Vorjahresbeginn, Stichtag + 1 Tag): der Stichtag selbst zaehlt
+    # zum Vorjahresfenster, so wie es die inklusive Fassung vor #160 tat.
+    revenue_prev_ytd = umsatz_im_zeitraum(db, prev_year_start, prev_year_end + timedelta(days=1))
     revenue_yoy_pct = umsatz_abweichung_prozent(revenue_ytd, revenue_prev_ytd)
 
     vat_liability_ytd = schuldige_umsatzsteuer_ytd(db, year_start)

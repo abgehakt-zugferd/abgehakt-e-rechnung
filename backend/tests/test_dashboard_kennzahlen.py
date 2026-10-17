@@ -138,6 +138,23 @@ def test_vormonat_enthalt_laufenden_monat_nicht(pg_session):
     assert bezahlt_im_zeitraum(pg_session, monat_beginn, None) == Decimal("100.00")
 
 
+def test_umsatz_und_bezahlt_zaehlen_den_stichtag_nicht_mehr(pg_session):
+    """#160: Zeitraeume sind halboffen [von, bis). Ein am Stichtag bezahlter
+    Beleg gehoert zum Folgezeitraum; angrenzende Zeiträume überschneiden sich
+    nicht. Vorher nahm umsatz_im_zeitraum den Stichtag inklusiv und
+    bezahlt_im_zeitraum exklusiv: dieselbe Grenze, je Kennzahl ein anderer Wert."""
+    from tests.test_dashboard import _inv
+
+    _inv(
+        pg_session, "paid", "100.00",
+        issue=date(2026, 9, 1), bezahlt_am=date(2026, 10, 1),
+    )
+
+    assert umsatz_im_zeitraum(pg_session, date(2026, 9, 1), date(2026, 10, 1)) == Decimal("0")
+    assert bezahlt_im_zeitraum(pg_session, date(2026, 9, 1), date(2026, 10, 1)) == Decimal("0")
+    assert umsatz_im_zeitraum(pg_session, date(2026, 10, 1)) == Decimal("100.00")
+
+
 def test_vorjahres_stichtag_am_29_februar():
     assert vorjahres_stichtag(date(2024, 2, 29)) == date(2023, 2, 28)
 
