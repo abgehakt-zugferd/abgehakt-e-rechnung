@@ -5,6 +5,7 @@ Signaturprüfung hier nicht die des Absenders importiert.
 """
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,15 @@ from app.installation import is_testinstanz
 from app.services.protokoll import zeit
 
 _WURZEL = Path(__file__).resolve().parents[2] / "schluessel"
+
+# Was eine Schluesselkennung sein darf (Absender wie schluessel_id): Die beiden
+# bauen den Pfad zum Schluessel, und sie kommen aus Belegfeldern - aus der
+# Datei, die ein Absender hingelegt hat. Ein Wert wie "../x" oder mit "/"
+# wuerde aus dem Schluesselordner hinausfuehren, und ein Wert, der keine
+# Zeichenkette ist, liefe ohnehin auf einen TypeError, der den ganzen Beleg
+# lahmlegte statt eines Befunds. Kleinbuchstaben genuegen: alle echten
+# Kennungen (Ordner wie Schluessel) bestehen aus ihnen.
+_KENNUNG = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 # Ein Probeschluessel ist am NAMEN erkennbar und gilt nur in einer Testinstanz.
 # Am Namen und nicht an einer Angabe im Beiblatt: das Beiblatt liegt beim
@@ -60,14 +70,29 @@ def schluessel_laden(
     SCHLUESSEL_UNBEKANNT ab, und ein Beiblatt, das der Empfaenger nicht lesen
     kann, ist seine eigene Sache.
     """
+    # Erst die Form der Kennung, dann irgendein Dateizugriff: Ein Wert, der
+    # nicht wie eine Kennung aussieht, hat keinen Schluessel, bevor ueberhaupt
+    # ein Pfad aufgeloest wird.
+    if (not isinstance(absender, str) or _KENNUNG.match(absender) is None
+            or not isinstance(schluessel_id, str) or _KENNUNG.match(schluessel_id) is None):
+        raise SchluesselUnbekannt(f"{absender}/{schluessel_id}: keine Schluesselkennung")
+
     if PROBE_KENNZEICHEN in schluessel_id and not is_testinstanz():
         raise ProbeschluesselImEchtlauf(
             f"{schluessel_id} ist ein Probeschlüssel und gilt nur in der Testinstanz"
         )
 
-    ordner = Path(wurzel) if wurzel else _WURZEL
+    ordner = (Path(wurzel) if wurzel else _WURZEL).resolve()
     pem = ordner / absender / f"{schluessel_id}.pub"
     beiblatt = ordner / absender / f"{schluessel_id}.json"
+    # Die Kennung allein genuegt nicht: Ein VERWEIS im Ordner (ein symlink,
+    # den jemand hinterlegt hat) fuehrte trotz erlaubter Zeichen hinaus.
+    # Aufgeloest muss der Pfad unterhalb der Wurzel bleiben.
+    if (not pem.resolve().is_relative_to(ordner)
+            or not beiblatt.resolve().is_relative_to(ordner)):
+        raise SchluesselUnbekannt(
+            f"{absender}/{schluessel_id}: ausserhalb des Schluesselordners"
+        )
     if not pem.exists() or not beiblatt.exists():
         raise SchluesselUnbekannt(f"{absender}/{schluessel_id}")
 
