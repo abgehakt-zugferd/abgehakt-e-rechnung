@@ -12,6 +12,8 @@ unveraenderte Aufbewahrung auch beim EMPFAENGER, acht Jahre.
 
 import hashlib
 import io
+import os
+import time
 import uuid
 import zipfile
 from datetime import date, datetime, timedelta, timezone

@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import os
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -110,6 +111,30 @@ class KopieFehler(ValueError):
     auf Verlaub des Absenderordners."""
 
 
+# Eine Stunde statt sofort: solange liegt die Datei eines Schreibvorgangs, der
+# gerade laeuft, und darf nicht weggeraeumt werden (Issue #160).
+_VERWAIST_NACH_SEKUNDEN = 3600
+
+
+def _verwaiste_raeumen(ordner: Path) -> None:
+    """Entfernt .kopie-Reste, die ein Absturz zurueckgelassen hat.
+
+    Der finally-Block unten erreicht einen harten Absturz (Prozess weg) nicht;
+    die halbe Datei bliebe fuer immer liegen, weil die Anwendung unter storage/
+    sonst nichts loescht. Es sind keine Belege, sondern abgebrochene
+    Schreibvorgaenge: ihr endgueltiger Name waere {sha}.json, so heissen sie
+    nicht. Best effort: Scheitert das Raeumen einzelner Dateien, bleiben sie
+    liegen, die Annahme des Belegs darf an Muell nicht scheitern.
+    """
+    schwelle = time.time() - _VERWAIST_NACH_SEKUNDEN
+    for rest in ordner.glob(".kopie-*"):
+        try:
+            if rest.stat().st_mtime < schwelle:
+                rest.unlink()
+        except OSError:
+            continue
+
+
 def kopie_aufbewahren(roh: bytes, beleg_sha256: str, richtung: str) -> Path:
     """Bewahrt die gelesenen Bytes des Belegs unveraendert im eigenen Speicher
     auf (§ 12: acht Jahre, auch beim Empfaenger) und gibt den Zielpfad zurueck.
@@ -132,6 +157,10 @@ def kopie_aufbewahren(roh: bytes, beleg_sha256: str, richtung: str) -> Path:
                 f"Unter {ziel} liegt bereits anderer Inhalt fuer diesen Beleg."
             )
         ordner.mkdir(parents=True, exist_ok=True)
+        # Erst Muell vom letzten Absturz weg, dann die neue Datei: ein
+        # stehenbleibender Rest waere bei der naechsten Pruefung nicht von
+        # einem frischen zu unterscheiden.
+        _verwaiste_raeumen(ordner)
         # Temporaerdatei im selben Verzeichnis: os.replace bleibt damit auf
         # einem Dateisystem und umbenennt atomar. Nur sie darf weggeraeumt
         # werden; unter storage/ loescht die Anwendung sonst nichts.
