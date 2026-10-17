@@ -798,3 +798,24 @@ def test_ein_auftrag_von_einem_fremden_absender_wird_abgelehnt(schluessel):
     assert urteil.feststellungen[0].pfad == "$.absender"
     assert urteil.feststellungen[0].erwartet == ABSENDER_TANTIEMEN
     assert urteil.feststellungen[0].erhalten == FREMDER_ABSENDER
+
+
+def test_eine_389_ohne_positive_summe_ist_unbrauchbar(schluessel):
+    """§ 8a: Eine Gutschrift des Verfahrens (389) zahlt an den Beteiligten;
+    ueber null oder weniger ist sie keine, und der Sender erzeugt dann keinen
+    Auftrag. WERT_UNBRAUCHBAR am Feld, nicht SUMME_STIMMT_NICHT: Die Summe
+    kann aufgehen (und geht hier auf) - unbrauchbar ist der Wert, und der
+    Pfad nennt die Stelle. Der Leser nahm so einen Auftrag bisher an."""
+    nutzlast = _auftrag()
+    gutschrift = nutzlast["gutschriften"][0]
+    gutschrift["positionen"][0]["herleitung"]["basis_netto"] = "-697.30"
+    gutschrift["positionen"][0]["netto"] = "-174.33"
+    gutschrift["summe"]["netto"] = "-174.33"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].summe.netto"
+    assert urteil.feststellungen[0].erwartet == "groesser als 0.00"
+    assert urteil.feststellungen[0].erhalten == "-174.33"

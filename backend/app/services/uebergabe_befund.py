@@ -371,6 +371,16 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
                 ))
 
         genannt = _zahl(gutschrift["summe"]["netto"])
+        # § 8a: Eine Gutschrift des Verfahrens (389) zahlt an den Beteiligten;
+        # ueber null oder weniger ist sie keine, und der Sender erzeugt dann
+        # keinen Auftrag. WERT_UNBRAUCHBAR am Feld, nicht SUMME_STIMMT_NICHT:
+        # Die Summe kann aufgehen (und geht hier auf) - unbrauchbar ist der
+        # Wert. Der Probe fehlt der typcode, deshalb steht sie am Feld summe.
+        if typcode == "389" and genannt <= 0:
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", f"{pfad}.summe.netto",
+                erwartet="groesser als 0.00", erhalten=str(gutschrift["summe"]["netto"]),
+            ))
         if genannt != summe:
             funde.append(Feststellung(
                 "SUMME_STIMMT_NICHT", f"{pfad}.summe.netto",
