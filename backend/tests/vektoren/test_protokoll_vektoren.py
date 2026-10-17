@@ -4,6 +4,7 @@ Rot, sobald das Protokoll sich bewegt hat und diese Anwendung nicht. Das ist der
 ganze Abstimmungsmechanismus.
 """
 
+import hashlib
 import json
 
 import pytest
@@ -16,7 +17,7 @@ from app.services.protokoll import (
     NUTZLAST_ARTEN,
     PROTOKOLL_VERSION,
 )
-from app.services.uebergabebeleg import FassungUnvertraeglich, beleg_pruefen
+from app.services.uebergabe_befund import Empfangslage, beleg_beurteilen
 
 
 def test_konstante_haelt_die_geltende_fassung(protokoll):
@@ -52,20 +53,62 @@ def test_vektoren_sind_gegen_dieselbe_fassung_gebaut(vektoren):
     assert erwartung["format_version"] == PROTOKOLL_VERSION
 
 
+class _Vorgaengerlage(Empfangslage):
+    """Nur die Kette: `03_hoeherer_minor` nennt `02_nachfolger` als Vorgaenger."""
+
+    def __init__(self, zuletzt):
+        self._zuletzt = zuletzt
+
+    def zuletzt_angenommen(self, absender):
+        return self._zuletzt
+
+
+def _lage_mit_vorgaenger(vektoren, name):
+    """Die Lage, in der `umschlaege/<name>` bereits angenommen wurde."""
+    roh = (vektoren / "umschlaege" / f"{name}.json").read_bytes()
+    beleg = json.loads(roh)
+    # Mit derselben Zeitregel wie der Leser selbst (protokoll.zeit, abgehakt#166):
+    # wer hier anders parsed, konstruiert eine Lage, die der Leser nie erzeugt.
+    from app.services.protokoll import zeit
+
+    return _Vorgaengerlage(
+        (hashlib.sha256(roh).hexdigest(), zeit(beleg["erzeugt_am"])),
+    )
+
+
 def test_hoeherer_minor_wird_angenommen(vektoren, schluesselordner):
-    """`03_hoeherer_minor` traegt 1.6 und muss durchgehen."""
+    """`03_hoeherer_minor` traegt 1.7 und muss durch die Fassungsprobe kommen.
+
+    Gemessen wird derselbe Leser wie in der Anwendung (ein Pruefpfad, abgehakt#159).
+    Diese Anwendung liest die Erloesmeldung nicht, deshalb ist NUTZLASTART_UNBEKANNT
+    der einzige Befund, und genau der beweist die Annahme der Fassung: In
+    `beleg_beurteilen` laeuft die Fassungsprobe VOR der Artprobe und die
+    Signaturprobe VOR der Artprobe am Ende. Waere der minor abgelehnt, stünde
+    FASSUNG_UNVERTRAEGLICH da. Der Umschlag geht an einen anderen Empfaenger
+    (feiyr-konto an tantiemen-app) und bekommt deshalb dessen Namen gereicht.
+    """
     roh = (vektoren / "umschlaege" / "03_hoeherer_minor.json").read_bytes()
-    befund = beleg_pruefen(roh, wurzel=schluesselordner)
-    assert befund.signatur_gueltig
-    assert befund.format_version.split(".")[0] == PROTOKOLL_VERSION.split(".")[0]
+
+    urteil = beleg_beurteilen(
+        roh, _lage_mit_vorgaenger(vektoren, "02_nachfolger"),
+        schluessel_wurzel=schluesselordner, eigener_name="tantiemen-app",
+    )
+
+    assert [f.code for f in urteil.feststellungen] == ["NUTZLASTART_UNBEKANNT"]
 
 
 def test_hoeherer_major_wird_mit_befundcode_abgelehnt(vektoren, schluesselordner):
     roh = (vektoren / "ablehnung" / "major_hoeher.json").read_bytes()
-    with pytest.raises(FassungUnvertraeglich) as fehler:
-        beleg_pruefen(roh, wurzel=schluesselordner)
-    assert fehler.value.CODE == _erwarteter_code(vektoren, "ablehnung", "major_hoeher")
-    assert fehler.value.CODE in BEFUNDCODES
+
+    urteil = beleg_beurteilen(
+        roh, Empfangslage(), schluessel_wurzel=schluesselordner,
+        eigener_name="tantiemen-app",
+    )
+
+    assert [f.code for f in urteil.feststellungen] == [
+        _erwarteter_code(vektoren, "ablehnung", "major_hoeher")
+    ]
+    assert urteil.feststellungen[0].code in BEFUNDCODES
 
 
 # Prosa im Verzeichnis: Begruendungen, keine Feldnamen. Sie gehoeren in die

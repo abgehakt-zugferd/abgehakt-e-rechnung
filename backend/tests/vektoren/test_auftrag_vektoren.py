@@ -70,10 +70,12 @@ def _kettenanfang(vektoren):
     """Die Lage, in der `umschlaege/01_kettenanfang` bereits angenommen wurde."""
     roh = (vektoren / "umschlaege" / "01_kettenanfang.json").read_bytes()
     beleg = json.loads(roh)
-    from app.services.uebergabe_befund import _zeit
+    # Mit derselben Zeitregel wie der Leser selbst (protokoll.zeit, abgehakt#166):
+    # wer hier anders parsed, konstruiert eine Lage, die der Leser nie erzeugt.
+    from app.services.protokoll import zeit
 
     return Lage(
-        zuletzt=(hashlib.sha256(roh).hexdigest(), _zeit(beleg["erzeugt_am"])),
+        zuletzt=(hashlib.sha256(roh).hexdigest(), zeit(beleg["erzeugt_am"])),
         kennungen={beleg["beleg_id"]: hashlib.sha256(roh).hexdigest()},
     )
 
@@ -159,10 +161,10 @@ def test_der_gueltige_auftrag_wird_angenommen(vektoren, schluesselordner):
 def _lage_nach_dem_gueltigen(vektoren, partner=PARTNER_DES_PROBEBESTANDS):
     roh = (vektoren / "auftraege" / "01_gueltig.json").read_bytes()
     beleg = json.loads(roh)
-    from app.services.uebergabe_befund import _zeit
+    from app.services.protokoll import zeit
 
     return Lage(
-        zuletzt=(hashlib.sha256(roh).hexdigest(), _zeit(beleg["erzeugt_am"])),
+        zuletzt=(hashlib.sha256(roh).hexdigest(), zeit(beleg["erzeugt_am"])),
         kennungen={beleg["beleg_id"]: hashlib.sha256(roh).hexdigest()},
         partner=partner,
     )

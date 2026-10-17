@@ -931,11 +931,11 @@ Fehlschlag), und pytest schreibt am Ende jedes Laufs eine rote Zeile
 `formatvektoren: NICHT GEMESSEN`. `backend/run-tests.sh` reicht den Ordner read-only in den
 Container.
 
-Bekannte Lücke (Stand 2026-10-17): Die Formatvektoren messen `uebergabebeleg.beleg_pruefen`,
-die Anwendung selbst urteilt über `uebergabe_befund.beleg_beurteilen`. Die beiden Leser
-sind nicht deckungsgleich: Ein falscher Nutzlast-Hash heißt dort `SIGNATUR_UNGUELTIG`
-(`beleg_pruefen` wirft `SignaturUngueltig`), hier `NUTZLAST_HASH_FALSCH`. Die Vektoren
-prüfen also einen anderen Befundraum, als die Anwendung anzeigt.
+Behoben (#159): Die Formatvektoren messen `uebergabe_befund.beleg_beurteilen` und dessen
+Befundcodes, also denselben Leser, über den die Anwendung urteilt. Der zweite Leser
+`uebergabebeleg.beleg_pruefen` ist entfernt; ein falscher Nutzlast-Hash heißt seither
+überall `NUTZLAST_HASH_FALSCH`. Was der einzige Prüfpfad weiter braucht (Kanonisierung,
+Hash, Umschlag), steht weiter in `services/uebergabebeleg.py`.
 
 #### Ketten-Testinstanz (nicht Live)
 
@@ -973,8 +973,11 @@ entstehen ausschließlich über den Knopf ALS RECHNUNG ANLEGEN in der Oberfläch
 und finalisiert wird nur dort, nie in der Live-Installation.
 
 **Sichtbarkeit ohne Broker:** Ein Belegmonitor-Werkzeug, das denselben Belegordner ohne
-Signaturprüfung liest, ist **nicht ausgeliefert**; `kette_pruefen` in
-`services/uebergabebeleg.py` ist dafür vorbereitet, hat aber keinen Aufrufer (Stand 2026-10-17).
+Signaturprüfung liest, ist **nicht ausgeliefert**; der dafür vorbereitete Zweitleser
+`kette_pruefen` ist mit #159 entfernt, weil ihn niemand aufrief. Jedes Lesen läuft über
+`services/uebergabe_befund.py` (`beleg_beurteilen`), auch die Kettenprüfung: Der Leser
+verlangt je Absender den Hash des zuletzt angenommenen Belegs als `vorgaenger_hash` und
+meldet Sprünge und Neuanfänge als Befund.
 
 **Tests:** `tests/test_abrechnungsauftrag_wirkung.py`, `tests/test_uebergabe_befund.py`,
 `tests/test_testinstanz.py`. Suite
