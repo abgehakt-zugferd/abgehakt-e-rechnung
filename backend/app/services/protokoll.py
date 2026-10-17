@@ -155,3 +155,22 @@ FELDER = {   'umschlag': {   'pflicht': [   'format_version',
                                                                                     'netto',
                                                                                     'grund'],
                                                                      'erlaubt': []}}}}
+
+# § 4: die Form je Geld- und Satzfeld, als Verzeichnispfad (der Schluessel aus
+# FELDER plus Feldname, so wie der Leser ihn bildet). Geld ist eine
+# JSON-Zeichenkette mit Dezimalpunkt und GENAU zwei Nachkommastellen. Der Satz
+# ist KEIN Geld und traegt MINDESTENS zwei Nachkommastellen - "33.333333" ist
+# ein gueltiger Satz, "33.3" keiner (Klarstellung 2026-10-17). Die Zeitform des
+# erzeugt_am (§ 2) steht nicht hier: sie gilt am Umschlag, und der Leser prueft
+# sie an ihrer Stelle.
+FELDFORMEN = {
+    'bemessung.erloes_netto': 'geld',
+    'bemessung.direktkosten_netto': 'geld',
+    'bemessung.deckungsbeitrag_netto': 'geld',
+    'grundlagen[].erloes_netto': 'geld',
+    'gutschriften[].positionen[].netto': 'geld',
+    'gutschriften[].positionen[].herleitung.basis_netto': 'geld',
+    'gutschriften[].positionen[].herleitung.satz': 'satz',
+    'gutschriften[].summe.netto': 'geld',
+    'vortraege[].netto': 'geld',
+}

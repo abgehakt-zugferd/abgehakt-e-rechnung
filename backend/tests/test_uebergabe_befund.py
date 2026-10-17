@@ -506,14 +506,15 @@ def test_nan_als_positionsbetrag_ist_ein_befund(schluessel):
     still False, der Ordnungsvergleich (erloes, Grundlagen) wirft. So wurde
     aus "NaN" ein SUMME_STIMMT_NICHT oder ein Crash - nie aber der Befund,
     der dorthin gehoert. Ein Wert, der mit nichts vergleichbar ist, ist
-    keine Zahl."""
+    keine Zahl. Seit #163 prueft der Leser die Form am Feld selbst: Beide
+    NaN-Angaben sind je ein Befund, nicht mehr nur die zuerst gelesene."""
     nutzlast = _auftrag()
     nutzlast["gutschriften"][0]["positionen"][0]["netto"] = "NaN"
     nutzlast["gutschriften"][0]["summe"]["netto"] = "NaN"
 
     urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
 
-    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR", "WERT_UNBRAUCHBAR"]
     assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].positionen[0].netto"
 
 
@@ -577,3 +578,95 @@ def test_ein_leistungszeitraum_der_rueckwaerts_laeuft_ist_ein_befund(schluessel)
 
     assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
     assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].leistungszeitraum"
+
+
+# ── § 2 und § 4: die Formen des Formats (#163). Eine Abweichung ist kein
+# Rechenproblem, sondern ein unbrauchbarer WERT an einem bekannten Feld; der
+# Befund nennt den Pfad, damit der Absender die Stelle reparieren kann.
+
+@pytest.mark.parametrize("form", [
+    "174.335",    # drei Nachkommastellen statt genau zwei
+    "1.7433E2",   # Exponentialschreibweise
+    " 174.33",    # fuehrendes Leerzeichen
+    "174.3300",   # wertgleich, aber falsch geschrieben
+    "Infinity",   # keine endliche Zahl
+    "NaN",        # mit nichts vergleichbar
+    174,          # JSON-Zahl statt Zeichenkette
+])
+def test_ein_betrag_der_nicht_der_geldform_entspricht_ist_ein_befund(schluessel, form):
+    """§ 4: Geld ist eine JSON-Zeichenkette mit Dezimalpunkt und GENAU zwei
+    Nachkommastellen. Decimal hat alle diese Formen still geschluckt - " 174.33"
+    und "174.3300" sogar als wertgleich - und die Wirkung rundete dann heimlich.
+    Deshalb prueft der Leser die Form, bevor irgendwer rechnet."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["positionen"][0]["netto"] = form
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].positionen[0].netto"
+    )
+
+
+def test_auch_die_bemessung_traegt_die_geldform(schluessel):
+    """direktkosten_netto wurde vor #163 auf keinen Wert geprueft. Die
+    Formprobe gilt fuer ALLE Geldfelder des Verzeichnisses, nicht nur fuer
+    die, die vorher in eine Rechnung flossen."""
+    nutzlast = _auftrag()
+    nutzlast["bemessung"]["direktkosten_netto"] = "100.0"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.bemessung.direktkosten_netto"
+
+
+def test_ein_satz_mit_einer_nachkommastelle_ist_ein_befund(schluessel):
+    """§ 4, Klarstellung 2026-10-17: Der Satz ist vom Geld getrennt und traegt
+    MINDESTENS zwei Nachkommastellen. "33.3" ist keine Satzform. Die Gegenprobe
+    steht oben: "33.333333" bleibt gueltig
+    (test_ein_satz_mit_sechs_nachkommastellen_wird_nicht_vorher_gerundet)."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["positionen"][0]["herleitung"]["satz"] = "33.3"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].positionen[0].herleitung.satz"
+    )
+
+
+@pytest.mark.parametrize("angabe", [
+    "2026-09-03T11:00:00.123Z",   # Bruchteile einer Sekunde
+    "2026-09-03T13:00:00+02:00",  # Offset statt UTC
+])
+def test_ein_erzeugt_am_in_anderer_schreibweise_ist_ein_befund(schluessel, angabe):
+    """§ 2: UTC, sekundengenau, ohne Bruchteile - die Form
+    YYYY-MM-DDTHH:MM:SSZ. Beide Schreibweisen nennen denselben Augenblick,
+    und der Leser parste beide anstandslos; erlaubt ist nur die eine."""
+    roh = _beleg(schluessel, _auftrag(), erzeugt_am=angabe)
+
+    urteil = _urteil(schluessel, roh)
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.erzeugt_am"
+
+
+def test_ein_typcode_als_zahl_ist_ein_befund(schluessel):
+    """§ 4: typcode ist eine JSON-Zeichenkette ("389"), keine Zahl. str()
+    machte aus der Zahl 389 still einen gueltigen Code, und der Absender
+    erfaehrt nie, dass sein Beleg falsch gebaut ist."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["typcode"] = 389
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].typcode"

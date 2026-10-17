@@ -251,3 +251,18 @@ def test_importierter_entwurf_finalisiert(pg_session):
         assert pg_session.get(Invoice, entwurf.id).status == "issued"
     finally:
         cleanup(entwurf.invoice_number)
+
+
+def test_kein_betrag_wird_mehr_still_gerundet(pg_session):
+    """#163: Der Leser erzwingt die Geldform, deshalb rundet die Wirkung selbst
+    nicht mehr. quantize ohne Rundungsart (halb-gerade) machte aus "0.005"
+    still eine 0.00 - ein Entwurf mit einem Betrag, der im Auftrag nicht steht.
+    Im Echtlauf kommt der Wert nicht mehr vor (der Leser lehnt ihn ab); der
+    Test haelt fest, dass die Wirkung nichts mehr zurechtbiegt."""
+    _kunde(pg_session, PARTNER_A)
+    gutschrift = _gutschrift(PARTNER_A, netto="0.005")
+    gutschrift["positionen"][0]["herleitung"] = {"basis_netto": "0.02", "satz": "25.00"}
+
+    entwurf = entwuerfe_anlegen(pg_session, _urteil([gutschrift]))[0]
+
+    assert entwurf.net_total == Decimal("0.005")

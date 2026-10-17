@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -33,7 +34,7 @@ from typing import Optional, Sequence
 
 from cryptography.exceptions import InvalidSignature
 
-from app.services.protokoll import FELDER, NUTZLAST_ARTEN, fassung_annehmbar
+from app.services.protokoll import FELDER, FELDFORMEN, NUTZLAST_ARTEN, fassung_annehmbar
 from app.services.uebergabe_schluessel import (
     SchluesselNichtGueltig,
     SchluesselUnbekannt,
@@ -142,20 +143,45 @@ def _zahl(wert) -> Optional[Decimal]:
     return zahl
 
 
+# § 4, je Form EINE Pruefung und an EINER Stelle angewandt (protokoll.FELDFORMEN
+# nennt die Felder). Geld ist eine JSON-Zeichenkette mit Dezimalpunkt und GENAU
+# zwei Nachkommastellen - Decimal haette "174.3300", " 174.33" und "1.7433E2"
+# still geschluckt, und die Wirkung rundete dann heimlich. Das optionale
+# fuehrende Minus bleibt: kein Feld des Auftrags hat dem Leser bisher ein
+# Vorzeichen verboten, und die Formprobe aendert am Vorzeichen nichts.
+_GELDFORM = re.compile(r"^-?[0-9]+\.[0-9]{2}$")
+
+# Der Satz ist vom Geld getrennt (Klarstellung 2026-10-17): MINDESTENS zwei
+# Nachkommastellen, denn ein Satz, der vorher gerundet wird, lehnt den
+# gueltigen Auftrag ab (siehe _zahl).
+_SATZFORM = re.compile(r"^-?[0-9]+\.[0-9]{2,}$")
+
+
+def _hat_geldform(wert) -> bool:
+    return isinstance(wert, str) and _GELDFORM.match(wert) is not None
+
+
+def _hat_satzform(wert) -> bool:
+    return isinstance(wert, str) and _SATZFORM.match(wert) is not None
+
+
+# § 2: UTC, sekundengenau, ohne Bruchteile. Die Form ist Teil des Werts: Eine
+# andere Schreibweise desselben Augenblicks (".123", "+02:00") parste
+# fromisoformat frueher anstandslos, und eine naive Angabe crashte erst im
+# Vergleich mit dem Beiblatt des Schluessels (TypeError vor jeder
+# Signaturpruefung). Erlaubt ist nur die eine Schreibweise.
+_ZEITFORM = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
+
+
 def _zeit(wert) -> Optional[datetime]:
-    if not isinstance(wert, str):
+    if not isinstance(wert, str) or not _ZEITFORM.match(wert):
         return None
     try:
-        zeitpunkt = datetime.fromisoformat(wert.replace("Z", "+00:00"))
+        return datetime.fromisoformat(wert.replace("Z", "+00:00"))
     except ValueError:
+        # Formproben wie "2026-13-45T99:99:99Z": die Schreibweise stimmt, der
+        # Zeitpunkt tut nicht - beides ist ein unbrauchbarer Wert, keine Ausnahme.
         return None
-    # RFC 3339 verlangt die Zeitzone. Eine naive Angabe parst fromisoformat
-    # anstandslos und crashte erst im Vergleich mit dem zeitzonenbewussten
-    # Beiblatt des Schluessels (TypeError vor jeder Signaturpruefung); sie ist
-    # ein unbrauchbarer Wert, keine Ausnahme.
-    if zeitpunkt.tzinfo is None:
-        return None
-    return zeitpunkt
 
 
 def _datum(wert) -> Optional[date]:
@@ -217,6 +243,24 @@ def _pruefe_objekt(objekt, spec, unterobjekte, pfad_verzeichnis, pfad, funde) ->
             _pruefe_objekt(
                 wert, unterobjekte[kind], unterobjekte, kind, f"{pfad}.{name}", funde,
             )
+        else:
+            # § 4, einmal zentral: die Formprobe fuer jedes Geld- und Satzfeld
+            # des Verzeichnisses (protokoll.FELDFORMEN). Sie laeuft hier und
+            # nicht je Verbraucher, damit auch Felder die Form tragen, die
+            # dieser Empfaenger nie in eine Rechnung rechnet.
+            form = FELDFORMEN.get(kind)
+            if form == "geld" and not _hat_geldform(wert):
+                funde.append(Feststellung(
+                    "WERT_UNBRAUCHBAR", f"{pfad}.{name}",
+                    erwartet="Zeichenkette mit genau zwei Nachkommastellen",
+                    erhalten=str(wert),
+                ))
+            elif form == "satz" and not _hat_satzform(wert):
+                funde.append(Feststellung(
+                    "WERT_UNBRAUCHBAR", f"{pfad}.{name}",
+                    erwartet="Zeichenkette mit mindestens zwei Nachkommastellen",
+                    erhalten=str(wert),
+                ))
 
 
 def _felder_pruefen(objekt, verzeichnis, pfad) -> list:
@@ -226,7 +270,11 @@ def _felder_pruefen(objekt, verzeichnis, pfad) -> list:
 
 
 def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
-    """§ 8: die drei Pruefhaken und die Aufloesung des Beteiligten."""
+    """§ 8: die drei Pruefhaken und die Aufloesung des Beteiligten.
+
+    Die Formen des § 4 (Geld, Satz) hat _felder_pruefen schon geprueft; hier
+    wird nur noch gerechnet, und _zahl kann an keiner Angabe mehr scheitern.
+    """
     funde = _felder_pruefen(nutzlast, FELDER["abrechnungsauftrag"], "$.nutzlast")
     if funde:
         return funde
@@ -237,17 +285,8 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
     # Importen. Ein Pruefhaken auf Gleichheit lehnte jeden echten Auftrag ab.
     erloes = _zahl(nutzlast["bemessung"]["erloes_netto"])
     summe_grundlagen = Decimal("0")
-    for nummer, grundlage in enumerate(nutzlast["grundlagen"]):
-        betrag = _zahl(grundlage["erloes_netto"])
-        if betrag is None:
-            return [Feststellung("WERT_UNBRAUCHBAR",
-                                 f"$.nutzlast.grundlagen[{nummer}].erloes_netto",
-                                 erwartet="Betrag", erhalten=str(grundlage["erloes_netto"]))]
-        summe_grundlagen += betrag
-    if erloes is None:
-        return [Feststellung("WERT_UNBRAUCHBAR", "$.nutzlast.bemessung.erloes_netto",
-                             erwartet="Betrag",
-                             erhalten=str(nutzlast["bemessung"]["erloes_netto"]))]
+    for grundlage in nutzlast["grundlagen"]:
+        summe_grundlagen += _zahl(grundlage["erloes_netto"])
     if summe_grundlagen > erloes:
         return [Feststellung(
             "SUMME_STIMMT_NICHT", "$.nutzlast.grundlagen",
@@ -256,10 +295,13 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
 
     for nummer, gutschrift in enumerate(nutzlast["gutschriften"]):
         pfad = f"$.nutzlast.gutschriften[{nummer}]"
-        typcode = str(gutschrift["typcode"])
-        if typcode not in TYPCODES:
+        # § 4: typcode ist eine JSON-Zeichenkette. str() machte aus der Zahl
+        # 389 still einen gueltigen Code, und der Absender erfaehrt nie, dass
+        # sein Beleg falsch gebaut ist.
+        typcode = gutschrift["typcode"]
+        if not isinstance(typcode, str) or typcode not in TYPCODES:
             return [Feststellung("WERT_UNBRAUCHBAR", f"{pfad}.typcode",
-                                 erwartet=" oder ".join(TYPCODES), erhalten=typcode)]
+                                 erwartet=" oder ".join(TYPCODES), erhalten=str(typcode))]
 
         # Wertprobe vor der Annahme: Ein Zeitraum, den die Wirkung spaeter
         # nicht lesen kann, war vorher angenommen und wirkte als ValueError.
@@ -284,9 +326,6 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
         summe = Decimal("0")
         for lfd, position in enumerate(gutschrift["positionen"]):
             netto = _zahl(position["netto"])
-            if netto is None:
-                return [Feststellung("WERT_UNBRAUCHBAR", f"{pfad}.positionen[{lfd}].netto",
-                                     erwartet="Betrag", erhalten=str(position["netto"]))]
             summe += netto
             herleitung = position.get("herleitung")
             if herleitung is None:
@@ -295,9 +334,6 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
                 continue
             basis = _zahl(herleitung["basis_netto"])
             satz = _zahl(herleitung["satz"])
-            if basis is None or satz is None:
-                return [Feststellung("WERT_UNBRAUCHBAR", f"{pfad}.positionen[{lfd}].herleitung",
-                                     erwartet="basis_netto und satz als Zahlen")]
             # Kaufmaennisch runden. Pythons Standard waere ROUND_HALF_EVEN und
             # machte aus 174.325 eine 174.32 - der gueltige Auftrag flaege raus.
             erwartet = herleitungsbetrag(basis, satz)
@@ -308,9 +344,6 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
                 )]
 
         genannt = _zahl(gutschrift["summe"]["netto"])
-        if genannt is None:
-            return [Feststellung("WERT_UNBRAUCHBAR", f"{pfad}.summe.netto",
-                                 erwartet="Betrag", erhalten=str(gutschrift["summe"]["netto"]))]
         if genannt != summe:
             return [Feststellung(
                 "SUMME_STIMMT_NICHT", f"{pfad}.summe.netto",
@@ -404,9 +437,10 @@ def beleg_beurteilen(
     erzeugt_am = _zeit(beleg["erzeugt_am"])
     if erzeugt_am is None:
         # Bekanntes Feld, unbrauchbarer Wert (ab Fassung 1.6). Vorher stand hier
-        # BELEG_UNLESBAR, und das war gedehnt: die Datei ist ja lesbar.
+        # BELEG_UNLESBAR, und das war gedehnt: die Datei ist ja lesbar. Seit #163
+        # gilt die Form des § 2, nicht bloss RFC 3339 irgendeiner Zone.
         return abgelehnt(Feststellung("WERT_UNBRAUCHBAR", "$.erzeugt_am",
-                                      erwartet="RFC 3339, UTC",
+                                      erwartet="YYYY-MM-DDTHH:MM:SSZ",
                                       erhalten=str(beleg["erzeugt_am"])), **rest)
     rest["erzeugt_am"] = erzeugt_am
 
