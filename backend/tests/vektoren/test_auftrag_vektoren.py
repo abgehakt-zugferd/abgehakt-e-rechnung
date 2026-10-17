@@ -24,6 +24,7 @@ import json
 
 import pytest
 
+from app.services.abrechnungsauftrag_wirkung import WirkungFehler, entwuerfe_anlegen
 from app.services.uebergabe_befund import Empfangslage, beleg_beurteilen
 
 # Die drei Vektoren, deren Regel in der Nutzlast der Erloesmeldung sitzt.
@@ -125,6 +126,32 @@ def test_erloesmeldungen_werden_hier_gar_nicht_erst_gelesen(vektoren, schluessel
     assert [f.code for f in urteil.feststellungen] == ["NUTZLASTART_UNBEKANNT"]
 
 
+@pytest.mark.parametrize("gruppe", ["rechnungsauftraege", "aufstellungen"])
+def test_die_neuen_arten_werden_noch_nicht_gelesen(vektoren, schluesselordner, gruppe):
+    """1.7 kennt rechnungsauftrag und aufstellungsauftrag (§§ 8a, 8b); dieser
+    Empfaenger liest sie noch nicht, der Bau wartet auf eine Freigabe.
+
+    Gemessen wird je der Kettenanfang der Gruppe: ein gueltig signierter,
+    richtig an diesen Empfaenger adressierter Beleg. Er kommt durch jede
+    Umschlagprobe - Fassung, Hash, Signatur, Kette - und faellt genau an der
+    Artprobe, nicht frueher: GENAU EIN Befund beweist, dass nichts anderes
+    ihn abgewiesen hat. Die Wirkung verweigert fuer abgelehnte Belege, es
+    entsteht kein Entwurf; gemessen am ersten Haken von entwuerfe_anlegen.
+
+    Die beiden Gruppen sind damit NICHT als Annahme-Tests eingesammelt; ihre
+    uebrigen Faelle kommen mit dem Bau.
+    """
+    roh = (vektoren / gruppe / "01_gueltig.json").read_bytes()
+
+    urteil = beleg_beurteilen(roh, Empfangslage(), schluessel_wurzel=schluesselordner)
+
+    assert not urteil.angenommen
+    assert [f.code for f in urteil.feststellungen] == ["NUTZLASTART_UNBEKANNT"]
+    assert urteil.nutzlast_art == json.loads(roh)["nutzlast_art"]
+    with pytest.raises(WirkungFehler):
+        entwuerfe_anlegen(None, urteil)
+
+
 def test_derselbe_beleg_noch_einmal_ist_keine_ablehnung(vektoren, schluesselordner):
     """`beleg_id_doppelt` ist byteweise `01_kettenanfang` - der Fall, der am
     haeufigsten falsch gebaut wird."""
@@ -141,6 +168,69 @@ def test_derselbe_beleg_noch_einmal_ist_keine_ablehnung(vektoren, schluesselordn
     assert urteil.angenommen
     assert urteil.bereits_verarbeitet
     assert urteil.feststellungen == ()
+
+
+# Die Umschlaege sind Erloesmeldungen feiyr-konto an tantiemen-app; ihre
+# Sollwerte in erwartung.json sind die Hashes, kein erwarteter Code.
+UMSCHLAEGE = ("01_kettenanfang", "02_nachfolger", "03_hoeherer_minor")
+
+
+class _Zweitlesung(Empfangslage):
+    """Die Lage, in der dieser Beleg bereits angenommen und gewirkt hat."""
+
+    def __init__(self, roh):
+        beleg = json.loads(roh)
+        # Mit derselben Zeitregel wie der Leser selbst (protokoll.zeit, abgehakt#166):
+        # wer hier anders parsed, konstruiert eine Lage, die der Leser nie erzeugt.
+        from app.services.protokoll import zeit
+
+        self._sha = hashlib.sha256(roh).hexdigest()
+        self._kennungen = {beleg["beleg_id"]: self._sha}
+        self._zuletzt = (self._sha, zeit(beleg["erzeugt_am"]))
+
+    def zuletzt_angenommen(self, absender):
+        return self._zuletzt
+
+    def sha_zu_beleg_id(self, beleg_id):
+        return self._kennungen.get(beleg_id)
+
+
+def test_jeder_umschlagsvektor_ist_gemessen(vektoren):
+    """Kein stilles Weglassen: jede Datei im Ordner kommt in einem Test vor."""
+    dateien = {p.stem for p in (vektoren / "umschlaege").glob("*.json")}
+    assert dateien == set(_namen(vektoren, "umschlaege"))
+    assert dateien == set(UMSCHLAEGE)
+
+
+@pytest.mark.parametrize("name", UMSCHLAEGE)
+def test_umschlagsvektor_wird_angenommen(vektoren, schluesselordner, name):
+    """erwartung.json zu `umschlaege`: muss angenommen werden, Hashes wie erwartet.
+
+    Die Nutzlast dieser Belege ist eine Erloesmeldung, und die liest dieser
+    Empfaenger nicht - bis zur Artprobe kommt ein frischer Lauf also nie.
+    Die Annahme ist deshalb als Zweitlesung gemessen (§ 11 letzte Zeile:
+    zweimal eingelesen heisst einmal gewirkt, dieselbe Quittung noch einmal).
+    Der Idempotenzriegel sitzt im Pruefpfad hinter Bytes, Umschlag, Fassung,
+    Nutzlast-Hash und Signatur: Keine Feststellung entsteht dort, ohne dass
+    jede dieser Proben zuvor gruen war. Die Kette misst der frische Lauf von
+    `03_hoeherer_minor` mit Vorgaengerlage (test_protokoll_vektoren.py).
+    """
+    eintrag = _erwartung(vektoren)["umschlaege"][name]
+    roh = (vektoren / "umschlaege" / f"{name}.json").read_bytes()
+
+    urteil = beleg_beurteilen(
+        roh, _Zweitlesung(roh), schluessel_wurzel=schluesselordner,
+        eigener_name="tantiemen-app",
+    )
+
+    assert urteil.angenommen
+    assert urteil.bereits_verarbeitet
+    assert urteil.feststellungen == ()
+    assert urteil.beleg_sha256 == eintrag["beleg_sha256"]
+    # Der Hash der Nutzlast steht im Beleg und in erwartung.json. Dass er zur
+    # Nutzlast stimmt, hat der Leser eben geprueft: NUTZLAST_HASH_FALSCH
+    # waere vor dem Riegel gekommen.
+    assert json.loads(roh)["nutzlast_sha256"] == eintrag["nutzlast_sha256"]
 
 
 def test_der_gueltige_auftrag_wird_angenommen(vektoren, schluesselordner):

@@ -6,8 +6,6 @@ fehlgeschlagener Test. Nicht gesammelt heisst: der Lauf behauptet nicht,
 gemessen zu haben. Gesagt wird es trotzdem, im Kopf jedes Laufs.
 """
 
-import json
-
 import pytest
 
 from tests.helpers.formatvektoren import vektorordner
@@ -40,33 +38,16 @@ def protokoll(vektoren):
 
 
 @pytest.fixture(scope="session")
-def schluesselordner(vektoren, tmp_path_factory):
-    """Die Probeschluessel des Vektorordners, mit Beiblättern dieser Fassung.
+def schluesselordner(vektoren):
+    """Die Probeschluessel des Vektorordners, lesend direkt.
 
-    Die Beiblätter dort tragen noch Felder aus der Zeit vor dem geschlossenen
-    Feldbestand (abgehakt#166: hinweis, probe, warum_probe); der Leser verwirft
-    solche Schluessel als SCHLUESSEL_UNBEKANNT, und dieser Befund wuerde jede
-    spätere Ablehnung ueberdecken. Der Vektorordner gehoert keinem Empfaenger
-    allein und ist hier nur lesend eingehaengt, deshalb baut dieser Fixture die
-    Beiblätter zur Laufzeit neu: aus genau den Angaben, die § 6 zulaesst, am
-    selben .pub. Nichts davon landet im Repositorium. Gemessen wird der Leser
-    und sein Befundcode, nicht der Autor der Beiblätter.
+    Bis 1.6 trugen die Beiblätter dort noch Felder aus der Zeit vor dem
+    geschlossenen Feldbestand (hinweis, probe, warum_probe); der Leser
+    verwirft solche Schluessel als SCHLUESSEL_UNBEKANNT, und dieser Befund
+    wuerde jede spaetere Ablehnung ueberdecken. Deshalb baute eine Fixture
+    sie zur Laufzeit neu (abgehakt#159). Seit 1.7 tragen die Beiblätter nur
+    die Pflichtfelder plus notizen, wie § 6 es verlangt, und werden direkt
+    gelesen: Der Vektorordner gehoert keinem Empfaenger allein und ist hier
+    nur lesend eingehaengt, nichts davon landet im Repositorium.
     """
-    quelle = vektoren.parent / "schluessel"
-    ziel = tmp_path_factory.mktemp("schluessel")
-    erlaubt = (
-        "schluessel_id", "absender", "verfahren",
-        "gueltig_von", "gueltig_bis", "notizen",
-    )
-    for beiblatt in sorted(quelle.glob("*/*.json")):
-        angaben = json.loads(beiblatt.read_text(encoding="utf-8"))
-        ordner = ziel / beiblatt.parent.name
-        ordner.mkdir()
-        (ordner / beiblatt.name).write_text(
-            json.dumps({name: angaben[name] for name in angaben if name in erlaubt}),
-            encoding="utf-8",
-        )
-        (ordner / f"{beiblatt.stem}.pub").write_bytes(
-            (beiblatt.parent / f"{beiblatt.stem}.pub").read_bytes()
-        )
-    return ziel
+    return vektoren.parent / "schluessel"

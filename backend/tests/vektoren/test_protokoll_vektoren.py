@@ -17,7 +17,7 @@ from app.services.protokoll import (
     NUTZLAST_ARTEN,
     PROTOKOLL_VERSION,
 )
-from app.services.uebergabe_befund import Empfangslage, beleg_beurteilen
+from app.services.uebergabe_befund import LESBARE_ARTEN, Empfangslage, beleg_beurteilen
 
 
 def test_konstante_haelt_die_geltende_fassung(protokoll):
@@ -77,7 +77,7 @@ def _lage_mit_vorgaenger(vektoren, name):
 
 
 def test_hoeherer_minor_wird_angenommen(vektoren, schluesselordner):
-    """`03_hoeherer_minor` traegt 1.7 und muss durch die Fassungsprobe kommen.
+    """`03_hoeherer_minor` traegt 1.8 und muss durch die Fassungsprobe kommen.
 
     Gemessen wird derselbe Leser wie in der Anwendung (ein Pruefpfad, abgehakt#159).
     Diese Anwendung liest die Erloesmeldung nicht, deshalb ist NUTZLASTART_UNBEKANNT
@@ -152,11 +152,21 @@ def test_die_erreichbaren_codes_dieses_empfaengers_sind_benannt(protokoll):
     Wer einen Vektor gegen einen Empfaenger misst, dem sein Code gar nicht
     begegnen kann, misst nichts. STUECKZAHLPROBE gilt in der Erloesmeldung,
     und die liest diese Anwendung nicht.
+
+    Seit 1.7 nennt das Protokoll abgehakt mit den beiden neuen Arten; deren
+    Bau wartet hier auf eine Freigabe, gelesen wird die Teilmenge
+    (LESBARE_ARTEN). Die Differenz ist damit benannt und gesperrt: Waechst
+    das Protokoll um eine Art, die dieser Empfaenger still schluckt, wird
+    dieser Test rot - genauso wie beim Bau, der LESBARE_ARTEN erweitert und
+    ihn mitzieht.
     """
     lage = protokoll["codes_je_empfaenger"]
     meine = set(lage["umschlagcodes_fuer_alle"]) | set(lage["abgehakt"]["zusaetzlich"])
 
     assert meine <= BEFUNDCODES
-    assert lage["abgehakt"]["liest"] == ["abrechnungsauftrag"]
+    assert set(LESBARE_ARTEN) <= set(lage["abgehakt"]["liest"])
+    assert set(lage["abgehakt"]["liest"]) - set(LESBARE_ARTEN) == {
+        "rechnungsauftrag", "aufstellungsauftrag",
+    }
     assert "STUECKZAHLPROBE" in lage["abgehakt"]["nie_erreichbar"]
     assert not meine & set(lage["abgehakt"]["nie_erreichbar"])

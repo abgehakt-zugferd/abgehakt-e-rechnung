@@ -936,6 +936,16 @@ Befundcodes und das Feldverzeichnis. Maßgeblich ist `protokoll.json` im Ordner 
 major heißt annehmen, auch bei höherem minor; höherer major heißt
 `FASSUNG_UNVERTRAEGLICH`. Es gibt **keine** Aushandlung zur Laufzeit.
 
+Stand ist **1.7** (seit dem 2026-10-17): zwei neue Nutzlastarten (`rechnungsauftrag` und
+`aufstellungsauftrag`, §§ 8a und 8b) und drei neue Befundcodes (`AUFTRAG_SCHON_GERECHNET`,
+`ANLAGE_FEHLT`, `ANLAGE_HASH_FALSCH`). Dieses Repositorium kennt die neuen Arten und Codes,
+LIEST die Arten aber noch nicht: der Bau wartet auf eine Freigabe. Was dieser Empfänger
+liest, steht in `uebergabe_befund.LESBARE_ARTEN`, und das bleibt `abrechnungsauftrag`; ein
+gültig signierter Beleg der neuen Arten wird mit `NUTZLASTART_UNBEKANNT` abgelehnt, und es
+entsteht kein Entwurf. Die Beiblätter im Vektorordner tragen seit 1.7 nur die Pflichtfelder
+plus `notizen`; die Fixture, die sie zur Laufzeit in den geschlossenen Feldbestand umbaute
+(#159), ist entfernt, die Tests lesen die Beiblätter direkt.
+
 Die Vektoren liegen außerhalb dieses Repositoriums und werden nicht mitgeliefert. Pfad aus
 `UEBERGABE_VEKTOREN`, **ohne Vorgabe**: Name und Vorgabepfad, die das Papier dafür nennt,
 tragen den Namen des Betreibers, und dieses Repositorium ist öffentlich. Ist die Variable

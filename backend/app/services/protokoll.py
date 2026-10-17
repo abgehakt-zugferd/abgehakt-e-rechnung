@@ -19,13 +19,25 @@ import re
 from datetime import datetime
 from typing import Optional
 
-PROTOKOLL_VERSION = "1.6"
+PROTOKOLL_VERSION = "1.7"
 
-AKZEPTIERTE_FASSUNGEN = ("1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6")
+AKZEPTIERTE_FASSUNGEN = ("1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7")
 
 ABGELEHNT_AB_MAJOR = 2
 
-NUTZLAST_ARTEN = ("erloesmeldung", "abrechnungsauftrag", "quittung")
+# 1.7 fuehrt zwei neue Arten (rechnungsauftrag und aufstellungsauftrag,
+# §§ 8a und 8b). Dass sie hier stehen, heisst nur, dass das PROTOKOLL sie
+# kennt - die Frage, was dieser Empfaenger LIEST, ist eine andere, und ihre
+# Antwort steht in uebergabe_befund.LESBARE_ARTEN. Deren Bau wartet auf eine
+# Freigabe: Ein gueltig signierter Beleg der neuen Arten kommt heute durch
+# jede Umschlagprobe und faellt an der Artprobe mit NUTZLASTART_UNBEKANNT.
+NUTZLAST_ARTEN = (
+    "erloesmeldung",
+    "abrechnungsauftrag",
+    "rechnungsauftrag",
+    "aufstellungsauftrag",
+    "quittung",
+)
 
 # § 8 (ab 1.6): der geschlossene Wertevorrat von gutschriften[].typcode, und
 # zugleich die Zuordnung zu der Belegart, die dieser Empfaenger daraus anlegt.
@@ -68,6 +80,14 @@ BEFUNDCODES = frozenset({
     "SUMME_STIMMT_NICHT",
     "STUECKZAHLPROBE",
     "PARTNER_ID_UNBEKANNT",
+    # Ab 1.7 (§§ 8a und 8b), an die beiden neuen Arten gebunden: Zum
+    # auftragsschluessel besteht bereits ein nicht storniertes Dokument,
+    # Entwurf eingeschlossen; die Anlage eines aufstellungsauftrags fehlt
+    # oder weicht in Hash oder Groesse ab. Sie begegnen diesem Empfaenger
+    # erst, wenn er die neuen Arten liest.
+    "AUFTRAG_SCHON_GERECHNET",
+    "ANLAGE_FEHLT",
+    "ANLAGE_HASH_FALSCH",
 })
 
 _FASSUNG = re.compile(r"^([0-9]+)\.([0-9]+)$")

@@ -72,8 +72,15 @@ def test_befundcodes_sind_ein_geschlossener_wertevorrat():
     assert "AUFTRAG_KAPUTT" not in BEFUNDCODES
 
 
-def test_nutzlast_arten_sind_die_drei_des_protokolls():
-    assert set(NUTZLAST_ARTEN) == {"erloesmeldung", "abrechnungsauftrag", "quittung"}
+def test_nutzlast_arten_sind_die_fuenf_des_protokolls():
+    """1.7 fuehrt rechnungsauftrag und aufstellungsauftrag dazu (§§ 8a, 8b).
+    Das Protokoll kennt sie; gelesen werden sie von diesem Empfaenger erst mit
+    der Freigabe des Baus, und das misst der Vektortest
+    test_die_neuen_arten_werden_noch_nicht_gelesen."""
+    assert set(NUTZLAST_ARTEN) == {
+        "erloesmeldung", "abrechnungsauftrag",
+        "rechnungsauftrag", "aufstellungsauftrag", "quittung",
+    }
 
 
 def test_einstellungen_zeigen_app_version_und_protokollfassung(client, pg_session):
