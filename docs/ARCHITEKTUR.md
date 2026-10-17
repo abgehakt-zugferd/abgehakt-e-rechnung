@@ -83,17 +83,23 @@ backend/app/
 │   ├── mailtext.py           # Betreff und Rumpf der Rechnungsmail je Belegsprache
 │   ├── invoice_number.py     # fortlaufende Nummern
 │   ├── customer_number.py    # Vorschlag für Kundennummern, überschreibbar
+│   ├── kundenformular.py    # gemeinsame Formularlogik fürs Anlegen und Bearbeiten eines Kunden
 │   ├── storno.py             # Gutschrift zum Original (TypeCode 381), reine Logik
+│   ├── storno_wirkung.py     # wie eine Stornierung in den Kennzahlen wirkt (Gutschrift im Topf des Originals)
+│   ├── ersatzrechnung.py    # ob eine stornierte Rechnung ersetzt werden darf (BT-25)
 │   ├── audit.py              # automatisches Audit-Log über Session-Events
 │   ├── aenderungsprotokoll.py  # dasselbe Log, als lesbare Sätze für die Oberfläche
 │   ├── invoice_guard.py      # Statusmaschine + Unveränderlichkeit
+│   ├── bezahlt_am.py         # Zahlungsdatum beim Bezahltsetzen: Plausibilität und Gutschrift-Sperre
 │   ├── customer_guard.py     # kein Hard-Delete von Kunden
 │   ├── gobd_export.py        # ZIP-Export (CSV + Belege + Audit-Log)
 │   ├── datev_email.py        # SMTP-Versand + DATEV-BCC
 │   ├── crypto.py             # verschlüsselt Secrets in der Datenbank (SMTP-Passwort)
 │   ├── dashboard_kennzahlen.py # USt-, Steuer-Rücklagen-, offene und überfällige Forderungen
 │   ├── steuer_ruecklage.py   # konfigurierbare GmbH-Pauschale (KSt/GewSt) für Rücklagen
+│   ├── steuerstatus.py       # umsatzsteuerlicher Status des Kunden, steuert die Honorargutschrift (389)
 │   ├── beleg_status.py       # Status-Etiketten Versendet / Nicht versendet in der UI
+│   ├── belegsummen.py       # einzige Quelle der Belegsummen, inklusive Abzug auf Belegebene (BG-20)
 │   ├── secret_key.py         # Schlüssel dafür, als Datei im storage-Volume
 │   ├── epc_qr.py             # EPC-QR (Girocode) für Rechnung und Gutschrift
 │   ├── bankverbindung.py     # IBAN/BIC normalisieren und prüfen
@@ -107,6 +113,7 @@ backend/app/
 │   ├── archive_frist.py      # archive_until = 31.12. des Ausstellungsjahrs + 8
 │   ├── empfaenger.py         # Kopie-Empfänger aus Kunde, Einstellungen, Sende-Dialog
 │   ├── ust_id_pruefung.py    # VIES-Prüfung, nur auf Klick mit Einwilligung
+│   ├── steuerkategorie_land.py # Warntext, wenn Steuerkategorie und Kundenland nicht zusammenpassen
 │   ├── uebergabebeleg.py     # Übergabebelege lesen und prüfen (eigene RFC-8785-Kanonisierung)
 │   ├── uebergabe_schluessel.py  # öffentliche Schlüssel der Übergabe-Absender
 │   ├── uebergabe_befund.py   # ein Befund je Beleg, Lesen ohne Wirkung
@@ -150,11 +157,12 @@ Reihenfolge Guards → Audit ist Pflicht, sonst schreibt das
 Audit-Log Einträge für einen Flush, der anschließend abbricht.
 
 - `services/invoice_guard.py`: Statusmaschine, Hard-Delete-Verbot, Unveränderlichkeit
-  finalisierter Rechnungen (nur `status`, `datev_sent_at`, `updated_at` dürfen sich noch
-  ändern). Deckt **auch `InvoiceItem`** ab: Positionen finalisierter Rechnungen lassen sich
-  nicht ändern, löschen oder nachschieben. In derselben Transaktion neu erzeugte Rechnungen
-  (Storno-Muster) bleiben frei befüllbar. `audit.py` auditiert `InvoiceItem` bewusst
-  **nicht**; hier ist der Guard die einzige Verteidigung.
+  finalisierter Rechnungen (nur `status`, `datev_sent_at`, `bezahlt_am` und `updated_at`
+  dürfen sich noch ändern; die Zusatzregeln an `bezahlt_am` stehen im Abschnitt
+  Statusmaschine). Deckt **auch `InvoiceItem`** ab: Positionen finalisierter Rechnungen
+  lassen sich nicht ändern, löschen oder nachschieben. In derselben Transaktion neu
+  erzeugte Rechnungen (Storno-Muster) bleiben frei befüllbar. `audit.py` auditiert
+  `InvoiceItem` bewusst **nicht**; hier ist der Guard die einzige Verteidigung.
 - `services/customer_guard.py`: Hard-Delete verboten, Bearbeiten erlaubt.
 
 **Zweite Linie: Datenbank-Trigger.** `BEFORE DELETE`/`BEFORE TRUNCATE` auf `invoices` und
@@ -217,7 +225,7 @@ eine unvollständige E-Rechnung zementieren. Als zusätzliche Absicherung verwei
 
 ```
 draft → [prüfen] → [finalisieren] → issued → paid
-  ↕                                        ↘ cancelled
+  ↕                                     ↘ cancelled
 discarded
 ```
 
@@ -232,6 +240,19 @@ Exporten dürfen die beiden nie zusammenfallen. `discarded` existiert, weil Rech
 gelöscht werden dürfen und die Nummer schon beim Anlegen des Entwurfs vergeben wird: der
 verbliebene Datensatz ist das Einzige, was die Lücke in der Nummernfolge später erklärt. Aus
 `discarded` führt kein direkter Weg in einen Belegstatus: erst zurückholen, dann finalisieren.
+
+Der Übergang zu `cancelled` zweigt bei `issued` ab, nicht bei `paid`: `paid` und `cancelled`
+sind Endstatus, und aus beiden führt kein Übergang heraus (`ALLOWED_TRANSITIONS` in
+`services/invoice_guard.py`). Drei Regeln des Guards stehen zusätzlich zu der Tabelle:
+
+- **`paid` setzt ein Zahlungsdatum voraus.** Ohne `bezahlt_am` fiele der Beleg still aus
+  Umsatz und Geldeingang heraus, und nachtragen ließe sich das nicht mehr.
+- **`bezahlt_am` wird nur mit dem Übergang `issued` → `paid` gesetzt** und ist danach
+  unveränderlich, weder löschbar noch umdatierbar, wie der Erstversand `datev_sent_at`.
+- **Eine gestellte Gutschrift (TypeCode 381) ist endgültig und nicht stornierbar.** Würde
+  das Original durch die Stornierung der Gutschrift wieder aufleben, stünde die Korrektur
+  halb vollzogen und das Original fest; der Weg zur Korrektur ist eine neue Rechnung zum
+  Original.
 
 ### Entwürfe bearbeiten, nur `draft`
 
@@ -397,6 +418,20 @@ eine andere Menge. Wer das sieht, glaubt danach keiner Zahl mehr. Die Bedingung 
 SQL formuliert; Zählung und Filterung müssen dieselben zusätzlichen Bedingungen setzen.
 Das Etikett wertet die entsprechende Python-Prüfung im Speicher aus.
 
+### Summen haben eine Quelle
+
+`services/belegsummen.py` ist die einzige Stelle, an der Positionssumme, Abzug,
+Steuerbasis, Steuer und Brutto eines Belegs gerechnet werden. Router
+(`_apply_totals`) und Validator fragen sie beide, statt selbst nachzurechnen; eine
+zweite Rechenart stellte dieselbe Rechnung je Aufrufer anders dar, und der
+Unterschied fiele erst bei der Betriebsprüfung auf. Der Abzug auf Belegebene
+(EN 16931 BG-20) ist ein Paar aus Betrag und Grund: die Migration `023_belegabzug`
+erzwingt dieses Feldpaar mit einem CHECK, und ohne Abzug werden die Positionssteuern
+aufsummiert statt neu gerechnet, weil jede Position einzeln auf Cent gerundet ist und
+eine Neurechnung auf der Summe Bestandsbelege nachträglich um Centbeträge veränderte.
+Bei Anzahlungsrechnung (386) und Honorargutschrift (389) ist ein Abzug unzulässig;
+der Validator lehnt ihn mit dem Fehlercode `ABZUG_BELEGART` ab.
+
 ### Der Betreff der Rechnungsmail trägt keinen Zeilenumbruch
 
 `mailtext.pruefe_betreff` lehnt einen Betreff mit `\n` oder `\r` ab, und zwar nach dem Einsetzen
@@ -422,7 +457,8 @@ Dateisystem des Containers, und sie ist beim nächsten `up` verschwunden.
 Modellen erzeugt und legt das Schema des Extraktionsstands an, dazu die GoBD-Trigger (aus
 `app/db/immutability_triggers.py`, deren einzige Quelle) und die beiden Singleton-Zeilen
 `company` und `app_config`. Ab hier gilt der normale Ablauf: jede weitere Änderung ist eine
-**neue** Migration (derzeit `002` bis `016`).
+**neue** Migration (`002` bis zur jeweils jüngsten in `backend/alembic/versions/`; die Zahl
+der letzten wächst mit jeder Änderung und gehört deshalb nicht in diese Doku).
 
 **`alembic check` ist hier ein echtes Gate** und muss grün bleiben. Modelle und Migrationen
 sind deckungsgleich, und `tests/test_migrationskette.py` prüft das bei jedem Lauf gegen eine
@@ -510,3 +546,8 @@ erzeugt und eingecheckt, nicht mit `--frozen` umgangen.
 Hochgeladene oder zugesandte XML nie mit der Standardbibliothek (`xml.etree`) parsen:
 `import defusedxml.ElementTree as ET`, `DefusedXmlException` als fachlichen Fehler behandeln
 (fail-closed). Sonst sind XXE und „Billion Laughs" offen.
+
+**Bekannte Ausnahme, offen:** das Einspielskript `backend/scripts/beleg_aus_xml_einspielen.py`
+parst mit `xml.etree.ElementTree` statt mit `defusedxml` und verstößt damit gegen diese Regel.
+Es läuft nur im Betriebsumzug gegen XML aus dem eigenen Archiv; die Ausnahme ist bekannt,
+aber nicht behoben. Wer das Skript anfasst, behebt sie.
