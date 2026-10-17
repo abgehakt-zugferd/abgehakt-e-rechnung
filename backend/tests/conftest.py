@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.database import get_db
-from app.db.immutability_triggers import install
+from app.db.immutability_triggers import TRUNCATE_TABLES, install
 from app.db.roles import ensure_app_role, resolve_owner_role
 from app.main import app
 
@@ -133,7 +133,10 @@ def pg_engine():
 def pg_session(pg_engine):
     """Frische Session pro Test; alle Tabellen vorher geleert (Test-Isolation)."""
     with pg_engine.connect() as conn:
-        for tbl in ("invoices", "invoice_items", "customers"):
+        # Welche Tabellen ihre Trigger haben, weiss nur immutability_triggers:
+        # eine neue Trigger-Tabelle muss das Leeren hier automatisch mittragen,
+        # sonst faellt die Isolation still weg, sobald der Trigger dazukommt.
+        for tbl in TRUNCATE_TABLES:
             conn.execute(text(f"ALTER TABLE {tbl} DISABLE TRIGGER USER"))
         try:
             conn.execute(text(
@@ -141,7 +144,7 @@ def pg_session(pg_engine):
                 "invoice_items, invoices, customers, company RESTART IDENTITY CASCADE"
             ))
         finally:
-            for tbl in ("invoices", "invoice_items", "customers"):
+            for tbl in TRUNCATE_TABLES:
                 conn.execute(text(f"ALTER TABLE {tbl} ENABLE TRIGGER USER"))
         conn.commit()
     TestSession = sessionmaker(bind=pg_engine, autocommit=False, autoflush=False)
