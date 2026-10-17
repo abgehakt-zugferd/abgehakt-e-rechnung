@@ -1,5 +1,7 @@
 # Auftrag: Text der Rechnungsmail je Belegsprache konfigurierbar
 
+**Status:** umgesetzt.
+
 Stand: 28.09.2026. Spezifikation fuer einen getrennten, test-first auszufuehrenden Auftrag.
 Keine Implementierung in dieser Datei. Bestand aus dem Repository wird vorausgesetzt.
 
@@ -104,6 +106,11 @@ ein Ersetzen aller Vorkommen von `\{([a-z_]+)\}` gegen die bekannten Werte.
 Ein unbekannter Platzhalter ist ein **Fehler beim Speichern** in den Einstellungen, mit
 Nennung des Namens, und nicht beim Senden. Eine Mail, die im Moment des Versands an einem
 Tippfehler zerbricht, scheitert an der teuersten Stelle: der Beleg ist dann schon finalisiert.
+
+Beim Speichern gilt dasselbe für den Betreff: Er darf keinen Zeilenumbruch enthalten.
+`pruefe_betreff` in `backend/app/services/mailtext.py` weist ihn mit
+`BetreffMitZeilenumbruchError` ab, weil ein Umbruch im Betreff den Mail-Header beim Versand
+unbrauchbar macht. Für den Rumpf gilt die Prüfung nicht; er darf mehrzeilig sein.
 
 Geschweifte Klammern ohne bekannten Namen darin bleiben unveraendert stehen, statt eine
 Ausnahme zu werfen. Ein Text mit `{` in einer Produktbezeichnung darf nicht unversendbar sein.
