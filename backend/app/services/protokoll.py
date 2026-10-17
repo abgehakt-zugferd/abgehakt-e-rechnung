@@ -16,6 +16,7 @@ der Belegordner bleibt die einzige Verbindung im Betrieb.
 """
 
 import re
+from datetime import datetime
 from typing import Optional
 
 PROTOKOLL_VERSION = "1.6"
@@ -79,6 +80,33 @@ def fassung_annehmbar(fassung) -> bool:
     if major is None:
         return False
     return major == EIGENER_MAJOR and major < ABGELEHNT_AB_MAJOR
+
+
+# § 2: UTC, sekundengenau, ohne Bruchteile. Die Form ist Teil des Werts: Eine
+# andere Schreibweise desselben Augenblicks (".123", "+02:00") parste
+# fromisoformat anstandslos, und eine naive Angabe crashte erst im Vergleich
+# mit dem Beiblatt des Schluessels (TypeError vor jeder Signaturpruefung).
+# Erlaubt ist nur die eine Schreibweise. Sie gilt am Umschlag (erzeugt_am)
+# und am Beiblatt eines Schluessels (gueltig_von, gueltig_bis) - eine Form,
+# eine Stelle: hier, denn seit #166 pruefen sie der Belegleser und der
+# Schluessellader gemeinsam.
+ZEITFORM = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
+
+
+def zeit(wert) -> Optional[datetime]:
+    """Ein Zeitpunkt der § 2-Form, oder None - keine Ausnahme.
+
+    Ein Wert, der nicht der Form ist, ist unbrauchbar, egal ob die
+    Schreibweise oder der Zeitpunkt nicht stimmt.
+    """
+    if not isinstance(wert, str) or not ZEITFORM.match(wert):
+        return None
+    try:
+        return datetime.fromisoformat(wert.replace("Z", "+00:00"))
+    except ValueError:
+        # Formproben wie "2026-13-45T99:99:99Z": die Schreibweise stimmt, der
+        # Zeitpunkt tut nicht - beides ist ein unbrauchbarer Wert.
+        return None
 
 
 # Das Feldverzeichnis fuer § 11 (UNBEKANNTES_FELD und PFLICHTFELD_FEHLT). Bis zur
@@ -160,9 +188,10 @@ FELDER = {   'umschlag': {   'pflicht': [   'format_version',
 # FELDER plus Feldname, so wie der Leser ihn bildet). Geld ist eine
 # JSON-Zeichenkette mit Dezimalpunkt und GENAU zwei Nachkommastellen. Der Satz
 # ist KEIN Geld und traegt MINDESTENS zwei Nachkommastellen - "33.333333" ist
-# ein gueltiger Satz, "33.3" keiner (Klarstellung 2026-10-17). Die Zeitform des
-# erzeugt_am (§ 2) steht nicht hier: sie gilt am Umschlag, und der Leser prueft
-# sie an ihrer Stelle.
+# ein gueltiger Satz, "33.3" keiner (Klarstellung 2026-10-17). Die Zeitform
+# des § 2 steht als eigene Regel ueber diesem Verzeichnis (ZEITFORM), denn
+# sie gilt nicht je Feld des Belegs, sondern am Umschlag und am Beiblatt
+# eines Schluessels.
 FELDFORMEN = {
     'bemessung.erloes_netto': 'geld',
     'bemessung.direktkosten_netto': 'geld',

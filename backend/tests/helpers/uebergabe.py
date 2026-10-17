@@ -22,6 +22,30 @@ SCHLUESSEL_ID = "tantiemen-2026-09"
 ERZEUGT = "2026-09-03T11:00:00Z"
 
 
+def beiblatt(**aenderungen):
+    """Das Beiblatt des Probeschluessels, wie es das Formatverzeichnis unter
+    `schluessel_beiblatt` fuehrt (§ 6): geschlossener Feldbestand, `notizen`
+    als einziges freies Feld, `gueltig_bis` null heisst ohne Ablauf."""
+    angaben = {
+        "schluessel_id": SCHLUESSEL_ID,
+        "absender": ABSENDER_TANTIEMEN,
+        "verfahren": "Ed25519",
+        "gueltig_von": "2026-09-01T00:00:00Z",
+        "gueltig_bis": None,
+    }
+    angaben.update(aenderungen)
+    return angaben
+
+
+def beiblatt_ablegen(wurzel, angaben):
+    """Legt ein Beiblatt ab, wie es der Empfaenger vorfindet."""
+    ordner = wurzel / ABSENDER_TANTIEMEN
+    ordner.mkdir(parents=True, exist_ok=True)
+    (ordner / f"{SCHLUESSEL_ID}.json").write_text(
+        json.dumps(angaben), encoding="utf-8",
+    )
+
+
 def schluesselpaar(wurzel):
     """Legt einen Probeschluessel unter `wurzel` ab und gibt (signieren, ordner)."""
     privat = Ed25519PrivateKey.generate()
@@ -30,16 +54,7 @@ def schluesselpaar(wurzel):
     (ordner / f"{SCHLUESSEL_ID}.pub").write_bytes(
         privat.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
     )
-    (ordner / f"{SCHLUESSEL_ID}.json").write_text(
-        json.dumps({
-            "schluessel_id": SCHLUESSEL_ID,
-            "absender": ABSENDER_TANTIEMEN,
-            "verfahren": "Ed25519",
-            "gueltig_von": "2026-09-01T00:00:00Z",
-            "gueltig_bis": None,
-        }),
-        encoding="utf-8",
-    )
+    beiblatt_ablegen(wurzel, beiblatt())
     return privat.sign, wurzel
 
 

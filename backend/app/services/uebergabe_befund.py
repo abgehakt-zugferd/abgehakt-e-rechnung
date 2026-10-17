@@ -34,7 +34,13 @@ from typing import Optional, Sequence
 
 from cryptography.exceptions import InvalidSignature
 
-from app.services.protokoll import FELDER, FELDFORMEN, NUTZLAST_ARTEN, fassung_annehmbar
+from app.services.protokoll import (
+    FELDER,
+    FELDFORMEN,
+    NUTZLAST_ARTEN,
+    fassung_annehmbar,
+    zeit,
+)
 from app.services.uebergabe_schluessel import (
     SchluesselNichtGueltig,
     SchluesselUnbekannt,
@@ -165,23 +171,9 @@ def _hat_satzform(wert) -> bool:
     return isinstance(wert, str) and _SATZFORM.match(wert) is not None
 
 
-# § 2: UTC, sekundengenau, ohne Bruchteile. Die Form ist Teil des Werts: Eine
-# andere Schreibweise desselben Augenblicks (".123", "+02:00") parste
-# fromisoformat frueher anstandslos, und eine naive Angabe crashte erst im
-# Vergleich mit dem Beiblatt des Schluessels (TypeError vor jeder
-# Signaturpruefung). Erlaubt ist nur die eine Schreibweise.
-_ZEITFORM = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
-
-
-def _zeit(wert) -> Optional[datetime]:
-    if not isinstance(wert, str) or not _ZEITFORM.match(wert):
-        return None
-    try:
-        return datetime.fromisoformat(wert.replace("Z", "+00:00"))
-    except ValueError:
-        # Formproben wie "2026-13-45T99:99:99Z": die Schreibweise stimmt, der
-        # Zeitpunkt tut nicht - beides ist ein unbrauchbarer Wert, keine Ausnahme.
-        return None
+# § 2, die gemeinsame Formprobe fuer Beleg und Schluesselbeiblatt, steht in
+# protokoll.py (ZEITFORM, zeit): Sie gilt seit #166 an zwei Stellen, und zwei
+# Stellen bedeuten eine Quelle, keine Kopie.
 
 
 def _datum(wert) -> Optional[date]:
@@ -465,7 +457,7 @@ def beleg_beurteilen(
         return abgelehnt(Feststellung("NUTZLASTART_UNBEKANNT", "$.nutzlast_art",
                                       erhalten=str(beleg["nutzlast_art"])), **rest)
 
-    erzeugt_am = _zeit(beleg["erzeugt_am"])
+    erzeugt_am = zeit(beleg["erzeugt_am"])
     if erzeugt_am is None:
         # Bekanntes Feld, unbrauchbarer Wert (ab Fassung 1.6). Vorher stand hier
         # BELEG_UNLESBAR, und das war gedehnt: die Datei ist ja lesbar. Seit #163

@@ -64,13 +64,14 @@ def schluessel(tmp_path):
             privat.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
         )
         (ordner / f"{kennung}.json").write_text(
+            # Ohne "probe": Ein Probeschluessel ist am Namen erkennbar, nicht
+            # an einer Angabe im Beiblatt (§ 6, geschlossener Feldbestand).
             json.dumps({
                 "schluessel_id": kennung,
                 "absender": ABSENDER_TANTIEMEN,
                 "verfahren": "Ed25519",
                 "gueltig_von": "2026-09-01T00:00:00Z",
                 "gueltig_bis": None,
-                "probe": kennung == PROBE_SCHLUESSEL_ID,
             }),
             encoding="utf-8",
         )
