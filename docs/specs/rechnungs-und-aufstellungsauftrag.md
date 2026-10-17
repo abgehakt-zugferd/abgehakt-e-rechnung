@@ -43,14 +43,17 @@ Nutzers, wie bei jeder anderen Rechnung.
 5. **Kopf- und Fußtext je Kunde**, mit dem Platzhalter `{leistungsmonat}` (MM/JJJJ aus dem
    Leistungszeitraum). Dort stehen Vertragsgrundlage, der Hinweis auf den Bericht als
    Einzelaufstellung und der Reverse-Charge-Vermerk, so wie der Kunde ihn erwartet.
-6. **Versand an Buchhaltung und Kunde sind zwei Schritte** (Entscheidung 2026-10-17). Das
-   gilt für jede Rechnung, nicht nur für Belege aus Aufträgen. „An die Buchhaltung“ schickt
-   das PDF an die Upload-Adresse der Buchhaltung, „An den Kunden“ an den Kunden. Beide
-   Schritte haben je einen eigenen Vermerk (Zeitpunkt des ersten Versands) und eigene
-   Zeilen im Versandprotokoll. Ein Beleg, der an die Buchhaltung, aber noch nicht an den
-   Kunden ging, ist gestellt, dokumentiert und gilt als „nicht versendet“. Wer an den Kunden
-   sendet und die Buchhaltung noch nicht beliefert hat, kann beides in einem Schritt
-   auslösen; die Vermerke bleiben getrennt.
+6. **Versand an Buchhaltung und Kunde haben getrennte Vermerke** (Entscheidung
+   2026-10-17). Das gilt für jede Rechnung, nicht nur für Belege aus Aufträgen. Drei Wege:
+   - **Kunde und Buchhaltung** (Standard, vorgewählt): Mail an den Kunden mit Blindkopie an
+     die Upload-Adresse der Buchhaltung, wie bisher; setzt beide Vermerke.
+   - **Nur Buchhaltung**: Mail nur an die Upload-Adresse; der Kunde bleibt offen.
+   - **Zustellung an den Kunden vermerken**: keine Mail. Der Nutzer trägt Datum und Weg als
+     Freitext ein (etwa „Upload in das Kundenportal“). Korrigiert wird durch einen neuen
+     Eintrag, nicht durch Überschreiben; angezeigt wird der jüngste, alle bleiben im
+     Versandprotokoll.
+   Ein Beleg, der an die Buchhaltung, aber noch nicht an den Kunden ging, ist gestellt,
+   dokumentiert und gilt als „nicht versendet“.
 7. **Auftragsschlüssel.** Jeder Beleg aus einem Auftrag speichert dessen
    `auftragsschluessel`. Solange zu einem Schlüssel ein Beleg besteht, der weder storniert
    noch verworfen ist, lehnt Abgehakt einen neuen Auftrag mit `AUFTRAG_SCHON_GERECHNET` ab;
