@@ -55,8 +55,6 @@ BEFUNDCODES = frozenset({
 
 _FASSUNG = re.compile(r"^([0-9]+)\.([0-9]+)$")
 
-EIGENER_MAJOR = int(PROTOKOLL_VERSION.split(".")[0])
-
 
 def hauptteil(fassung) -> Optional[int]:
     """Die Hauptfassung, oder None, wenn das keine Fassungsangabe ist."""
@@ -67,19 +65,26 @@ def hauptteil(fassung) -> Optional[int]:
 
 
 def fassung_annehmbar(fassung) -> bool:
-    """Gleicher major heisst annehmen, auch bei hoeherem minor.
+    """§ 2: Abgelehnt ist nur der HOEHERE major, nicht interpretiert.
 
-    Der hoehere minor ist der Fall, der am ehesten falsch gebaut wird: Ein
-    Empfaenger, der bei jedem unbekannten minor abbricht, macht aus jeder
-    Erweiterung einen major und aus dem Gleichschritt eine Blockade. Umgekehrt
-    ist eine minor-Erweiterung nur fuer den EMPFAENGER abwaertsvertraeglich,
-    nicht fuer den Sender: ein neues Feld an einen alten Empfaenger ist dort
-    UNBEKANNTES_FELD, und zwar ganz, nicht teilweise.
+    Der hoehere minor bleibt angenommen - der Fall, der am ehesten falsch
+    gebaut wird: Ein Empfaenger, der bei jedem unbekannten minor abbricht,
+    macht aus jeder Erweiterung einen major und aus dem Gleichschritt eine
+    Blockade. Umgekehrt ist eine minor-Erweiterung nur fuer den EMPFAENGER
+    abwaertsvertraeglich, nicht fuer den Sender: ein neues Feld an einen
+    alten Empfaenger ist dort UNBEKANNTES_FELD, und zwar ganz, nicht
+    teilweise.
+
+    Ein NIEDRIGERER major ist ebenso keiner der Abgelehnten: § 2 nennt als
+    einzigen Grund den hoeheren, und `format_version` sagt nur, nach welchen
+    Regeln DIESER Beleg gebaut ist. Was einer frueheren Fassung fehlt oder
+    von ihr abweicht, fallen das Feldverzeichnis (UNBEKANNTES_FELD,
+    PFLICHTFELD_FEHLT) und die Wertproben - nicht die Fassung.
     """
     major = hauptteil(fassung)
     if major is None:
         return False
-    return major == EIGENER_MAJOR and major < ABGELEHNT_AB_MAJOR
+    return major < ABGELEHNT_AB_MAJOR
 
 
 # § 2: UTC, sekundengenau, ohne Bruchteile. Die Form ist Teil des Werts: Eine

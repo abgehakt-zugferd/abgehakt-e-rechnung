@@ -819,3 +819,16 @@ def test_eine_389_ohne_positive_summe_ist_unbrauchbar(schluessel):
     assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].summe.netto"
     assert urteil.feststellungen[0].erwartet == "groesser als 0.00"
     assert urteil.feststellungen[0].erhalten == "-174.33"
+
+
+def test_eine_niedrigere_hauptfassung_ist_kein_ablehnungsgrund(schluessel):
+    """§ 2 nennt als einzigen Fassungsgrund den HOEHEREN major: abgelehnt,
+    nicht interpretiert. Eine NIEDRIGERE Hauptfassung (hier 0.9 gegen die 1.x
+    hier) ist keiner von beiden - der Beleg sagt nur, nach welchen Regeln ER
+    gebaut ist, und was ihm fehlt, fallen Feldprobe und Wertproben, nicht die
+    Fassung. Der Leser lehnte hier bisher mit FASSUNG_UNVERTRAEGLICH ab."""
+    roh = _beleg(schluessel, _auftrag(), format_version="0.9")
+
+    urteil = _urteil(schluessel, roh)
+
+    assert urteil.angenommen, _codes(urteil)

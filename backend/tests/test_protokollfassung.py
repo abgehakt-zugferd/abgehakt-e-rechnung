@@ -42,13 +42,21 @@ def test_hoeherer_minor_wird_angenommen(fassung):
     assert fassung_annehmbar(fassung)
 
 
+@pytest.mark.parametrize("fassung", ["0.9", "0.1"])
+def test_niedrigerer_major_wird_angenommen(fassung):
+    """§ 2 lehnt nur den HOEHEREN major ab; eine niedrigere Hauptfassung ist
+    keiner. Der Beleg sagt, nach welchen Regeln ER gebaut ist - was ihm fehlt,
+    fallen Feldverzeichnis und Wertproben, nicht die Fassung."""
+    assert fassung_annehmbar(fassung)
+
+
 @pytest.mark.parametrize("fassung", ["2.0", "2.1", "3.0", "10.0"])
 def test_hoeherer_major_wird_abgelehnt(fassung):
     assert not fassung_annehmbar(fassung)
 
 
-@pytest.mark.parametrize("fassung", ["", "1", "0.9", "eins.null", "1.x", "-1.0", None])
-def test_unlesbare_oder_zu_alte_fassung_wird_abgelehnt(fassung):
+@pytest.mark.parametrize("fassung", ["", "1", "eins.null", "1.x", "-1.0", None])
+def test_unlesbare_fassung_wird_abgelehnt(fassung):
     assert not fassung_annehmbar(fassung)
 
 

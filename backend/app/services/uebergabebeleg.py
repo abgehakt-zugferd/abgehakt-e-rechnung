@@ -132,9 +132,10 @@ def umschlag(
     vorgaenger_hash: str | None,
     schluessel_id: str,
     signierer,
+    format_version: str = FORMAT_VERSION,
 ) -> bytes:
     ohne_signatur = {
-        "format_version": FORMAT_VERSION,
+        "format_version": format_version,
         "beleg_id": beleg_id,
         "nutzlast_art": nutzlast_art,
         "absender": absender,
