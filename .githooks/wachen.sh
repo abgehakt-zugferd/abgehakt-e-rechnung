@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Drei Wachen, die vor jedem Push und in der CI laufen.
+# Fuenf Wachen, die vor jedem Push und in der CI laufen.
 #
 # Sie stehen hier als Skript und nicht in der Testsuite, weil sie Dateien im
 # Wurzelverzeichnis lesen: der Testcontainer wird aus `backend/` gebaut und sieht den
