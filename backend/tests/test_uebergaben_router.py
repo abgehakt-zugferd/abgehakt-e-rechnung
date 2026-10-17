@@ -12,6 +12,7 @@ import hashlib
 import json
 import logging
 import uuid
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -282,3 +283,71 @@ def test_eine_unbekannte_kaputtheit_kostet_nur_die_eine_zeile(
     assert antwort.status_code == 200
     assert "BELEG_UNLESBAR" in antwort.text
     assert any("auftrag.json" in eintrag.message for eintrag in caplog.records)
+
+
+# --- Die eigene Aufbewahrungskopie (§ 12: unveraendert, auch beim Empfaenger) ---
+
+def test_der_knopf_bewahrt_den_beleg_auf_und_die_kopie_ueberlebt_die_quelle(
+    client, pg_session, belegordner,
+):
+    ordner, signieren = belegordner
+    _kunde(pg_session)
+    _schalter(pg_session)
+    roh = beleg(signieren)
+    (ordner / "auftrag.json").write_bytes(roh)
+    sha = hashlib.sha256(roh).hexdigest()
+
+    client.post("/uebergaben/auftrag.json/rechnung-anlegen")
+
+    kopie = get_settings().storage_path / "uebergaben" / RICHTUNG / f"{sha}.json"
+    assert kopie.read_bytes() == roh
+    assert hashlib.sha256(kopie.read_bytes()).hexdigest() == sha
+    assert pg_session.query(UebergabeEingang).one().beleg_sha256 == sha
+
+    # Der Absender kann seinen Ordner leeren: die eigene Kopie bleibt (§ 12).
+    (ordner / "auftrag.json").unlink()
+    assert kopie.read_bytes() == roh
+
+
+def test_scheitert_die_kopie_wird_der_beleg_nicht_angenommen(
+    client, pg_session, belegordner,
+):
+    ordner, signieren = belegordner
+    _kunde(pg_session)
+    _schalter(pg_session)
+    (ordner / "auftrag.json").write_bytes(beleg(signieren))
+    zielordner = get_settings().storage_path / "uebergaben" / RICHTUNG
+    zielordner.mkdir(parents=True, exist_ok=True)
+    zielordner.chmod(0o500)
+
+    try:
+        antwort = client.post("/uebergaben/auftrag.json/rechnung-anlegen")
+    finally:
+        zielordner.chmod(0o700)
+
+    assert antwort.status_code == 303
+    meldung = parse_qs(urlparse(antwort.headers["location"]).query)["fehler"][0]
+    assert "Aufbewahrungskopie" in meldung
+    assert pg_session.query(Invoice).count() == 0
+    assert pg_session.query(UebergabeEingang).count() == 0
+
+
+def test_der_zweite_knopfdruck_laesst_die_kopie_unveraendert(
+    client, pg_session, belegordner,
+):
+    ordner, signieren = belegordner
+    _kunde(pg_session)
+    _schalter(pg_session)
+    roh = beleg(signieren)
+    (ordner / "auftrag.json").write_bytes(roh)
+    sha = hashlib.sha256(roh).hexdigest()
+
+    client.post("/uebergaben/auftrag.json/rechnung-anlegen")
+    kopie = get_settings().storage_path / "uebergaben" / RICHTUNG / f"{sha}.json"
+    # Der Speicher ist Sitzungseigentum: gezaehlt wird der Zuwachs, nicht der Bestand.
+    vorher = {p.name for p in kopie.parent.iterdir()}
+
+    client.post("/uebergaben/auftrag.json/rechnung-anlegen")
+
+    assert {p.name for p in kopie.parent.iterdir()} == vorher
+    assert kopie.read_bytes() == roh

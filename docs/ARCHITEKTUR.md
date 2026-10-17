@@ -145,6 +145,7 @@ Laufzeitdaten liegen unter `storage/{pdfs,xml,temp}/`, als Bind-Mount aus dem Pr
 - `archive_until` ist der 31.12. des Ausstellungsjahrs + 8. Ändert sich das Rechnungsdatum, muss die
   Frist mitwandern (`_apply_totals`), sonst driftet sie gegen den Beleg.
 - Der Betriebsprüfungs-Export (Z3) liegt unter `GET /export/gobd?von=…&bis=…`.
+- Angenommene Übergabebelege bewahrt die Anwendung als byte-gleiche Kopie unter `storage/uebergaben/<Richtung>/<beleg_sha256>.json` auf (§ 12 des Übergabeformats: unverändert, acht Jahre, auch beim Empfänger); unter `storage/` löscht sie nie etwas, und der Z3-Export gibt die Kopien im Ordner `uebergaben/` mit.
 - Das Audit-Log füllt sich automatisch über Session-Events (`services/audit.py`, registriert
   in `main.py`). **Nie von Hand hineinschreiben.**
 

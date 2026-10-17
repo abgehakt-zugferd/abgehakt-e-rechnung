@@ -499,7 +499,10 @@ die Rechnung wird nicht zurechtgebogen, der Absender erzeugt einen neuen.
 Erst der Knopf **ALS RECHNUNG ANLEGEN** schreibt. Aus einer Datei entsteht je Gutschrift
 ein **Entwurf**, mit dem Typ, den der Absender bestimmt hat: 389 (Abrechnungsgutschrift)
 oder 381 (Gutschrift). Danach landet die Seite auf der Vorschau des ersten Entwurfs.
-Nichts wird automatisch finalisiert, nichts automatisch versendet.
+Nichts wird automatisch finalisiert, nichts automatisch versendet. Mit demselben Knopf
+bewahrt dieses Programm den Beleg unverändert als eigene Kopie unter `storage/uebergaben/`
+auf, acht Jahre wie die Rechnungen; scheitert die Kopie, wird der Beleg nicht angenommen
+und kein Entwurf angelegt.
 
 Am Entwurf steht ein Teil des Inhalts aus dem signierten Beleg fest und lässt sich nicht
 mehr ändern (services/belegsperre.py, `GESPERRTE_FELDER`): der Beteiligte, der

@@ -3,16 +3,26 @@
 `uebergabe_befund.py` kennt keine Datenbank: es bekommt die Lage gereicht. Hier
 steht die Fassung, die sie aus dem Bestand beantwortet, und das Merken eines
 angenommenen Belegs.
+
+Dazu die eigene Aufbewahrungskopie (§ 12, abgehakt#167): Der Empfaenger bewahrt
+den Beleg genauso auf wie der Absender, acht Jahre, unveraendert. Die Kopie
+liegt im eigenen Speicher und teilt damit die Aufbewahrung der Rechnungen;
+die Anwendung loescht unter storage/ nie etwas.
 """
 
 from __future__ import annotations
 
+import hashlib
+import os
+import tempfile
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.models.customer import Customer
 from app.models.uebergabe_eingang import UebergabeEingang
 from app.services.uebergabe_befund import Belegurteil, Empfangslage
@@ -85,3 +95,56 @@ def merken(db: Session, urteil: Belegurteil, *, dateiname: Optional[str] = None)
     )
     db.add(zeile)
     return zeile
+
+
+class KopieFehler(ValueError):
+    """Die Aufbewahrungskopie ist nicht entstanden. Der Beleg wird daraufhin
+    nicht angenommen (§ 12): eine Wirkung ohne eigene Kopie waere Aufbewahrung
+    auf Verlaub des Absenderordners."""
+
+
+def kopie_aufbewahren(roh: bytes, beleg_sha256: str, richtung: str) -> Path:
+    """Bewahrt die gelesenen Bytes des Belegs unveraendert im eigenen Speicher
+    auf (§ 12: acht Jahre, auch beim Empfaenger) und gibt den Zielpfad zurueck.
+
+    Fail closed: Jedes Scheitern wird als KopieFehler gemeldet, damit der
+    Aufrufer den Beleg ablehnen kann. Erst die gepruefte Kopie, dann die
+    Datenbankzeilen: scheitert deren Commit, bleibt die Kopie liegen, aber sie
+    ist byte-gleich mit dem Beleg und schadet niemandem.
+    """
+    ordner = get_settings().storage_path / "uebergaben" / richtung
+    ziel = ordner / f"{beleg_sha256}.json"
+    try:
+        if ziel.exists():
+            # Idempotenz: derselbe Beleg noch einmal annehmen darf am Bestand
+            # nichts aendern. Anderer Inhalt unter gleichem Namen waere keine
+            # Kopie, sondern eine Fälschung der Aufbewahrung.
+            if hashlib.sha256(ziel.read_bytes()).hexdigest() == beleg_sha256:
+                return ziel
+            raise KopieFehler(
+                f"Unter {ziel} liegt bereits anderer Inhalt fuer diesen Beleg."
+            )
+        ordner.mkdir(parents=True, exist_ok=True)
+        # Temporaerdatei im selben Verzeichnis: os.replace bleibt damit auf
+        # einem Dateisystem und umbenennt atomar. Nur sie darf weggeraeumt
+        # werden; unter storage/ loescht die Anwendung sonst nichts.
+        with tempfile.NamedTemporaryFile(
+            dir=ordner, prefix=".kopie-", delete=False,
+        ) as hand:
+            hand.write(roh)
+            zwischenstand = Path(hand.name)
+        try:
+            # Massgeblich ist der Hash der GESCHRIEBENEN Datei, nicht der der
+            # Bytes im Gedaechtnis: nur er beweist, was auf der Platte liegt.
+            if hashlib.sha256(zwischenstand.read_bytes()).hexdigest() != beleg_sha256:
+                raise KopieFehler(
+                    "Die geschriebene Aufbewahrungskopie stimmt nicht mit dem Beleg ueberein."
+                )
+            os.replace(zwischenstand, ziel)
+        finally:
+            zwischenstand.unlink(missing_ok=True)
+        return ziel
+    except OSError as fehler:
+        raise KopieFehler(
+            f"Die Aufbewahrungskopie liess sich nicht schreiben: {fehler}"
+        ) from fehler

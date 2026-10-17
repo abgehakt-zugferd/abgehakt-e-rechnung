@@ -166,6 +166,8 @@ Enthaltene Tabellen
   alte/neue Werte als JSON.
 - dokumente/: Original-Belege — ZUGFeRD-PDF und E-Rechnungs-XML je Rechnung.
   Fehlende Dateien sind in fehlende_dateien.txt aufgeführt.
+- uebergaben/: Angenommene Übergabebelege, unveränderte Kopie je Beleg (§ 12);
+  der Dateiname ist der SHA-256 der Beleg-Bytes.
 
 Erzeugt mit {PRODUCT_NAME}.
 """
@@ -317,6 +319,17 @@ def build_gobd_export(
             zf.writestr("fehlende_dateien.txt",
                         "Folgende Beleg-Dateien wurden nicht gefunden:\n"
                         + "\n".join(missing) + "\n")
+        # Angenommene Übergabebelege (§ 12) sind aufbewahrungspflichtige
+        # Unterlagen wie Rechnungen; ohne sie hätte der Prüfer die 389/381-
+        # Gutschrift ohne ihren Ursprungsbeleg. Eigenordner im ZIP, Inhalt
+        # unverändert, Richtung und Hash bleiben im Namen erhalten.
+        uebergabe_wurzel = storage_path / "uebergaben"
+        if uebergabe_wurzel.is_dir():
+            for datei in sorted(uebergabe_wurzel.rglob("*.json")):
+                zf.writestr(
+                    "uebergaben/" + datei.relative_to(uebergabe_wurzel).as_posix(),
+                    datei.read_bytes(),
+                )
         zf.writestr("dokumentation.txt", _dokumentation(
             date_from, date_to, len(invoices), len(customers), len(audit_rows)))
     return buf.getvalue()

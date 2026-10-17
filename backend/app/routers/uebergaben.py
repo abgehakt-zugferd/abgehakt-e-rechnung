@@ -33,7 +33,11 @@ from app.services.abrechnungsauftrag_wirkung import (
     entwuerfe_anlegen,
 )
 from app.services.uebergabe_befund import Belegurteil, Feststellung, beleg_beurteilen
-from app.services.uebergabe_eingang import DatenbankLage
+from app.services.uebergabe_eingang import (
+    DatenbankLage,
+    KopieFehler,
+    kopie_aufbewahren,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -140,13 +144,24 @@ def rechnung_anlegen(dateiname: str, db: Session = Depends(get_db)):
 
     # Noch einmal beurteilen, nicht der Ansicht glauben: zwischen dem Anzeigen
     # und dem Knopfdruck kann der Ordner ein anderer sein.
+    roh = datei.read_bytes()
     urteil = beleg_beurteilen(
-        datei.read_bytes(), DatenbankLage(db), schluessel_wurzel=_schluesselwurzel(),
+        roh, DatenbankLage(db), schluessel_wurzel=_schluesselwurzel(),
     )
     if not urteil.angenommen:
         return RedirectResponse(
             url=f"/uebergaben?fehler={urteil.befund or 'ABGELEHNT'}", status_code=303,
         )
+
+    # Erst die eigene Aufbewahrungskopie (§ 12), dann die Datenbankzeilen: ohne
+    # gepruefte Kopie wird der Beleg nicht angenommen, denn sonst haette der
+    # Empfaenger nur den Absenderordner als Beleg. Scheitert spaeter der Commit,
+    # bleibt die Kopie liegen; sie ist byte-gleich mit dem Beleg und schadet
+    # niemandem.
+    try:
+        kopie_aufbewahren(roh, urteil.beleg_sha256, richtung=RICHTUNG)
+    except KopieFehler as fehler:
+        return RedirectResponse(url=f"/uebergaben?fehler={fehler}", status_code=303)
 
     try:
         entwuerfe = entwuerfe_anlegen(db, urteil, dateiname=datei.name)
