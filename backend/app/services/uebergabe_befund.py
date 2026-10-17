@@ -289,6 +289,11 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
 
     Die Formen des § 4 (Geld, Satz) hat _felder_pruefen schon geprueft; hier
     wird nur noch gerechnet, und _zahl kann an keiner Angabe mehr scheitern.
+
+    Gesammelt wird alles Falsche, nicht bloss das Erste: § 10 verlangt JE
+    Grund einen Befund. Der Leser meldete bisher nur den ersten - der
+    Absender reparierte die eine Stelle, reichte wieder ein, und erst dann
+    kam der zweite Befund.
     """
     funde = _felder_pruefen(nutzlast, FELDER["abrechnungsauftrag"], "$.nutzlast")
     if funde:
@@ -303,10 +308,10 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
     for grundlage in nutzlast["grundlagen"]:
         summe_grundlagen += _zahl(grundlage["erloes_netto"])
     if summe_grundlagen > erloes:
-        return [Feststellung(
+        funde.append(Feststellung(
             "SUMME_STIMMT_NICHT", "$.nutzlast.grundlagen",
             erwartet=f"hoechstens {erloes}", erhalten=str(summe_grundlagen),
-        )]
+        ))
 
     for nummer, gutschrift in enumerate(nutzlast["gutschriften"]):
         pfad = f"$.nutzlast.gutschriften[{nummer}]"
@@ -315,8 +320,10 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
         # sein Beleg falsch gebaut ist.
         typcode = gutschrift["typcode"]
         if not isinstance(typcode, str) or typcode not in TYPCODES:
-            return [Feststellung("WERT_UNBRAUCHBAR", f"{pfad}.typcode",
-                                 erwartet=" oder ".join(TYPCODES), erhalten=str(typcode))]
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", f"{pfad}.typcode",
+                erwartet=" oder ".join(TYPCODES), erhalten=str(typcode),
+            ))
 
         # Wertprobe vor der Annahme: Ein Zeitraum, den die Wirkung spaeter
         # nicht lesen kann, war vorher angenommen und wirkte als ValueError.
@@ -326,17 +333,21 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
         von = _datum(zeitraum["von"])
         bis = _datum(zeitraum["bis"])
         if von is None:
-            return [Feststellung("WERT_UNBRAUCHBAR", f"{pfad}.leistungszeitraum.von",
-                                 erwartet="Datum", erhalten=str(zeitraum["von"]))]
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", f"{pfad}.leistungszeitraum.von",
+                erwartet="Datum", erhalten=str(zeitraum["von"]),
+            ))
         if bis is None:
-            return [Feststellung("WERT_UNBRAUCHBAR", f"{pfad}.leistungszeitraum.bis",
-                                 erwartet="Datum", erhalten=str(zeitraum["bis"]))]
-        if von > bis:
-            return [Feststellung(
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", f"{pfad}.leistungszeitraum.bis",
+                erwartet="Datum", erhalten=str(zeitraum["bis"]),
+            ))
+        if von is not None and bis is not None and von > bis:
+            funde.append(Feststellung(
                 "WERT_UNBRAUCHBAR", f"{pfad}.leistungszeitraum",
                 erwartet="von vor bis",
                 erhalten=f"von {zeitraum['von']}, bis {zeitraum['bis']}",
-            )]
+            ))
 
         summe = Decimal("0")
         for lfd, position in enumerate(gutschrift["positionen"]):
@@ -353,27 +364,29 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
             # machte aus 174.325 eine 174.32 - der gueltige Auftrag flaege raus.
             erwartet = herleitungsbetrag(basis, satz)
             if erwartet != netto:
-                return [Feststellung(
+                funde.append(Feststellung(
                     "SUMME_STIMMT_NICHT", f"{pfad}.positionen[{lfd}].netto",
                     erwartet=str(erwartet), erhalten=str(netto),
-                )]
+                ))
 
         genannt = _zahl(gutschrift["summe"]["netto"])
         if genannt != summe:
-            return [Feststellung(
+            funde.append(Feststellung(
                 "SUMME_STIMMT_NICHT", f"{pfad}.summe.netto",
                 erwartet=str(summe), erhalten=str(gutschrift["summe"]["netto"]),
-            )]
+            ))
 
         partner_id = gutschrift["beteiligter"]["partner_id"]
         if not lage.partner_bekannt(str(partner_id)):
             # Ein Kunde entsteht nur von Hand. Und der Auftrag wirkt gar nicht:
             # drei von vier angelegten Gutschriften sind ein Zustand, den von
             # aussen niemand erkennt.
-            return [Feststellung("PARTNER_ID_UNBEKANNT", f"{pfad}.beteiligter.partner_id",
-                                 erhalten=str(partner_id))]
+            funde.append(Feststellung(
+                "PARTNER_ID_UNBEKANNT", f"{pfad}.beteiligter.partner_id",
+                erhalten=str(partner_id),
+            ))
 
-    return []
+    return funde
 
 
 def _anzeige(nutzlast: dict) -> dict:

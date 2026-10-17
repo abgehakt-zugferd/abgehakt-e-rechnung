@@ -8,6 +8,7 @@ nicht in der Ansicht steckt.
 """
 
 import base64
+import copy
 import hashlib
 import json
 from dataclasses import dataclass
@@ -719,3 +720,26 @@ def test_ein_typcode_als_zahl_ist_ein_befund(schluessel):
     assert not urteil.angenommen
     assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
     assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].typcode"
+
+
+# ── § 10: je Grund ein Befund (#169). Die Quittung nennt jeden Grund mit
+# Pfad; der Leser prueft deshalb alle Wertproben, nicht bloss bis zur ersten.
+
+def test_je_grund_ein_befund_ueber_alle_gutschriften(schluessel):
+    """Ein typcode ausserhalb des Vorrats in Gutschrift 0 UND eine Summe, die
+    nicht aufgeht, in Gutschrift 1: zwei Gruende, zwei Befunde, je mit eigenem
+    Pfad. Der Leser meldete bisher nur den ersten - der Absender reparierte die
+    eine Stelle, reichte wieder ein, und erst dann kam der zweite Befund."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["typcode"] = "999"
+    zweite = copy.deepcopy(nutzlast["gutschriften"][0])
+    zweite["typcode"] = "389"
+    zweite["summe"]["netto"] = "999.99"
+    nutzlast["gutschriften"].append(zweite)
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR", "SUMME_STIMMT_NICHT"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].typcode"
+    assert urteil.feststellungen[1].pfad == "$.nutzlast.gutschriften[1].summe.netto"
