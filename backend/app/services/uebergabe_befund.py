@@ -23,6 +23,7 @@ und nicht hier gesucht: der Leser kennt keine Datenbank und keinen Ordner.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import re
@@ -38,6 +39,7 @@ from app.services.protokoll import (
     FELDER,
     FELDFORMEN,
     NUTZLAST_ARTEN,
+    TYPCODE_BELEGART,
     fassung_annehmbar,
     zeit,
 )
@@ -62,11 +64,6 @@ LESBARE_ARTEN = ("abrechnungsauftrag",)
 # Auftrag ohne Gutschrift und eine Gutschrift ohne Position tun nichts.
 # `grundlagen` und `vortraege` duerfen leer sein - das sind Aussagen.
 _LEER_IST_FEHLEND = ("gutschriften", "positionen")
-
-# 389 ist die Abrechnung ueber eine fremde Leistung (Gutschriftverfahren), 381
-# die kaufmaennische Gutschrift. Ein anderer Wert ist kein Beleg, den dieser
-# Empfaenger ausstellen koennte.
-TYPCODES = ("381", "389")
 
 _CENT = Decimal("0.01")
 
@@ -320,10 +317,10 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
         # 389 still einen gueltigen Code, und der Absender erfaehrt nie, dass
         # sein Beleg falsch gebaut ist.
         typcode = gutschrift["typcode"]
-        if not isinstance(typcode, str) or typcode not in TYPCODES:
+        if not isinstance(typcode, str) or typcode not in TYPCODE_BELEGART:
             funde.append(Feststellung(
                 "WERT_UNBRAUCHBAR", f"{pfad}.typcode",
-                erwartet=" oder ".join(TYPCODES), erhalten=str(typcode),
+                erwartet=" oder ".join(TYPCODE_BELEGART), erhalten=str(typcode),
             ))
 
         # Wertprobe vor der Annahme: Ein Zeitraum, den die Wirkung spaeter
@@ -552,8 +549,6 @@ def beleg_beurteilen(
         return abgelehnt(Feststellung("SIGNATUR_UNGUELTIG", "$"), **rest)
 
     try:
-        import base64
-
         schluessel.verify(base64.b64decode(signatur["wert"]), umschlag_kanonisch)
     except (InvalidSignature, ValueError):
         return abgelehnt(Feststellung("SIGNATUR_UNGUELTIG", "$.signatur.wert"), **rest)
@@ -571,6 +566,13 @@ def beleg_beurteilen(
             return abgelehnt(Feststellung("BELEG_ID_WIDERSPRUCH", "$.beleg_id",
                                           erwartet=schon, erhalten=sha), **rest)
 
+    # Kette: zwei Stufen. "Angenommen" im Befund heisst ANNEHMBAR; gewirkt hat
+    # ein Beleg erst, wenn der Knopf ALS RECHNUNG ANLEGEN ihn ueber
+    # entwuerfe_anlegen gemerkt hat (uebergabe_eingang.merken, § 5). Die Lage
+    # kennt nur gemerkte Belege: Bis der Vorgaenger gewirkt hat, gilt dieser
+    # Empfaenger als ohne Vorgeschichte, und ein Folgebeleg, der ihn als
+    # vorgaenger_hash nennt, erhaelt KETTE_SPRINGT. Kein Fehler, sondern die
+    # Abbildung: die Kette bildet ab, was gewirkt hat, nicht was gelesen wurde.
     zuletzt = lage.zuletzt_angenommen(beleg["absender"])
     vorgaenger = beleg["vorgaenger_hash"]
     if zuletzt is None:
@@ -597,6 +599,13 @@ def beleg_beurteilen(
                                       erhalten=str(beleg["empfaenger"])), **rest)
 
     if beleg["nutzlast_art"] not in lesbare_arten:
+        # Das Wort ist gedehnt, und das bleibt so (der Code ist Bestandteil
+        # der Quittung und mit den Vektoren gemessen): Nicht jede Art, die
+        # das PROTOKOLL kennt (NUTZLAST_ARTEN), liest dieser Empfaenger
+        # (lesbare_arten) - die erloesmeldung geht an tantiemen, die quittung
+        # schreibt diese Anwendung noch nicht. Der geschlossene Befundvorrat
+        # kennt kein "kannte ich, lese ich aber nicht"; die Codeliste kommt
+        # vom Format, nicht von der Lesbarkeit dieses Empfaengers.
         return abgelehnt(Feststellung("NUTZLASTART_UNBEKANNT", "$.nutzlast_art",
                                       erwartet=", ".join(lesbare_arten),
                                       erhalten=str(beleg["nutzlast_art"])), **rest)

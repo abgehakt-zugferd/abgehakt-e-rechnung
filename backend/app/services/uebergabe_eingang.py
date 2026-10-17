@@ -69,7 +69,14 @@ class DatenbankLage(Empfangslage):
 
 
 def merken(db: Session, urteil: Belegurteil, *, dateiname: Optional[str] = None) -> UebergabeEingang:
-    """Haelt einen angenommenen Beleg fest. Committet nicht."""
+    """Haelt einen angenommenen Beleg fest. Committet nicht.
+
+    Das ist der Uebergang von der ersten Stufe zur zweiten: ANNEHMBAR war der
+    Beleg schon mit dem Befund des Lesers, GEWIRKT hat er erst mit dieser
+    Zeile, und sie entsteht nur ueber den Knopf ALS RECHNUNG ANLEGEN
+    (entwuerfe_anlegen). Erst mit ihr kennt die Kette den Beleg als
+    vorgaenger; ein Folgebeleg vor dem Knopfdruck erhaelt KETTE_SPRINGT.
+    """
     if not urteil.angenommen:
         raise ValueError(
             "Ein abgelehnter Beleg wird nicht gemerkt: er darf erneut vorgelegt werden."

@@ -867,6 +867,14 @@ Tabellendarstellung: er ist später der Inhalt der Quittung (Stufe 7), und ob di
 Lesen oder beim Knopfdruck geschrieben wird, ist damit noch offen. In den Belegordner
 schreibt diese Anwendung **nie** (§ 12: der Ordner ist Archiv nach § 147 AO).
 
+**Zwei Stufen: annehmbar und gewirkt.** Der Befund des Lesers sagt *annehmbar*; *gewirkt*
+hat ein Beleg erst, wenn der Knopf ALS RECHNUNG ANLEGEN ihn über
+`abrechnungsauftrag_wirkung.entwuerfe_anlegen()` und `uebergabe_eingang.merken()` in
+`uebergabe_eingaenge` festgehalten hat. Die Kettenprüfung fragt genau diese Tabelle: Ein
+Folgebeleg, der einen Beleg als `vorgaenger_hash` nennt, der noch nicht gewirkt hat, erhält
+`KETTE_SPRINGT`. Das ist kein Fehler, sondern die Abbildung von § 5: die Kette bildet ab,
+was **gewirkt** hat, nicht was gelesen wurde.
+
 #### Prüfhaken und Befundcodes
 
 Die Reihenfolge geht von der Datei nach innen: Bytes, Umschlag, Fassung, Art, erzeugte Zeit
@@ -914,6 +922,11 @@ werden, sobald der Grund behoben ist.
 Ist ein Netto-Betrag falsch, ist der **Beleg** falsch: dann wird er abgelehnt und die
 Gegenseite erzeugt einen neuen. Im Formular sind die gesperrten Felder als „aus dem Beleg
 übernommen" gekennzeichnet, nicht bloß grau.
+
+**Ausstellungsdatum und Fälligkeit:** Der Entwurf stellt am **Kalendertag von
+`erzeugt_am`** aus, gerechnet in der festen Zeitzone **Europe/Berlin** (`app/zeit.py`;
+`erzeugt_am` trägt nach § 2 immer UTC), und ist **14 Tage später** fällig, wie die
+Voreinstellung des Anlegeformulars.
 
 #### Protokollfassung (#72)
 

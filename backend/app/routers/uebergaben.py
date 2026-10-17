@@ -16,6 +16,7 @@ import hashlib
 import logging
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -115,6 +116,18 @@ def _zeile(datei: Path, db: Session) -> dict:
     }
 
 
+def _zurueck(fehler: str) -> RedirectResponse:
+    """Zur Liste zurueck, mit dem Fehlertext URL-kodiert (urlencode).
+
+    Der Text kommt aus Meldungen der Wirkung und der Aufbewahrung und kann
+    Leerzeichen, & und Umlaute tragen. Unkodiert waere das & ein zweiter
+    Query-Parameter, und die Zielseite zeigte die Meldung abgeschnitten.
+    """
+    return RedirectResponse(
+        url=f"/uebergaben?{urlencode({'fehler': fehler})}", status_code=303,
+    )
+
+
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 def belegliste(request: Request, db: Session = Depends(get_db), hinweis: str = "",
@@ -149,9 +162,7 @@ def rechnung_anlegen(dateiname: str, db: Session = Depends(get_db)):
         roh, DatenbankLage(db), schluessel_wurzel=_schluesselwurzel(),
     )
     if not urteil.angenommen:
-        return RedirectResponse(
-            url=f"/uebergaben?fehler={urteil.befund or 'ABGELEHNT'}", status_code=303,
-        )
+        return _zurueck(urteil.befund or "ABGELEHNT")
 
     # Erst die eigene Aufbewahrungskopie (§ 12), dann die Datenbankzeilen: ohne
     # gepruefte Kopie wird der Beleg nicht angenommen, denn sonst haette der
@@ -161,7 +172,7 @@ def rechnung_anlegen(dateiname: str, db: Session = Depends(get_db)):
     try:
         kopie_aufbewahren(roh, urteil.beleg_sha256, richtung=RICHTUNG)
     except KopieFehler as fehler:
-        return RedirectResponse(url=f"/uebergaben?fehler={fehler}", status_code=303)
+        return _zurueck(str(fehler))
 
     try:
         entwuerfe = entwuerfe_anlegen(db, urteil, dateiname=datei.name)
@@ -172,6 +183,6 @@ def rechnung_anlegen(dateiname: str, db: Session = Depends(get_db)):
     except WirkungFehler as fehler:
         # Alles oder nichts: was halb entstanden waere, ist damit weg.
         db.rollback()
-        return RedirectResponse(url=f"/uebergaben?fehler={fehler}", status_code=303)
+        return _zurueck(str(fehler))
 
     return RedirectResponse(url=f"/invoices/{entwuerfe[0].id}/vorschau", status_code=303)

@@ -27,6 +27,23 @@ ABGELEHNT_AB_MAJOR = 2
 
 NUTZLAST_ARTEN = ("erloesmeldung", "abrechnungsauftrag", "quittung")
 
+# § 8 (ab 1.6): der geschlossene Wertevorrat von gutschriften[].typcode, und
+# zugleich die Zuordnung zu der Belegart, die dieser Empfaenger daraus anlegt.
+# 389 ist die Abrechnung ueber eine fremde Leistung (Gutschriftverfahren,
+# § 14 Abs. 2 UStG), 381 die kaufmaennische Gutschrift; der Unterschied ist
+# eine Entscheidung des Absenders und steht im Klartext im Auftrag.
+#
+# Der Vorrat steht hier und nicht in der Belegarttabelle (belegart.py): Er
+# ist Teil des Uebergabeformats und mit den Vektoren gemessen, waehrend die
+# BT-3 der Belegarten auch 380, 384, 386 und 261 kennen - im Auftrag sind
+# die verboten, und ein Vorrat in belegart.py haette zwei Bedeutungen. Die
+# Werte sind die internen Belegarten aus belegart.py; dort bleibt die Quelle
+# der Belegarten, hier die der Zuordnung, denn Vorrat und Zuordnung bewegen
+# sich zusammen, wenn das Format einen Code ergaenzt. Der Leser prueft die
+# Schluessel (uebergabe_befund), die Wirkung liest die Werte
+# (abrechnungsauftrag_wirkung).
+TYPCODE_BELEGART = {"381": "credit_note", "389": "self_billing"}
+
 # Geschlossener Wertevorrat. Ein selbst erfundenes Wort gibt es nicht: eine
 # Quittung, deren Code der Leser nicht kennt, ist wieder "ungueltiges Dokument".
 BEFUNDCODES = frozenset({

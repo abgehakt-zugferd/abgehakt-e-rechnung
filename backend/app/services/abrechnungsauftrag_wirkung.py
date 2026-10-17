@@ -35,14 +35,7 @@ from app.services.steuerstatus import (
 from app.services.uebergabe_befund import Belegurteil, herleitungsbetrag
 from app.zeit import heute, kalendertag
 from app.services.uebergabe_eingang import merken
-
-# 389 ist die Abrechnung ueber eine fremde Leistung (Gutschriftverfahren,
-# § 14 Abs. 2 UStG), 381 die kaufmaennische Gutschrift. Der Unterschied ist eine
-# Entscheidung des Absenders und steht im Klartext im Auftrag.
-TYPCODE_BELEGART = {
-    "389": "self_billing",
-    "381": "credit_note",
-}
+from app.services.protokoll import TYPCODE_BELEGART
 
 
 class WirkungFehler(ValueError):
@@ -110,6 +103,11 @@ def entwuerfe_anlegen(
     nutzlast = urteil.nutzlast
     quartal = nutzlast.get("abrechnungsquartal", "")
     projekt = (nutzlast.get("projekt") or {}).get("name", "")
+    # Ausstellungsdatum des Entwurfs ist der Kalendertag von erzeugt_am,
+    # gerechnet in der festen Zeitzone Europe/Berlin (app.zeit.kalendertag;
+    # erzeugt_am traegt nach § 2 immer UTC): Derselbe Beleg stellt zu jedem
+    # Lesezeitpunkt am selben Tag aus. Faellig ist er 14 Tage spaeter, wie
+    # die Voreinstellung des Anlegeformulars.
     ausstellung = kalendertag(urteil.erzeugt_am) if urteil.erzeugt_am else heute()
     faellig = ausstellung + timedelta(days=14)
 

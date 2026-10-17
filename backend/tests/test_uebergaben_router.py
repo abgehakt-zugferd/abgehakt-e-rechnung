@@ -9,6 +9,7 @@ Erst der Knopf "Als Rechnung anlegen" schreibt fest.
 
 import base64
 import hashlib
+import html
 import json
 import logging
 import uuid
@@ -57,11 +58,12 @@ def _schalter(pg_session, aktiv=True):
     pg_session.commit()
 
 
-def _kunde(pg_session, kennung=PARTNER_A, name="Autorin A"):
+def _kunde(pg_session, kennung=PARTNER_A, name="Autorin A", nummer=None,
+           gutschriftempfaenger=True):
     kunde = Customer(
-        customer_number=f"K-{uuid.uuid4().hex[:8]}", name=name,
+        customer_number=nummer or f"K-{uuid.uuid4().hex[:8]}", name=name,
         address_line1="Weg 1", zip_code="10115", city="Berlin", country="DE",
-        gutschriftempfaenger=True,
+        gutschriftempfaenger=gutschriftempfaenger,
         ust_status="regelbesteuert",
         tax_number="12/345/67890",
     )
@@ -330,6 +332,33 @@ def test_scheitert_die_kopie_wird_der_beleg_nicht_angenommen(
     assert "Aufbewahrungskopie" in meldung
     assert pg_session.query(Invoice).count() == 0
     assert pg_session.query(UebergabeEingang).count() == 0
+
+
+def test_der_fehlertext_steht_url_kodiert_in_der_weiterleitung(
+    client, pg_session, belegordner,
+):
+    """Ein Fehlertext in einer Redirect-URL ist ein Query-Parameter: Leerzeichen,
+    & und Umlaute sind dort Sonderzeichen. Unkodiert schnitt das & die Query,
+    und die Zielseite zeigte den Text abgeschnitten. Der Weg dorthin ist echt:
+    Ein Kunde ohne Gutschriftempfaenger-Eigenschaft laesst die Wirkung am
+    Knopf scheitern, und seine Nummer geraet in die Meldung."""
+    ordner, signieren = belegordner
+    _schalter(pg_session)
+    _kunde(pg_session, nummer="K-Ü & 1", gutschriftempfaenger=False)
+    (ordner / "auftrag.json").write_bytes(beleg(signieren))
+
+    antwort = client.post("/uebergaben/auftrag.json/rechnung-anlegen")
+
+    assert antwort.status_code == 303
+    ort = antwort.headers["location"]
+    assert "K-Ü" not in ort
+    assert "&" not in ort
+    meldung = parse_qs(urlparse(ort).query)["fehler"][0]
+    assert meldung == "Kunde K-Ü & 1 ist kein Gutschriftempfaenger"
+
+    seite = client.get(ort)
+    assert seite.status_code == 200
+    assert "Kunde K-Ü & 1 ist kein Gutschriftempfaenger" in html.unescape(seite.text)
 
 
 def test_der_zweite_knopfdruck_laesst_die_kopie_unveraendert(
