@@ -10,6 +10,7 @@ from pathlib import Path
 
 from app.models.customer import Customer
 from app.models.invoice import AuditLog, Invoice, InvoiceItem
+from app.models.uebergabe_eingang import UebergabeEingang
 from app.services.gobd_export import build_gobd_export
 
 
@@ -44,7 +45,7 @@ def _invoice(customer: Customer, number="RE-2026-001") -> Invoice:
 def _build(tmp_path: Path, **overrides) -> zipfile.ZipFile:
     c = overrides.pop("customer", _customer())
     kwargs = dict(
-        invoices=[_invoice(c)], customers=[c], audit_rows=[],
+        invoices=[_invoice(c)], customers=[c], audit_rows=[], uebergaben=[],
         storage_path=tmp_path, date_from=date(2026, 1, 1), date_to=date(2026, 12, 31),
     )
     kwargs.update(overrides)
@@ -283,3 +284,44 @@ def test_positionen_csv_fuehrt_den_positionszeitraum_hinten_als_datum(tmp_path):
     assert kopf[-3:] == ["artikelnummer", "leistung_von", "leistung_bis"]
     zeile = _read_csv(zf, "positionen.csv")[0]
     assert (zeile["leistung_von"], zeile["leistung_bis"]) == ("2026-07-01", "2026-07-31")
+
+
+def _uebergabe(sha: str, angenommen_am: datetime) -> UebergabeEingang:
+    return UebergabeEingang(
+        beleg_id=f"b-{sha[:8]}", beleg_sha256=sha, absender="tantiemen-app",
+        nutzlast_art="abrechnungsauftrag",
+        erzeugt_am=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        angenommen_am=angenommen_am,
+    )
+
+
+def test_uebergabekopien_nur_der_im_zeitraum_angenommenen(tmp_path):
+    """#160: rechnungen.csv filtert nach Zeitraum; die Uebergabekopien folgen dem
+    Datum der ANNAHME (uebergabe_eingaenge.angenommen_am), nicht dem Ordnerinhalt.
+    Der Router waehlt die Zeilen, hier zaehlt nur, was er gereicht bekommt."""
+    ordner = tmp_path / "uebergaben" / "tantiemen-app-nach-abgehakt"
+    ordner.mkdir(parents=True)
+    innen, draussen = "1" * 64, "2" * 64
+    (ordner / f"{innen}.json").write_bytes(b"{}")
+    (ordner / f"{draussen}.json").write_bytes(b"{}")
+
+    zeilen = [_uebergabe(innen, datetime(2026, 6, 1, tzinfo=timezone.utc))]
+    zf = _build(tmp_path, uebergaben=zeilen)
+    namen = [n for n in zf.namelist() if n.startswith("uebergaben/")]
+
+    assert namen == [f"uebergaben/tantiemen-app-nach-abgehakt/{innen}.json"]
+    assert f"uebergaben/tantiemen-app-nach-abgehakt/{draussen}.json" not in namen
+
+
+def test_fehlende_uebergabekopie_steht_in_fehlende_dateien(tmp_path):
+    """#160: Die Datenbankzeile verspricht eine Kopie (§ 12: keine Wirkung ohne
+    eigene Kopie). Fehlt sie, muss der Pruefer das erfahren, nicht still nichts
+    im Datentraeger vorfinden."""
+    sha = "3" * 64
+    zeile = _uebergabe(sha, datetime(2026, 6, 1, tzinfo=timezone.utc))
+    (tmp_path / "uebergaben").mkdir()
+    # keine Datei {sha}.json
+
+    zf = _build(tmp_path, uebergaben=[zeile])
+    assert "fehlende_dateien.txt" in zf.namelist()
+    assert sha in zf.read("fehlende_dateien.txt").decode("utf-8")

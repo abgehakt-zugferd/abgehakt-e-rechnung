@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import AuditLog, Invoice
+from app.models.uebergabe_eingang import UebergabeEingang
 from app.services.gobd_export import build_gobd_export
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
@@ -57,10 +58,22 @@ def download_gobd(von: date, bis: date, db: Session = Depends(get_db)):
         .order_by(AuditLog.changed_at)
         .all()
     )
+    # Uebergabekopien nach dem Datum der ANNAHME (#160): angenommen ist, was
+    # gewirkt hat (§ 11), und die Annahme ist der Beitrag zum Zeitraum. Ohne
+    # diesen Filter nähme jeder Datenträger alle je angenommenen Kopien mit,
+    # auch die fremder Prüfzeiträume.
+    uebergaben = (
+        db.query(UebergabeEingang)
+        .filter(UebergabeEingang.angenommen_am >= von,
+                UebergabeEingang.angenommen_am < bis + timedelta(days=1))
+        .order_by(UebergabeEingang.angenommen_am)
+        .all()
+    )
 
     settings = get_settings()
     zip_bytes = build_gobd_export(
         invoices=invoices, customers=customers, audit_rows=audit_rows,
+        uebergaben=uebergaben,
         storage_path=settings.storage_path, date_from=von, date_to=bis,
         # GDPdU-Datenlieferant ist die eigene Firma, nicht die Software (#99 §4.4)
         company=db.query(Company).filter(Company.id == 1).first(),

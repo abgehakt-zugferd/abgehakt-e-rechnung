@@ -82,3 +82,41 @@ def test_gobd_download_excludes_draft_invoices(pg_session):
     csv_content = zipfile.ZipFile(io.BytesIO(r.content)).read("rechnungen.csv").decode("utf-8")
     assert "RE-2026-001" not in csv_content   # Entwurf ausgeschlossen
     assert "RE-2026-042" in csv_content
+
+
+def test_gobd_download_filtert_uebergabekopien_nach_annahmezeitpunkt(pg_session):
+    """#160: Der Datentraeger eines Pruefzeitraums fuehrt nur die Uebergabekopien,
+    die in IHM angenommen wurden. Massgeblich ist das Datum der ANNAHME
+    (uebergabe_eingaenge.angenommen_am), nicht alles, was je im Ordner liegt."""
+    import hashlib
+    from datetime import datetime, timezone
+
+    from app.config import get_settings
+    from app.models.uebergabe_eingang import UebergabeEingang
+
+    richtung = "tantiemen-app-nach-abgehakt"
+    wurzel = get_settings().storage_path / "uebergaben" / richtung
+    wurzel.mkdir(parents=True)
+    innen, draussen = b'{"beleg": "innen"}', b'{"beleg": "draussen"}'
+    (wurzel / f"{hashlib.sha256(innen).hexdigest()}.json").write_bytes(innen)
+    (wurzel / f"{hashlib.sha256(draussen).hexdigest()}.json").write_bytes(draussen)
+    for roh, angenommen_am in (
+        (innen, datetime(2026, 5, 10, tzinfo=timezone.utc)),
+        (draussen, datetime(2027, 1, 5, tzinfo=timezone.utc)),
+    ):
+        pg_session.add(UebergabeEingang(
+            beleg_id=hashlib.sha256(roh).hexdigest()[:16],
+            beleg_sha256=hashlib.sha256(roh).hexdigest(), absender="tantiemen-app",
+            nutzlast_art="abrechnungsauftrag",
+            erzeugt_am=datetime(2026, 5, 1, tzinfo=timezone.utc),
+            angenommen_am=angenommen_am,
+        ))
+    pg_session.commit()
+
+    r = _client(pg_session).get("/export/gobd?von=2026-01-01&bis=2026-12-31")
+
+    namen = [
+        n for n in zipfile.ZipFile(io.BytesIO(r.content)).namelist()
+        if n.startswith("uebergaben/")
+    ]
+    assert namen == [f"uebergaben/{richtung}/{hashlib.sha256(innen).hexdigest()}.json"]

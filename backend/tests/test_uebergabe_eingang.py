@@ -227,12 +227,58 @@ def test_der_z3_export_liefert_die_aufbewahrungskopien_mit(speicher):
     rechnung.customer = kunde
     rechnung.items = []
 
+    # Die Zeile der Annahme (angenommen_am innerhalb des Export-Zeitraums)
+    # waehlt der Router zu; hier reichen wir sie wie der Router es tut (#160).
+    zeile = UebergabeEingang(
+        beleg_id="a" * 36, beleg_sha256=sha, absender=ABSENDER,
+        nutzlast_art="abrechnungsauftrag", erzeugt_am=ZEIT, angenommen_am=ZEIT,
+    )
+
     daten = build_gobd_export(
         invoices=[rechnung], customers=[kunde], audit_rows=[],
         storage_path=speicher, date_from=date(2026, 1, 1), date_to=date(2026, 12, 31),
+        uebergaben=[zeile],
     )
     zf = zipfile.ZipFile(io.BytesIO(daten))
     name = f"uebergaben/{RICHTUNG}/{sha}.json"
 
     assert name in zf.namelist()
     assert zf.read(name) == roh
+
+
+# --- Verwaiste .kopie-Reste (Issue #160) ---
+
+def _verwaise(speicher, name, stunden):
+    ordner = speicher / "uebergaben" / RICHTUNG
+    ordner.mkdir(parents=True)
+    muell = ordner / name
+    muell.write_bytes(b"halber Schreibvorgang, kein Beleg")
+    vor_x_stunden = time.time() - stunden * 3600
+    os.utime(muell, (vor_x_stunden, vor_x_stunden))
+    return muell
+
+
+def test_verwaiste_kopie_reste_werden_bei_naechstem_schreiben_entfernt(speicher):
+    """#160: Ein harter Absturz mitten im Schreiben erreicht den finally-Block
+    nicht, die halbe .kopie-Datei bliebe fuer immer unter storage/ liegen (die
+    Anwendung loescht dort sonst nichts). Beim naechsten Schreiben in dasselbe
+    Verzeichnis gehoert der Muell weg: Es sind keine Belege, sondern
+    abgebrochene Schreibvorgaenge, ihr endgueltiger Name waere {sha}.json."""
+    muell = _verwaise(speicher, ".kopie-abgestuerzt", stunden=4)
+    roh = b'{"beleg": "neu"}'
+
+    kopie_aufbewahren(roh, hashlib.sha256(roh).hexdigest(), RICHTUNG)
+
+    assert not muell.exists()
+
+
+def test_eine_frische_kopie_eines_laufenden_schreibvorgangs_bleibt_liegen(speicher):
+    """#160: Die Stunde Zurueckhaltung schuetzt den Schreibvorgang, der gerade
+    in demselben Verzeichnis laeuft: eine frische .kopie-Datei ist niemandes
+    Muell, das Raeumen darf sie nicht anfassen."""
+    laufend = _verwaise(speicher, ".kopie-laufend", stunden=0)
+    roh = b'{"beleg": "neu"}'
+
+    kopie_aufbewahren(roh, hashlib.sha256(roh).hexdigest(), RICHTUNG)
+
+    assert laufend.exists()
