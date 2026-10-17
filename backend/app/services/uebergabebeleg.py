@@ -7,6 +7,7 @@ wird ein Beleg nur noch an EINER Stelle: `uebergabe_befund.beleg_beurteilen`
 
 import base64
 import hashlib
+import unicodedata
 
 from app.services.protokoll import PROTOKOLL_VERSION
 
@@ -35,10 +36,16 @@ class UebergabeFehler(ValueError):
 
 
 def _sortierschluessel(name: str) -> bytes:
-    return name.encode("utf-16-be")
+    return unicodedata.normalize("NFC", name).encode("utf-16-be")
 
 
 def _zeichenkette(wert: str) -> str:
+    # § 3 Zusatz 1: Normalform NFC. RFC 8785 verlangt keine Normalisierung,
+    # das Uebergabeformat tut es - derselbe Name in NFD und in NFC sind
+    # verschiedene Bytes und derselbe Name, und sonst haengen Hash und
+    # Signatur davon ab, ueber welches Dateisystem ein Name gelaufen ist
+    # (macOS liefert routinemaessig NFD).
+    wert = unicodedata.normalize("NFC", wert)
     teile = ['"']
     for zeichen in wert:
         if zeichen in _STEUERZEICHEN:
