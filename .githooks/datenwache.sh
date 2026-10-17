@@ -3,7 +3,8 @@
 #
 # Massgebliche Vorlage: zemp-integration/werkzeuge/datenwache/pre-push-datenwache.sh
 #
-# Was geprueft wird (nur NEU hinzukommende Zeilen der gepushten Commits):
+# Was geprueft wird (je gepuschtem Commit, nur NEU hinzukommende Zeilen und
+# die Commit-Nachricht, deren Befunde den Zusatz " (Commit-Nachricht)"):
 #   - private Schluessel (BEGIN ... PRIVATE KEY)
 #   - IBAN-Format (Registry-Laender, Laenge aus iban_laengen.tsv, MOD 97-10;
 #     Ausnahme: BBAN = PROBE + Nullen, optional eine Schlussziffer; Issue #93)
@@ -131,11 +132,13 @@ pruefe_ausser_konstruiert() {
 }
 
 # IBAN laenderuebergreifend: Laengentabelle + MOD 97-10 in awk (Issue #93).
-# stdin = Diff-Zeilen. Exit von awk unverfaelscht (keine Pipe hinter awk).
+# stdin = zu pruefender Text (Diff-Zeilen oder Commit-Nachricht). $2 = Zusatz
+# zur Musterklasse. Exit von awk unverfaelscht (keine Pipe hinter awk).
 pruefe_iban_format() {
     commit=$1
+    klasse="IBAN-Format$2"
     if [ ! -f "$iban_laengen_tsv" ]; then
-        printf '%s | %s\n%s\n' "$commit" "IBAN-Format" \
+        printf '%s | %s\n%s\n' "$commit" "$klasse" \
             "1:datenwache: Laengentabelle fehlt: $iban_laengen_tsv" >> "$befunde"
         return 0
     fi
@@ -229,12 +232,36 @@ pruefe_iban_format() {
         }
     ') || awk_ec=$?
     if [ "$awk_ec" -ne 0 ]; then
-        printf '%s | %s\n%s\n' "$commit" "IBAN-Format" \
+        printf '%s | %s\n%s\n' "$commit" "$klasse" \
             "1:datenwache: awk-IBAN-Pruefung fehlgeschlagen (exit $awk_ec)" >> "$befunde"
         return 0
     fi
     if [ -n "$treffer" ]; then
-        printf '%s | %s\n%s\n' "$commit" "IBAN-Format" "$treffer" >> "$befunde"
+        printf '%s | %s\n%s\n' "$commit" "$klasse" "$treffer" >> "$befunde"
+    fi
+}
+
+# Die fuenf Textpruefungen (privater Schluessel, IBAN-, USt-IdNr-, Steuernummer-
+# Format, Zusatzmuster) auf den Text von stdin (#154). herkunft = Zusatz zur
+# Musterklasse: leer fuer Diff-Zeilen, " (Commit-Nachricht)" fuer Nachrichten.
+pruefe_text() {
+    commit=$1
+    herkunft=$2
+    text=$(cat)
+    [ -z "$text" ] && return 0
+    printf '%s\n' "$text" | pruefe "privater Schluessel$herkunft" \
+        '-----BEGIN [A-Z ]*PRIVATE KEY-----' "$commit"
+    printf '%s\n' "$text" | pruefe_iban_format "$commit" "$herkunft"
+    printf '%s\n' "$text" | pruefe_ausser_konstruiert "USt-IdNr-Format$herkunft" \
+        '(^|[^A-Za-z0-9])DE[0-9]{9}([^0-9]|$)' "$commit" \
+        'DE[0-9]{9}' 's/^DE//'
+    printf '%s\n' "$text" | pruefe_ausser_konstruiert "Steuernummer-Format$herkunft" \
+        '(^|[^0-9])[0-9]{2,3}/[0-9]{3}/[0-9]{4,5}([^0-9/]|$)' "$commit" \
+        '[0-9]{2,3}/[0-9]{3}/[0-9]{4,5}' 's/\///g'
+    if [ -f "$muster_datei" ]; then
+        grep -vE '^[[:space:]]*(#|$)' "$muster_datei" | while IFS= read -r m; do
+            printf '%s\n' "$text" | pruefe "Zusatzmuster$herkunft" "$m" "$commit"
+        done
     fi
 }
 
@@ -251,23 +278,11 @@ while read -r _lokal_ref lokal_sha _fern_ref fern_sha; do
             | grep -E '(^|/)\.env(\.[^/]*)?$' | grep -vE '\.env\.example$') \
             && printf '%s | .env-Datei\n%s\n' "$c" "$env_neu" >> "$befunde"
 
-        zeilen=$(git show --format= --unified=0 "$c" | grep -E '^\+[^+]' | cut -c2-)
-        [ -z "$zeilen" ] && continue
+        git show --format= --unified=0 "$c" | grep -E '^\+[^+]' | cut -c2- \
+            | pruefe_text "$c" ""
 
-        printf '%s\n' "$zeilen" | pruefe "privater Schluessel" \
-            '-----BEGIN [A-Z ]*PRIVATE KEY-----' "$c"
-        printf '%s\n' "$zeilen" | pruefe_iban_format "$c"
-        printf '%s\n' "$zeilen" | pruefe_ausser_konstruiert "USt-IdNr-Format" \
-            '(^|[^A-Za-z0-9])DE[0-9]{9}([^0-9]|$)' "$c" \
-            'DE[0-9]{9}' 's/^DE//'
-        printf '%s\n' "$zeilen" | pruefe_ausser_konstruiert "Steuernummer-Format" \
-            '(^|[^0-9])[0-9]{2,3}/[0-9]{3}/[0-9]{4,5}([^0-9/]|$)' "$c" \
-            '[0-9]{2,3}/[0-9]{3}/[0-9]{4,5}' 's/\///g'
-        if [ -f "$muster_datei" ]; then
-            grep -vE '^[[:space:]]*(#|$)' "$muster_datei" | while IFS= read -r m; do
-                printf '%s\n' "$zeilen" | pruefe "Zusatzmuster" "$m" "$c"
-            done
-        fi
+        nachricht=$(git log -1 --format=%B "$c")
+        printf '%s\n' "$nachricht" | pruefe_text "$c" " (Commit-Nachricht)"
     done
 done
 

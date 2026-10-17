@@ -28,6 +28,11 @@ jobs:
       - name: Datenwache (Charakterisierungstests)
         run: .githooks/test_datenwache.sh
 
+      # Testdatei ausdruecklich nennen: Node 22 behandelt ein Verzeichnis als
+      # Modulpfad statt darin zu suchen (MODULE_NOT_FOUND); Node 20 und 26 suchen.
+      - name: Datenwache Texte (Issue-/PR-Pruefung)
+        run: node --test .github/scripts/datenwache-texte.test.js
+
       - name: Datenwache ohne mktemp (fail closed, keine Schreibzugriffe aufs Repo)
         run: .githooks/test_werkstatt.sh
 
