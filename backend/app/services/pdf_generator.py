@@ -28,7 +28,7 @@ from app.services.pdf_fuss import Fuss, leinwand
 from app.services.pdf_spalten import spaltenbreiten
 from app.services.iban import IbanProfil
 from app.services.zugferd_xml import EXEMPTION_REASONS
-from app.services.belegart import belegart
+from app.services.belegart import GUTSCHRIFT_TYPEN, belegart
 from app.services.belegrollen import besetzung
 from app.services.belegsprache import Belegdarstellung, darstellung, resolve_belegsprache
 from app.services.belegsummen import belegsummen
@@ -77,9 +77,8 @@ def _logo_flowable():
 # nach den Kategorien in EXEMPTION_REASONS (XML-Tabelle), nicht nach dem Wortlaut.
 TAX_NOTICE_KATEGORIEN = frozenset(EXEMPTION_REASONS)
 
-GUTSCHRIFT_TYPEN = frozenset({"credit_note", "credit", "storno", "self_billing"})
-
-
+# Welche Belegarten an den Kunden zahlen (und damit ohne eigenen Bankblock
+# auskommen), steht einmal in belegart.GUTSCHRIFT_TYPEN — hier nur der Leser.
 def _ist_gutschrift(invoice) -> bool:
     return getattr(invoice, "invoice_type", None) in GUTSCHRIFT_TYPEN
 

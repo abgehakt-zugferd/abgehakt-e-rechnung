@@ -120,6 +120,17 @@ TYPE_CODE_MAP: dict[str | None, str] = {
     wert: art.bt3 for wert, art in _ALIASES.items()
 }
 
+# Gutschriften im Geldfluss samt den Alias-Schreibweisen, die aeltere
+# Versionen gespeichert haben: Diese Belegarten zahlen an den KUNDEN
+# (pdf_generator: Bankblock des Kunden; zugferd_xml: PaymentMeans des
+# Kunden; validator: Warnung zur fehlenden Kunden-IBAN). Bewusst NICHT
+# dabei: das 389-Storno (261) hebt die Honorargutschrift auf, der
+# Geldfluss kehrt sich um und der Kunde zahlt der Firma; und die
+# Korrektur (384) ist eine normale Zahlung des Kunden. Genau einmal
+# hier (Issue #160); vorher stand die Menge in drei Dateien, die
+# auseinanderlaufen konnten.
+GUTSCHRIFT_TYPEN = frozenset({"credit_note", "credit", "storno", "self_billing"})
+
 
 def belegart(internal_value: str | None) -> Belegart:
     """Loesst einen gespeicherten internen Wert (oder Alias) auf.

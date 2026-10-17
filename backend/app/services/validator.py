@@ -19,6 +19,7 @@ from app.services.belegrollen import besetzung
 from app.services.einheiten import UnknownUnitError, resolve_einheit
 from app.services.pflichtangaben import pflichtangaben
 from app.services.belegart import (
+    GUTSCHRIFT_TYPEN,
     TYPE_CODE_MAP,
     UnknownInvoiceTypeError,
     belegart,
@@ -557,6 +558,5 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
 
 
 def _gutschrift_auszahlung(invoice: Invoice) -> bool:
-    return getattr(invoice, "invoice_type", None) in {
-        "credit_note", "credit", "storno", "self_billing",
-    }
+    # Die Menge steht einmal in belegart.GUTSCHRIFT_TYPEN, hier nur der Leser.
+    return getattr(invoice, "invoice_type", None) in GUTSCHRIFT_TYPEN
