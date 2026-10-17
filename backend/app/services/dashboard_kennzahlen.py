@@ -21,9 +21,12 @@ from app.models.company import Company
 from app.models.invoice import Invoice
 from app.services.beleg_status import nicht_versendet_bedingung
 from app.services.steuer_ruecklage import steuerruecklage_anteil
-from app.services.storno_wirkung import WIRKSAM_STORNIERT, summe_gutschriften
+from app.services.storno_wirkung import GESTELLT, WIRKSAM_STORNIERT, summe_gutschriften
 
-_AUSGESTELLT = ("issued", "paid")
+# Umsatz-Belegarten (Standardrechnung und Anzahlungsrechnung) — einzige Quelle
+# dieser Menge. storno_wirkung definiert sie nicht neu, sondern bekommt sie als
+# `topf` gereicht (Issue #160); auch die Rechnungsliste filtert darueber
+# (rechnungsliste_filter importiert UMSATZ_BELEGARTEN_FILTER).
 UMSATZ_BELEGARTEN = (None, "prepayment")
 UMSATZ_BELEGARTEN_FILTER = or_(
     Invoice.invoice_type.is_(None),
@@ -89,7 +92,7 @@ def _summe_feld(
     # Von Hand auf cancelled gesetzt, aber schon per Gutschrift aufgehoben: das
     # Original zaehlt, die Gutschrift zieht ab. Sonst wirkte die Stornierung
     # doppelt (Issue #141).
-    gestellt = or_(Invoice.status.in_(_AUSGESTELLT),
+    gestellt = or_(Invoice.status.in_(GESTELLT),
                    and_(Invoice.status == "cancelled", WIRKSAM_STORNIERT))
     bedingungen = [
         gestellt,

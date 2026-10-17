@@ -16,7 +16,11 @@ from sqlalchemy.orm import Session, aliased
 
 from app.models.invoice import Invoice
 
-_AUSGESTELLT = ("issued", "paid")
+# "Gestellt" im Sinne der Kennzahlen: finalisiert (issued) oder bezahlt (paid).
+# Einzige Quelle dieser Menge — dashboard_kennzahlen importiert sie (Issue #160),
+# sonst formulieren beide Module die Wirksamkeit einer Gutschrift neu und die
+# beiden Fassungen laufen auseinander, sobald ein Status dazukommt.
+GESTELLT = ("issued", "paid")
 STORNO_BELEGARTEN = ("credit_note", "self_billing_storno")
 
 _Gutschrift = aliased(Invoice)
@@ -28,7 +32,7 @@ _Gutschrift = aliased(Invoice)
 WIRKSAM_STORNIERT = exists().where(
     _Gutschrift.original_invoice_id == Invoice.id,
     _Gutschrift.invoice_type.in_(STORNO_BELEGARTEN),
-    _Gutschrift.status.in_(_AUSGESTELLT),
+    _Gutschrift.status.in_(GESTELLT),
 )
 
 
@@ -75,7 +79,7 @@ def summe_gutschriften(
     if ausgezahlt:
         topf_filter = and_(topf_filter, original.status == "paid")
     datum = Invoice.bezahlt_am if ausgezahlt else Invoice.issue_date
-    status = ("paid",) if ausgezahlt else _AUSGESTELLT
+    status = ("paid",) if ausgezahlt else GESTELLT
     bedingungen = [
         Invoice.status.in_(status),
         Invoice.invoice_type.in_(STORNO_BELEGARTEN),
