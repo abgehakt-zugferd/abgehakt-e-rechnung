@@ -10,6 +10,7 @@ Erst der Knopf "Als Rechnung anlegen" schreibt fest.
 import base64
 import hashlib
 import json
+import logging
 import uuid
 
 import pytest
@@ -238,3 +239,46 @@ def test_ohne_eingerichteten_ordner_bleibt_die_seite_ruhig(client, pg_session, b
 
     assert antwort.status_code == 200
     assert "kein Belegordner" in antwort.text
+
+
+def test_eine_kaputte_datei_legt_die_belegliste_nicht_lahm(client, pg_session, belegordner):
+    """Eine kaputte Datei neben einer guten: Die Liste antwortet 200, zeigt
+    den guten Beleg und fuer die kaputte den Befund - nicht HTTP 500 fuer
+    die ganze Liste (abgehakt#164). Die Bytes der kaputten Datei werden
+    direkt geschrieben, signieren liess sie sich ohnehin nicht."""
+    ordner, signieren = belegordner
+    _kunde(pg_session)
+    _schalter(pg_session)
+    (ordner / "auftrag.json").write_bytes(beleg(signieren))
+    kaputt = json.loads(beleg(signieren))
+    kaputt["nutzlast"]["bemessung"]["erloes_netto"] = 797.30   # Gleitkommazahl
+    (ordner / "kaputt.json").write_bytes(json.dumps(kaputt).encode("utf-8"))
+
+    antwort = client.get("/uebergaben")
+
+    assert antwort.status_code == 200
+    assert "Probeverlag" in antwort.text
+    assert "WERT_UNBRAUCHBAR" in antwort.text
+
+
+def test_eine_unbekannte_kaputtheit_kostet_nur_die_eine_zeile(
+    client, pg_session, belegordner, monkeypatch, caplog,
+):
+    """Sicherheitsnetz des Routers: Jede unerwartete Ausnahme der Beurteilung
+    wird je Datei als BELEG_UNLESBAR gezeigt und geloggt - die Liste bleibt
+    200. Das ersetzt nicht die gezielten Befunde des Lesers."""
+    ordner, signieren = belegordner
+    _kunde(pg_session)
+    _schalter(pg_session)
+    (ordner / "auftrag.json").write_bytes(beleg(signieren))
+
+    def unbekannt(roh, lage, **kwargs):
+        raise RuntimeError("eine noch unbekannte Kaputtheit")
+
+    monkeypatch.setattr("app.routers.uebergaben.beleg_beurteilen", unbekannt)
+    with caplog.at_level(logging.ERROR):
+        antwort = client.get("/uebergaben")
+
+    assert antwort.status_code == 200
+    assert "BELEG_UNLESBAR" in antwort.text
+    assert any("auftrag.json" in eintrag.message for eintrag in caplog.records)

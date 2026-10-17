@@ -100,6 +100,37 @@ def kanonisch(wert) -> bytes:
     return _wert(wert).encode("utf-8")
 
 
+def kanonisierungsfehler(wert, praefix: str = "$"):
+    """(pfad, wert) des ersten Werts, den `kanonisch` ablehnt, oder None.
+
+    Die Ausnahme nennt keine Stelle; ein Befund, der den Absender informieren
+    soll, aber schon. Gesucht wird in derselben Sortierung wie `kanonisch`,
+    damit beide Stelle und Wert meinen.
+    """
+    try:
+        _wert(wert)
+        return None
+    except UebergabeFehler:
+        pass
+    if isinstance(wert, dict):
+        kinder = [
+            (f"{praefix}.{name}", wert[name])
+            for name in sorted(wert, key=_sortierschluessel)
+        ]
+    elif isinstance(wert, (list, tuple)):
+        kinder = [
+            (f"{praefix}[{nummer}]", eintrag)
+            for nummer, eintrag in enumerate(wert)
+        ]
+    else:
+        kinder = []
+    for pfad, eintrag in kinder:
+        fund = kanonisierungsfehler(eintrag, pfad)
+        if fund is not None:
+            return fund
+    return praefix, wert
+
+
 def sha256_hex(daten: bytes) -> str:
     return hashlib.sha256(daten).hexdigest()
 

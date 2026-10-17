@@ -26,7 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Optional, Sequence
@@ -41,7 +41,9 @@ from app.services.uebergabe_schluessel import (
 )
 from app.services.uebergabebeleg import (
     EMPFAENGER_ABGEHAKT,
+    UebergabeFehler,
     kanonisch,
+    kanonisierungsfehler,
 )
 
 # Was dieser Empfaenger liest. Die `erloesmeldung` geht an tantiemen, die
@@ -128,16 +130,45 @@ def _zahl(wert) -> Optional[Decimal]:
     sind 265.77, mit gerundetem Satz 265.74.
     """
     try:
-        return Decimal(str(wert))
+        zahl = Decimal(str(wert))
     except (InvalidOperation, ValueError, ArithmeticError):
         return None
+    # NaN und Infinity parst Decimal anstandslos, aber der Gleichheitsvergleich
+    # mit ihnen ist still False und der Ordnungsvergleich wirft: Ein Betrag
+    # "NaN" wurde so zum falschen Befund oder zur Ausnahme. Ein Wert, der mit
+    # nichts vergleichbar ist, ist keine Zahl.
+    if not zahl.is_finite():
+        return None
+    return zahl
 
 
 def _zeit(wert) -> Optional[datetime]:
     if not isinstance(wert, str):
         return None
     try:
-        return datetime.fromisoformat(wert.replace("Z", "+00:00"))
+        zeitpunkt = datetime.fromisoformat(wert.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    # RFC 3339 verlangt die Zeitzone. Eine naive Angabe parst fromisoformat
+    # anstandslos und crashte erst im Vergleich mit dem zeitzonenbewussten
+    # Beiblatt des Schluessels (TypeError vor jeder Signaturpruefung); sie ist
+    # ein unbrauchbarer Wert, keine Ausnahme.
+    if zeitpunkt.tzinfo is None:
+        return None
+    return zeitpunkt
+
+
+def _datum(wert) -> Optional[date]:
+    """Dieselbe Parse-Regel, mit der die Wirkung den Zeitraum liest.
+
+    Nicht aus abrechnungsauftrag_wirkung importierbar, denn die Wirkung
+    importiert diesen Leser; die gemeinsame Quelle ist date.fromisoformat
+    selbst und keine zweite Regel.
+    """
+    if not isinstance(wert, str):
+        return None
+    try:
+        return date.fromisoformat(wert)
     except ValueError:
         return None
 
@@ -160,13 +191,29 @@ def _pruefe_objekt(objekt, spec, unterobjekte, pfad_verzeichnis, pfad, funde) ->
             funde.append(Feststellung("UNBEKANNTES_FELD", f"{pfad}.{name}"))
             continue
         kind = f"{pfad_verzeichnis}.{name}" if pfad_verzeichnis else name
-        if isinstance(wert, list) and f"{kind}[]" in unterobjekte:
+        if f"{kind}[]" in unterobjekte:
+            # Formprobe vor der Annahme: Ein Objekt oder eine Zeichenkette
+            # statt der Liste wurde frueher stillschweigend uebernommen und
+            # war erst in der Wirkung ein TypeError. Das Feld ist bekannt
+            # und da, nur seine Form ist unbrauchbar.
+            if not isinstance(wert, list):
+                funde.append(Feststellung(
+                    "WERT_UNBRAUCHBAR", f"{pfad}.{name}",
+                    erwartet="Liste", erhalten=type(wert).__name__,
+                ))
+                continue
             for nummer, eintrag in enumerate(wert):
                 _pruefe_objekt(
                     eintrag, unterobjekte[f"{kind}[]"], unterobjekte,
                     f"{kind}[]", f"{pfad}.{name}[{nummer}]", funde,
                 )
-        elif isinstance(wert, dict) and kind in unterobjekte:
+        elif kind in unterobjekte:
+            if not isinstance(wert, dict):
+                funde.append(Feststellung(
+                    "WERT_UNBRAUCHBAR", f"{pfad}.{name}",
+                    erwartet="Objekt", erhalten=type(wert).__name__,
+                ))
+                continue
             _pruefe_objekt(
                 wert, unterobjekte[kind], unterobjekte, kind, f"{pfad}.{name}", funde,
             )
@@ -213,6 +260,26 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
         if typcode not in TYPCODES:
             return [Feststellung("WERT_UNBRAUCHBAR", f"{pfad}.typcode",
                                  erwartet=" oder ".join(TYPCODES), erhalten=typcode)]
+
+        # Wertprobe vor der Annahme: Ein Zeitraum, den die Wirkung spaeter
+        # nicht lesen kann, war vorher angenommen und wirkte als ValueError.
+        # Gelesen wird mit derselben Regel (date.fromisoformat), nicht mit
+        # einer strengeren, damit kein gueltiger Auftrag abgelehnt wird.
+        zeitraum = gutschrift["leistungszeitraum"]
+        von = _datum(zeitraum["von"])
+        bis = _datum(zeitraum["bis"])
+        if von is None:
+            return [Feststellung("WERT_UNBRAUCHBAR", f"{pfad}.leistungszeitraum.von",
+                                 erwartet="Datum", erhalten=str(zeitraum["von"]))]
+        if bis is None:
+            return [Feststellung("WERT_UNBRAUCHBAR", f"{pfad}.leistungszeitraum.bis",
+                                 erwartet="Datum", erhalten=str(zeitraum["bis"]))]
+        if von > bis:
+            return [Feststellung(
+                "WERT_UNBRAUCHBAR", f"{pfad}.leistungszeitraum",
+                erwartet="von vor bis",
+                erhalten=f"von {zeitraum['von']}, bis {zeitraum['bis']}",
+            )]
 
         summe = Decimal("0")
         for lfd, position in enumerate(gutschrift["positionen"]):
@@ -262,11 +329,21 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
 
 
 def _anzeige(nutzlast: dict) -> dict:
-    """Was die Tabelle zeigt. Nur Lesen, keine Wirkung."""
-    gutschriften = nutzlast.get("gutschriften") or []
+    """Was die Tabelle zeigt. Nur Lesen, keine Wirkung.
+
+    Laeuft auch fuer eine abgelehnte Nutzlast, denn die Zeile muss erscheinen,
+    damit der Befund erscheint - deshalb ertraegt sie jede Form, die der
+    Leser gerade abgelehnt hat.
+    """
+    gutschriften = nutzlast.get("gutschriften") if isinstance(
+        nutzlast.get("gutschriften"), list
+    ) else []
     summe = Decimal("0")
     for gutschrift in gutschriften:
-        betrag = _zahl((gutschrift.get("summe") or {}).get("netto"))
+        if not isinstance(gutschrift, dict):
+            continue
+        summe_feld = gutschrift.get("summe")
+        betrag = _zahl(summe_feld.get("netto") if isinstance(summe_feld, dict) else None)
         if betrag is not None:
             summe += betrag
     projekt = nutzlast.get("projekt") or {}
@@ -334,10 +411,22 @@ def beleg_beurteilen(
     rest["erzeugt_am"] = erzeugt_am
 
     nutzlast = beleg["nutzlast"]
-    if hashlib.sha256(kanonisch(nutzlast)).hexdigest() != beleg["nutzlast_sha256"]:
+    try:
+        nutzlast_kanonisch = kanonisch(nutzlast)
+    except UebergabeFehler:
+        # WERT_UNBRAUCHBAR, nicht BELEG_UNLESBAR: Die Datei ist lesbar, das
+        # Feld ist bekannt, nur der Wert kanonisiert nicht - RFC 8785 ohne
+        # Gleitkommazahlen, dieses Format traegt Betraege als Zeichenketten.
+        # BELEG_UNLESBAR waere wieder gedehnt wie beim erzeugt_am vor 1.6.
+        pfad, wert = kanonisierungsfehler(nutzlast, "$.nutzlast")
+        return abgelehnt(Feststellung(
+            "WERT_UNBRAUCHBAR", pfad,
+            erwartet="Zeichenkette oder Ganzzahl", erhalten=str(wert),
+        ), **rest)
+    if hashlib.sha256(nutzlast_kanonisch).hexdigest() != beleg["nutzlast_sha256"]:
         return abgelehnt(Feststellung(
             "NUTZLAST_HASH_FALSCH", "$.nutzlast_sha256",
-            erwartet=hashlib.sha256(kanonisch(nutzlast)).hexdigest(),
+            erwartet=hashlib.sha256(nutzlast_kanonisch).hexdigest(),
             erhalten=str(beleg["nutzlast_sha256"]),
         ), **rest)
 
@@ -354,9 +443,19 @@ def beleg_beurteilen(
 
     ohne_signatur = {name: wert for name, wert in beleg.items() if name != "signatur"}
     try:
+        umschlag_kanonisch = kanonisch(ohne_signatur)
+    except UebergabeFehler:
+        # Dieselbe Probe fuer den Umschlag: Eine Gleitkommazahl ausserhalb der
+        # Nutzlast scheiterte hier genauso ohne Stellenangabe.
+        pfad, wert = kanonisierungsfehler(ohne_signatur, "$")
+        return abgelehnt(Feststellung(
+            "WERT_UNBRAUCHBAR", pfad,
+            erwartet="Zeichenkette oder Ganzzahl", erhalten=str(wert),
+        ), **rest)
+    try:
         import base64
 
-        schluessel.verify(base64.b64decode(signatur["wert"]), kanonisch(ohne_signatur))
+        schluessel.verify(base64.b64decode(signatur["wert"]), umschlag_kanonisch)
     except (InvalidSignature, ValueError):
         return abgelehnt(Feststellung("SIGNATUR_UNGUELTIG", "$.signatur.wert"), **rest)
 

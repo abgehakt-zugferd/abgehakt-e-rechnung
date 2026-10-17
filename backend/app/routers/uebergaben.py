@@ -12,6 +12,8 @@ Menuepunkt: eine Seite, die man erreicht, wenn man die Adresse kennt, waere
 kein ausgeschaltetes Merkmal.
 """
 
+import hashlib
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -30,8 +32,10 @@ from app.services.abrechnungsauftrag_wirkung import (
     WirkungFehler,
     entwuerfe_anlegen,
 )
-from app.services.uebergabe_befund import beleg_beurteilen
+from app.services.uebergabe_befund import Belegurteil, Feststellung, beleg_beurteilen
 from app.services.uebergabe_eingang import DatenbankLage
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -83,9 +87,22 @@ def _geld(wert) -> str:
 
 def _zeile(datei: Path, db: Session) -> dict:
     """Ein Beleg, ein Befund. Der Befund entsteht hier und nicht in der Ansicht."""
-    urteil = beleg_beurteilen(
-        datei.read_bytes(), DatenbankLage(db), schluessel_wurzel=_schluesselwurzel(),
-    )
+    roh = datei.read_bytes()
+    try:
+        urteil = beleg_beurteilen(
+            roh, DatenbankLage(db), schluessel_wurzel=_schluesselwurzel(),
+        )
+    except Exception:
+        # Sicherheitsnetz, kein Ersatz fuer die Befunde des Lesers: Eine
+        # Kaputtheit, die dieser noch nicht kennt, darf nur EINE Zeile der
+        # Liste kosten und nicht die ganze Seite (HTTP 500). Der Befund ist
+        # BELEG_UNLESBAR, weil hier niemand sagen kann, was mit den Bytes
+        # los ist; das Wesentliche steht in der Logzeile mit dem Traceback.
+        logger.exception("Beurteilung von %s gescheitert", datei.name)
+        urteil = Belegurteil(
+            beleg_sha256=hashlib.sha256(roh).hexdigest(),
+            feststellungen=(Feststellung("BELEG_UNLESBAR", "$"),),
+        )
     return {
         "dateiname": datei.name,
         "urteil": urteil,

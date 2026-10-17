@@ -467,3 +467,113 @@ def test_ein_probeschluessel_gilt_in_der_testinstanz(schluessel, monkeypatch):
     urteil = _urteil(schluessel, roh)
 
     assert urteil.angenommen, _codes(urteil)
+
+
+def test_eine_gleitkommazahl_in_der_nutzlast_ist_ein_befund(schluessel):
+    """RFC 8785 ohne Gleitkommazahlen: kanonisch() wirft UebergabeFehler, und
+    vorher war das eine Ausnahme, die die ganze Belegliste lahmlegte (500).
+
+    WERT_UNBRAUCHBAR, nicht BELEG_UNLESBAR: Die Datei ist lesbar, das Feld ist
+    bekannt, nur der Wert kanonisiert nicht (protokoll.py zu WERT_UNBRAUCHBAR).
+    Die Bytes werden direkt geschrieben: signieren laesst sich eine Nutzlast
+    mit Gleitkommazahl ohnehin nicht, der Befund entsteht vor der Signatur."""
+    beleg = json.loads(_beleg(schluessel, _auftrag()))
+    beleg["nutzlast"]["bemessung"]["erloes_netto"] = 797.30
+    roh = json.dumps(beleg).encode("utf-8")
+
+    urteil = _urteil(schluessel, roh)
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.bemessung.erloes_netto"
+
+
+@pytest.mark.parametrize("angabe", ["2026-09-03T11:00:00", "2026-09-03"])
+def test_ein_erzeugt_am_ohne_zone_ist_ein_befund(schluessel, angabe):
+    """Ohne Zeitzone parst fromisoformat eine naive datetime, und erst der
+    Vergleich mit dem zeitzonenbewussten Beiblatt des Schluessels warf einen
+    TypeError - vor jeder Signaturpruefung, also genuegte jede Datei. RFC 3339
+    verlangt die Zone; ohne sie ist der Wert unbrauchbar, nicht der Beleg."""
+    roh = _beleg(schluessel, _auftrag(), erzeugt_am=angabe)
+
+    urteil = _urteil(schluessel, roh)
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.erzeugt_am"
+
+
+def test_nan_als_positionsbetrag_ist_ein_befund(schluessel):
+    """Decimal parst "NaN" anstandslos: Der Gleichheitsvergleich mit NaN ist
+    still False, der Ordnungsvergleich (erloes, Grundlagen) wirft. So wurde
+    aus "NaN" ein SUMME_STIMMT_NICHT oder ein Crash - nie aber der Befund,
+    der dorthin gehoert. Ein Wert, der mit nichts vergleichbar ist, ist
+    keine Zahl."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["positionen"][0]["netto"] = "NaN"
+    nutzlast["gutschriften"][0]["summe"]["netto"] = "NaN"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].positionen[0].netto"
+
+
+def test_nan_als_erloes_ist_ein_befund(schluessel):
+    """NaN im Erloes wirft heute decimal.InvalidOperation im Vergleich mit
+    den Grundlagen - eine Ausnahme, kein Befund. Ein Wert, der mit nichts
+    vergleichbar ist, ist keine Zahl."""
+    nutzlast = _auftrag()
+    nutzlast["bemessung"]["erloes_netto"] = "NaN"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.bemessung.erloes_netto"
+
+
+def test_ein_objekt_statt_der_gutschriften_liste_ist_ein_befund(schluessel):
+    """Vorher stillschweigend angenommen; erst die Wirkung lief in einen
+    TypeError (string indices). Die Formprobe gehoert in den Leser, vor die
+    Annahme - das Feld ist bekannt und da, nur seine Form ist unbrauchbar."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"] = nutzlast["gutschriften"][0]
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften"
+
+
+def test_eine_zeichenkette_statt_der_positionen_liste_ist_ein_befund(schluessel):
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["positionen"] = "eine Position als Text"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].positionen"
+
+
+def test_ein_leistungszeitraum_der_kein_datum_ist_ein_befund(schluessel):
+    """Vorher angenommen; erst das Anlegen der Rechnung warf beim Lesen des
+    Zeitraums einen ValueError. Die Wertprobe gehoert vor die Annahme, und
+    sie verlangt dasselbe Datum, das die Wirkung spaeter liest."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["leistungszeitraum"]["von"] = "irgendwann"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].leistungszeitraum.von"
+    )
+
+
+def test_ein_leistungszeitraum_der_rueckwaerts_laeuft_ist_ein_befund(schluessel):
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["leistungszeitraum"]["von"] = "2026-06-30"
+    nutzlast["gutschriften"][0]["leistungszeitraum"]["bis"] = "2026-04-01"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].leistungszeitraum"
