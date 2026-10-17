@@ -74,23 +74,45 @@ git config core.hooksPath .githooks
 
 ### Was der Hook außer den Tests noch prüft
 
-Drei weitere Wachen brechen den Push ab. Sie stehen im Hook und nicht in der Suite, weil sie
-Dateien im Wurzelverzeichnis lesen und der Testcontainer nur `backend/` sieht: ein Test dafür
-würde still übersprungen, und ein übersprungener Test gilt hier als Fehlschlag.
+Vor der Suite brechen Wachen den Push ab. Sie stehen im Hook und nicht in der Suite, weil
+sie Dateien im Wurzelverzeichnis lesen und der Testcontainer nur `backend/` sieht: ein Test
+dafür würde still übersprungen, und ein übersprungener Test gilt hier als Fehlschlag. Der
+Reihe nach laufen die Datenwache, die Gedankenstrich-Wache und die fünf Wachen aus
+`.githooks/wachen.sh`; auf die Suite folgt der Skip-Guard.
 
-- **Kein veröffentlichter Port ohne `127.0.0.1:`** in einer Compose-Datei. `"3000:3000"`
-  hängt an allen Schnittstellen, und die Anwendung bringt keine Anmeldung mit: wer im selben
-  Netz sitzt, sähe damit alle Rechnungen und lüde den GoBD-Export samt Kundendaten herunter.
-- **`docker-compose.yml` bleibt die Auslieferung.** Kein `target: test`, kein Mount aus
-  `./backend/`. Beides gehört in `docker-compose.dev.yml`, das die Wache bewusst nicht prüft.
+- **Datenwache** (`.githooks/datenwache.sh`): prüft je gepuschtem Commit nur die neu
+  hinzukommenden Zeilen und zusätzlich die Commit-Nachricht auf Muster echter Daten, nämlich
+  private Schlüssel, die Formate von IBAN, USt-IdNr. und Steuernummer, neu hinzukommende
+  `.env`-Dateien und Zusatzmuster aus einer privaten Musterdatei außerhalb des Repos. Bei
+  einem Fund bricht der Push ab; einen bewussten Fehlalarm überstimmt man einmalig mit
+  `DATENWACHE_UEBERSTIMMT=1`. Issues und Pull Requests auf GitHub prüft dieselbe Regel
+  (`.github/workflows/issue-wache.yml`): bei einem Fund erhalten sie ein Label und einen
+  Hinweiskommentar, der nur die Musterklasse nennt.
+- **Fünf Wachen aus `.githooks/wachen.sh`:**
+  - **Kein veröffentlichter Port ohne `127.0.0.1:`** in einer Compose-Datei. `"3000:3000"`
+    hängt an allen Schnittstellen, und die Anwendung bringt keine Anmeldung mit: wer im
+    selben Netz sitzt, sähe damit alle Rechnungen und lüde den GoBD-Export samt
+    Kundendaten herunter.
+  - **`docker-compose.yml` bleibt die Auslieferung.** Kein `target: test`, kein Mount aus
+    `./backend/`. Beides gehört in `docker-compose.dev.yml`, das die Wache bewusst nicht
+    prüft.
+  - **UID und GID stehen im Dockerfile fest** und müssen mit der `chown`-Zahl im README
+    übereinstimmen, sonst wird die Anweisung für `storage/` still falsch.
+  - **Die Gruppe der Belegordner** (`EXTRA_GROUP_GID=2000`, Name `belegordner`) muss im
+    Dockerfile stehen, damit alle Stacks dieselbe Gruppenkennung tragen.
+  - **Keine Postgres-Passwörter mit stiller Vorgabe** in `docker-compose.yml`: fehlende
+    Werte müssen den Start abbrechen, nicht unbemerkt einen Zufallswert annehmen.
 - **Keine Gedankenstriche in Markdown** (U+2013, U+2014). Komma, Doppelpunkt, Strichpunkt
   oder zwei Sätze sagen dasselbe und überstehen jede Schrift und jedes Terminal. Zwischen
   zwei Ziffern, also in einer Jahres- oder Paragraphenspanne, bleibt der Strich erlaubt.
+- **Skip-Guard:** übersprungene Tests brechen den Push ab, genau wie in der CI; ein
+  fehlendes Werkzeug im Container darf den E-Rechnungs-Pfad nicht unbemerkt verbergen.
 
-Die ersten beiden stehen in `.githooks/wachen.sh` und laufen auch in der CI, denn ein Hook
-greift nur bei dem, der ihn aktiviert hat. Die dritte ist eine Schreibregel dieses Projekts
-und bleibt lokal: sie ist kein Grund, einen fremden Pull Request abzuweisen. Wer sie beim
-Schreiben vergisst, hört es vor dem Push und nicht als rote CI.
+Die fünf Wachen aus `wachen.sh` laufen auch in der CI (`.github/workflows/tdd.yml`), denn
+ein Hook greift nur bei dem, der ihn aktiviert hat. Die Datenwache selbst läuft nur im Hook,
+in der CI werden ihre Tests gefahren. Die Gedankenstrich-Wache bleibt bewusst lokal im
+Hook: eine Schreibregel dieses Projekts ist kein Grund, einen fremden Pull Request
+abzuweisen. Wer sie beim Schreiben vergisst, hört es vor dem Push und nicht als rote CI.
 
 ## Migrationen und neue Pakete
 

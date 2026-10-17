@@ -1,5 +1,7 @@
 # Auftrag 2: Vorabrechnung und Belegart
 
+**Status:** umgesetzt.
+
 Stand: 25.09.2026. Eigenstaendiger Spezifikationsauftrag fuer spaetere test-first Umsetzung. Kein Zahlungsbuch, keine Schlussrechnungsautomatik, keine automatische Halbierung von Positionen.
 
 ## Kernaussage und Entscheidung des Menschen
@@ -62,13 +64,15 @@ Die vorhandene `TYPE_CODE_MAP` kann dazu in eine fachliche Quelle umziehen; ihre
 | `self_billing`, `self-billing` | Nein | 389 im bestehenden fachlichen Integrationsweg |
 | unbekannter Wert | Nein | `INVOICE_TYPE_INVALID` im Validator und `UnknownInvoiceTypeError` im Generator bleiben fail-closed |
 
+Abgelöst durch docs/specs/gutschriftverfahren-389.md (manuelle Anlage der 389 geplant, im Code noch nicht umgesetzt).
+
 Reihenfolge beim Schreiben: bestehenden Entwurf und dessen Herkunft pruefen, manuelle Auswahl pruefen, Feldregeln pruefen, erst dann speichern beziehungsweise Nummer vergeben. Systembelege behalten ihre Art bei fehlendem Feld; mitgesendete manuelle Typaenderung wird abgelehnt, nicht ignoriert. Ein normaler draft darf zwischen Standard und Vorausrechnung wechseln. Ein finalisierter Beleg darf das nicht. Das Formular bietet fuer Systembelege kein editierbares Typfeld. Ein manipulierter POST scheitert serverseitig mit HTTP 400 und `INVOICE_TYPE_NOT_SELECTABLE`; der allgemeine Validator allein genuegt nicht, weil 381/389 allgemein gueltige Codes sind.
 
 Vorgesehene Begrenzung des ersten 386-Schnitts: **noch nicht bezahlte Vorausforderung mit bekanntem geplantem Leistungszeitraum**. Formularhilfe nennt diese Begrenzung. Beginn und Ende werden ueber die bestehenden Periodenfelder erfasst, fuer einen einzelnen Tag gleich gesetzt. PDF bezeichnet sie bei 386 als voraussichtlichen Leistungszeitraum, XML schreibt BG-14. `delivery_date` bleibt leer; ein gesetztes tatsaechliches Lieferdatum bei 386 wird in diesem Schnitt als `PREPAYMENT_ACTUAL_DELIVERY` abgelehnt. Der Validator verlangt fuer 386 den vollstaendigen geordneten Zeitraum (`PREPAYMENT_PERIOD_REQUIRED` bei beidseitigem Fehlen); bestehende Fehler fuer Teilzeitraum und falsche Reihenfolge bleiben.
 
 Diese Produktbegrenzung ist strenger als die allgemeinen Regeln und wird **nicht als EN16931-Pflicht verkauft**. Ein allgemeiner Modus fuer noch nicht vereinbarte Leistungszeitpunkte braucht eine ausdruecklich gespeicherte Erklaerung und eigene Ausgabe. Bereits vereinnahmte Zahlungen brauchen sachgerechte Datums- und Zahlungsabbildung. Beides ist ausserhalb dieses kleinen Schnitts. Nicht einfach alle Datumspruefungen fuer 386 abschalten oder das Rechnungsdatum als Lieferung einsetzen.
 
-Beide Raten enthalten jeweils nur ihren eigenen Betrag. Im vorgeschlagenen Beispiel werden auf beiden Belegen die gleichen Teilnehmermengen und jeweils halbe vereinbarte Einzelpreise eingegeben. Der Belegtyp veraendert weder Vorzeichen noch Preise, Mengen, Steuerkategorie oder Zahlungsziel. Die Anwendung schreibt fuer diese unbezahlte Forderung kein `TotalPrepaidAmount`; `DuePayableAmount` entspricht dem eigenen Bruttobetrag. Insbesondere darf die zweite 380 nicht nochmals die erste Rate abziehen. Ein kuenftiges Schlussrechnungsfeature darf BT-113 nicht mit der gesamten steuerlichen Anzahlungsaufstellung verwechseln.
+Beide Raten enthalten jeweils nur ihren eigenen Betrag. Im vorgeschlagenen Beispiel werden auf beiden Belegen die gleichen Teilnehmermengen und jeweils halbe vereinbarte Einzelpreise eingegeben. Der Belegtyp veraendert weder Vorzeichen noch Preise, Mengen, Steuerkategorie oder Zahlungsziel. Die Anwendung schreibt fuer diese unbezahlte Forderung kein `TotalPrepaidAmount`; `DuePayableAmount` entspricht dem eigenen Bruttobetrag. Insbesondere darf die zweite 380 nicht nochmals die erste Rate abziehen. Ein Abzug auf Belegebene ist bei 386 verboten; der Validator weist ihn mit dem Fehlercode `ABZUG_BELEGART` ab (backend/app/services/validator.py). Ein kuenftiges Schlussrechnungsfeature darf BT-113 nicht mit der gesamten steuerlichen Anzahlungsaufstellung verwechseln.
 
 ## Abnahmekriterien fuer Option B
 

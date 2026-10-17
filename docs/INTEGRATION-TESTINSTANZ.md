@@ -9,6 +9,10 @@ Parallele Installation für Kettenproben, **nicht** die Live-Instanz auf Port 30
 - Kunden- und DATEV-Adressen erscheinen nur im Mailtext als „geplant an …"
 - Eigene Daten: `storage-integration/`, Postgres-Volume `postgres_data_integration`
 - Eigene Ports: **3001** (App), **5433** (DB)
+- Der Backup-Dienst läuft nicht: `docker-compose.integration.yml` versieht `db-backup`
+  mit dem Profil `integration-off`, also startet der Teststack ohne ihn. Die Probe
+  schreibt nichts Aufbewahrungswürdiges, und ein Backup der Testinstanz wäre eines von
+  Wegwerfdaten.
 
 Ohne `TESTINSTANZ_MAIL_TO` startet die App nicht (`fail-closed`).
 
@@ -23,10 +27,22 @@ mkdir -p ~/uebergaben-test/tantiemen-app-nach-abgehakt
 mkdir -p ~/uebergaben-test/abgehakt-nach-tantiemen-app
 # UEBERGABEN_ORDNER in integration.env auf diesen Pfad setzen
 
+# Öffentliche Schlüssel der Übergabe-Absender bereitstellen, je Absender ein
+# Unterordner mit je Schlüssel zwei Dateien:
+#   backend/schluessel/<absender>/<schluessel_id>.pub    (PEM)
+#   backend/schluessel/<absender>/<schluessel_id>.json   (gueltig_von, gueltig_bis)
+
 docker compose -p abgehakt-test \
   -f docker-compose.yml -f docker-compose.integration.yml \
   --env-file integration.env up -d --build
 ```
+
+`docker-compose.integration.yml` bindet `./backend/schluessel` nur lesend in den
+Container ein. Ein Beleg ist nur mit dem öffentlichen Schlüssel seines Absenders
+annehmbar: fehlt er, scheitert der Befund am Code `SCHLUESSEL_UNBEKANNT`
+(`services/uebergabe_schluessel.py`), und **ALS RECHNUNG ANLEGEN** bleibt gesperrt.
+Ein Probeschlüssel ist am Namen erkennbar (Kennzeichen `-probe-`) und gilt nur in
+einer Testinstanz, nie im Echtlauf.
 
 Öffnen: http://127.0.0.1:3001
 
