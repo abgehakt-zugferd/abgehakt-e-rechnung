@@ -252,6 +252,24 @@ class TestV5Typaufloesung:
         assert TYPE_CODE_MAP["prepayment"] == "386"
 
 
+# ── Originalbezug: 389 kennt kein Original (Spec #156, Umfang 1) ─────────────
+
+class TestBrauchtOriginal:
+    def test_gutschriftverfahren_braucht_kein_original(self):
+        """Ein 389 weist in dieser Anwendung nie auf ein Original: das Verfahren
+        hat keins, und die Anwendung kennt keines (BG-3 ist bei 389 weder im
+        Standard gefordert noch verboten; die Spec entscheidet: nie)."""
+        assert belegart("self_billing").braucht_original is False
+
+    @pytest.mark.parametrize("wert", [None, "standard", "prepayment"])
+    def test_eigenstaendige_arten_brauchen_kein_original(self, wert):
+        assert belegart(wert).braucht_original is False
+
+    @pytest.mark.parametrize("wert", ["credit_note", "correction"])
+    def test_storno_und_korrektur_brauchen_ein_original(self, wert):
+        assert belegart(wert).braucht_original is True
+
+
 # ── V1: Formular bietet exakt Standard und Anzahlung ────────────────────────
 
 class TestV1FormularAuswahl:

@@ -215,3 +215,39 @@ def test_ausstellung_folgt_berlin_kalendertag_des_erzeugt_am(pg_session):
     assert entwurf.issue_date == date(2027, 1, 1)
     assert entwurf.due_date == date(2027, 1, 15)
     assert entwurf.invoice_number.startswith("RE-2027-")
+
+
+# ── Der Integrationsweg bis zum finalisierten Beleg (Spec #156): „kein Test
+# führt einen importierten Entwurf durch die Finalisierung. Dieser Weg fehlt
+# heute ganz und ist der Grund, warum die Befunde nicht aufgefallen sind."
+
+def test_importierter_entwurf_validiert_ohne_fehler(pg_session):
+    """Der Entwurf aus dem Auftrag trägt keinen Originalbezug und muss für
+    sich allein durch den Validator kommen (389 kennt kein Original)."""
+    from app.models.company import Company
+    from app.services.validator import validate_invoice
+
+    _kunde(pg_session, PARTNER_A)
+    entwurf = entwuerfe_anlegen(pg_session, _urteil(), dateiname="auftrag.json")[0]
+    pg_session.commit()
+    entwurf.customer  # noqa: B018 – Beziehung laden, nicht nur customer_id
+
+    errors, _ = validate_invoice(
+        entwurf, pg_session.query(Company).filter(Company.id == 1).one())
+    assert errors == [], [f"{e.code}: {e.message}" for e in errors]
+
+
+def test_importierter_entwurf_finalisiert(pg_session):
+    """Der Weg, der heute ganz fehlte: angenommen → Entwurf → finalisiert."""
+    _kunde(pg_session, PARTNER_A)
+    entwurf = entwuerfe_anlegen(pg_session, _urteil(), dateiname="auftrag.json")[0]
+    pg_session.commit()
+
+    from tests.helpers.finalize_pipeline import cleanup, finalize_with_fake_pipeline
+    try:
+        antwort = finalize_with_fake_pipeline(pg_session, entwurf.id)
+        assert antwort.status_code == 303, antwort.text
+        pg_session.expire_all()
+        assert pg_session.get(Invoice, entwurf.id).status == "issued"
+    finally:
+        cleanup(entwurf.invoice_number)
