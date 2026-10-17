@@ -51,8 +51,8 @@ den Tag ihrer letzten Änderung (Migration 018, #130). Die Umsatzkennzahlen der
   Rechnung (#153).
 - **Rechnungsentwürfe aus signierten Übergabebelegen** eines vorgelagerten
   Systems, hinter einem Schalter und nur lesend auf einen Ordner
-  (`UEBERGABEN_ORDNER`, `SCHLUESSEL_PFAD`) (#69). Die so entstehenden Entwürfe sind derzeit
-  Gutschriften im Gutschriftverfahren und unterliegen dessen Grenzen (siehe oben).
+  (`UEBERGABEN_ORDNER`, `SCHLUESSEL_PFAD`) (#69). Der Absender bestimmt die Belegart
+  (381 oder 389); für 389 gelten die Grenzen oben.
 
 ### Inhalt der E-Rechnung
 
