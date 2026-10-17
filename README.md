@@ -8,6 +8,10 @@ Versand übertragen.
 Eine erzeugte Rechnung ist ein PDF/A-3 mit eingebetteter, maschinenlesbarer XML: für Menschen
 lesbar und für die Buchhaltungssoftware des Empfängers auswertbar, in einer Datei.
 
+Wer es kürzer will: [docs/TLDR.md](docs/TLDR.md) erklärt Abgehakt in fünf Minuten, was es ist
+und wo im Code was steht. [CHANGELOG.md](CHANGELOG.md) sagt, was sich zwischen den Fassungen
+geändert hat; lesen Sie ihn, bevor Sie auf eine neue Fassung wechseln.
+
 ## Was das Programm leistet
 
 - **E-Rechnungen nach EN 16931** als PDF/A-3 mit eingebetteter ZUGFeRD/Factur-X-XML. Vor dem
@@ -30,6 +34,12 @@ lesbar und für die Buchhaltungssoftware des Empfängers auswertbar, in einer Da
   Eigene Texte wie Positionsbeschreibungen und Zahlungsbedingungen werden nicht übersetzt.
 - **Kundenstamm** mit Schnittstellen-ID für Kettenimport, CC-Adressen pro Kunde und optionaler
   Bankverbindung des Beteiligten für Auszahlungen (siehe unten).
+- **Belege aus einem vorgelagerten System:** optional nimmt Abgehakt signierte
+  Abrechnungsaufträge aus einem Ordner an, den das Programm nur liest, in den es nie
+  hineinschreibt. Es prüft Signatur und Inhalt und legt auf Knopfdruck Rechnungsentwürfe an. Eingeschaltet
+  wird die Integration in den Einstellungen, eingerichtet über die Umgebungsvariablen
+  `UEBERGABEN_ORDNER` und `SCHLUESSEL_PFAD`. Ablauf und Befunde:
+  [Belege aus Übergaben](docs/ANWENDUNG.md#belege-aus-uebergaben).
 - **USt-IdNr. bei VIES prüfen:** Existenz und Gültigkeit einer USt-IdNr. gegen die offizielle
   EU-Schnittstelle, nur auf Knopfdruck nach Einwilligung im Dialog auf der Seite; kein Abruf beim
   Speichern und nichts im Hintergrund. Ablauf und Grenzen:
@@ -49,7 +59,9 @@ lesbar und für die Buchhaltungssoftware des Empfängers auswertbar, in einer Da
   Rücklagenplanung). Die Steuersätze sind unter Einstellungen konfigurierbar.
 - **Mailtext je Belegsprache:** Betreff und Rumpf der Rechnungsmail sind für Deutsch und Englisch
   getrennt hinterlegbar, mit fünf Platzhaltern für Rechnungsnummer, Kunde, Betrag, Fälligkeit und
-  Firma. Ohne eigenen Text gilt eine eingebaute Schablone. Welche Mail eine Rechnung bekommt,
+  Firma. Ohne eigenen Text gilt eine eingebaute Schablone. Jede Mail erhält außerdem automatisch
+  einen Fuß „Verantwortlich:" mit Firma und Anschrift, auf Englisch „Responsible:"; dieser Fuß
+  lässt sich nicht abwählen. Welche Mail eine Rechnung bekommt,
   entscheidet ihre Belegsprache, nicht eine globale Einstellung.
 - **Offene und überfällige Forderungen:** die Übersicht nennt Anzahl und Bruttosumme der gestellten
   Standardrechnungen, davon die überfälligen samt Alter der ältesten, und die Zahl der noch nicht
@@ -194,15 +206,11 @@ Dann `.env` in einem Texteditor öffnen und die **drei Datenbankpasswörter** er
 (`DB_BOOTSTRAP_PASSWORD`, `DB_PASSWORD`, `DB_APP_PASSWORD`). Frei erfundene, lange
 Zeichenketten genügen; sie werden nirgends eingetippt.
 
-**Das dritte Passwort steht zweimal in der Datei** und muss an beiden Stellen gleich lauten:
-einmal hinter `DB_APP_PASSWORD=`, und ein zweites Mal innerhalb der langen Adresse in der
-Zeile darunter, zwischen dem Doppelpunkt und dem `@`:
-
-```
-DB_APP_PASSWORD=xB7kq2LmPw9dRt4v
-APP_DATABASE_URL=postgresql://abgehakt_app:xB7kq2LmPw9dRt4v@db:5432/abgehakt
-                                          ^^^^^^^^^^^^^^^^ dasselbe Passwort
-```
+Für das dritte Passwort ist allein **`DB_APP_PASSWORD` maßgeblich**: der
+`environment`-Block in `docker-compose.yml` baut die Datenbankadresse der Anwendung bei
+jedem Start selbst aus `DB_APP_USER` und `DB_APP_PASSWORD` zusammen und überlagert damit
+jeden Wert, der etwa zusätzlich unter `APP_DATABASE_URL` in der `.env` steht. Ein dort
+anderlautendes Passwort in einer Adresse hat im Compose-Betrieb keine Wirkung.
 
 Alles Weitere in dieser Datei ist optional und lässt sich später in der Oberfläche einstellen.
 Die Datenbankrollen legt das Programm beim ersten Start selbst an.
@@ -479,8 +487,10 @@ die niemand prüft.
 
 ## Grenzen, ehrlich benannt
 
-- **`storage/` wird nicht atomar mit der Datenbank gesichert.** Datenbank-Dump und Dateiarchiv
-  entstehen zu leicht unterschiedlichen Zeitpunkten. Wer produktiv geht, sollte eine
+- **`storage/` sichert der Betreiber selbst.** Automatisch gesichert wird nur die Datenbank,
+  durch den Dienst `db-backup` im Compose-Stack. Das Dateiarchiv unter `storage/` sichert
+  niemand von selbst; Datenbank-Dump und Dateiarchiv stammen deshalb unvermeidlich von
+  verschiedenen Zeitpunkten. Wer produktiv geht, sollte eine
   Rücksicherung einmal vollständig durchgespielt haben, bevor er sie braucht.
 - **Kleinunternehmer: Rechnung ja, Umsatzüberwachung nein.** Der Steuertyp
   „Kleinunternehmer (§ 19 UStG)" erzeugt eine vollständige Rechnung ohne Umsatzsteuer,
@@ -489,6 +499,11 @@ die niemand prüft.
   wann Sie die Grenze reißen und in die Regelbesteuerung wechseln müssen. Diesen Wechsel
   müssen Sie selbst im Blick behalten. Der Steuertyp wird pro Rechnung gewählt, es gibt
   keine dauerhafte Einstellung dafür.
+- **Die Kennzahlen der Übersicht zählen nur Standardrechnungen.** Schuldige Umsatzsteuer,
+  Bezahlt und Umsatz erfassen Standardrechnungen samt der Gutschriften, die sie mindern;
+  Anzahlungsrechnungen (TypeCode 386) fehlen in diesen Zahlen und müssen für die
+  Umsatzsteuer-Voranmeldung selbst mitgerechnet werden. Die Zahlen sind eine Schätzung
+  für die Übersicht und ersetzen keine Umsatzsteuer-Voranmeldung.
 - **Deutsche Steuersätze im Formular.** Wählbar sind 0, 7 und 19 Prozent; die Regelprüfung
   vergleicht den auf ganze Prozent gerundeten Satz. Für Kunden im EU-Ausland
   deckt das die üblichen Fälle ab, weil dort in der Regel gar keine deutsche Umsatzsteuer
