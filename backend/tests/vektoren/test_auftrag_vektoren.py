@@ -192,9 +192,17 @@ def test_auftragsvektor_trifft_seinen_befundcode(vektoren, schluesselordner, nam
 
 def test_der_gueltige_auftrag_braucht_beide_partner_im_stamm(vektoren, schluesselordner):
     """Ohne Kunden im Stamm faellt derselbe Beleg - die Voraussetzung, die
-    erwartung.json fuer `01_gueltig` nennt, ist wirklich eine."""
+    erwartung.json fuer `01_gueltig` nennt, ist wirklich eine. Beide Gutschriften
+    nennen je einen Beteiligten, und § 10 verlangt JE Grund einen Befund: Der
+    Leser nennt beide Stellen, nicht nur die zuerst gelesene."""
     roh = (vektoren / "auftraege" / "01_gueltig.json").read_bytes()
 
     urteil = beleg_beurteilen(roh, Lage(partner=()), schluessel_wurzel=schluesselordner)
 
-    assert [f.code for f in urteil.feststellungen] == ["PARTNER_ID_UNBEKANNT"]
+    assert [f.code for f in urteil.feststellungen] == [
+        "PARTNER_ID_UNBEKANNT", "PARTNER_ID_UNBEKANNT",
+    ]
+    assert {f.pfad for f in urteil.feststellungen} == {
+        "$.nutzlast.gutschriften[0].beteiligter.partner_id",
+        "$.nutzlast.gutschriften[1].beteiligter.partner_id",
+    }
