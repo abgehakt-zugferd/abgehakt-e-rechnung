@@ -658,6 +658,54 @@ def test_ein_erzeugt_am_in_anderer_schreibweise_ist_ein_befund(schluessel, angab
     assert urteil.feststellungen[0].pfad == "$.erzeugt_am"
 
 
+# ── § 3: Die Datei IST die kanonische Form (#165). Die Signatur gilt ueber
+# die gelesenen Bytes, nicht ueber ein neu kanonisiertes Objekt - wer die
+# Pruefung ueber das Objekt macht, nimmt jede Schreibweise desselben Belegs an,
+# und beleg_sha256 entsteht trotzdem ueber die abweichende Datei: Die Kette
+# reisst beim naechsten Beleg, der diesen Hash als vorgaenger nennt.
+
+def test_eine_eingerueckte_ansicht_desselben_belegs_wird_abgelehnt(schluessel):
+    """§ 3, Gegenstueck zur Annahme oben: derselbe Beleg, mit Einrueckung neu
+    geschrieben, ist eine ANDERE Datei. Vor #165 pruefte der Leser die
+    Signatur ueber das neu kanonisierte Objekt und nahm sie an."""
+    roh = _beleg(schluessel, _auftrag())
+    eingerueckt = json.dumps(json.loads(roh), indent=2).encode("utf-8")
+
+    urteil = _urteil(schluessel, eingerueckt)
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["SIGNATUR_UNGUELTIG"]
+    assert urteil.beleg_sha256 == hashlib.sha256(eingerueckt).hexdigest()
+
+
+def test_eine_datei_mit_doppeltem_namen_wird_abgelehnt(schluessel):
+    """json.loads laesst bei einem doppelten Namen still den letzten gewinnen.
+    Die Datei ist damit nie die kanonische Form; der Befund entsteht schon beim
+    Parsen, damit "der letzte gewinnt" gar nicht erst passiert."""
+    roh = _beleg(schluessel, _auftrag())
+    text = roh.decode("utf-8")
+    doppelt = text.replace(
+        '"empfaenger":"abgehakt"',
+        '"empfaenger":"abgehakt","empfaenger":"abgehakt"',
+        1,
+    ).encode("utf-8")
+
+    urteil = _urteil(schluessel, doppelt)
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["SIGNATUR_UNGUELTIG"]
+
+
+def test_der_unveraenderte_gueltige_beleg_wird_weiter_angenommen(schluessel):
+    """Die Gegenprobe zu den beiden oben: der Beleg, wie ihn der Absender
+    kanonisch geschrieben hat, bleibt angenommen - die Datei IST die Form."""
+    roh = _beleg(schluessel, _auftrag())
+
+    urteil = _urteil(schluessel, roh)
+
+    assert urteil.angenommen, _codes(urteil)
+
+
 def test_ein_typcode_als_zahl_ist_ein_befund(schluessel):
     """§ 4: typcode ist eine JSON-Zeichenkette ("389"), keine Zahl. str()
     machte aus der Zahl 389 still einen gueltigen Code, und der Absender

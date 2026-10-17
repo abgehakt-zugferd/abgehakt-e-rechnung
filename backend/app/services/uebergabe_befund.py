@@ -199,6 +199,29 @@ def _datum(wert) -> Optional[date]:
         return None
 
 
+class _DoppelterName(ValueError):
+    """Ein JSON-Objekt mit zwei gleichen Namen.
+
+    json.loads laesst dabei still den letzten gewinnen; der Befund soll schon
+    beim Parsen entstehen, damit das Umschreiben des Objekts, das daraus
+    folgt, gar nicht erst passiert.
+    """
+
+    def __init__(self, name):
+        super().__init__(name)
+        self.name = name
+
+
+def _objekt_aus_paaren(paare):
+    """object_pairs_hook: sammelt Namen, statt den letzten gewinnen zu lassen."""
+    objekt = {}
+    for name, wert in paare:
+        if name in objekt:
+            raise _DoppelterName(name)
+        objekt[name] = wert
+    return objekt
+
+
 def _pruefe_objekt(objekt, spec, unterobjekte, pfad_verzeichnis, pfad, funde) -> None:
     """Ein Objekt gegen das Feldverzeichnis. Kein Zaehlen, kein Raten."""
     if not isinstance(objekt, dict):
@@ -404,7 +427,15 @@ def beleg_beurteilen(
         return Belegurteil(beleg_sha256=sha, feststellungen=tuple(feststellungen), **anzeige)
 
     try:
-        beleg = json.loads(roh.decode("utf-8"))
+        beleg = json.loads(
+            roh.decode("utf-8"), object_pairs_hook=_objekt_aus_paaren,
+        )
+    except _DoppelterName as fehler:
+        # Ein doppelter Name ist eine Datei, die nicht die kanonische Form
+        # sein kann (RFC 8785 schreibt jeden Namen einmal). Der Befundcode
+        # SIGNATUR_UNGUELTIG ("nicht die signierten Bytes") gilt hier und bei
+        # der Kanonprobe unten, bis das Format etwas anderes festlegt.
+        return abgelehnt(Feststellung("SIGNATUR_UNGUELTIG", "$", erhalten=fehler.name))
     except (UnicodeDecodeError, json.JSONDecodeError):
         # Die Kennung steht in Bytes, die niemand lesen kann; der Hash ueber die
         # Datei ist trotzdem zu bilden. Der Empfaenger kann immer sagen, WELCHE
@@ -486,6 +517,23 @@ def beleg_beurteilen(
             "WERT_UNBRAUCHBAR", pfad,
             erwartet="Zeichenkette oder Ganzzahl", erhalten=str(wert),
         ), **rest)
+    # § 3: Die Datei IST die kanonische Form (RFC 8785). Die Signatur gilt
+    # ueber die gelesenen Bytes, und deshalb gilt vor der Pruefung:
+    # Bytes == kanonisch(json.loads(Bytes)). Ohne diese Probe nahm der Leser
+    # eine eingerueckte Ansicht desselben Belegs an (er pruefte die Signatur
+    # ueber das neu kanonisierte Objekt), und beleg_sha256 entstand ueber die
+    # abweichende Datei - die Kette reisst beim naechsten Beleg, der diesen
+    # Hash als vorgaenger nennt. Befundcode SIGNATUR_UNGUELTIG ("nicht die
+    # signierten Bytes"), bis das Format etwas anderes festlegt.
+    try:
+        ist_kanonisch = kanonisch(beleg) == roh
+    except UebergabeFehler:
+        # Hier kann nur noch die Signatur selbst unkanonisierbar sein; der
+        # Umschlag und die Nutzlast sind oben schon geprueft.
+        ist_kanonisch = False
+    if not ist_kanonisch:
+        return abgelehnt(Feststellung("SIGNATUR_UNGUELTIG", "$"), **rest)
+
     try:
         import base64
 
