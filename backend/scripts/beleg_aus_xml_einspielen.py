@@ -15,7 +15,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from types import SimpleNamespace
-from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as DET
+from xml.etree import ElementTree as ET  # nur fuer Typannotationen, Parsen laeuft ueber DET
 
 from sqlalchemy.orm import Session
 
@@ -157,7 +158,7 @@ def _parse_settlement(root: ET.Element, xml_path: Path) -> dict:
 
 
 def _parse(xml_path: Path) -> dict:
-    root = ET.parse(xml_path).getroot()
+    root = DET.parse(xml_path).getroot()
     doc = root.find(f".//{_q(RSM, 'ExchangedDocument')}")
     if doc is None:
         raise ValueError(f"{xml_path}: ExchangedDocument fehlt")
