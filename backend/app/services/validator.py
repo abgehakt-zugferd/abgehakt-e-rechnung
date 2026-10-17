@@ -15,6 +15,7 @@ from app.services.leistungszeit import (
 from app.services.ust_id_pruefung import vies_name_vergleichbar
 from app.models.invoice import Invoice
 from app.models.company import Company
+from app.services.belegrollen import besetzung
 from app.services.einheiten import UnknownUnitError, resolve_einheit
 from app.services.pflichtangaben import pflichtangaben
 from app.services.belegart import (
@@ -138,32 +139,45 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
         errors.append(Issue("SELLER_NAME_MISSING", "error", "Firmenname fehlt in den Einstellungen.", "company.name"))
     if not company.address_line1 or not company.zip_code or not company.city:
         errors.append(Issue("SELLER_ADDRESS_MISSING", "error", "Vollständige Adresse des Leistungserbringers fehlt.", "company.address"))
-    if not company.tax_number and not company.vat_id:
-        errors.append(Issue("SELLER_TAX_ID_MISSING", "error", "Steuernummer oder USt-IdNr. des Leistungserbringers fehlt (§ 14 Abs. 4 Nr. 2 UStG).", "company.tax"))
-    elif tax_category == "O" and not company.tax_number:
-        errors.append(Issue(
-            "SELLER_TAX_NUMBER_REQUIRED_FOR_O", "error",
-            "Bei Kategorie O (nicht im Inland steuerbar, § 3a Abs. 2 UStG) muss die "
-            "Steuernummer in den Einstellungen hinterlegt sein (EN16931 BR-CO-26). "
-            "Die USt-IdNr. allein genügt hier nicht.",
-            "company.tax_number",
-        ))
-    elif tax_category == "AE" and not company.vat_id:
-        errors.append(Issue(
-            "SELLER_VAT_ID_REQUIRED", "error",
-            "Bei Reverse Charge (Kategorie AE) muss die USt-IdNr. des Leistungserbringers "
-            "in den Einstellungen hinterlegt sein (§ 14a Abs. 1 Satz 3 UStG). "
-            "Die Steuernummer allein genügt hier nicht.",
-            "company.vat_id",
-        ))
-    elif tax_category == "K" and not company.vat_id:
-        errors.append(Issue(
-            "SELLER_VAT_ID_REQUIRED", "error",
-            "Bei innergemeinschaftlicher Lieferung (Kategorie K) muss die USt-IdNr. des "
-            "Leistungserbringers in den Einstellungen hinterlegt sein "
-            "(§ 14a Abs. 3 Satz 2 UStG). Die Steuernummer allein genügt hier nicht.",
-            "company.vat_id",
-        ))
+    # Die Steuerkennung gehört dem Leistenden, auch wenn der Erwerber den
+    # Beleg ausstellt. Unbekannte Typen bekommen unten ihren eigenen Befund.
+    if art is not None:
+        rollen = besetzung(invoice, company, invoice.customer)
+        seller = rollen.verkaeufer
+        seller_field = "company" if rollen.verkaeufer_ist_firma else "customer"
+        if not seller.steuernummer and not seller.ust_id:
+            code = ("SELLER_TAX_ID_MISSING" if rollen.verkaeufer_ist_firma
+                    else "SELF_BILLING_SELLER_TAX_ID_MISSING")
+            errors.append(Issue(
+                code, "error",
+                "Steuernummer oder USt-IdNr. des Leistungserbringers fehlt "
+                "(§ 14 Abs. 4 Nr. 2 UStG).",
+                f"{seller_field}.tax",
+            ))
+        elif tax_category == "O" and not seller.steuernummer:
+            errors.append(Issue(
+                "SELLER_TAX_NUMBER_REQUIRED_FOR_O", "error",
+                "Bei Kategorie O (nicht im Inland steuerbar, § 3a Abs. 2 UStG) muss die "
+                "Steuernummer beim Leistungserbringer hinterlegt sein (EN16931 BR-CO-26). "
+                "Die USt-IdNr. allein genügt hier nicht.",
+                f"{seller_field}.tax_number",
+            ))
+        elif tax_category == "AE" and not seller.ust_id:
+            errors.append(Issue(
+                "SELLER_VAT_ID_REQUIRED", "error",
+                "Bei Reverse Charge (Kategorie AE) muss die USt-IdNr. "
+                "beim Leistungserbringer hinterlegt sein (§ 14a Abs. 1 Satz 3 UStG). "
+                "Die Steuernummer allein genügt hier nicht.",
+                f"{seller_field}.vat_id",
+            ))
+        elif tax_category == "K" and not seller.ust_id:
+            errors.append(Issue(
+                "SELLER_VAT_ID_REQUIRED", "error",
+                "Bei innergemeinschaftlicher Lieferung (Kategorie K) muss die USt-IdNr. "
+                "beim Leistungserbringer hinterlegt sein "
+                "(§ 14a Abs. 3 Satz 2 UStG). Die Steuernummer allein genügt hier nicht.",
+                f"{seller_field}.vat_id",
+            ))
     angaben = pflichtangaben(company)
     if angaben.fehlend:
         errors.append(Issue(

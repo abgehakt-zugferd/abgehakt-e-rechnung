@@ -57,11 +57,13 @@ def _date102(raw: str | None) -> date | None:
     return date(int(raw[:4]), int(raw[4:6]), int(raw[6:8]))
 
 
-def _find_buyer_vat(root: ET.Element) -> str | None:
-    buyer = root.find(f".//{_q(RAM, 'BuyerTradeParty')}")
-    if buyer is None:
+def _find_customer_vat(root: ET.Element, invoice_type: str | None) -> str | None:
+    # Beim Rückimport ist der externe Kunde bei 389 der Verkäufer.
+    party_name = "SellerTradeParty" if invoice_type == "self_billing" else "BuyerTradeParty"
+    party = root.find(f".//{_q(RAM, 'ApplicableHeaderTradeAgreement')}/{_q(RAM, party_name)}")
+    if party is None:
         return None
-    for reg in buyer.iter(_q(RAM, "SpecifiedTaxRegistration")):
+    for reg in party.iter(_q(RAM, "SpecifiedTaxRegistration")):
         id_el = reg.find(_q(RAM, "ID"))
         if id_el is not None and id_el.get("schemeID") == "VA":
             return _text(id_el).replace(" ", "").upper()
@@ -163,13 +165,14 @@ def _parse(xml_path: Path) -> dict:
             f"/{_q(RAM, 'OccurrenceDateTime')}/{_q(UDT, 'DateTimeString')}"
         )
     ))
+    invoice_type = _invoice_type_aus_doc(doc, xml_path)
     data = {
         "number": _text(doc.find(_q(RAM, "ID"))),
-        "invoice_type": _invoice_type_aus_doc(doc, xml_path),
+        "invoice_type": invoice_type,
         "issue_date": issue_date,
         "delivery_date": delivery_date,
         "notes": notes,
-        "buyer_vat": _find_buyer_vat(root),
+        "customer_vat": _find_customer_vat(root, invoice_type),
         "items": _parse_items(root),
         "xml_text": xml_path.read_text(encoding="utf-8"),
     }
@@ -230,10 +233,10 @@ def _ein_beleg(db: Session, num: str, xml_dir: Path, pdf_dir: Path, *, aus_altem
         print(f"FEHLER: {num} — {exc}")
         return
     customer = None
-    if data["buyer_vat"]:
-        customer = db.query(Customer).filter(Customer.vat_id == data["buyer_vat"]).first()
+    if data["customer_vat"]:
+        customer = db.query(Customer).filter(Customer.vat_id == data["customer_vat"]).first()
     if customer is None:
-        print(f"FEHLER: {num} — kein Kunde mit USt-IdNr. {data['buyer_vat']}")
+        print(f"FEHLER: {num} — kein Kunde mit USt-IdNr. {data['customer_vat']}")
         return
     inv = _baue_invoice(data, customer, num)
     # Positionen VOR der Pruefung anhaengen: sonst sieht pruefe_honorargutschrift

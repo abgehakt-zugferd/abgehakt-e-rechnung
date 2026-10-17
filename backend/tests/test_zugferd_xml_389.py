@@ -44,7 +44,7 @@ def _firma():
 def _kunde(**over):
     """Leistender/Verkäufer bei 389, Erwerber sonst. In jedem Feld verschieden
     von _firma()."""
-    return customer_stub(
+    daten = dict(
         name="Probe Kunde AG",
         address_line1="Kundenstraße 99",
         address_line2="Hinterhof",
@@ -55,8 +55,9 @@ def _kunde(**over):
         customer_number="K-389",
         tax_number="98/765/43210",
         vat_id="ATU98765432",
-        **over,
     )
+    daten.update(over)
+    return customer_stub(**daten)
 
 
 def _beleg(art, *, kunde=None, notes=None):

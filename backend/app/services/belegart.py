@@ -88,7 +88,7 @@ _KORREKTUR = Belegart(
 _SELF_BILLING = Belegart(
     intern="self_billing", bt3="389",
     manuell_waehlbar=False, form_wert=None, label=None,
-    braucht_original=True,
+    braucht_original=False,
 )
 
 _ALIASES: dict[str | None, Belegart] = {

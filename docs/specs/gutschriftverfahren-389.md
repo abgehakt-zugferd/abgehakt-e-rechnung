@@ -8,12 +8,12 @@ Umgesetzt:
 - Steuernummer am Kunden: `Customer.tax_number`, Formularfeld und Prüfung beim Finalisieren.
 - Vorsteuer in den Kennzahlen: `vorsteuer_honorargutschriften` in `dashboard_kennzahlen.py`, abgezogen in `geschaetzte_steuerabgaben`.
 - Befreiungshinweis nach § 34a UStDV: `EXEMPTION_SELF_BILLING_E` in `zugferd_xml.py`.
+- Rollentausch: `services/belegrollen.py` besetzt Verkäufer und Erwerber für XML und PDF.
+- Originalbezug: `self_billing` trägt `braucht_original=False`; ein Bezug wird abgewiesen.
+- Pflichtangabe „Gutschrift" als systemseitige BT-22-Note, unabhängig von Nutzernotizen.
 
 Offen:
 
-- Rollentausch: es gibt kein Modul `services/belegrollen.py`; `SellerTradeParty` wird aus der eigenen Firma gefüllt.
-- Originalbezug: `self_billing` trägt in `belegart.py` `braucht_original=True`; diese Spec verlangt, dass ein 389 nie einen Originalbezug trägt.
-- Pflichtangabe „Gutschrift" als BT-22-Note: `_notes_xml` in `zugferd_xml.py` schreibt nur die Nutzernotizen.
 - Eigener Titel für 381: `Belegdarstellung.titel` in `belegsprache.py` bildet `credit_note` und `self_billing` auf denselben Titel ab.
 - Storno-Sperre für 389: `pruefe_stornierbar` in `storno.py` und `create_storno` in `routers/invoices.py` sperren nur `credit_note`.
 - Manuelle Anlage: `self_billing` steht in `belegart.py` auf `manuell_waehlbar=False`.
@@ -203,6 +203,14 @@ Befunde) und im PDF-Erzeuger. Das Modul trägt also etwas, statt nur durchzureic
    Erwerberblock, Verkäuferkennung, Steuerregistrierung, Verkäuferkontakt, elektronische
    Adressen und die Adresszusatz-Aufbereitung. Im PDF ebenso, samt der Steuernummer im Fuß
    (`pdf_fuss.py`) und der Kundenkennung im Kopf (`pdf_generator.py`).
+   Die Erwerber-USt-IdNr. im PDF-Kopf bleibt BT-48 zugeordnet, bei 389 also der
+   eigenen Firma. Die Steuerkennung im Fuß gehört dagegen dem Verkäufer.
+   Fundstelle: [EN-16931-Zuordnung BT-48 bei OpenPeppol](https://docs.peppol.eu/poacc/billing/3.0/syntax/ubl-invoice/cac-AccountingCustomerParty/cac-Party/cac-PartyTaxScheme/cbc-CompanyID/).
+   Der XML-Rückimport sucht den externen Kunden bei TypeCode 389 deshalb im
+   Verkäuferblock, bei den übrigen Typen im Erwerberblock. Ersatzrechnungen
+   bleiben ausdrücklich auf 380 und 386 als ersetzbare Belegarten beschränkt;
+   die Originalbezugspflicht entscheidet darüber nicht. Die Korrektur einer
+   falschen 389 durch Storno und Neuausstellung folgt in einem eigenen Schritt.
 3. **Der Kunde bekommt eine Steuernummer.** Umgesetzt: Feld `Customer.tax_number`, Migration,
    Formularfeld, Speicherung, Prüfung beim Finalisieren einer 389. **Noch offen:** Ausgabe als
    `FC`-Registrierung in der XML (Rollenbesetzung). Nach § 9 des Übergabeformats darf sie

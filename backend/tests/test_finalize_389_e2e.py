@@ -103,9 +103,10 @@ def test_scheitert_eine_stufe_liegt_nichts_im_archiv(pg_session):
     )
     pg_session.add(kunde)
     pg_session.flush()
-    gutschrift = _urteil().nutzlast["gutschriften"][0]
+    urteil = _urteil()
+    gutschrift = urteil.nutzlast["gutschriften"][0]
     gutschrift["beteiligter"]["partner_id"] = str(kunde.id)
-    entwurf = entwuerfe_anlegen(pg_session, _urteil())[0]
+    entwurf = entwuerfe_anlegen(pg_session, urteil)[0]
     pg_session.commit()
     nummer = entwurf.invoice_number
     app.dependency_overrides[get_db] = lambda: pg_session
@@ -114,7 +115,15 @@ def test_scheitert_eine_stufe_liegt_nichts_im_archiv(pg_session):
         assert entwurf.status == "draft"
         r = client.post(f"/invoices/{entwurf.id}/finalisieren")
         assert r.status_code == 400
-        assert "SELF_BILLING_SELLER_TAX_ID_MISSING" in r.text
+        # Die HTTP-Fehlerseite zeigt den Befundtext, nicht den internen Code.
+        # Beide gehören zum selben Befund; Status und Archiv bleiben geprüft.
+        from app.models.company import Company
+        from app.services.validator import validate_invoice
+        errors, _ = validate_invoice(
+            entwurf, pg_session.query(Company).filter(Company.id == 1).one())
+        befund = next(e for e in errors
+                      if e.code == "SELF_BILLING_SELLER_TAX_ID_MISSING")
+        assert befund.message in r.text
         pg_session.expire_all()
         assert pg_session.get(Invoice, entwurf.id).status == "draft"
         assert _archiv_hat_nichts(nummer) == []

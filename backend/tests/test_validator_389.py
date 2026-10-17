@@ -90,7 +90,12 @@ def test_389_mit_original_wird_abgewiesen(pg_session):
     """Diese Anwendung kennt kein Original, auf das ein 389 zeigen könnte;
     ein gesetzter Bezug ist erfunden und sperrt das Finalisieren."""
     kunde = _kunde(pg_session)
-    inv = _entwurf(pg_session, kunde, original_invoice_id=uuid.uuid4())
+    # Ein existierender Beleg erfüllt den Fremdschlüssel; erst der Validator
+    # soll den fachlich unzulässigen Bezug der 389 abweisen.
+    original = _entwurf(pg_session, kunde, invoice_type=None)
+    original.status = "issued"
+    pg_session.commit()
+    inv = _entwurf(pg_session, kunde, original_invoice_id=original.id)
     try:
         antwort = finalize_with_fake_pipeline(pg_session, inv.id)
         assert antwort.status_code == 400

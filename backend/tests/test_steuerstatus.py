@@ -143,8 +143,8 @@ def test_389_ohne_iban_finalisiert_trotz_bank_warnung(pg_session):
         tax_number="12/345/67890",
         bank_iban=None,
     )
-    original = _original(pg_session, kunde)
-    inv = _honorargutschrift(pg_session, kunde, original=original)
+    # Die Anwendung erlaubt bei 389 bewusst keinen Originalbezug (Spec #156).
+    inv = _honorargutschrift(pg_session, kunde)
     company = pg_session.query(Company).filter(Company.id == 1).one()
     # Beziehung laden: Validator liest invoice.customer
     pg_session.refresh(inv)

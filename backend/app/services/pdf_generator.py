@@ -29,6 +29,7 @@ from app.services.pdf_spalten import spaltenbreiten
 from app.services.iban import IbanProfil
 from app.services.zugferd_xml import EXEMPTION_REASONS
 from app.services.belegart import belegart
+from app.services.belegrollen import besetzung
 from app.services.belegsprache import Belegdarstellung, darstellung, resolve_belegsprache
 from app.services.belegsummen import belegsummen
 
@@ -384,7 +385,9 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
 
     # Fester Fuß auf jeder Seite (services/pdf_fuss.py); seine gemessene Höhe
     # bestimmt, wo der Textfluss endet.
-    fuss = Fuss(company, d, schrift=BODY, breite=A4[0] - 4 * cm, links=2 * cm,
+    rollen = besetzung(invoice, company, invoice.customer)
+    seller = rollen.verkaeufer
+    fuss = Fuss(company, d, rollen=rollen, schrift=BODY, breite=A4[0] - 4 * cm, links=2 * cm,
                 mit_bank=not _ist_gutschrift(invoice))
     doc = SimpleDocTemplate(
         str(output_path),
@@ -407,17 +410,17 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     story = []
     W = A4[0] - 4 * cm
 
-    addr_lines = [company.name]
-    if company.address_line1:
-        addr_lines.append(company.address_line1)
-    line2 = bereinige_adresszeile2(company.name, company.address_line2)
+    addr_lines = [seller.name]
+    if seller.address_line1:
+        addr_lines.append(seller.address_line1)
+    line2 = bereinige_adresszeile2(seller.name, seller.address_line2)
     if line2:
         addr_lines.append(line2)
-    addr_lines.append(f"{company.zip_code} {company.city}")
-    if company.email:
-        addr_lines.append(company.email)
-    if company.phone:
-        addr_lines.append(company.phone)
+    addr_lines.append(f"{seller.zip_code} {seller.city}")
+    if seller.email:
+        addr_lines.append(seller.email)
+    if seller.phone:
+        addr_lines.append(seller.phone)
 
     contact_text = "<br/>".join(escape(z) for z in addr_lines)
 
@@ -426,7 +429,7 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     brand_style = ParagraphStyle(
         "brand", fontName=PIXEL, fontSize=brand_fontsize, leading=13, textColor=INK
     )
-    brand_text = company.name.upper()
+    brand_text = seller.name.upper()
     brand_name = Paragraph(escape(brand_text), brand_style)
 
     logo_img = _logo_flowable()
@@ -471,7 +474,7 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     story.append(HRFlowable(width=W, thickness=1.5, color=INK, spaceBefore=2, spaceAfter=1))
     story.append(HRFlowable(width=W, thickness=0.5, color=GOLD, spaceAfter=12))
 
-    customer = invoice.customer
+    customer = rollen.erwerber
     cust_addr = [customer.name]
     if customer.address_line1:
         cust_addr.append(customer.address_line1)
@@ -512,7 +515,7 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     meta_text = "".join(f"<b>{escape(k)}</b> {escape(str(v))}<br/>" for k, v in meta_rows)
 
     addr_meta = Table(
-        [[[Paragraph(escape(_absenderzeile(company)), absender_stil),
+        [[[Paragraph(escape(_absenderzeile(seller)), absender_stil),
            Paragraph("<br/>".join(escape(z) for z in cust_addr), normal)],
           Paragraph(meta_text, small_right)]],
         colWidths=[W * 0.5, W * 0.5]

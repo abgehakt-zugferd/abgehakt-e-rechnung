@@ -7,6 +7,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from collections import defaultdict
 from app.models.invoice import Invoice
 from app.models.company import Company
+from app.services.belegrollen import Partei, besetzung
 from app.services.adresse import bereinige_adresszeile2
 from app.services.bankverbindung import iban_fuer_ausgabe
 # P7: Die Zuordnung Rechnungstyp → ZUGFeRD/UN-CEFACT TypeCode lebt in
@@ -231,7 +232,7 @@ def _allowance_charge_xml(invoice: Invoice, summen: Belegsummen) -> str:
             </ram:SpecifiedTradeAllowanceCharge>"""
 
 
-def _seller_id_xml(company: Company, tax_category: str = "S") -> str:
+def _seller_id_xml(company: Partei, tax_category: str = "S") -> str:
     """BT-29, die Verkäufer-Kennung. Steht als erstes Kind von `SellerTradeParty`
     (die CII-Sequenz ist geordnet: ID, GlobalID, Name, …).
 
@@ -257,7 +258,7 @@ def _seller_id_xml(company: Company, tax_category: str = "S") -> str:
                 <ram:ID>{_esc(company.tax_number)}</ram:ID>"""
 
 
-def _seller_legal_xml(company: Company, invoice: Invoice) -> str:
+def _seller_legal_xml(company: Partei, invoice: Invoice) -> str:
     """BT-33 und BT-30: Pflichtangaben des Geschäftsbriefs (services/pflichtangaben.py).
 
     CII-Reihenfolge: Name, Description, SpecifiedLegalOrganization, DefinedTradeContact.
@@ -277,17 +278,17 @@ def _seller_legal_xml(company: Company, invoice: Invoice) -> str:
     return "".join(teile)
 
 
-def _seller_contact_xml(company: Company) -> str:
+def _seller_contact_xml(company: Partei) -> str:
     """BG-6, der Ansprechpartner des Verkäufers (BT-41/42/43).
 
     Steht in der CII-Sequenz zwischen `SpecifiedLegalOrganization` und
     `PostalTradeAddress` — an anderer Stelle ist es ein Schemafehler.
 
-    Ohne eigens gepflegten Namen tritt der Firmenname an die Stelle: BT-41 ist der
-    Kontaktpunkt, nicht zwingend eine natürliche Person, und ein leeres Element
+    Bei der Firma tritt ohne eigens gepflegten Namen der Firmenname an die Stelle:
+    BT-41 ist der Kontaktpunkt, nicht zwingend eine natürliche Person, und ein leeres Element
     wäre schema-ungültig. Telefon und Mail entfallen einzeln, wenn sie fehlen.
     """
-    name = (company.contact_name or "").strip() or (company.name or "").strip()
+    name = company.kontakt_name
     if not name:
         return ""
     teile = [f"""
@@ -368,7 +369,7 @@ def _buyer_order_reference_xml(invoice: Invoice) -> str:
             </ram:BuyerOrderReferencedDocument>"""
 
 
-def _seller_tax_xml(company: Company, tax_category: str) -> str:
+def _seller_tax_xml(company: Partei, tax_category: str) -> str:
     parts = []
     if company.tax_number:
         parts.append(f"""
@@ -548,12 +549,15 @@ def _reference_xml(invoice: Invoice) -> str:
 
 
 def _notes_xml(invoice: Invoice) -> str:
-    if not invoice.notes:
-        return ""
-    return f"""
+    # BT-22 ist beim Gutschriftverfahren Pflicht und darf nicht von frei
+    # bearbeitbaren Nutzernotizen abhängen.
+    notizen = ["Gutschrift"] if belegart(invoice.invoice_type).bt3 == "389" else []
+    if invoice.notes:
+        notizen.append(invoice.notes)
+    return "".join(f"""
         <ram:IncludedNote>
-            <ram:Content>{_esc(invoice.notes)}</ram:Content>
-        </ram:IncludedNote>"""
+            <ram:Content>{_esc(notiz)}</ram:Content>
+        </ram:IncludedNote>""" for notiz in notizen)
 
 
 # P7: Zuordnung Rechnungstyp → ZUGFeRD/UN-CEFACT TypeCode: services/belegart.py
@@ -589,7 +593,9 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
             f"Erlaubt: {', '.join(sorted(PROFILE_IDS))}."
         )
     profile_id = PROFILE_IDS[profile]
-    customer = invoice.customer
+    rollen = besetzung(invoice, company, invoice.customer)
+    seller = rollen.verkaeufer
+    customer = rollen.erwerber
     inv_cat = getattr(invoice, "tax_category", "S")
 
     # Einzige Stelle der Summenrechnung ist belegsummen; die gespeicherten
@@ -609,7 +615,7 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
         buyer_line2 = bereinige_adresszeile2(customer.name, customer.address_line2)
         if buyer_line2:
             addr2_buyer = f"\n                    <ram:LineTwo>{_esc(buyer_line2)}</ram:LineTwo>"
-    seller_line2 = bereinige_adresszeile2(company.name, company.address_line2)
+    seller_line2 = bereinige_adresszeile2(seller.name, seller.address_line2)
     addr2_seller = (f"\n                    <ram:LineTwo>{_esc(seller_line2)}</ram:LineTwo>"
                     if seller_line2 else "")
 
@@ -641,14 +647,14 @@ def generate_xml(invoice: Invoice, company: Company) -> str:
     <rsm:SupplyChainTradeTransaction>
 {_line_items_xml(invoice)}
         <ram:ApplicableHeaderTradeAgreement>{_buyer_reference_xml(invoice)}
-            <ram:SellerTradeParty>{_seller_id_xml(company, inv_cat)}
-                <ram:Name>{_esc(company.name)}</ram:Name>{_seller_legal_xml(company, invoice)}{_seller_contact_xml(company)}
+            <ram:SellerTradeParty>{_seller_id_xml(seller, inv_cat)}
+                <ram:Name>{_esc(seller.name)}</ram:Name>{_seller_legal_xml(seller, invoice)}{_seller_contact_xml(seller)}
                 <ram:PostalTradeAddress>
-                    <ram:PostcodeCode>{_esc(company.zip_code)}</ram:PostcodeCode>
-                    <ram:LineOne>{_esc(company.address_line1)}</ram:LineOne>{addr2_seller}
-                    <ram:CityName>{_esc(company.city)}</ram:CityName>
-                    <ram:CountryID>{_esc(company.country)}</ram:CountryID>
-                </ram:PostalTradeAddress>{_electronic_address_xml(company.email)}{_seller_tax_xml(company, inv_cat)}
+                    <ram:PostcodeCode>{_esc(seller.zip_code)}</ram:PostcodeCode>
+                    <ram:LineOne>{_esc(seller.address_line1)}</ram:LineOne>{addr2_seller}
+                    <ram:CityName>{_esc(seller.city)}</ram:CityName>
+                    <ram:CountryID>{_esc(seller.country)}</ram:CountryID>
+                </ram:PostalTradeAddress>{_electronic_address_xml(seller.email)}{_seller_tax_xml(seller, inv_cat)}
             </ram:SellerTradeParty>
             <ram:BuyerTradeParty>{_buyer_id_xml(customer)}
                 <ram:Name>{_esc(customer.name if customer else "")}</ram:Name>

@@ -19,6 +19,7 @@ from reportlab.platypus import Paragraph, Table, TableStyle
 from app.services.adresse import bereinige_adresszeile2
 from app.services.bankverbindung import iban_fuer_ausgabe
 from app.services.belegsprache import Belegdarstellung
+from app.services.belegrollen import Besetzung
 from app.services.iban import IbanProfil
 from app.services.pflichtangaben import pflichtangaben
 
@@ -32,12 +33,12 @@ LINIE = colors.HexColor("#c8c8c8")
 
 class Fuss:
     def __init__(self, company, d: Belegdarstellung, *, schrift: str, breite: float,
-                 links: float, mit_bank: bool):
+                 links: float, mit_bank: bool, rollen: Besetzung):
         self._links = links
         self._breite = breite
         stil = ParagraphStyle("fuss", fontName=schrift, fontSize=GROESSE,
                               leading=GROESSE + 2, textColor=GRAU)
-        spalten = [_firma(company), _steuer_und_register(company, d), []]
+        spalten = [_firma(rollen.verkaeufer), _steuer_und_register(rollen.verkaeufer, d), []]
         if mit_bank:
             spalten[2] = _bank(company)
         zellen = [[Paragraph("<br/>".join(escape(z) for z in spalte), stil) for spalte in spalten]]
