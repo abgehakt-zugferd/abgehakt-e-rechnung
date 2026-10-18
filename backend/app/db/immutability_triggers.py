@@ -12,8 +12,18 @@ from sqlalchemy.engine import Connection
 
 # invoice_items: KEIN DELETE-Trigger (Draft-Positionen sind legitim löschbar) —
 # nur TRUNCATE ist dort nie legitim.
-DELETE_TABLES = ("invoices", "customers")
-TRUNCATE_TABLES = ("invoices", "invoice_items", "customers")
+# aufstellungen: wie invoices, nie löschbar. aufstellung_anlagen: Das DELETE-
+# Verbot ist bewusst UNBEDINGT (auch im Entwurf): Der Platz jeder Anlage ist
+# durch (aufstellung_id, quelle) fix, Korrektur ist ein UPDATE der Zeile
+# (neue Datei, neuer Hash) — eine gelöschte Anlagenzeile wäre ein
+# verschwundener Dateinachweis, und genau den prüft der GoBD-Export.
+DELETE_TABLES = (
+    "invoices", "customers", "aufstellungen", "aufstellung_anlagen",
+)
+TRUNCATE_TABLES = (
+    "invoices", "invoice_items", "customers", "aufstellungen",
+    "aufstellung_anlagen",
+)
 
 _FUNCTIONS = r"""
 CREATE OR REPLACE FUNCTION gobd_forbid_delete() RETURNS trigger AS $$
@@ -34,18 +44,36 @@ $$ LANGUAGE plpgsql;
 """
 
 
+def _trigger_sql(tabelle: str, ereignis: str, funktion: str, je: str) -> str:
+    """Ein Trigger — aber nur, wenn die Tabelle existiert.
+
+    Warum die Existenzsicherung: INSTALL_SQL ist eine BEWEGLICHE Quelle
+    (Single Source of Truth), und Migration 001 legt sie bei jedem Durchlauf
+    der Kette in einer Datenbank aus, in der spaetere Tabellen (hier:
+    aufstellungen, Migration 030) noch nicht existieren. Ohne die Pruefung
+    waere jede historische Kette — upgrade bis 017, 028, head — kaputt,
+    sobald diese Liste waechst. Die Migration, die eine Tabelle anlegt,
+    ruft dieselbe Quelle erneut (030: op.execute(INSTALL_SQL)), deshalb
+    existiert der Trigger am Ende der Kette trotzdem — und zwar aus DIESER
+    Datei, nirgends sonst.
+    """
+    return (
+        f"DO $$ BEGIN "
+        f"IF to_regclass('{tabelle}') IS NOT NULL THEN "
+        f"CREATE OR REPLACE TRIGGER gobd_no_{ereignis}_{tabelle} "
+        f"BEFORE {ereignis.upper()} ON {tabelle} "
+        f"FOR EACH {je} EXECUTE FUNCTION {funktion}(); "
+        f"END IF; "
+        f"END $$;"
+    )
+
+
 def _build_install_sql() -> str:
     parts = [_FUNCTIONS]
     for t in DELETE_TABLES:
-        parts.append(
-            f"CREATE OR REPLACE TRIGGER gobd_no_delete_{t} "
-            f"BEFORE DELETE ON {t} FOR EACH ROW EXECUTE FUNCTION gobd_forbid_delete();"
-        )
+        parts.append(_trigger_sql(t, "delete", "gobd_forbid_delete", "ROW"))
     for t in TRUNCATE_TABLES:
-        parts.append(
-            f"CREATE OR REPLACE TRIGGER gobd_no_truncate_{t} "
-            f"BEFORE TRUNCATE ON {t} FOR EACH STATEMENT EXECUTE FUNCTION gobd_forbid_truncate();"
-        )
+        parts.append(_trigger_sql(t, "truncate", "gobd_forbid_truncate", "STATEMENT"))
     return "\n".join(parts)
 
 

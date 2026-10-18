@@ -17,7 +17,14 @@ from sqlalchemy.engine import Connection
 
 APP_ROLE = "abgehakt_app"
 OWNER_ROLE = "abgehakt_admin"
-PROTECTED_NO_DELETE = ("invoices", "customers")
+# Die ALTER DEFAULT PRIVILEGES raeumen DELETE auf ALLE kuenftigen Tabellen
+# ein (CRUD heisst dort C-R-U-D); diese Liste zieht es auf den
+# GoBD-geschuetzten zurueck. Die Aufstellungstabellen muessen hier stehen,
+# sonst haette die App-Rolle DELETE auf ihnen, sobald Migration 030 sie
+# anlegt (geprueft in test_immutability_triggers.py).
+PROTECTED_NO_DELETE = (
+    "invoices", "customers", "aufstellungen", "aufstellung_anlagen",
+)
 
 
 def resolve_owner_role(database_url: str | None, default: str = OWNER_ROLE) -> str:

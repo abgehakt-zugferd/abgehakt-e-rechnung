@@ -53,6 +53,20 @@ class Company(Base):
         Boolean, nullable=False, default=True, server_default="true"
     )
     invoice_counter: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Nummernkreis der Abrechnungsaufstellung (Bauschritt 7a, Entscheidung 8):
+    # eigener Praefix, eigener Zaehler, dieselbe lueckenlose Logik wie oben
+    # (services/invoice_number.py). server_default, weil die Firmenzeile
+    # ausserhalb des ORM entsteht (Migration, conftest) und NOT NULL gilt —
+    # die Vorgabe 'AA-' ist die Antwort der Software auf den ersten Start,
+    # keine Ansicht des Nutzers. Die Jahreszahl in der Nummer regelt bewusst
+    # invoice_year_in_number mit: Das ist EIN Stil der Firma, keine Angabe
+    # je Belegart.
+    aufstellung_prefix: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="AA-", server_default="AA-"
+    )
+    aufstellung_counter: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     payment_terms_default: Mapped[str] = mapped_column(
         String(500),
         nullable=False,
