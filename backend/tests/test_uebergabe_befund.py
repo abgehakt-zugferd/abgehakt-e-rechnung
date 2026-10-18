@@ -804,8 +804,10 @@ def test_eine_389_ohne_positive_summe_ist_unbrauchbar(schluessel):
     """§ 8a: Eine Gutschrift des Verfahrens (389) zahlt an den Beteiligten;
     ueber null oder weniger ist sie keine, und der Sender erzeugt dann keinen
     Auftrag. WERT_UNBRAUCHBAR am Feld, nicht SUMME_STIMMT_NICHT: Die Summe
-    kann aufgehen (und geht hier auf) - unbrauchbar ist der Wert, und der
-    Pfad nennt die Stelle. Der Leser nahm so einen Auftrag bisher an."""
+    kann aufgehen (und geht hier auf) - unbrauchbar ist der Wert. Der Probe
+    fehlt der typcode, deshalb steht sie am Feld summe. Seit der Probe je
+    Position meldet der Leser auch die negative Position selbst: zwei
+    Gruende, zwei Befunde (§ 10)."""
     nutzlast = _auftrag()
     gutschrift = nutzlast["gutschriften"][0]
     gutschrift["positionen"][0]["herleitung"]["basis_netto"] = "-697.30"
@@ -815,10 +817,52 @@ def test_eine_389_ohne_positive_summe_ist_unbrauchbar(schluessel):
     urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
 
     assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR", "WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].positionen[0].netto"
+    )
+    assert urteil.feststellungen[1].pfad == "$.nutzlast.gutschriften[0].summe.netto"
+    assert urteil.feststellungen[1].erwartet == "groesser als 0.00"
+    assert urteil.feststellungen[1].erhalten == "-174.33"
+
+
+def test_eine_389_position_ohne_positiven_betrag_ist_unbrauchbar(schluessel):
+    """Der Validator weist bei 389 einen Einzelpreis 0 und einen negativen ab;
+    der Leser nahm beide an, und der Entwurf war gebunden und nie
+    finalisierbar. Leser und Validator muessen dieselbe Menge annehmen."""
+    nutzlast = _auftrag()
+    gutschrift = nutzlast["gutschriften"][0]
+    gutschrift["positionen"].append(dict(nr=2, bezeichnung="Nullbeteiligung",
+        netto="0.00"))
+    gutschrift["summe"]["netto"] = "174.33"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
     assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
-    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].summe.netto"
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].positionen[1].netto"
+    )
     assert urteil.feststellungen[0].erwartet == "groesser als 0.00"
-    assert urteil.feststellungen[0].erhalten == "-174.33"
+    assert urteil.feststellungen[0].erhalten == "0.00"
+
+
+def test_eine_389_position_mit_negativem_betrag_ist_unbrauchbar(schluessel):
+    """Die negative Schwester: die Summe geht auf, die Position zahlt aber
+    zurueck, und der Validator lehnt sie beim Finalisieren ab."""
+    nutzlast = _auftrag()
+    gutschrift = nutzlast["gutschriften"][0]
+    gutschrift["positionen"].append(dict(nr=2, bezeichnung="Rueckzahlung",
+        netto="-50.00"))
+    gutschrift["summe"]["netto"] = "124.33"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].positionen[1].netto"
+    )
 
 
 # ── Optionale Unterobjekte: null heisst nicht da, nicht unbrauchbar. Seit #164

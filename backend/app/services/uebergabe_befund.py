@@ -361,6 +361,15 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
         for lfd, position in enumerate(gutschrift["positionen"]):
             netto = _zahl(position["netto"])
             summe += netto
+            # § 8a je Position, nicht nur je Summe: Der Validator weist bei 389
+            # einen Einzelpreis 0 und einen negativen ab; nahm der Leser solche
+            # Positionen an, war der Entwurf gebunden und nie finalisierbar.
+            # Leser und Validator nehmen damit dieselbe Menge an.
+            if typcode == "389" and netto <= 0:
+                funde.append(Feststellung(
+                    "WERT_UNBRAUCHBAR", f"{pfad}.positionen[{lfd}].netto",
+                    erwartet="groesser als 0.00", erhalten=str(position["netto"]),
+                ))
             herleitung = position.get("herleitung")
             if herleitung is None:
                 # Ohne Herleitung ungeprueft uebernehmen: der Schluessel dahinter
