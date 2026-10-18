@@ -126,20 +126,23 @@ def test_erloesmeldungen_werden_hier_gar_nicht_erst_gelesen(vektoren, schluessel
     assert [f.code for f in urteil.feststellungen] == ["NUTZLASTART_UNBEKANNT"]
 
 
-@pytest.mark.parametrize("gruppe", ["rechnungsauftraege", "aufstellungen"])
+@pytest.mark.parametrize("gruppe", ["aufstellungen"])
 def test_die_neuen_arten_werden_noch_nicht_gelesen(vektoren, schluesselordner, gruppe):
-    """1.7 kennt rechnungsauftrag und aufstellungsauftrag (§§ 8a, 8b); dieser
-    Empfaenger liest sie noch nicht, der Bau wartet auf eine Freigabe.
+    """1.7 kennt rechnungsauftrag und aufstellungsauftrag (§§ 8a, 8b); der
+    rechnungsauftrag wird seit Teil 1a gelesen, der aufstellungsauftrag
+    wartet weiter auf seinen Bau.
 
-    Gemessen wird je der Kettenanfang der Gruppe: ein gueltig signierter,
+    Gemessen wird der Kettenanfang der Gruppe: ein gueltig signierter,
     richtig an diesen Empfaenger adressierter Beleg. Er kommt durch jede
     Umschlagprobe - Fassung, Hash, Signatur, Kette - und faellt genau an der
     Artprobe, nicht frueher: GENAU EIN Befund beweist, dass nichts anderes
     ihn abgewiesen hat. Die Wirkung verweigert fuer abgelehnte Belege, es
     entsteht kein Entwurf; gemessen am ersten Haken von entwuerfe_anlegen.
 
-    Die beiden Gruppen sind damit NICHT als Annahme-Tests eingesammelt; ihre
-    uebrigen Faelle kommen mit dem Bau.
+    Die rechnungsauftraege misst dieser Test nicht mehr: Ihre Grundregeln
+    misst test_rechnungsauftrag_leser.py an erfundenen Belegen; die weiteren
+    Teile (Gruppen, Bezeichnungen, Grundlagen, Auftragsschluessel) sammeln
+    die Vektorfaelle ein, sobald sie gebaut sind.
     """
     roh = (vektoren / gruppe / "01_gueltig.json").read_bytes()
 

@@ -95,6 +95,32 @@ def auftrag(**aenderungen):
     return nutzlast
 
 
+def rechnungsauftrag(**aenderungen):
+    """§ 8a (Fassung 1.7): Ausgangsrechnung 380 an einen Kunden, nur netto,
+    je Marktplatz und Verkaufsmonat eine. Erfundene Zahlen; die negative
+    Position bleibt, denn negative Positionen sind erlaubt."""
+    nutzlast = {
+        "auftragsschluessel": "plattform:2026-02:kanal-a:x1",
+        "kunde": {"partner_id": PARTNER_A, "anzeigename": "Plattform Beispiel GmbH"},
+        "typcode": "380",
+        "leistungszeitraum": {"von": "2026-02-01", "bis": "2026-02-28"},
+        "waehrung": "EUR",
+        "positionen": [
+            {"nr": 1, "gruppe": "Digital", "bezeichnung": "Nutzungsrechte A", "netto": "174.44"},
+            {"nr": 2, "gruppe": "Druck", "bezeichnung": "Nutzungsrechte B", "netto": "-3.10"},
+        ],
+        "summe": {"netto": "171.34"},
+        "grundlagen": [{
+            "quelle": "abrechnungsbericht",
+            "beleg_sha256": "1a" * 32,
+            "leistungsperiode": "2026-02",
+            "netto": "171.34",
+        }],
+    }
+    nutzlast.update(aenderungen)
+    return nutzlast
+
+
 def beleg(signieren, nutzlast=None, **aenderungen) -> bytes:
     felder = dict(
         nutzlast=auftrag() if nutzlast is None else nutzlast,

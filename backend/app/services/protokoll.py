@@ -28,9 +28,9 @@ ABGELEHNT_AB_MAJOR = 2
 # 1.7 fuehrt zwei neue Arten (rechnungsauftrag und aufstellungsauftrag,
 # §§ 8a und 8b). Dass sie hier stehen, heisst nur, dass das PROTOKOLL sie
 # kennt - die Frage, was dieser Empfaenger LIEST, ist eine andere, und ihre
-# Antwort steht in uebergabe_befund.LESBARE_ARTEN. Deren Bau wartet auf eine
-# Freigabe: Ein gueltig signierter Beleg der neuen Arten kommt heute durch
-# jede Umschlagprobe und faellt an der Artprobe mit NUTZLASTART_UNBEKANNT.
+# Antwort steht in uebergabe_befund.LESBARE_ARTEN. Der rechnungsauftrag wird
+# gelesen (seine Grundregeln, Teil 1a); der aufstellungsauftrag wartet weiter
+# auf eine Freigabe und faellt an der Artprobe mit NUTZLASTART_UNBEKANNT.
 NUTZLAST_ARTEN = (
     "erloesmeldung",
     "abrechnungsauftrag",
@@ -156,15 +156,19 @@ def zeit(wert) -> Optional[datetime]:
 # und "unbekannt" war in zwei Umsetzungen etwas leicht Verschiedenes. Was hier steht,
 # wird gegen das Protokoll gemessen (tests/vektoren/), nicht abgeschrieben.
 #
-# Gefuehrt sind nur die beiden Arten, die dieser Empfaenger liest: der Umschlag und
-# der `abrechnungsauftrag`. Die `erloesmeldung` geht an tantiemen, nicht hierher; die
-# `quittung` schreibt diese Anwendung noch nicht.
+# Gefuehrt sind die Arten, die dieser Empfaenger liest: der Umschlag, der
+# `abrechnungsauftrag` und seit 1.7 der `rechnungsauftrag` (§ 8a, Grundregeln).
+# Die `erloesmeldung` geht an tantiemen, nicht hierher; die `quittung` schreibt
+# diese Anwendung noch nicht; der `aufstellungsauftrag` (§ 8b) wartet auf seinen
+# Bau.
 #
-# Wichtig am Auftrag: er traegt NUR NETTO. `steuer`, `brutto`, `steuersatz` und
-# `steuerkategorie` stehen weder unter pflicht noch unter erlaubt und sind deshalb
-# UNBEKANNTES_FELD. Nicht weil der Wert falsch waere, sondern weil dann zwei Stellen
-# dieselbe Zahl behaupten: die Steuer entsteht hier, aus dem Steuerstatus des Kunden
-# hinter der partner_id.
+# Wichtig an beiden Auftraegen: sie tragen NUR NETTO. `steuer`, `brutto`,
+# `steuersatz` und `steuerkategorie` stehen weder unter pflicht noch unter
+# erlaubt und sind deshalb UNBEKANNTES_FELD. Nicht weil der Wert falsch
+# waere, sondern weil dann zwei Stellen dieselbe Zahl behaupten: die Steuer
+# entsteht hier, aus dem Steuerstatus des Kunden hinter der partner_id. Beim
+# rechnungsauftrag gilt dasselbe fuer `anlagen` - die traegt in 1.7 nur der
+# aufstellungsauftrag.
 #
 # Fehlt ein Pflichtfeld, ist der Befund PFLICHTFELD_FEHLT, nicht UNBEKANNTES_FELD:
 # das Feld ist bekannt, es ist nur nicht da.
@@ -224,7 +228,32 @@ FELDER = {   'umschlag': {   'pflicht': [   'format_version',
                                                   'vortraege[]': {   'pflicht': [   'beteiligter',
                                                                                     'netto',
                                                                                     'grund'],
-                                                                     'erlaubt': []}}}}
+                                                                     'erlaubt': []}}},
+    'rechnungsauftrag': {   'pflicht': [   'auftragsschluessel',
+                                           'kunde',
+                                           'typcode',
+                                           'leistungszeitraum',
+                                           'waehrung',
+                                           'positionen',
+                                           'summe',
+                                           'grundlagen'],
+                            'erlaubt': [],
+                            'unterobjekte': {   'kunde': {   'pflicht': [   'partner_id'],
+                                                              'erlaubt': [   'anzeigename']},
+                                                'leistungszeitraum': {   'pflicht': [   'von',
+                                                                                          'bis'],
+                                                                         'erlaubt': []},
+                                                'positionen[]': {   'pflicht': [   'nr',
+                                                                                   'bezeichnung',
+                                                                                   'netto'],
+                                                                    'erlaubt': [   'gruppe']},
+                                                'summe': {   'pflicht': [   'netto'],
+                                                             'erlaubt': []},
+                                                'grundlagen[]': {   'pflicht': [   'quelle',
+                                                                                   'beleg_sha256',
+                                                                                   'leistungsperiode',
+                                                                                   'netto'],
+                                                                    'erlaubt': []}}}}
 
 # § 4: die Form je Geld- und Satzfeld, als Verzeichnispfad (der Schluessel aus
 # FELDER plus Feldname, so wie der Leser ihn bildet). Geld ist eine
@@ -233,7 +262,9 @@ FELDER = {   'umschlag': {   'pflicht': [   'format_version',
 # ein gueltiger Satz, "33.3" keiner (Klarstellung 2026-10-17). Die Zeitform
 # des § 2 steht als eigene Regel ueber diesem Verzeichnis (ZEITFORM), denn
 # sie gilt nicht je Feld des Belegs, sondern am Umschlag und am Beiblatt
-# eines Schluessels.
+# eines Schluessels. Die letzten drei Pfade gehoeren zum rechnungsauftrag
+# (§ 8a): Seine positionen, summe und grundlagen liegen OBEN in der Nutzlast,
+# die des abrechnungsauftrags unter gutschriften[].
 FELDFORMEN = {
     'bemessung.erloes_netto': 'geld',
     'bemessung.direktkosten_netto': 'geld',
@@ -244,4 +275,7 @@ FELDFORMEN = {
     'gutschriften[].positionen[].herleitung.satz': 'satz',
     'gutschriften[].summe.netto': 'geld',
     'vortraege[].netto': 'geld',
+    'positionen[].netto': 'geld',
+    'summe.netto': 'geld',
+    'grundlagen[].netto': 'geld',
 }

@@ -153,12 +153,13 @@ def test_die_erreichbaren_codes_dieses_empfaengers_sind_benannt(protokoll):
     begegnen kann, misst nichts. STUECKZAHLPROBE gilt in der Erloesmeldung,
     und die liest diese Anwendung nicht.
 
-    Seit 1.7 nennt das Protokoll abgehakt mit den beiden neuen Arten; deren
-    Bau wartet hier auf eine Freigabe, gelesen wird die Teilmenge
-    (LESBARE_ARTEN). Die Differenz ist damit benannt und gesperrt: Waechst
-    das Protokoll um eine Art, die dieser Empfaenger still schluckt, wird
-    dieser Test rot - genauso wie beim Bau, der LESBARE_ARTEN erweitert und
-    ihn mitzieht.
+    Seit 1.7 nennt das Protokoll abgehakt mit den beiden neuen Arten; der
+    rechnungsauftrag wird seit Teil 1a gelesen (seine Grundregeln), der
+    aufstellungsauftrag wartet weiter auf seine Freigabe, gelesen wird die
+    Teilmenge (LESBARE_ARTEN). Die Differenz ist damit benannt und gesperrt:
+    Waechst das Protokoll um eine Art, die dieser Empfaenger still schluckt,
+    wird dieser Test rot - genauso wie beim Bau, der LESBARE_ARTEN erweitert
+    und ihn mitzieht.
     """
     lage = protokoll["codes_je_empfaenger"]
     meine = set(lage["umschlagcodes_fuer_alle"]) | set(lage["abgehakt"]["zusaetzlich"])
@@ -166,7 +167,7 @@ def test_die_erreichbaren_codes_dieses_empfaengers_sind_benannt(protokoll):
     assert meine <= BEFUNDCODES
     assert set(LESBARE_ARTEN) <= set(lage["abgehakt"]["liest"])
     assert set(lage["abgehakt"]["liest"]) - set(LESBARE_ARTEN) == {
-        "rechnungsauftrag", "aufstellungsauftrag",
+        "aufstellungsauftrag",
     }
     assert "STUECKZAHLPROBE" in lage["abgehakt"]["nie_erreichbar"]
     assert not meine & set(lage["abgehakt"]["nie_erreichbar"])

@@ -24,6 +24,7 @@ und nicht hier gesucht: der Leser kennt keine Datenbank und keinen Ordner.
 from __future__ import annotations
 
 import base64
+import calendar
 import hashlib
 import json
 import re
@@ -57,8 +58,10 @@ from app.services.uebergabebeleg import (
 )
 
 # Was dieser Empfaenger liest. Die `erloesmeldung` geht an tantiemen, die
-# `quittung` schreibt diese Anwendung noch nicht (Stufe 7).
-LESBARE_ARTEN = ("abrechnungsauftrag",)
+# `quittung` schreibt diese Anwendung noch nicht (Stufe 7), der
+# `aufstellungsauftrag` (§ 8b) wartet auf seinen Bau. Der `rechnungsauftrag`
+# (§ 8a) wird gelesen, bislang nach seinen Grundregeln (_rechnungsauftrag_pruefen).
+LESBARE_ARTEN = ("abrechnungsauftrag", "rechnungsauftrag")
 
 # Ein Pflichtfeld, das da ist und leer, ist bei diesen beiden nicht da: ein
 # Auftrag ohne Gutschrift und eine Gutschrift ohne Position tun nichts.
@@ -292,8 +295,8 @@ def _felder_pruefen(objekt, verzeichnis, pfad) -> list:
     return funde
 
 
-def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
-    """§ 8: die drei Pruefhaken und die Aufloesung des Beteiligten.
+def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage, art: str) -> list:
+    """§§ 8 und 8a: der Feldbestand aus dem Verzeichnis je Art, dann ihre Proben.
 
     Die Formen des § 4 (Geld, Satz) hat _felder_pruefen schon geprueft; hier
     wird nur noch gerechnet, und _zahl kann an keiner Angabe mehr scheitern.
@@ -303,9 +306,97 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
     Absender reparierte die eine Stelle, reichte wieder ein, und erst dann
     kam der zweite Befund.
     """
-    funde = _felder_pruefen(nutzlast, FELDER["abrechnungsauftrag"], "$.nutzlast")
+    funde = _felder_pruefen(nutzlast, FELDER[art], "$.nutzlast")
     if funde:
         return funde
+    if art == "rechnungsauftrag":
+        return _rechnungsauftrag_pruefen(nutzlast)
+    return _abrechnungsauftrag_pruefen(nutzlast, lage)
+
+
+def _rechnungsauftrag_pruefen(nutzlast: dict) -> list:
+    """§ 8a (Fassung 1.7), Teil 1a: die Grundregeln des Rechnungsauftrags.
+
+    Gruppen, Bezeichnungen, Grundlagen und der Auftragsschluessel folgen in
+    eigenen Teilen; hier stehen typcode, waehrung, der Kalendermonat und die
+    Summen. Wie beim abrechnungsauftrag gilt: Alles Falsche wird gesammelt.
+    """
+    funde: list = []
+
+    # Geschlossene Vorraete. 380 ist die Ausgangsrechnung; 389 ist die
+    # Gutschrift aus § 8, ein anderer Beleg, kein Typcode mehr. EUR, bis die
+    # Kursfrage beantwortet ist: GBP als Euro zu lesen waere schlimmer als
+    # die Ablehnung.
+    if nutzlast["typcode"] != "380":
+        funde.append(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.nutzlast.typcode",
+            erwartet="380", erhalten=str(nutzlast["typcode"]),
+        ))
+    if nutzlast["waehrung"] != "EUR":
+        funde.append(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.nutzlast.waehrung",
+            erwartet="EUR", erhalten=str(nutzlast["waehrung"]),
+        ))
+
+    # Genau ein Kalendermonat: von der Erste, bis der Letzte desselben Monats.
+    # Wer sammelt, verliert die Zuordnung zur Zahlung. Gelesen wird mit
+    # derselben Regel wie beim abrechnungsauftrag (_datum), damit kein
+    # gueltiger Auftrag abgelehnt wird; die Monatsprobe kommt dazu.
+    zeitraum = nutzlast["leistungszeitraum"]
+    von = _datum(zeitraum["von"])
+    bis = _datum(zeitraum["bis"])
+    if von is None:
+        funde.append(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.nutzlast.leistungszeitraum.von",
+            erwartet="Datum", erhalten=str(zeitraum["von"]),
+        ))
+    if bis is None:
+        funde.append(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.nutzlast.leistungszeitraum.bis",
+            erwartet="Datum", erhalten=str(zeitraum["bis"]),
+        ))
+    if von is not None and bis is not None:
+        letzter = date(von.year, von.month, calendar.monthrange(von.year, von.month)[1])
+        if von.day != 1 or (bis.year, bis.month) != (von.year, von.month) or bis != letzter:
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", "$.nutzlast.leistungszeitraum",
+                erwartet="ein Kalendermonat",
+                erhalten=f"von {zeitraum['von']}, bis {zeitraum['bis']}",
+            ))
+
+    summe = Decimal("0")
+    for nummer, position in enumerate(nutzlast["positionen"]):
+        netto = _zahl(position["netto"])
+        summe += netto
+        # Positionen duerfen negativ sein, nie 0.00: Der Sender laesst sie
+        # weg, und eine Position ueber nichts ist keine Auskunft.
+        if netto == 0:
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", f"$.nutzlast.positionen[{nummer}].netto",
+                erwartet="nicht 0.00", erhalten=str(position["netto"]),
+            ))
+
+    genannt = _zahl(nutzlast["summe"]["netto"])
+    if genannt != summe:
+        funde.append(Feststellung(
+            "SUMME_STIMMT_NICHT", "$.nutzlast.summe.netto",
+            erwartet=str(summe), erhalten=str(nutzlast["summe"]["netto"]),
+        ))
+    # Eine Rechnung ueber null oder weniger ist keine 380; der Sender haette
+    # keinen Auftrag erzeugen duerfen. Die Summen koennen aufgehen - deshalb
+    # SUMME_STIMMT_NICHT am Feld und nicht WERT_UNBRAUCHBAR: Die Probe gilt
+    # der Rechnung als ganzer, nicht dem einzelnen Wert.
+    if genannt <= 0:
+        funde.append(Feststellung(
+            "SUMME_STIMMT_NICHT", "$.nutzlast.summe.netto",
+            erwartet="groesser als 0.00", erhalten=str(nutzlast["summe"]["netto"]),
+        ))
+    return funde
+
+
+def _abrechnungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
+    """§ 8: die drei Pruefhaken und die Aufloesung des Beteiligten."""
+    funde: list = []
 
     # Summe grundlagen <= bemessung.erloes_netto. NIE Gleichheit: `grundlagen`
     # ist ein Auszug, kein Nachweis des Erloeses. Als signierte Erloesmeldung
@@ -643,7 +734,7 @@ def beleg_beurteilen(
             erwartet=erwarteter_absender, erhalten=str(beleg["absender"]),
         ), **rest)
 
-    funde = _auftrag_pruefen(nutzlast, lage)
+    funde = _auftrag_pruefen(nutzlast, lage, beleg["nutzlast_art"])
     if funde:
         return abgelehnt(*funde, nutzlast=nutzlast, **rest, **_anzeige(nutzlast))
 
