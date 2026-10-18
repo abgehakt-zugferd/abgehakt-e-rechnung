@@ -28,7 +28,9 @@
     {% if nicht_versendet_anzahl %}
     <div class="card mb-5" style="border-color:var(--amber);">
         <a data-kpi="hinweis-versand" href="/invoices?status=issued&art=rechnung&versand=offen" style="display:block; font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--amber); text-decoration:none;">
-            {{ nicht_versendet_anzahl }} gestellte Rechnung{{ '' if nicht_versendet_anzahl == 1 else 'en' }} ohne Versand
+            {# Bauschritt 5b: Der Streifen meint den KUNDEN — ein Beleg nur an die
+               Buchhaltung steht hier mit drin. #}
+            {{ nicht_versendet_anzahl }} gestellte Rechnung{{ '' if nicht_versendet_anzahl == 1 else 'en' }} ohne Zustellung an den Kunden
         </a>
     </div>
     {% endif %}

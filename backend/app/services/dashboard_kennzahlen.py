@@ -230,17 +230,19 @@ def ueberfaellige_forderungen(db: Session, heute: date) -> Ueberfaellig:
 
 
 def nicht_versendet_anzahl(db: Session) -> int:
-    """Gestellte Rechnungen der Umsatz-Belegarten ohne Erstversand.
+    """Gestellte Rechnungen der Umsatz-Belegarten ohne Zustellung an den Kunden.
 
     Gezaehlt wird in der Datenbank, nicht im Speicher: die Uebersicht laedt sonst
     bei jedem Aufruf die ganze Rechnungstabelle, um am Ende eine Zahl zu zeigen.
-    Die Bedingung kommt aus `beleg_status`, nicht noch einmal hier formuliert.
+    Die Bedingung kommt aus `beleg_status`, nicht noch einmal hier formuliert;
+    sie liest `kunde_zugestellt_am` (Bauschritt 5b): Ein Beleg nur an die
+    Buchhaltung zaehlt weiter als nicht versendet.
     """
     return (
         db.query(func.count(Invoice.id))
         .filter(
             UMSATZ_BELEGARTEN_FILTER,
-            nicht_versendet_bedingung(Invoice.status, Invoice.datev_sent_at),
+            nicht_versendet_bedingung(Invoice.status, Invoice.kunde_zugestellt_am),
         )
         .scalar()
     ) or 0

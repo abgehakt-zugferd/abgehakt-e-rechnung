@@ -81,17 +81,44 @@ Aufforderung, die Rechnung erneut zu finalisieren; steht das Prüfwerkzeug nicht
 bricht der Versand ab, statt etwas Ungeprüftes zu schicken.
 
 Erst wenn all das steht, wird gesendet, und ein Eintrag im **Versandprotokoll** auf der
-Detailseite wird geschrieben: Datum, Empfänger, Kopien, ob die Buchhaltung Blindkopie
-war, und der Ausgang. Schlägt der Versand fehl, steht die Meldung des Servers dort; blieb
-der Ausgang offen, heißt es: „AUSGANG UNBEKANNT: der Versand wurde begonnen, das
+Detailseite wird geschrieben: Datum, Ziel der Zeile, Empfänger, Kopien, ob die Buchhaltung
+Blindkopie war, und der Ausgang. Schlägt der Versand fehl, steht die Meldung des Servers
+dort; blieb der Ausgang offen, heißt es: „AUSGANG UNBEKANNT: der Versand wurde begonnen, das
 Ergebnis kam nicht mehr an. Bitte im Postausgang nachsehen, bevor erneut gesendet wird."
 
-Der Zeitpunkt des ersten Versands wird am Beleg festgehalten (Feld `datev_sent_at`): als
-**Versendet am** auf der Detailseite, als Datum in der Versandspalte der Liste und als
-Marke **Versendet** im Status. Ein weiterer Versand ändert ihn nicht, jede Wiederholung
-steht nur im Versandprotokoll. Der Knopf heißt dann **ERNEUT SENDEN** und fragt noch
-einmal: „Diese Rechnung wurde am <Datum> bereits versendet. Erneut senden?" Auch ein
-bereits bezahlter Beleg lässt sich noch einmal versenden.
+Buchhaltung und Kunde erhalten einen Beleg getrennt voneinander. Es gibt drei Wege:
+
+- **Kunde und Buchhaltung** (Knopf **SENDEN**, Route `POST /invoices/{id}/datev-senden`):
+  die Mail geht an den Kunden und, sofern eine Upload-Adresse hinterlegt ist, als Blindkopie
+  zugleich an die Buchhaltung. Beide Vermerke entstehen in einem Schritt.
+- **Nur an die Buchhaltung** (Knopf **NUR AN DIE BUCHHALTUNG**, Route `POST
+  /invoices/{id}/an-buchhaltung`): die Mail geht allein an die Upload-Adresse, in einer
+  neutralen Schablone ohne Kundenanrede. Keine Blindkopie, kein CC. Der Weg empfiehlt sich,
+  wenn der Kunde noch keine E-Mail-Adresse hat oder den Beleg auf anderem Weg erhält.
+- **Zustellung an den Kunden vermerken** (Formular **ZUSTELLUNG AN DEN KUNDEN VERMERKEN**,
+  Route `POST /invoices/{id}/zustellung-vermerken`): für Zustellungen, die außerhalb des
+  Programms geschahen, etwa den Upload in ein Kundenportal oder die persönliche Aushändigung.
+  Das Formular fragt das Datum und einen freien Weg (Pflichtfeld, etwa „Upload in das
+  Kundenportal“). Gesendet wird dabei nichts. Das Datum darf nicht in der Zukunft und nicht
+  vor dem Ausstellungsdatum liegen.
+
+Jeder Weg hinterlässt eine Zeile im **Versandprotokoll**, die das Ziel nennt (Kunde und
+Buchhaltung, Buchhaltung, Kunde (Vermerk)). Ein weiterer Vermerk ist die Korrektur: Er
+überschreibt keine früheren Protokollzeilen, und die Detailseite zeigt den jüngsten Stand.
+
+Buchhaltung und Kunde haben je einen eigenen Vermerk am Beleg: `datev_sent_at` für die
+Buchhaltung, `kunde_zugestellt_am` für den Kunden. Die Detailseite nennt beide getrennt
+(„Buchhaltung: versendet am …“ bzw. „nicht versendet“, „Kunde: zugestellt am …“ mit dem Weg,
+etwa „per Mail“, bzw. „nicht versendet“). Jeder Vermerk wird nur beim ersten Mal gesetzt und
+ändert sich danach nicht; jede Wiederholung steht nur im Versandprotokoll. Der Knopf
+**SENDEN** heißt nach dem ersten Versand **ERNEUT SENDEN** und fragt noch einmal: „Diese
+Rechnung wurde am <Datum> bereits versendet. Erneut senden?" Auch ein bereits bezahlter
+Beleg lässt sich noch einmal versenden.
+
+**Nicht versendet** heißt: dem Kunden nicht zugebracht. Ein Beleg, der nur an die
+Buchhaltung ging, gilt weiter als nicht versendet. Das Etikett in der Liste, die Kennzahl
+„Nicht versendete Belege“ auf der Übersicht und der Listenfilter **Ohne Versand** meinen
+alle dieselbe Frage: Hat der Kunde den Beleg?
 
 ---
 
@@ -215,7 +242,7 @@ Zeitzone des Servers.
 | Schuldige Umsatzsteuer | Summe der **ausgewiesenen USt** gestellter und bezahlter Standard- und Anzahlungsrechnungen seit Jahresanfang (386 erst nach Zahlung, zeitlich nach `bezahlt_am`), abzüglich gestellter und bezahlter Gutschriften (`credit_note`), **ohne Vorsteuerabzug** und ohne obere Datumsgrenze (das Programm kennt keine fremden Eingangsrechnungen; die Vorsteuer aus selbst ausgestellten Honorargutschriften mindert erst die geschätzten Steuerabgaben). Die Kachel zeigt daneben die schuldige USt des laufenden Kalenderquartals als eigene Zeile (`Q1` bis `Q4` mit Jahr). |
 | Gesch. Steuerabgaben | Schuldige USt abzüglich der **Vorsteuer aus Honorargutschriften** (389, gestellt oder bezahlt, seit Jahresanfang) plus pauschale **KSt/GewSt-Rücklage** auf den positiven Nettosaldo aus Standard- und Anzahlungsrechnungen und Gutschriften (Anteil in den Einstellungen). Unter der Zahl rechnet die Kachel die Bestandteile vor: USt, abzüglich Vorsteuer aus Honorargutschriften, plus KSt/GewSt-Rücklage mit ihrem Anteil in Prozent auf den Nettoumsatz. |
 | Überfällige Forderungen | Davon jene (ohne wirksam stornierte), deren Fälligkeitsdatum vor heute liegt, mit Anzahl, Bruttosumme und dem Alter der ältesten in Tagen. |
-| Nicht versendete Belege | Anzahl der gestellten Standard- und Anzahlungsrechnungen ohne Erstversand. Diese Zahl wird in der Datenbank gezählt, nicht im Speicher. |
+| Nicht versendete Belege | Anzahl der gestellten Standard- und Anzahlungsrechnungen ohne Zustellung an den Kunden (Feld `kunde_zugestellt_am`); ein Beleg, der nur an die Buchhaltung ging, zählt mit. Diese Zahl wird in der Datenbank gezählt, nicht im Speicher. |
 | Umsatzvergleich | Dem Umsatz des laufenden Jahres stellt die Übersicht den Umsatz zum selben Kalendertag des Vorjahres gegenüber und nennt die Abweichung in Prozent. Fehlt ein Vergleichswert, weil der Vorjahreswert null ist, entfällt die Prozentangabe. |
 | Letzte Rechnungen | Unter den Kacheln listet die Seite die zehn neuesten Belege mit Nummer, Kunde, Datum, Betrag und Status; der Verweis **ALLE RECHNUNGEN** führt in die Liste. |
 
@@ -225,7 +252,8 @@ genau der Auswahl, die die Zahl gezählt hat. Kennzahl und Liste zeigen deshalb 
 Für die Umsatz- und Steuerkennzahlen gilt das nicht, sie summieren und verlinken nichts.
 
 In der Rechnungsliste und auf der Detailseite unterscheidet der Status **Versendet** und
-**Nicht versendet** bei gestellten Belegen. **Bezahlt** bleibt der Endzustand nach Zahlungseingang.
+**Nicht versendet** bei gestellten Belegen. Gemeint ist die Zustellung an den Kunden.
+**Bezahlt** bleibt der Endzustand nach Zahlungseingang.
 
 ---
 
@@ -239,10 +267,10 @@ In der Rechnungsliste und auf der Detailseite unterscheidet der Status **Versend
 | Status | Entwurf, Gestellt, Bezahlt, Storniert, Verworfen |
 | Art | Rechnung (Standard und Anzahlung), Stornorechnung, Honorargutschrift (`honorargutschrift`, nur 389), Storno zur Honorargutschrift (`honorargutschrift_storno`) |
 | Frist | **Überfällig**: Fälligkeitsdatum liegt vor heute |
-| Versand | **Ohne Versand**: ohne Erstversand, unabhängig vom Status |
+| Versand | **Ohne Versand**: ohne Zustellung an den Kunden (`kunde_zugestellt_am`), unabhängig vom Status |
 | Stornostand | **Ohne Stornierte**: blendet Belege aus, zu denen eine gestellte oder bezahlte Gutschrift existiert (Parameter `storno=ohne`, dieselbe Bedingung wie die Kacheln der Übersicht) |
 
-**Ohne Versand** prüft nur den fehlenden Erstversand. Das Etikett **Nicht versendet** verlangt
+**Ohne Versand** prüft nur die fehlende Zustellung an den Kunden. Das Etikett **Nicht versendet** verlangt
 zusätzlich den Status **Gestellt**, die Kennzahl auf der Übersicht außerdem die Art **Rechnung**.
 
 Solange Sie keinen Status wählen, blendet die Liste verworfene Entwürfe aus; sie erscheinen nur

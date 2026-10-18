@@ -55,7 +55,7 @@ from app.services.bezahlt_am import (
     BezahltTrotzGutschrift,
     vorbereiten_bezahlt,
 )
-from app.zeit import heute
+from app.zeit import ZEITZONE, heute, kalendertag
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -923,6 +923,29 @@ def _cc_vorbelegung(invoice: Invoice, app_config) -> tuple[str, str]:
     return "", ""
 
 
+def _kunde_zustellung_fuer_detail(invoice: Invoice) -> tuple[date | None, str | None]:
+    """Datum und Weg der Kundenzustellung fuer die Zeile auf der Detailseite.
+
+    Gezeigt wird die JUENGSTE Zustellung, nicht die erste: Ein weiterer Vermerk
+    ist die Korrektur, und die Leserin soll den korrigierten Stand sehen. Das
+    Modell liefert `send_logs` neueste zuerst, also genuegt der erste Treffer.
+    Gezaehlt werden nur GELUNGENE Versuche: Ein Fehlversand ist keine Zustellung
+    (sonst stuende hier „zugestellt", waehrend der Beleg als „Nicht versendet"
+    gilt). Fallback ohne jede Protokollzeile ist `kunde_zugestellt_am` selbst —
+    so zeigen auch rueckwirkend gesicherte Belege (Migration) ein Datum.
+    """
+    for log in invoice.send_logs:
+        if log.success is not True:
+            continue
+        if log.ziel == "kunde_vermerk":
+            return kalendertag(log.sent_at), log.weg_notiz
+        if log.ziel == "kunde_und_buchhaltung":
+            return kalendertag(log.sent_at), "per Mail"
+    if invoice.kunde_zugestellt_am is not None:
+        return kalendertag(invoice.kunde_zugestellt_am), None
+    return None, None
+
+
 @router.get("/{invoice_id}", response_class=HTMLResponse)
 def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
@@ -957,6 +980,7 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
             original_ersetzbar = True
         except ErsatzNichtMoeglich:
             pass
+    kunde_zustellung_am, kunde_weg = _kunde_zustellung_fuer_detail(invoice)
     return templates.TemplateResponse("invoices/detail.html", {
         "request": request,
         "invoice": invoice,
@@ -970,6 +994,8 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
         "heute": heute(),
         "ersetzbar": ersetzbar,
         "original_ersetzbar": original_ersetzbar,
+        "kunde_zustellung_am": kunde_zustellung_am,
+        "kunde_weg": kunde_weg,
     })
 
 
@@ -1457,6 +1483,62 @@ def send_an_buchhaltung(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
     # erhalten, also bleibt kunde_zugestellt_am unberührt und der Beleg gilt
     # weiter als „nicht versendet" (Entscheidung 6).
     _vermerk_einmal_setzen(invoice, "datev_sent_at", datetime.now(timezone.utc))
+    db.commit()
+
+    return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
+
+
+@router.post("/{invoice_id}/zustellung-vermerken")
+def zustellung_vermerken(
+    invoice_id: uuid.UUID,
+    datum: str = Form(""),
+    weg: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Zustellung an den Kunden von Hand vermerken (Bauschritt 5b, Teil 2).
+
+    Nicht jede Zustellung geht durch dieses Programm: Upload in ein Kunden-
+    portal, Aushaendigung, Fax. Der Vermerk zeichnet so einen Vorgang NACH und
+    ist die Behauptung des Nutzers, nicht das Ergebnis eines Versands — deshalb
+    kein SMTP, keine Versandgrundlage (`_pruefe_versandgrundlage` prueft das
+    PDF auf dem Weg zu einem VERSAND; der Beleg wurde ausserhalb bereits
+    zugesellt) und `success = True` im Protokoll.
+    """
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(404, "Rechnung nicht gefunden")
+    if invoice.status not in ("issued", "paid"):
+        raise HTTPException(
+            400, "Eine Zustellung lässt sich nur zu gestellten Belegen vermerken.")
+    weg = weg.strip()
+    if not weg:
+        raise HTTPException(
+            400, "Bitte den Weg der Zustellung angeben, etwa „Upload in das Kundenportal“.")
+    try:
+        tag = date.fromisoformat(datum)
+    except ValueError:
+        raise HTTPException(400, "Bitte das Datum der Zustellung angeben (JJJJ-MM-TT).")
+    # Grenzen in Europe/Berlin (app.zeit), nicht nach der Uhr des Containers:
+    # „heute" ist der Kalendertag der Anwenderin.
+    if tag > heute():
+        raise HTTPException(400, "Das Datum der Zustellung liegt in der Zukunft.")
+    if tag < invoice.issue_date:
+        raise HTTPException(
+            400, "Das Datum der Zustellung liegt vor dem Ausstellungsdatum.")
+    # sent_at traegt das GEWAEHLTE Zustelldatum, nicht den Erfassungszeitpunkt:
+    # Das Protokoll sortiert nach sent_at (Modell, „neueste zuerst"), und eine
+    # Korrektur mit frueherem Zustelldatum muesste sonst obenauf stehen. Der
+    # Erfassungszeitpunkt ist bewusst nicht gesondert gesichert — der Nachweis
+    # gilt der Zustellung, nicht dem Erfassen.
+    zustell_zeit = datetime(tag.year, tag.month, tag.day, tzinfo=ZEITZONE)
+    protokoll = InvoiceSendLog(
+        invoice_id=invoice.id, ziel="kunde_vermerk", to_email=None,
+        weg_notiz=weg, sent_at=zustell_zeit, success=True,
+    )
+    db.add(protokoll)
+    # Erstvermerk wie bei jedem Weg: einmal setzen, nie aendern (invoice_guard,
+    # GoBD). Die Korrektur steht allein im Protokoll.
+    _vermerk_einmal_setzen(invoice, "kunde_zugestellt_am", zustell_zeit)
     db.commit()
 
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)

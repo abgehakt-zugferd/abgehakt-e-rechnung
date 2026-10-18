@@ -22,8 +22,9 @@
                 <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">{{ invoice.customer.name if invoice.customer else '–' }}</p>
             </div>
         </div>
-        <span class="badge badge-{{ invoice.status|beleg_badge(invoice.datev_sent_at) }}" style="font-size:var(--fs-klein); padding:5px 10px;">
-            {{ invoice.status|beleg_etikett(invoice.datev_sent_at) }}
+        <span class="badge badge-{{ invoice.status|beleg_badge(invoice.kunde_zugestellt_am) }}" style="font-size:var(--fs-klein); padding:5px 10px;">
+            {# Bauschritt 5b: „nicht versendet“ meint den KUNDEN, nicht die Buchhaltung. #}
+            {{ invoice.status|beleg_etikett(invoice.kunde_zugestellt_am) }}
         </span>
     </div>
 
@@ -250,11 +251,46 @@
                         <p style="color:var(--text-hi);">{{ invoice.archive_until.strftime('%d.%m.%Y') if invoice.archive_until else '–' }}</p>
                     </div>
                     <div>
-                        <p class="label">Versendet am</p>
-                        <p style="color:{% if invoice.datev_sent_at %}var(--green){% else %}var(--text-dim){% endif %};">{{ invoice.datev_sent_at.strftime('%d.%m.%Y %H:%M') if invoice.datev_sent_at else '–' }}</p>
+                        {# Zwei getrennte Nachweise (Bauschritt 5a/5b): Die Buchhaltung
+                           hat datev_sent_at, der Kunde kunde_zugestellt_am. Eine Zeile,
+                           die beides vermengt, wuerde einen Beleg, der nur der
+                           Buchhaltung vorliegt, als erledigt zeigen. #}
+                        <p class="label">Buchhaltung</p>
+                        <p style="color:{% if invoice.datev_sent_at %}var(--green){% else %}var(--text-dim){% endif %};">
+                            {% if invoice.datev_sent_at %}Buchhaltung: versendet am {{ invoice.datev_sent_at.strftime('%d.%m.%Y') }}{% else %}Buchhaltung: nicht versendet{% endif %}
+                        </p>
+                        <p class="label" style="margin-top:10px;">Kunde</p>
+                        <p style="color:{% if kunde_zustellung_am %}var(--green){% else %}var(--text-dim){% endif %};">
+                            {# Datum und Weg kommen aus dem Router: die JUENGSTE Zustellung,
+                               damit ein korrigierender Vermerk hier ankommt. #}
+                            {% if kunde_zustellung_am %}Kunde: zugestellt am {{ kunde_zustellung_am.strftime('%d.%m.%Y') }}{% if kunde_weg %} ({{ kunde_weg }}){% endif %}{% else %}Kunde: nicht versendet{% endif %}
+                        </p>
                     </div>
                 </div>
             </div>
+
+            {# Zustellung von Hand vermerken (Bauschritt 5b): Nur bei gestellten
+               Belegen — ein Entwurf wurde nie zugesellt. #}
+            {% if invoice.status in ('issued', 'paid') %}
+            <div class="card">
+                <h2 style="margin-bottom:12px;">ZUSTELLUNG AN DEN KUNDEN VERMERKEN</h2>
+                <form method="post" action="/invoices/{{ invoice.id }}/zustellung-vermerken"
+                      style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; font-family:'VT323',monospace; font-size:var(--fs-text);">
+                    <label style="display:flex; flex-direction:column; gap:4px; color:var(--text-dim);">
+                        DATUM DER ZUSTELLUNG
+                        <input type="date" name="datum" value="{{ heute.isoformat() }}"
+                               min="{{ invoice.issue_date.isoformat() }}" max="{{ heute.isoformat() }}" required
+                               style="font-family:'VT323',monospace; font-size:var(--fs-text); background:var(--bg); color:var(--text-hi); border:1px solid var(--border); padding:4px 6px;">
+                    </label>
+                    <label style="display:flex; flex-direction:column; gap:4px; color:var(--text-dim); flex:1; min-width:240px;">
+                        WEG (z. B. Upload in das Kundenportal)
+                        <input type="text" name="weg" required
+                               style="font-family:'VT323',monospace; font-size:var(--fs-text); background:var(--bg); color:var(--text-hi); border:1px solid var(--border); padding:4px 6px;">
+                    </label>
+                    <button type="submit" class="btn-secondary">VERMERKEN</button>
+                </form>
+            </div>
+            {% endif %}
 
             <!-- Line items -->
             <div class="card">
@@ -451,7 +487,23 @@
                             {% endif %}
                             <span style="color:var(--text-hi);">{{ log.sent_at.strftime('%d.%m.%Y %H:%M') }}</span>
                         </div>
+                        {# Das Ziel jeder Zeile (Bauschritt 5a/5b): Ein Beleg kann der
+                           Buchhaltung vorliegen, ohne dass der Kunde ihn hat — ohne
+                           diese Angabe waere „an <Adresse>" die einzige, irreführende
+                           Auskunft. .get statt [..]: ein unbekannter ziel-Wert darf die
+                           Seite nicht sprengen, er wird roh gezeigt. #}
+                        {% set ziel_text = {
+                            'kunde_und_buchhaltung': 'Kunde und Buchhaltung',
+                            'buchhaltung': 'Buchhaltung',
+                            'kunde_vermerk': 'Kunde (Vermerk)',
+                        }.get(log.ziel, log.ziel) %}
+                        <p style="color:var(--text-dim);">Ziel: {{ ziel_text }}</p>
+                        {% if log.to_email %}
                         <p style="color:var(--text-dim);">an {{ log.to_email }}{% if log.cc_email %}, CC {{ log.cc_email }}{% endif %}{% if log.datev_bcc %}, BCC DATEV{% endif %}</p>
+                        {% endif %}
+                        {% if log.weg_notiz %}
+                        <p style="color:var(--text-dim);">{{ log.weg_notiz }}</p>
+                        {% endif %}
                         {% if log.success is none %}
                         <p style="color:var(--text-dim);">AUSGANG UNBEKANNT: der Versand wurde begonnen, das Ergebnis kam nicht mehr an. Bitte im Postausgang nachsehen, bevor erneut gesendet wird.</p>
                         {% endif %}

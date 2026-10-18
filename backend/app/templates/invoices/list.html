@@ -107,8 +107,10 @@
                         <td style="padding:10px 14px; text-align:right; color:var(--text-hi); font-family:'Share Tech Mono',monospace;">{{ inv.gross_total|euro }}</td>
                         <td style="padding:10px 14px;">
                             {# .get statt [..]: ein unbekannter Status wirft sonst KeyError
-                               und nimmt die ganze Seite mit, nicht nur das Etikett. #}
-                            <span class="badge badge-{{ inv.status|beleg_badge(inv.datev_sent_at) }}">{{ inv.status|beleg_etikett(inv.datev_sent_at) }}</span>
+                               und nimmt die ganze Seite mit, nicht nur das Etikett.
+                               Der zweite Parameter ist die KUNDENZUSTELLUNG (Bauschritt
+                               5b): „Nicht versendet“ meint den Kunden. #}
+                            <span class="badge badge-{{ inv.status|beleg_badge(inv.kunde_zugestellt_am) }}">{{ inv.status|beleg_etikett(inv.kunde_zugestellt_am) }}</span>
                         </td>
                         <td style="padding:10px 14px;">
                             {% if inv.datev_sent_at %}

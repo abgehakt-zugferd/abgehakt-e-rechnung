@@ -197,19 +197,23 @@ def test_quartals_ust_ohne_vorquartal(pg_session):
     assert schuldige_umsatzsteuer(pg_session, date(2026, 7, 1), None) == Decimal("38.00")
 
 
-def test_nicht_versendet_zaehlt_nur_issued_ohne_versand(pg_session):
+def test_nicht_versendet_zaehlt_nur_issued_ohne_kundenzustellung(pg_session):
+    """Die Kennzahl meint den KUNDEN (Bauschritt 5b): Ein Beleg, der nur der
+    Buchhaltung vorliegt, zaehlt weiter als nicht versendet."""
     from datetime import datetime, timezone
 
     from tests.test_dashboard import _gutschrift, _inv
 
     offen = _inv(pg_session, "issued", "100.00")
+    nur_buchhaltung = _inv(pg_session, "issued", "40.00")
+    nur_buchhaltung.datev_sent_at = datetime(2026, 9, 1, tzinfo=timezone.utc)
     versendet = _inv(pg_session, "issued", "50.00")
-    versendet.datev_sent_at = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    versendet.kunde_zugestellt_am = datetime(2026, 9, 1, tzinfo=timezone.utc)
     _inv(pg_session, "draft", "10.00")
     _inv(pg_session, "paid", "20.00")
     _gutschrift(pg_session, "issued", "30.00")
     pg_session.commit()
-    assert nicht_versendet_anzahl(pg_session) == 1
+    assert nicht_versendet_anzahl(pg_session) == 2
     assert offen.status == "issued"
 
 
