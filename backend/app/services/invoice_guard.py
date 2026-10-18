@@ -45,8 +45,8 @@ ALLOWED_TRANSITIONS: dict[str, set[str]] = {
 # `auftragsschluessel_offen` ist dabei Sonderfall (Festlegung 12): erlaubt ist
 # nach dem Finalisieren nur das LEEREN; das Prüfen der Richtung steht unten.
 MUTABLE_AFTER_FINALIZE: set[str] = {
-    "status", "datev_sent_at", "bezahlt_am", "auftragsschluessel_offen",
-    "updated_at",
+    "status", "datev_sent_at", "kunde_zugestellt_am", "bezahlt_am",
+    "auftragsschluessel_offen", "updated_at",
 }
 
 # Session-Schlüssel für die in DIESER Transaktion neu erzeugten Rechnungen. Sie
@@ -137,6 +137,27 @@ def _guard_item(session: Session, item: InvoiceItem, new_invoices: set) -> None:
         )
 
 
+def _pruefe_forward_only(session: Session, obj: Invoice, attr: str, label: str) -> None:
+    """Einmal setzen, nie ändern — das Muster der Versand-/Zustellvermerke.
+
+    Vorwert robust ermitteln — nach Commit ist das Attribut expired, die
+    History-`deleted` also leer; dann aus der DB nachladen (wie beim Status).
+    """
+    hist = get_history(obj, attr)
+    if not hist.has_changes():
+        return
+    alt = hist.deleted[0] if hist.deleted else session.execute(
+        select(getattr(Invoice.__table__.c, attr))
+        .where(Invoice.__table__.c.id == obj.id)
+    ).scalar()
+    neu = hist.added[0] if hist.added else None
+    if alt is not None and neu != alt:
+        raise InvoiceStateError(
+            f"{label} ist nach dem Setzen unveränderlich (GoBD) "
+            "— weder Löschen noch Umdatieren erlaubt."
+        )
+
+
 def _before_flush(session: Session, flush_context, instances) -> None:
     # 0. In dieser Transaktion neu erzeugte Rechnungen merken (als Objekte, damit
     #    ihre – erst beim Flush vergebene – UUID gelesen werden kann). Ihre Befüllung
@@ -190,25 +211,17 @@ def _before_flush(session: Session, flush_context, instances) -> None:
                     "Bezahlt ohne Zahlungsdatum (bezahlt_am) ist nicht erlaubt."
                 )
 
-        # Versandnachweis ist forward-only (#98 P0.3): None → Zeitpunkt ist erlaubt
-        # (der Versand selbst), aber ein einmal gesetzter datev_sent_at darf nicht
-        # mehr geleert oder umdatiert werden — sonst ließe sich der DATEV-Versand
-        # nachträglich verleugnen. (datev_sent_at bleibt in MUTABLE_AFTER_FINALIZE,
-        # damit das erstmalige Setzen an issued/paid weiter durchgeht.)
-        ds_hist = get_history(obj, "datev_sent_at")
-        if ds_hist.has_changes():
-            # Vorwert robust ermitteln — nach Commit ist das Attribut expired, die
-            # History-`deleted` also leer; dann aus der DB nachladen (wie beim Status).
-            old_ds = ds_hist.deleted[0] if ds_hist.deleted else session.execute(
-                select(Invoice.__table__.c.datev_sent_at)
-                .where(Invoice.__table__.c.id == obj.id)
-            ).scalar()
-            new_ds = ds_hist.added[0] if ds_hist.added else None
-            if old_ds is not None and new_ds != old_ds:
-                raise InvoiceStateError(
-                    "datev_sent_at (Versandnachweis) ist nach dem Setzen unveränderlich "
-                    "(GoBD) — weder Löschen noch Umdatieren erlaubt."
-                )
+        # Versand- und Zustellvermerke sind forward-only (#98 P0.3): None →
+        # Zeitpunkt ist erlaubt (der Versand selbst), aber ein einmal
+        # gesetzter Wert darf nicht mehr geleert oder umdatiert werden —
+        # sonst ließe sich der Versand nachträglich verleugnen. (Beide bleiben
+        # in MUTABLE_AFTER_FINALIZE, damit das erstmalige Setzen an
+        # issued/paid weiter durchgeht.) datev_sent_at ist ab der Entkopplung
+        # (Bauschritt 5a) der Vermerk „erstmals an die Buchhaltung",
+        # kunde_zugestellt_am der Vermerk „erstmals beim Kunden" — beide
+        # nach demselben Muster, denn beide sind Nachweise.
+        _pruefe_forward_only(session, obj, "datev_sent_at", "datev_sent_at (Versandnachweis)")
+        _pruefe_forward_only(session, obj, "kunde_zugestellt_am", "kunde_zugestellt_am (Zustellnachweis)")
 
         # Zahlungsdatum: nur mit issued → paid setzen, danach forward-only
         # (Entscheidung 2026-09-30). In MUTABLE_AFTER_FINALIZE, damit das Setzen

@@ -261,6 +261,81 @@ def test_auftragsschluessel_nach_upgrade_head(migrationsdatenbank):
     assert "ck_invoices_auftragsschluessel_offen_wie_nachweis" in checks
 
 
+def test_versand_entkoppelt_nach_upgrade_head(migrationsdatenbank):
+    """Migration 029 (Bauschritt 5a): getrennte Versandvermerke an invoices
+    und Weg-Spalten am Versandprotokoll.
+
+    Die CHECKs werden hier direkt beprobt, weil sie die Zusagen auch ohne
+    Anwendung sichern: ziel kennt genau die drei Wege aus Entscheidung 6,
+    und nur der Freitext-Vermerk (keine Mail) darf ohne Empfaenger auskommen.
+    """
+    url, _ = migrationsdatenbank
+    engine = create_engine(url)
+    try:
+        with engine.connect() as conn:
+            invoice_spalten = {
+                zeile[0] for zeile in conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'invoices'"
+                ))
+            }
+            log_spalten = {
+                zeile[0] for zeile in conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'invoice_send_log'"
+                ))
+            }
+            checks = {
+                zeile[0] for zeile in conn.execute(text(
+                    "SELECT conname FROM pg_constraint "
+                    "WHERE conrelid = 'invoice_send_log'::regclass AND contype = 'c'"
+                ))
+            }
+            conn.execute(text(
+                "INSERT INTO invoices (invoice_number, issue_date, payment_terms) "
+                "VALUES ('RE-VS-1', '2026-01-05', 'Zahlbar.')"
+            ))
+            beleg = conn.execute(text(
+                "SELECT id FROM invoices WHERE invoice_number = 'RE-VS-1'"
+            )).scalar()
+            conn.commit()
+        # Weg ausserhalb des Wertevorrats: der CHECK schlaegt zu. (id und
+        # datev_bcc muessen mit: beide haben nur einen ORM-Default, keinen
+        # server_default, sonst schlage ich aus dem falschen Grund an.)
+        with pytest.raises(IntegrityError):
+            with engine.connect() as conn:
+                conn.execute(text(
+                    "INSERT INTO invoice_send_log "
+                    "(id, invoice_id, ziel, to_email, datev_bcc) "
+                    "VALUES (gen_random_uuid(), :b, 'flugpost', 'x@example.de', false)"
+                ), {"b": beleg})
+                conn.commit()
+        # Ein Mail-Weg ohne Empfaenger ist eine halbe Wahrheit: nur der
+        # Freitext-Vermerk darf ohne to_email auskommen.
+        with pytest.raises(IntegrityError):
+            with engine.connect() as conn:
+                conn.execute(text(
+                    "INSERT INTO invoice_send_log (id, invoice_id, ziel, datev_bcc) "
+                    "VALUES (gen_random_uuid(), :b, 'buchhaltung', false)"
+                ), {"b": beleg})
+                conn.commit()
+        with engine.connect() as conn:
+            conn.execute(text(
+                "INSERT INTO invoice_send_log "
+                "(id, invoice_id, ziel, weg_notiz, datev_bcc) "
+                "VALUES (gen_random_uuid(), :b, 'kunde_vermerk', "
+                "'Upload ins Kundenportal', false)"
+            ), {"b": beleg})
+            conn.commit()
+    finally:
+        engine.dispose()
+
+    assert "kunde_zugestellt_am" in invoice_spalten
+    assert {"ziel", "weg_notiz"} <= log_spalten
+    assert "ck_invoice_send_log_ziel" in checks
+    assert "ck_invoice_send_log_empfaenger_ausser_vermerk" in checks
+
+
 def test_upgrade_head_legt_beide_singleton_zeilen_an(migrationsdatenbank):
     """`company` und `app_config` sind Singletons mit id=1.
 

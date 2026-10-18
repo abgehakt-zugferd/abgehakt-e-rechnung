@@ -48,7 +48,11 @@ def test_nachziehen_setzt_versand_und_bezahlt(pg_session):
     assert row.updated_at == datetime(2026, 7, 22, 12, 0, tzinfo=timezone.utc)
     log = pg_session.query(InvoiceSendLog).filter(InvoiceSendLog.invoice_id == row.id).one()
     assert log.success is True
+    assert log.ziel == "kunde_und_buchhaltung"
     assert "vorheriges Abgehakt" in log.error
+    # Der historische Versand ging an Kunde UND Buchhaltung: Beide Vermerke
+    # stehen auf denselben Zeitpunkt (Bestandsregel aus Migration 029).
+    assert row.kunde_zugestellt_am == row.datev_sent_at
 
 
 def test_nachziehen_setzt_das_zahlungsdatum(pg_session):

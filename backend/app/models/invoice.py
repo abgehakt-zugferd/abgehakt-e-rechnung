@@ -153,7 +153,19 @@ class Invoice(Base):
     uebergabe_beleg_sha256: Mapped[Optional[str]] = mapped_column(String(64))
     zugferd_xml: Mapped[Optional[str]] = mapped_column(Text)
     pdf_filename: Mapped[Optional[str]] = mapped_column(String(255))
+    # Erstversand an die BUCHHALTUNG (Bauschritt 5a, Entscheidung 6): Bis hier
+    # deckte diese Spalte den ganzen Versand ab, weil eine Mail Kunde und
+    # Buchhaltung in einem Schritt belief. Seit beide getrennte Vermerke
+    # haben, zaehlt sie nur noch den Weg an die Buchhaltung; der Kunde hat
+    # kunde_zugestellt_am. Wie dort: einmal setzen, nie aendern (invoice_guard,
+    # GoBD).
     datev_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Erstzustellung an den KUNDEN, auf jedem Weg (Mail oder, ab Teil 5b,
+    # Freitext-Vermerk). Ein Beleg kann der Buchhaltung zugegangen sein, ohne
+    # dass der Kunde ihn hat — dann steht hier NULL, und der Beleg gilt als
+    # nicht versendet. Gleiches Muster wie datev_sent_at: einmal setzen, nie
+    # aendern (invoice_guard, GoBD).
+    kunde_zugestellt_am: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     # Zahlungseingang (Entscheidung 2026-09-30): nur beim Uebergang issued→paid
     # gesetzt, danach unveraenderlich. Umsatz und „Bezahlt diesen Monat“ rechnen danach.
     bezahlt_am: Mapped[Optional[date]] = mapped_column(Date)
@@ -308,27 +320,56 @@ class InvoiceSendLog(Base):
     """Protokoll JEDES Zustellversuchs der Rechnungsmail (#146).
 
     Zweigeteilter Versandnachweis: `invoices.datev_sent_at` bleibt der ERSTversand
-    und ist guardgesichert unveränderlich (#98 P0.3); diese Tabelle hält alle
-    Versuche — auch die gescheiterten. Der Fehlertext (z. B. „550 blocked") ist der
-    eigentliche Wert: ohne ihn steht die Nutzerin bei einer gesperrten Adresse vor
-    einem stummen Fehlschlag.
+    an die Buchhaltung und `invoices.kunde_zugestellt_am` die Erstzustellung an
+    den Kunden (Bauschritt 5a), beide guardgesichert unveränderlich (#98 P0.3);
+    diese Tabelle hält alle Versuche — auch die gescheiterten. Der Fehlertext
+    (z. B. „550 blocked") ist der eigentliche Wert: ohne ihn steht die Nutzerin bei
+    einer gesperrten Adresse vor einem stummen Fehlschlag.
 
     Bewusst OHNE eigenen Guard/DB-Trigger: die Tabelle ist Zusatznachweis, nicht der
     rechtliche Anker (das bleiben `datev_sent_at` + Audit-Log). Sie ist selbst ein
     Protokoll und wird von `audit.py` deshalb nicht zusätzlich auditiert.
     """
     __tablename__ = "invoice_send_log"
+    __table_args__ = (
+        # Entscheidung 6: Drei Wege, die sich im Protokoll unterscheiden muessen —
+        # der kombinierte Standardversand, der Gang nur an die Buchhaltung und
+        # (Teil 5b) der Freitext-Vermerk einer Zustellung ohne Mail. Der CHECK
+        # sichert den Wertevorrat auch ohne Anwendung. Identisch zu Migration
+        # 029 (alembic check).
+        CheckConstraint(
+            "ziel IN ('kunde_und_buchhaltung', 'buchhaltung', 'kunde_vermerk')",
+            name="ck_invoice_send_log_ziel",
+        ),
+        # Nur der Freitext-Vermerk traegt keinen Empfaenger: Ein Mail-Weg ohne
+        # to_email waere ein halber Nachweis. Identisch zu Migration 029
+        # (alembic check).
+        CheckConstraint(
+            "ziel = 'kunde_vermerk' OR to_email IS NOT NULL",
+            name="ck_invoice_send_log_empfaenger_ausser_vermerk",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     invoice_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=False, index=True
     )
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    to_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Nullable seit Bauschritt 5a: Nur ein kunde_vermerk (Zustellung ohne
+    # Mail, Teil 5b) hat keinen Empfaenger — der CHECK oben erzwingt das.
+    to_email: Mapped[Optional[str]] = mapped_column(String(255))
     # Die tatsächlich verwendete Liste, nicht die Voreinstellung (#58): der Nachweis
     # muss sagen, wer den Beleg bekommen hat.
     cc_email: Mapped[Optional[str]] = mapped_column(String(500))
     datev_bcc: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Weg dieses Eintrags (Entscheidung 6): Er beschreibt den gewaehlten Versand-
+    # weg, nicht allein das Ergebnis — die tatsaechlichen Empfaenger stehen in
+    # to_email/cc_email/datev_bcc, Abweichungen des Wegs in weg_notiz.
+    ziel: Mapped[str] = mapped_column(Text, nullable=False)
+    # Notiz zum Weg: heute die Abweichung, wenn der Standardversand ohne
+    # Upload-Adresse nur an den Kunden ging; ab Teil 5b der Freitext des
+    # Nutzers (etwa „Upload in das Kundenportal").
+    weg_notiz: Mapped[Optional[str]] = mapped_column(Text)
     # Drei Ausgaenge, nicht zwei (#10): die Zeile entsteht und wird committet, BEVOR
     # SMTP angesprochen wird. In der Zeit dazwischen ist der Ausgang offen, und NULL
     # ist genau das. Faellt der Commit danach um, bleibt sie offen stehen: die Mail

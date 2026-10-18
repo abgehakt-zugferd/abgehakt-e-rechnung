@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 
 from app.database import get_db
 from app.main import app
+from app.models.app_config import AppConfig
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceSendLog
 from app.services import datev_email
@@ -24,6 +25,18 @@ from app.services import datev_email
 
 def teardown_function():
     app.dependency_overrides.clear()
+
+
+def _upload_adresse(pg_session):
+    """datev_sent_at zaehlt ab der Entkopplung nur noch fuer die Buchhaltung
+    (Bauschritt 5a): Diese Tests messen den ERSTversand-Nachweis und muessen
+    deshalb die Upload-Adresse konfigurieren."""
+    cfg = pg_session.query(AppConfig).filter(AppConfig.id == 1).first()
+    if not cfg:
+        cfg = AppConfig(id=1)
+        pg_session.add(cfg)
+    cfg.datev_bcc_email = "datev-bcc@datev.de"
+    pg_session.commit()
 
 
 def _valid_mustang():
@@ -59,6 +72,7 @@ def _logs(pg_session, invoice_id):
 
 def test_erster_versand_schreibt_protokollzeile(pg_session):
     inv = _seed(pg_session)
+    _upload_adresse(pg_session)
     with patch.object(datev_email, "send_invoice"), \
          patch("app.routers.invoices.mustang.jar_available", return_value=True), \
          patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):
@@ -72,6 +86,7 @@ def test_erster_versand_schreibt_protokollzeile(pg_session):
     assert zeilen[0].to_email == "kunde@example.de"
     assert zeilen[0].cc_email == "ablage@example.de"
     assert zeilen[0].datev_bcc is True
+    assert zeilen[0].ziel == "kunde_und_buchhaltung"
     assert zeilen[0].error is None
 
 
@@ -79,6 +94,7 @@ def test_zweiter_versand_ohne_guard_fehler(pg_session):
     """Der Regressionstest: zweimal senden darf NICHT am invoice_guard scheitern,
     und `datev_sent_at` bleibt der Erstversand (#98 P0.3 gilt weiter)."""
     inv = _seed(pg_session)
+    _upload_adresse(pg_session)
     with patch.object(datev_email, "send_invoice"), \
          patch("app.routers.invoices.mustang.jar_available", return_value=True), \
          patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):
@@ -118,6 +134,7 @@ def test_fehlversuch_wird_protokolliert(pg_session):
 
 def test_nach_fehlversuch_gelingt_der_zweite_und_setzt_den_zeitstempel(pg_session):
     inv = _seed(pg_session)
+    _upload_adresse(pg_session)
     c = _client(pg_session)
     with patch("app.routers.invoices.mustang.jar_available", return_value=True), \
          patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):

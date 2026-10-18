@@ -21,6 +21,7 @@ import pytest
 from app.config import get_settings
 from app.database import get_db
 from app.main import app
+from app.models.app_config import AppConfig
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services import datev_email, mustang, pdfa
@@ -31,6 +32,19 @@ def _mail(nummer="RE-77"):
     return Mailinhalt(betreff=f"Rechnung {nummer}", rumpf=f"Body {nummer}\n")
 
 settings = get_settings()
+
+
+def _upload_adresse(pg_session):
+    """datev_sent_at bedeutet ab der Entkopplung „erstmals an die Buchhaltung“
+    (Bauschritt 5a): Tests, die ihn gesetzt sehen wollen, müssen die
+    Upload-Adresse konfigurieren, sonst geht der Standardversand nur an den
+    Kunden und setzt nur kunde_zugestellt_am."""
+    cfg = pg_session.query(AppConfig).filter(AppConfig.id == 1).first()
+    if not cfg:
+        cfg = AppConfig(id=1)
+        pg_session.add(cfg)
+    cfg.datev_bcc_email = "datev-bcc@datev.de"
+    pg_session.commit()
 
 
 def teardown_function():
@@ -63,6 +77,7 @@ def _seed(pg_session, status="issued", pdf="RE.pdf", email="kunde@example.de"):
 def test_send_success_sets_datev_sent_at(pg_session):
     from fastapi.testclient import TestClient
     inv = _seed(pg_session, status="issued")
+    _upload_adresse(pg_session)
     app.dependency_overrides[get_db] = lambda: pg_session
     # Route-Orchestrierung (Status/E-Mail/Timestamp) — die echte E-Rechnungs-
     # Validität beweist die Mustang-Integration weiter unten; hier gemockt.
@@ -75,6 +90,7 @@ def test_send_success_sets_datev_sent_at(pg_session):
     pg_session.expire_all()
     row = pg_session.query(Invoice).filter(Invoice.id == inv.id).first()
     assert row.datev_sent_at is not None      # invoice_guard lässt dieses Metadatum zu
+    assert row.kunde_zugestellt_am is not None  # derselbe Versand ging an beide
     assert row.status == "issued"             # unverändert
 
 
@@ -245,6 +261,7 @@ def test_send_allows_real_zugferd_pdf(pg_session):
     inv, number = _finalize_real(pg_session)
     assert inv.status == "issued"
     assert inv.pdf_filename == f"{number}.pdf"
+    _upload_adresse(pg_session)
     try:
         with patch.object(datev_email, "send_invoice") as send:
             r = TestClient(app, follow_redirects=False).post(f"/invoices/{inv.id}/datev-senden")

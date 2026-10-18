@@ -145,7 +145,8 @@ def test_scheitert_der_commit_nach_dem_versand_bleibt_der_versuch_stehen(pg_sess
 def test_ein_offener_ausgang_wird_als_offen_angezeigt(pg_session):
     """Ein „✗" an dieser Stelle waere die Auskunft, die zum Doppelversand fuehrt."""
     inv = _seed(pg_session)
-    pg_session.add(InvoiceSendLog(invoice_id=inv.id, to_email="kunde@example.de",
+    pg_session.add(InvoiceSendLog(invoice_id=inv.id, ziel="kunde_und_buchhaltung",
+                                  to_email="kunde@example.de",
                                   datev_bcc=True, success=None))
     pg_session.commit()
 

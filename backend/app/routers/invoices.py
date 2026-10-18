@@ -1257,12 +1257,14 @@ def finalize_invoice(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
 
 
-@router.post("/{invoice_id}/datev-senden")
-def send_to_datev(invoice_id: uuid.UUID, customer_email: str = Form(""),
-                  cc_email: str = Form(""), db: Session = Depends(get_db)):
-    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
-    if not invoice:
-        raise HTTPException(404)
+def _pruefe_versandgrundlage(invoice: Invoice) -> Path:
+    """Vorprüfungen, die für JEDE Versandart gelten (Bauschritt 5a): Status,
+    PDF-Existenz und die Mustang-Beweispflicht für die eingebettete XML.
+
+    Warum eine Stelle: Der Standardversand und der Weg nur an die Buchhaltung
+    teilen dieselben Regeln — eine Kopie würde auseinanderlaufen, und ein
+    Beleg, der an einem Weg durchgeht, muss am anderen nicht anders prüfen.
+    """
     if invoice.status not in ("issued", "paid"):
         raise HTTPException(400, "Nur finalisierte Rechnungen können gesendet werden.")
     if not invoice.pdf_filename:
@@ -1275,12 +1277,6 @@ def send_to_datev(invoice_id: uuid.UUID, customer_email: str = Form(""),
             "PDF ohne eingebettete E-Rechnung (Visual-PDF) darf nicht versendet "
             "werden. Rechnung erneut finalisieren, um ein ZUGFeRD-PDF zu erzeugen.",
         )
-
-    pdf_path = settings.storage_path / "pdfs" / invoice.pdf_filename
-    to_email = customer_email or (invoice.customer.email if invoice.customer else "")
-    if not to_email:
-        raise HTTPException(400, "Keine E-Mail-Adresse des Kunden bekannt.")
-
     # E3 (#98 Hardness): der Dateiname (`_visual`-Suffix) ist nur eine Vorabprüfung
     # und beweist nichts über den Inhalt — ein bares ReportLab-PDF ohne eingebettete
     # ZUGFeRD-XML hätte den Suffix-Check passiert. Verbindlich ist Mustang: nur ein
@@ -1290,11 +1286,40 @@ def send_to_datev(invoice_id: uuid.UUID, customer_email: str = Form(""),
         raise HTTPException(
             400, "E-Rechnungs-Validierung nicht möglich (Mustang nicht verfügbar) — "
             "Versand abgebrochen.")
+    pdf_path = settings.storage_path / "pdfs" / invoice.pdf_filename
     validation = mustang.validate(pdf_path)
     if not (validation["is_valid"] and "XML:valid" in validation["raw"]):
         raise HTTPException(
             400, "PDF enthält keine gültig eingebettete E-Rechnung (Mustang-"
             "Validierung fehlgeschlagen). Bitte die Rechnung erneut finalisieren.")
+    return pdf_path
+
+
+def _vermerk_einmal_setzen(invoice: Invoice, attr: str, zeit: datetime) -> None:
+    """Versand-/Zustellvermerk nur beim ersten Mal setzen (Muster
+    datev_sent_at, #98 P0.3): Ein bedingungsloses Setzen liefe beim zweiten
+    Versand am invoice_guard in den Fehler, und der Vermerk bliebe der
+    Erstversand. Die weiteren Versuche stehen im Protokoll. Der Zeitpunkt
+    kommt vom Aufrufer, damit EIN Versand auch für beide Vermerke EINEN
+    Zeitpunkt hat."""
+    if getattr(invoice, attr) is None:
+        setattr(invoice, attr, zeit)
+
+
+@router.post("/{invoice_id}/datev-senden")
+def send_to_datev(invoice_id: uuid.UUID, customer_email: str = Form(""),
+                  cc_email: str = Form(""), db: Session = Depends(get_db)):
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(404)
+    to_email = customer_email or (invoice.customer.email if invoice.customer else "")
+    if not to_email:
+        raise HTTPException(400, "Keine E-Mail-Adresse des Kunden bekannt.")
+    pdf_path = _pruefe_versandgrundlage(invoice)
+    # Entscheidet beides: ob die Mail eine Blindkopie an die Upload-Adresse
+    # bekommt (`send_invoice` lässt sie still weg, wenn keine konfiguriert
+    # ist — so läuft es heute) und welcher Vermerk am Ende gesetzt wird.
+    upload = datev_email.upload_adresse(db)
 
     # Ab hier findet ein echter Zustellversuch statt — erst ab hier wird
     # protokolliert (#146). Ein an den Vorprüfungen gescheiterter Aufruf hat nie
@@ -1315,8 +1340,19 @@ def send_to_datev(invoice_id: uuid.UUID, customer_email: str = Form(""),
         raise HTTPException(400, cc_fehler)
     # `ohne=to_email`: wer im An-Feld steht, bekaeme die Rechnung sonst zweimal.
     cc = empfaenger.normalisiere(cc_email, ohne=to_email)
-    protokoll = InvoiceSendLog(invoice_id=invoice.id, to_email=to_email,
-                               cc_email=cc or None, datev_bcc=True, success=None)
+    # `ziel` benennt den gewaehlten WEG des Standardversands (Kunde und, wenn
+    # konfiguriert, Buchhaltung als Blindkopie). Die tatsaechlichen Empfaenger
+    # stehen in to_email/cc_email/datev_bcc — fehlt die Upload-Adresse, ist die
+    # Blindkopie weg, und genau diese Abweichung traegt weg_notiz, statt den Weg
+    # still umzudeuten.
+    protokoll = InvoiceSendLog(
+        invoice_id=invoice.id, ziel="kunde_und_buchhaltung", to_email=to_email,
+        cc_email=cc or None, datev_bcc=bool(upload), success=None,
+        weg_notiz=None if upload else (
+            "Upload-Adresse der Buchhaltung nicht konfiguriert — keine "
+            "Blindkopie, nur an den Kunden gesendet."
+        ),
+    )
     db.add(protokoll)
     db.commit()
     try:
@@ -1348,12 +1384,79 @@ def send_to_datev(invoice_id: uuid.UUID, customer_email: str = Form(""),
         raise
 
     protokoll.success = True
-    # `datev_sent_at` ist der ERSTversand und bleibt unverfälscht: der invoice_guard
-    # verbietet Umdatieren (#98 P0.3), ein bedingungsloses Setzen ließ deshalb jeden
-    # Zweitversand nach dem Absenden der Mail am Commit scheitern. Die weiteren
-    # Versuche stehen im Protokoll.
-    if invoice.datev_sent_at is None:
-        invoice.datev_sent_at = datetime.now(timezone.utc)
+    # Zwei getrennte Vermerke (Entscheidung 6): Der Standardversand beliefert
+    # den Kunden immer und die Buchhaltung, soweit eine Upload-Adresse steht.
+    # Ohne sie ist der Vermerk „an die Buchhaltung" eine Behauptung, die niemand
+    # pruefen kann — er bleibt dann leer, und der Beleg gilt weiter als bei der
+    # Buchhaltung nicht eingegangen. Beide nur beim ersten Mal (guardgesichert)
+    # und mit dem Zeitpunkt DIESES Versands.
+    jetzt = datetime.now(timezone.utc)
+    _vermerk_einmal_setzen(invoice, "kunde_zugestellt_am", jetzt)
+    if upload:
+        _vermerk_einmal_setzen(invoice, "datev_sent_at", jetzt)
+    db.commit()
+
+    return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
+
+
+@router.post("/{invoice_id}/an-buchhaltung")
+def send_an_buchhaltung(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Nur an die Buchhaltung (Entscheidung 6): Mail allein an die Upload-Adresse,
+    neutrale Schablone ohne Kundenanrede (Festlegung 16), keine Blindkopie und
+    kein CC — der Kunde bleibt offen, kunde_zugestellt_am bleibt unberührt."""
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(404)
+    pdf_path = _pruefe_versandgrundlage(invoice)
+    upload = datev_email.upload_adresse(db)
+    if not upload:
+        # Ein Knopf ohne Ziel wäre ein 500er — derselbe Fall wie „SMTP nicht
+        # konfiguriert" eine Zeile tiefer im Dienst: verständlich, vor dem
+        # Protokoll, ohne dass etwas gesendet wurde.
+        raise HTTPException(
+            400,
+            "Keine Upload-Adresse der Buchhaltung konfiguriert. Bitte in den "
+            "Einstellungen die DATEV-Upload-Adresse hinterlegen.",
+        )
+
+    # Wie beim Standardversand (#10/#146): erst der committete Versuch mit
+    # offenem Ausgang, dann SMTP, dann der Nachtrag des Ergebnisses.
+    protokoll = InvoiceSendLog(
+        invoice_id=invoice.id, ziel="buchhaltung", to_email=upload,
+        datev_bcc=False, success=None,
+    )
+    db.add(protokoll)
+    db.commit()
+    try:
+        company = db.query(Company).filter(Company.id == 1).first()
+        inhalt = mailtext.buchhaltungsmail(invoice, company)
+        datev_email.send_invoice(
+            to_email=upload,
+            mailinhalt=inhalt,
+            pdf_path=pdf_path,
+            bcc_datev=False,
+            db=db,
+        )
+    except (
+        UnknownDocumentLanguageError,
+        mailtext.BetreffMitZeilenumbruchError,
+        datev_email.EmailError,
+    ) as e:
+        protokoll.success = False
+        protokoll.error = str(e)
+        db.commit()
+        raise HTTPException(400, str(e)) from e
+    except Exception as e:
+        protokoll.success = False
+        protokoll.error = str(e)
+        db.commit()
+        raise
+
+    protokoll.success = True
+    # Nur der Vermerk der Buchhaltung — der Kunde hat mit diesem Weg nichts
+    # erhalten, also bleibt kunde_zugestellt_am unberührt und der Beleg gilt
+    # weiter als „nicht versendet" (Entscheidung 6).
+    _vermerk_einmal_setzen(invoice, "datev_sent_at", datetime.now(timezone.utc))
     db.commit()
 
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)

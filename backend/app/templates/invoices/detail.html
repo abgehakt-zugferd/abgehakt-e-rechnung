@@ -107,6 +107,18 @@
         </div>
         {% endif %}
 
+        {# Entscheidung 6 (Bauschritt 5a): Die Buchhaltung kann den Beleg
+           bekommen, bevor der Kunde ihn hat — ein eigener Weg nur an die
+           Upload-Adresse, ohne Blindkopie. Nur bei gestellten Belegen und nur
+           mit konfigurierter Upload-Adresse: Ohne sie kann die Route nicht
+           gelingen, und ein Knopf, der nur einen Fehler zeigt, wäre keiner. #}
+        {% if invoice.status in ('issued', 'paid') and datev_configured %}
+        <form method="post" action="/invoices/{{ invoice.id }}/an-buchhaltung"
+              {% if invoice.datev_sent_at %}onsubmit="return confirm('Dieser Beleg ging bereits an die Buchhaltung. Erneut senden?')"{% endif %}>
+            <button type="submit" class="btn-secondary">NUR AN DIE BUCHHALTUNG</button>
+        </form>
+        {% endif %}
+
         {% if invoice.status == 'paid' and invoice.bezahlt_am %}
         <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--green);">
             bezahlt am {{ invoice.bezahlt_am.strftime('%d.%m.%Y') }}

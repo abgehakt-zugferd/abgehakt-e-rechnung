@@ -57,6 +57,44 @@ _STANDARD_RUMPF_EN = (
 
 _STANDARD_RUMPF = {"de": _STANDARD_RUMPF_DE, "en": _STANDARD_RUMPF_EN}
 
+# Neutrale Schablone an die Buchhaltung (Festlegung 16): Der Empfänger ist
+# die Upload-Adresse der Buchhaltung, nicht der Kunde — deshalb keine Anrede
+# des Kunden und kein „Ihre Rechnung". Sie liegt bewusst fest im Code und
+# nicht bei den konfigurierbaren Schablonen der Einstellungen: Dort stehen die
+# Kundenschablonen mit Platzhaltern wie {kunde}, und eine uebernommene
+# Kundenschablone wuerde der Buchhaltung den Kundenanspruch der Mail
+# vorspielen. Je Belegsprache, wie der Beleg selbst.
+_BUCHHALTUNG_BETREFF = {
+    "de": "Beleg {rechnungsnummer} für die Buchhaltung",
+    "en": "Document {rechnungsnummer} for accounting",
+}
+
+_BUCHHALTUNG_RUMPF_DE = (
+    "Guten Tag,\n"
+    "\n"
+    "anbei erhalten Sie den Beleg {rechnungsnummer} zur Verbuchung.\n"
+    "\n"
+    "Das Dokument enthält die strukturierten ZUGFeRD-Rechnungsdaten "
+    "(Factur-X EN16931) gemäß § 14 UStG.\n"
+    "\n"
+    "Mit freundlichen Grüßen\n"
+    "{firma}"
+)
+
+_BUCHHALTUNG_RUMPF_EN = (
+    "Hello,\n"
+    "\n"
+    "please find attached document {rechnungsnummer} for booking.\n"
+    "\n"
+    "The document contains the structured ZUGFeRD invoice data (Factur-X EN16931) "
+    "pursuant to section 14 of the German VAT Act (UStG).\n"
+    "\n"
+    "Kind regards\n"
+    "{firma}"
+)
+
+_BUCHHALTUNG_RUMPF = {"de": _BUCHHALTUNG_RUMPF_DE, "en": _BUCHHALTUNG_RUMPF_EN}
+
 _FUSS_LABEL = {"de": "Verantwortlich:", "en": "Responsible:"}
 
 
@@ -189,5 +227,22 @@ def rechnungsmail(invoice, company, config) -> Mailinhalt:
     betreff = _ersetze(schablone.betreff, werte)
     pruefe_betreff(betreff)
     rumpf = _ohne_leerzeilen_am_ende(_ersetze(schablone.rumpf, werte))
+    rumpf = rumpf + _fuss(company, sprache) + "\n"
+    return Mailinhalt(betreff=betreff, rumpf=rumpf)
+
+
+def buchhaltungsmail(invoice, company) -> Mailinhalt:
+    """Neutrale Mail an die Upload-Adresse der Buchhaltung (Festlegung 16).
+
+    Keine Anrede des Kunden, kein Zahlungshinweis — die Buchhaltung verbucht,
+    sie zahlt nicht. Nur {rechnungsnummer} und {firma} aus denselben Werten
+    wie die Kundenmail, deshalb ohne eigenen config-Parameter (siehe
+    _BUCHHALTUNG_BETREFF, warum diese Schablone nicht konfigurierbar ist).
+    """
+    sprache = resolve_belegsprache(getattr(invoice, "document_language", None))
+    werte = _werte(invoice, company, sprache)
+    betreff = _ersetze(_BUCHHALTUNG_BETREFF[sprache], werte)
+    pruefe_betreff(betreff)
+    rumpf = _ohne_leerzeilen_am_ende(_ersetze(_BUCHHALTUNG_RUMPF[sprache], werte))
     rumpf = rumpf + _fuss(company, sprache) + "\n"
     return Mailinhalt(betreff=betreff, rumpf=rumpf)

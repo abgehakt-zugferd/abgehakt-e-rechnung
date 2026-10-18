@@ -74,6 +74,17 @@ class EmailError(Exception):
     pass
 
 
+def upload_adresse(db: Session | None = None) -> str | None:
+    """Effektive Upload-Adresse der Buchhaltung (DB vor .env) oder None.
+
+    Warum hier und nicht an der Route: `EffectiveSettings` entscheidet, welche
+    Konfigurationsquelle gilt — eine zweite Entscheidung im Router liefe
+    mit der in `send_invoice` auseinander.
+    """
+    cfg = _get_effective_smtp_config(db)
+    return (getattr(cfg, "datev_bcc_email", "") or "").strip() or None
+
+
 def _testinstanz_empfaenger(
     geplant_an: str,
     geplant_cc: str | None,
