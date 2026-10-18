@@ -27,6 +27,7 @@ from app.services.archive_frist import berechne_archive_until
 from app.services.belegart import UnknownInvoiceTypeError, belegart_aus_bt3
 from app.services.belegrollen import besetzung
 from app.services.steuerstatus import pruefe_honorargutschrift
+from app.services.zugferd_xml import systemnotizen
 
 RAM = "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"
 UDT = "urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100"
@@ -165,17 +166,14 @@ def _parse(xml_path: Path) -> dict:
     ))
     if not issue_date:
         raise ValueError(f"{xml_path}: Rechnungsdatum fehlt")
-    notes_el = doc.find(_q(RAM, "IncludedNote"))
-    notes = _text(notes_el.find(_q(RAM, "Content"))) if notes_el is not None else None
-    if notes in ("None", ""):
-        notes = None
+    invoice_type = _invoice_type_aus_doc(doc, xml_path)
+    notes = _nutzernotizen(root, doc, invoice_type)
     delivery_date = _date102(_text(
         root.find(
             f".//{_q(RAM, 'ActualDeliverySupplyChainEvent')}"
             f"/{_q(RAM, 'OccurrenceDateTime')}/{_q(UDT, 'DateTimeString')}"
         )
     ))
-    invoice_type = _invoice_type_aus_doc(doc, xml_path)
     data = {
         "number": _text(doc.find(_q(RAM, "ID"))),
         "invoice_type": invoice_type,
@@ -188,6 +186,31 @@ def _parse(xml_path: Path) -> dict:
     }
     data.update(_parse_settlement(root, xml_path))
     return data
+
+
+def _nutzernotizen(root: ET.Element, doc: ET.Element, invoice_type: str | None) -> str | None:
+    """Alle IncludedNote-Inhalte außer den Systemnotizen, als Bemerkung.
+
+    Der Generator schreibt die Systemnotizen (BT-22-Pflicht) vor der
+    Nutzernotiz; ihr Wortlaut kommt aus zugferd_xml.systemnotizen — derselben
+    Quelle wie beim Erzeugen, keine zweite Liste. Ohne das Überspringen würde
+    die Systemnotiz zur Nutzernotiz und bei jeder Neuausgabe verdoppelt.
+    """
+    original_el = root.find(
+        f".//{_q(RAM, 'InvoiceReferencedDocument')}/{_q(RAM, 'IssuerAssignedID')}"
+    )
+    pflicht = set(systemnotizen(invoice_type, _text(original_el) or None))
+    texte = [
+        inhalt for inhalt in (
+            _text(note.find(_q(RAM, "Content")))
+            for note in doc.findall(_q(RAM, "IncludedNote"))
+        )
+        if inhalt and inhalt not in pflicht
+    ]
+    notes = "\n".join(texte)
+    if notes in ("None", ""):
+        return None
+    return notes
 
 
 def _pruefe_vor_anlage(num: str, inv: Invoice) -> bool:

@@ -548,14 +548,29 @@ def _reference_xml(invoice: Invoice) -> str:
             </ram:InvoiceReferencedDocument>"""
 
 
+def systemnotizen(invoice_type: str | None, original_nummer: str | None) -> list[str]:
+    """Pflicht-Systemnotizen (BT-22) zur Belegart, vor der Nutzernotiz.
+
+    Eine Quelle fuer den Wortlaut: der Generator schreibt sie, und der
+    Rueckimport (scripts/beleg_aus_xml_einspielen.py) erkennt und ueberspringt
+    sie an genau diesem Wortlaut — keine zweite Liste.
+    """
+    art = belegart(invoice_type).intern
+    if art == "self_billing":
+        return ["Gutschrift"]
+    if art == "self_billing_storno" and original_nummer:
+        return [f"Stornierung der Gutschrift Nr. {original_nummer}"]
+    return []
+
+
 def _notes_xml(invoice: Invoice) -> str:
     # BT-22 ist beim Gutschriftverfahren Pflicht und darf nicht von frei
     # bearbeitbaren Nutzernotizen abhängen.
     art = belegart(invoice.invoice_type).intern
-    notizen = ["Gutschrift"] if art == "self_billing" else []
-    if art == "self_billing_storno":
-        original = invoice.original_invoice
-        notizen.append(f"Stornierung der Gutschrift Nr. {original.invoice_number}")
+    original_nummer = (
+        invoice.original_invoice.invoice_number if art == "self_billing_storno" else None
+    )
+    notizen = systemnotizen(invoice.invoice_type, original_nummer)
     if invoice.notes:
         notizen.append(invoice.notes)
     return "".join(f"""
