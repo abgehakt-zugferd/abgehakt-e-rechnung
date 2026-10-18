@@ -32,7 +32,7 @@ from app.services.belegsprache import (
 from app.services.leistungszeit import parse_leistungszeit_from_form
 from app.models.app_config import AppConfig
 from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
-                          datev_email, aenderungsprotokoll, mailtext)
+                          datev_email, aenderungsprotokoll, mailtext, kundenvorgaben)
 from app.services.einheiten import (
     UnknownUnitError,
     formular_bezeichnungen,
@@ -111,11 +111,19 @@ def _belegsprache_aus_form(form, *, fehlt: str = "de") -> str:
         raise HTTPException(400, str(fehler)) from fehler
 
 
-def _zahlungsbedingungen(form, company: Company, sprache: str) -> str:
-    """Leeres Feld → Vorgabe der gewaehlten Sprache. Englisch ohne Vorgabe: 400."""
+def _zahlungsbedingungen(form, company: Company, sprache: str,
+                         kunden_hinweis: str | None = None) -> str:
+    """Leeres Feld → Zahlungshinweis des Kunden, sonst Vorgabe der gewaehlten
+    Sprache. Englisch ohne Vorgabe: 400.
+
+    Der Kundenhinweis (Entscheidung 4) steht VOR der Sprachvorgabe der Firma:
+    er gilt fuer DIESEN Kunden, die Firmavorgabe ist der Rueckfall fuer alle.
+    """
     eingabe = (form.get("payment_terms") or "").strip()
     if eingabe:
         return eingabe
+    if kunden_hinweis:
+        return kunden_hinweis
     if sprache == "en":
         vorgabe = (company.payment_terms_default_en or "").strip()
         if not vorgabe:
@@ -489,6 +497,10 @@ def _vorbelegung_aus(quelle: Invoice, customers, mit_abzug: bool = False) -> tup
         delivery_date=quelle.delivery_date,
         payment_terms=quelle.payment_terms,
         notes=quelle.notes,
+        # Kopf-/Fusstext werden wie die Bemerkung vererbt: sie sind bereits
+        # Rechnungsinhalt der Vorlage (Platzhalter war schon ersetzt).
+        kopftext=getattr(quelle, "kopftext", None),
+        fusstext=getattr(quelle, "fusstext", None),
         document_language=getattr(quelle, "document_language", None) or "de",
         invoice_type=None,
     )
@@ -604,8 +616,24 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
 
     # Sprache vor Nummernvergabe: ungueltiger Wert und fehlende englische
     # Vorgabe duerfen den Zaehler nicht erhoehen (docs/specs/belegsprache.md S1/S7).
+    # Kundenvorgabe (falls gesetzt) ueberschreibt die Formularwahl: beim Anlegen
+    # weiss der Nutzer den Kundenwunsch oft nicht, im Entwurf bleibt es aenderbar.
     document_language = _belegsprache_aus_form(form)
-    payment_terms = _zahlungsbedingungen(form, company, document_language)
+    kunde = (
+        db.query(Customer).filter(Customer.id == customer_id).first()
+        if customer_id is not None else None
+    )
+    # Vorbelegung aus dem Kundenstamm (Festlegung 15): Kopf-/Fusstext mit
+    # ersetztem {leistungsmonat}, Zahlungshinweis, Belegsprache. Formularwerte
+    # gewinnen; leer heisst, der Kunde darf seine Vorgabe beitragen.
+    vorgabe = kundenvorgaben.entwurfs_vorbelegung(
+        kunde, service_period_start, service_period_end,
+    )
+    if vorgabe.belegsprache:
+        document_language = vorgabe.belegsprache
+    payment_terms = _zahlungsbedingungen(
+        form, company, document_language, kunden_hinweis=vorgabe.zahlungshinweis,
+    )
 
     items_json = form.get("items_json", "[]")
     raw_items = json.loads(items_json)
@@ -646,6 +674,10 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
         buyer_reference=form.get("buyer_reference", "").strip() or None,
         buyer_order_reference=form.get("buyer_order_reference", "").strip() or None,
         notes=form.get("notes", "").strip() or None,
+        # Kopf-/Fusstext: Formularfeld gewinnt, sonst Vorbelegung aus dem
+        # Kundenstamm (nur leere Felder werden gefuellt, siehe oben).
+        kopftext=(form.get("kopftext", "").strip() or vorgabe.kopftext) or None,
+        fusstext=(form.get("fusstext", "").strip() or vorgabe.fusstext) or None,
         currency="EUR",
         zugferd_profile="EN16931",
         tax_category=tax_category,
@@ -749,6 +781,10 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
     # sie tauchen hier bewusst nicht auf.
     rohe_positionen = json.loads(form.get("items_json", "[]"))
     aus_beleg = belegsperre.gilt(invoice)
+    # Vorher-Stand fuer die Vorbelegung weiter unten: beim ERSTEN Speichern mit
+    # Kunde greifen die Kundenvorgaben noch auf leere Felder, danach nie wieder
+    # (sonst kaeme ein bewusst geleertes Feld beim naechsten Speichern zurueck).
+    kunde_vorher = invoice.customer_id
     if aus_beleg:
         # Was aus dem signierten Beleg stammt, kommt aus dem Bestand und nicht
         # aus dem Formular (services/belegsperre.py).
@@ -783,6 +819,21 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
     invoice.buyer_reference = form.get("buyer_reference", "").strip() or None
     invoice.buyer_order_reference = form.get("buyer_order_reference", "").strip() or None
     invoice.notes = form.get("notes", "").strip() or None
+    invoice.kopftext = (form.get("kopftext") or "").strip() or None
+    invoice.fusstext = (form.get("fusstext") or "").strip() or None
+
+    # Erstmals mit Kunde gespeichert (Auftrag 2a): die Vorbelegung konnte beim
+    # Anlegen nicht greifen, weil kein Kunde gewaehlt war. Sie fuellt jetzt nur
+    # Felder, die noch leer sind; was der Nutzer hier eingetippt hat, gewinnt.
+    if invoice.customer_id is not None and kunde_vorher is None:
+        kunde = db.query(Customer).filter(Customer.id == invoice.customer_id).first()
+        vorgabe = kundenvorgaben.entwurfs_vorbelegung(
+            kunde, invoice.service_period_start, invoice.service_period_end,
+        )
+        if invoice.kopftext is None:
+            invoice.kopftext = vorgabe.kopftext
+        if invoice.fusstext is None:
+            invoice.fusstext = vorgabe.fusstext
 
     # Abzug: unvollstaendiges Paar und unparsebarer Betrag wie oben, Wertefehler
     # aus belegsummen. Hier gibt es keinen Zaehler zu schuetzen, aber dieselbe

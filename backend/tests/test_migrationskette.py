@@ -112,6 +112,46 @@ def test_upgrade_head_passt_zu_den_modellen(migrationsdatenbank):
         pytest.fail(f"Migration und Modelle laufen auseinander:\n{abweichung}")
 
 
+def test_kundenvorgaben_spalten_nach_upgrade_head(migrationsdatenbank):
+    """Migration 025 legt die Kundenvorgaben an (Bauschritt 2a).
+
+    Die sieben Spalten muessen wirklich am Ende der Kette stehen — `alembic check`
+    vergleicht Modelle mit Schema, sagt aber nicht, WELCHE Spalte fehlte, wenn
+    jemand die 025 aus der Kette loescht und das Modell mitzieht.
+    """
+    url, _ = migrationsdatenbank
+    engine = create_engine(url)
+    try:
+        with engine.connect() as conn:
+            kunden = {
+                zeile[0] for zeile in conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'customers'"
+                ))
+            }
+            belege = {
+                zeile[0] for zeile in conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'invoices'"
+                ))
+            }
+            checks = {
+                zeile[0] for zeile in conn.execute(text(
+                    "SELECT conname FROM pg_constraint "
+                    "WHERE conrelid = 'customers'::regclass AND contype = 'c'"
+                ))
+            }
+    finally:
+        engine.dispose()
+
+    assert {"auftrag_steuer", "kopftext", "fusstext", "zahlungshinweis",
+            "belegsprache_vorgabe"} <= kunden
+    assert {"kopftext", "fusstext"} <= belege
+    # Die Wertevorraete sind DB-CHECKs, nicht nur Formularpruefung (Festlegung 13).
+    assert "ck_customers_auftrag_steuer_wertevorrat" in checks
+    assert "ck_customers_belegsprache_vorgabe_wertevorrat" in checks
+
+
 def test_upgrade_head_legt_beide_singleton_zeilen_an(migrationsdatenbank):
     """`company` und `app_config` sind Singletons mit id=1.
 

@@ -548,6 +548,14 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
     ))
     story.append(Spacer(1, 0.5 * cm))
 
+    # Kopftext (Festlegung 15): Rechnungsinhalt aus dem Kundenstamm, ueber der
+    # Positionstabelle. Dieselbe Aufbereitung wie Beschreibungen — auch hier ist
+    # der rohe Text kein Markup. Leer druckt nichts.
+    kopftext = (getattr(invoice, "kopftext", None) or "").strip()
+    if kopftext:
+        story.append(Paragraph(_description_markup(kopftext), small))
+        story.append(Spacer(1, 0.3 * cm))
+
     item_rows = _build_item_rows(invoice, d)
     # Aus dem Inhalt, nicht aus festen Zentimetern (services/pdf_spalten.py).
     # Größe und Polsterung müssen zum TableStyle darunter passen.
@@ -670,6 +678,14 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
     ]))
     story.append(totals_table)
+
+    # Fusstext (Festlegung 15): unter dem Summenblock, vor dem Zahlungsblock.
+    # Der Reverse-Charge-Vermerk steht im Steuerhinweis weiter oben; der
+    # Fusstext wiederholt ihn bewusst nicht. Leer druckt nichts.
+    fusstext = (getattr(invoice, "fusstext", None) or "").strip()
+    if fusstext:
+        story.append(Spacer(1, 0.3 * cm))
+        story.append(Paragraph(_description_markup(fusstext), small))
 
     story.append(Spacer(1, 0.8 * cm))
     if _zahlung_an_kunde(invoice) and _zahlungs_empfaenger(invoice, company):

@@ -80,6 +80,14 @@ class Invoice(Base):
     # damit Leitweg-ID und Purchase-Order gleichzeitig getragen werden können.
     buyer_order_reference: Mapped[Optional[str]] = mapped_column(String(100))
     notes: Mapped[Optional[str]] = mapped_column(Text)
+    # Kopf- und Fusstext, beim Anlegen aus dem Kunden KOPIERT (Festlegung 15):
+    # Platzhalter {leistungsmonat} schon ersetzt, spaetere Aenderungen am Kunden
+    # erreichen diesen Beleg nicht mehr. Bewusst eigene Spalten und nicht live
+    # gelesen, damit der Beleg auch nach einer Kundenkorrektur noch aussieht wie
+    # gestellt. Nach dem Finalisieren Rechnungsinhalt: nicht in
+    # MUTABLE_AFTER_FINALIZE, der Guard schuetzt sie wie notes.
+    kopftext: Mapped[Optional[str]] = mapped_column(Text)
+    fusstext: Mapped[Optional[str]] = mapped_column(Text)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="EUR", server_default="EUR")
     net_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")
     tax_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")

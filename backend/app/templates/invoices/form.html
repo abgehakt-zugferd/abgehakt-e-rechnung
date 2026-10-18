@@ -328,6 +328,22 @@
                     </div>
                 </div>
 
+                <!-- Kopf- und Fußtext: aus dem Kundenstamm vorbelegt, im Entwurf frei -->
+                <div class="card">
+                    <label class="label">Kopftext</label>
+                    <textarea name="kopftext" rows="2" class="input" placeholder="Erscheint auf der Rechnung über den Positionen">{{ (belegung.kopftext if belegung and belegung.kopftext else '') or '' }}</textarea>
+                    <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+                        Beim Anlegen aus dem Kundenstamm vorbelegt; Platzhalter {leistungsmonat} wird zu MM/JJJJ des Leistungszeitraums. Nach dem Finalisieren unveränderlich.
+                    </p>
+                </div>
+                <div class="card">
+                    <label class="label">Fußtext</label>
+                    <textarea name="fusstext" rows="2" class="input" placeholder="Erscheint auf der Rechnung unter dem Summenblock">{{ (belegung.fusstext if belegung and belegung.fusstext else '') or '' }}</textarea>
+                    <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+                        Den Reverse-Charge-Vermerk druckt das Programm selbst; hier nicht wiederholen. Nach dem Finalisieren unveränderlich.
+                    </p>
+                </div>
+
                 <!-- Notes -->
                 <div class="card">
                     <label class="label">Notizen / Anmerkungen</label>

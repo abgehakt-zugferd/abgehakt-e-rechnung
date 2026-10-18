@@ -1,6 +1,6 @@
 import uuid
 from datetime import date, datetime
-from sqlalchemy import String, Boolean, Date, DateTime, func, Integer, text
+from sqlalchemy import String, Text, Boolean, CheckConstraint, Date, DateTime, func, Integer, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
@@ -8,6 +8,19 @@ from app.database import Base
 
 class Customer(Base):
     __tablename__ = "customers"
+
+    # Wertevorraete als DB-CHECKs, identisch zu Migration 025 (alembic check):
+    # das Formular prueft zuerst, aber der CHECK greift auch ohne Formular.
+    __table_args__ = (
+        CheckConstraint(
+            "auftrag_steuer IS NULL OR auftrag_steuer IN ('AE')",
+            name="ck_customers_auftrag_steuer_wertevorrat",
+        ),
+        CheckConstraint(
+            "belegsprache_vorgabe IS NULL OR belegsprache_vorgabe IN ('de', 'en')",
+            name="ck_customers_belegsprache_vorgabe_wertevorrat",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
@@ -51,6 +64,24 @@ class Customer(Base):
     # Gesetzt, wenn jemand bewusst regelbesteuert oder kleinunternehmer waehlt.
     # Bei Rueckkehr zu ungeklaert geleert. Nur Anzeige, keine Fachlogik.
     ust_status_bestaetigt_am: Mapped[date | None] = mapped_column(Date)
+    # Vorgaben fuer Rechnungen aus Rechnungsauftraegen (Festlegung 13): Steuer-
+    # kategorie und -vermerk kommen aus DEM KUNDEN, nicht aus dem Draht, denn der
+    # Auftrag traegt nur Netto. Wertevorrat {"AE"} in dieser Fassung; AE verlangt
+    # eine USt-IdNr. des Kunden. NULL heisst: keine Vorgabe.
+    auftrag_steuer: Mapped[str | None] = mapped_column(String(20))
+    # Vorlagen fuer Kopf- und Fusstext jeder Rechnung an diesen Kunden
+    # (Entscheidung 5), mit dem Platzhalter {leistungsmonat}. Beim Anlegen wird
+    # KOPIERT (Festlegung 15), der Platzhalter ist dann schon ersetzt; eine
+    # spaetere Aenderung hier erreicht keinen bestehenden Beleg.
+    kopftext: Mapped[str | None] = mapped_column(Text)
+    fusstext: Mapped[str | None] = mapped_column(Text)
+    # Entscheidung 4: manche Kunden zahlen nach eigenem Takt, ein Faelligkeits-
+    # datum waere eine Angabe, die nichts regelt. Der Hinweis wandert beim
+    # Anlegen in payment_terms des Belegs.
+    zahlungshinweis: Mapped[str | None] = mapped_column(Text)
+    # Belegsprache der Belege an diesen Kunden, falls der Kunde eine erwartet.
+    # NULL heisst: die Sprache wird im Rechnungsformular gewaehlt wie bisher.
+    belegsprache_vorgabe: Mapped[str | None] = mapped_column(String(2))
     # Kommagetrennte Liste (#58), gepflegt über `services/empfaenger.py`. Sie steht
     # hier und nicht in `app_config`, weil sie zu DIESEM Kunden gehört: die globale
     # Voreinstellung ginge sonst an jeden anderen Kunden mit in Kopie.

@@ -12,6 +12,43 @@ from app.services.steuerstatus import (
     ust_status_aus_formular,
 )
 
+# Wertevorraete der Kundenvorgaben (Festlegung 13): Formular und DB-CHECK
+# (Migration 025) pruefen denselben Vorrat. Ausserhalb des Vorrats ist ein
+# manipulierter POST, kein Tippfehler — die Auswahl bietet nur diese Werte.
+AUFTRAG_STEUER_WERTE = frozenset({"AE"})
+BELEGSPRACHE_VORGABEN = frozenset({"de", "en"})
+
+
+def vorgaben_pruefen(auftrag_steuer: str, belegsprache_vorgabe: str) -> str | None:
+    """Prueft die beiden Vorgaben mit Wertevorrat; None heisst in Ordnung.
+
+    Der DB-CHECK allein wuerde aus einem manipulierten POST einen 500er machen;
+    hier wird derselbe Vorrat vorher als Formularfehler gemeldet.
+    """
+    steuer = (auftrag_steuer or "").strip()
+    if steuer and steuer not in AUFTRAG_STEUER_WERTE:
+        return f"Unbekannte Steuervorgabe: {steuer}"
+    sprache = (belegsprache_vorgabe or "").strip()
+    if sprache and sprache not in BELEGSPRACHE_VORGABEN:
+        return f"Unbekannte Belegsprachenvorgabe: {sprache}"
+    return None
+
+
+def vorgaben_speichern(
+    customer: Customer,
+    *,
+    auftrag_steuer: str,
+    kopftext: str,
+    fusstext: str,
+    zahlungshinweis: str,
+    belegsprache_vorgabe: str,
+) -> None:
+    customer.auftrag_steuer = (auftrag_steuer or "").strip() or None
+    customer.kopftext = kopftext.strip() or None
+    customer.fusstext = fusstext.strip() or None
+    customer.zahlungshinweis = zahlungshinweis.strip() or None
+    customer.belegsprache_vorgabe = (belegsprache_vorgabe or "").strip() or None
+
 
 def bank_felder(bank_iban: str, bank_bic: str, bank_name: str) -> tuple[dict, str | None]:
     """Normalisiert Bankfelder oder liefert Formularwerte + Fehlermeldung."""
@@ -99,6 +136,11 @@ def formularwerte(
     phone: str,
     notes: str,
     cc_emails: str,
+    auftrag_steuer: str = "",
+    kopftext: str = "",
+    fusstext: str = "",
+    zahlungshinweis: str = "",
+    belegsprache_vorgabe: str = "",
 ) -> dict:
     return {
         "customer_number": number,
@@ -116,4 +158,9 @@ def formularwerte(
         "phone": phone,
         "notes": notes,
         "cc_emails": cc_emails,
+        "auftrag_steuer": auftrag_steuer,
+        "kopftext": kopftext,
+        "fusstext": fusstext,
+        "zahlungshinweis": zahlungshinweis,
+        "belegsprache_vorgabe": belegsprache_vorgabe,
     }
