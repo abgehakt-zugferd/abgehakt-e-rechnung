@@ -28,9 +28,9 @@ ABGELEHNT_AB_MAJOR = 2
 # 1.7 fuehrt zwei neue Arten (rechnungsauftrag und aufstellungsauftrag,
 # §§ 8a und 8b). Dass sie hier stehen, heisst nur, dass das PROTOKOLL sie
 # kennt - die Frage, was dieser Empfaenger LIEST, ist eine andere, und ihre
-# Antwort steht in uebergabe_befund.LESBARE_ARTEN. Der rechnungsauftrag wird
-# gelesen (seine Grundregeln, Teil 1a); der aufstellungsauftrag wartet weiter
-# auf eine Freigabe und faellt an der Artprobe mit NUTZLASTART_UNBEKANNT.
+# Antwort steht in uebergabe_befund.LESBARE_ARTEN. Beide werden gelesen:
+# der rechnungsauftrag seit Teil 1a, der aufstellungsauftrag seit § 8b
+# (sein Leser traegt die Anlagenprobe gegen die Dateien).
 NUTZLAST_ARTEN = (
     "erloesmeldung",
     "abrechnungsauftrag",
@@ -157,10 +157,9 @@ def zeit(wert) -> Optional[datetime]:
 # wird gegen das Protokoll gemessen (tests/vektoren/), nicht abgeschrieben.
 #
 # Gefuehrt sind die Arten, die dieser Empfaenger liest: der Umschlag, der
-# `abrechnungsauftrag` und seit 1.7 der `rechnungsauftrag` (§ 8a, Grundregeln).
-# Die `erloesmeldung` geht an tantiemen, nicht hierher; die `quittung` schreibt
-# diese Anwendung noch nicht; der `aufstellungsauftrag` (§ 8b) wartet auf seinen
-# Bau.
+# `abrechnungsauftrag`, seit 1.7 der `rechnungsauftrag` (§ 8a) und der
+# `aufstellungsauftrag` (§ 8b). Die `erloesmeldung` geht an tantiemen, nicht
+# hierher; die `quittung` schreibt diese Anwendung noch nicht.
 #
 # Wichtig an beiden Auftraegen: sie tragen NUR NETTO. `steuer`, `brutto`,
 # `steuersatz` und `steuerkategorie` stehen weder unter pflicht noch unter
@@ -168,7 +167,9 @@ def zeit(wert) -> Optional[datetime]:
 # waere, sondern weil dann zwei Stellen dieselbe Zahl behaupten: die Steuer
 # entsteht hier, aus dem Steuerstatus des Kunden hinter der partner_id. Beim
 # rechnungsauftrag gilt dasselbe fuer `anlagen` - die traegt in 1.7 nur der
-# aufstellungsauftrag.
+# aufstellungsauftrag, und umgekehrt ist dessen `typcode` ebensowenig da:
+# Die Aufstellung ist keine Rechnung (§ 14 UStG), ihre Quellensteuer ist ein
+# Einbehalt des Auszahlers.
 #
 # Fehlt ein Pflichtfeld, ist der Befund PFLICHTFELD_FEHLT, nicht UNBEKANNTES_FELD:
 # das Feld ist bekannt, es ist nur nicht da.
@@ -253,7 +254,37 @@ FELDER = {   'umschlag': {   'pflicht': [   'format_version',
                                                                                    'beleg_sha256',
                                                                                    'leistungsperiode',
                                                                                    'netto'],
-                                                                    'erlaubt': []}}}}
+                                                                    'erlaubt': []}}},
+    'aufstellungsauftrag': {   'pflicht': [   'auftragsschluessel',
+                                             'kunde',
+                                             'leistungszeitraum',
+                                             'zahlung',
+                                             'waehrung',
+                                             'betraege',
+                                             'anlagen'],
+                              'erlaubt': ['umrechnung'],
+                              'unterobjekte': {   'kunde': {   'pflicht': [   'partner_id'],
+                                                               'erlaubt': [   'anzeigename']},
+                                                  'leistungszeitraum': {   'pflicht': [   'von',
+                                                                                           'bis'],
+                                                                          'erlaubt': []},
+                                                  'zahlung': {   'pflicht': [   'zahlungsnummer',
+                                                                                'datum'],
+                                                                'erlaubt': []},
+                                                  'betraege': {   'pflicht': [   'brutto',
+                                                                                 'quellensteuer',
+                                                                                 'netto'],
+                                                                 'erlaubt': []},
+                                                  'umrechnung': {   'pflicht': [   'kurs',
+                                                                                   'waehrung',
+                                                                                   'zahlbetrag'],
+                                                                   'erlaubt': []},
+                                                  'anlagen[]': {   'pflicht': [   'quelle',
+                                                                                  'dateiname',
+                                                                                  'sha256',
+                                                                                  'groesse',
+                                                                                  'medientyp'],
+                                                                   'erlaubt': []}}}}
 
 # § 4: die Form je Geld- und Satzfeld, als Verzeichnispfad (der Schluessel aus
 # FELDER plus Feldname, so wie der Leser ihn bildet). Geld ist eine
@@ -264,7 +295,10 @@ FELDER = {   'umschlag': {   'pflicht': [   'format_version',
 # sie gilt nicht je Feld des Belegs, sondern am Umschlag und am Beiblatt
 # eines Schluessels. Die letzten drei Pfade gehoeren zum rechnungsauftrag
 # (§ 8a): Seine positionen, summe und grundlagen liegen OBEN in der Nutzlast,
-# die des abrechnungsauftrags unter gutschriften[].
+# die des abrechnungsauftrags unter gutschriften[]. Die letzten vier gehoeren
+# zum aufstellungsauftrag (§ 8b): Seine betraege und der zahlbetrag der
+# umrechnung - der kurs ist KEIN Geld und KEIN Satz, denn er steht drauf, wie
+# ihn die Plattform nennt, seine Form prueft der Leser selbst.
 FELDFORMEN = {
     'bemessung.erloes_netto': 'geld',
     'bemessung.direktkosten_netto': 'geld',
@@ -278,4 +312,8 @@ FELDFORMEN = {
     'positionen[].netto': 'geld',
     'summe.netto': 'geld',
     'grundlagen[].netto': 'geld',
+    'betraege.brutto': 'geld',
+    'betraege.quellensteuer': 'geld',
+    'betraege.netto': 'geld',
+    'umrechnung.zahlbetrag': 'geld',
 }

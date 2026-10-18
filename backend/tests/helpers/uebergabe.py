@@ -5,6 +5,7 @@ Die Formatvektoren liegen ausserhalb des Repositoriums und sind nicht immer da
 eigener Beleg - fuer alles, was mit den Vektoren nichts zu tun hat.
 """
 
+import hashlib
 import json
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -116,6 +117,57 @@ def rechnungsauftrag(**aenderungen):
             "leistungsperiode": "2026-02",
             "netto": "171.34",
         }],
+    }
+    nutzlast.update(aenderungen)
+    return nutzlast
+
+
+# § 8b: Die Anlage liegt als Datei neben dem Beleg, ihr Eintrag nennt Hash und
+# Groesse derselben Bytes. Damit Tests ohne Dateisystem auskommen, stehen hier
+# zwei erfundene Anlagen als Bytes; die Empfangslage eines Tests reicht sie
+# nach ihrem Hash her (Empfangslage.anlagen_bytes).
+ANLAGE_ABRECHNUNGSBERICHT = b"Probe-Abrechnungsbericht, erfundene Bytes ohne xlsx."
+ANLAGE_ZAHLUNGSBERICHT = b"Probe-Zahlungsbericht, erfundene Bytes ohne xlsx."
+
+ANLAGE_MEDIENTYP = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def anlage(quelle, dateiname, bytes_):
+    """Ein Anlageneintrag (§ 8b) zu gegebenen Bytes: Hash und Groesse passen,
+    denn beide nannte sonst schon der Lesertest."""
+    return {
+        "quelle": quelle,
+        "dateiname": dateiname,
+        "sha256": hashlib.sha256(bytes_).hexdigest(),
+        "groesse": len(bytes_),
+        "medientyp": ANLAGE_MEDIENTYP,
+    }
+
+
+def probe_anlagen() -> dict:
+    """Die beiden Probeanlagen als {sha256: bytes} - der Bestand, den die
+    Empfangslage eines Tests hinterlegt hat."""
+    return {hashlib.sha256(b).hexdigest(): b
+            for b in (ANLAGE_ABRECHNUNGSBERICHT, ANLAGE_ZAHLUNGSBERICHT)}
+
+
+def aufstellungsauftrag(**aenderungen):
+    """§ 8b (Fassung 1.7): Abrechnungsaufstellung bei Drittlandzahlung - keine
+    Rechnung, kein typcode, keine Steuerfelder, zwei Anlagen neben dem Beleg.
+    Erfundene Zahlen; USD, damit die umrechnung dasteht. netto x kurs muss
+    zahlbetrag NICHT ergeben: Die Plattform rechnet die Umrechnung."""
+    nutzlast = {
+        "auftragsschluessel": "plattform:2026-02:kanal-b:x1",
+        "kunde": {"partner_id": PARTNER_A, "anzeigename": "Beispiel Services LLC"},
+        "leistungszeitraum": {"von": "2026-02-01", "bis": "2026-02-28"},
+        "zahlung": {"zahlungsnummer": "100000000000001", "datum": "2026-04-29"},
+        "waehrung": "USD",
+        "betraege": {"brutto": "6.92", "quellensteuer": "2.08", "netto": "4.84"},
+        "umrechnung": {"kurs": "0.8533", "waehrung": "EUR", "zahlbetrag": "4.13"},
+        "anlagen": [
+            anlage("abrechnungsbericht", "bericht.xlsx", ANLAGE_ABRECHNUNGSBERICHT),
+            anlage("zahlungsbericht", "zahlung.xlsx", ANLAGE_ZAHLUNGSBERICHT),
+        ],
     }
     nutzlast.update(aenderungen)
     return nutzlast

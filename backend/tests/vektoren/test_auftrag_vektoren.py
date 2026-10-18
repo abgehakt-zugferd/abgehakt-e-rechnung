@@ -24,7 +24,6 @@ import json
 
 import pytest
 
-from app.services.abrechnungsauftrag_wirkung import WirkungFehler, entwuerfe_anlegen
 from app.services.uebergabe_befund import Empfangslage, beleg_beurteilen
 
 # Die drei Vektoren, deren Regel in der Nutzlast der Erloesmeldung sitzt.
@@ -124,35 +123,6 @@ def test_erloesmeldungen_werden_hier_gar_nicht_erst_gelesen(vektoren, schluessel
 
     assert not urteil.angenommen
     assert [f.code for f in urteil.feststellungen] == ["NUTZLASTART_UNBEKANNT"]
-
-
-@pytest.mark.parametrize("gruppe", ["aufstellungen"])
-def test_die_neuen_arten_werden_noch_nicht_gelesen(vektoren, schluesselordner, gruppe):
-    """1.7 kennt rechnungsauftrag und aufstellungsauftrag (§§ 8a, 8b); der
-    rechnungsauftrag wird seit Teil 1a gelesen, der aufstellungsauftrag
-    wartet weiter auf seinen Bau.
-
-    Gemessen wird der Kettenanfang der Gruppe: ein gueltig signierter,
-    richtig an diesen Empfaenger adressierter Beleg. Er kommt durch jede
-    Umschlagprobe - Fassung, Hash, Signatur, Kette - und faellt genau an der
-    Artprobe, nicht frueher: GENAU EIN Befund beweist, dass nichts anderes
-    ihn abgewiesen hat. Die Wirkung verweigert fuer abgelehnte Belege, es
-    entsteht kein Entwurf; gemessen am ersten Haken von entwuerfe_anlegen.
-
-    Die rechnungsauftraege misst dieser Test nicht mehr: Ihre Grundregeln
-    misst test_rechnungsauftrag_leser.py an erfundenen Belegen; die weiteren
-    Teile (Gruppen, Bezeichnungen, Grundlagen, Auftragsschluessel) sammeln
-    die Vektorfaelle ein, sobald sie gebaut sind.
-    """
-    roh = (vektoren / gruppe / "01_gueltig.json").read_bytes()
-
-    urteil = beleg_beurteilen(roh, Empfangslage(), schluessel_wurzel=schluesselordner)
-
-    assert not urteil.angenommen
-    assert [f.code for f in urteil.feststellungen] == ["NUTZLASTART_UNBEKANNT"]
-    assert urteil.nutzlast_art == json.loads(roh)["nutzlast_art"]
-    with pytest.raises(WirkungFehler):
-        entwuerfe_anlegen(None, urteil)
 
 
 def test_derselbe_beleg_noch_einmal_ist_keine_ablehnung(vektoren, schluesselordner):

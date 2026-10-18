@@ -59,16 +59,20 @@ from app.services.uebergabebeleg import (
 )
 
 # Was dieser Empfaenger liest. Die `erloesmeldung` geht an tantiemen, die
-# `quittung` schreibt diese Anwendung noch nicht (Stufe 7), der
-# `aufstellungsauftrag` (§ 8b) wartet auf seinen Bau. Der `rechnungsauftrag`
-# (§ 8a) ist mit seinem Auftragsschluessel vollstaendig gebaut
-# (_rechnungsauftrag_pruefen); was aus ihm WIRD, entscheidet sich in einem
-# spaeteren Bauschritt.
-LESBARE_ARTEN = ("abrechnungsauftrag", "rechnungsauftrag")
+# `quittung` schreibt diese Anwendung noch nicht (Stufe 7). Der
+# `rechnungsauftrag` (§ 8a) ist mit seinem Auftragsschluessel vollstaendig
+# gebaut (_rechnungsauftrag_pruefen); was aus ihm WIRD, entscheidet sich in
+# einem spaeteren Bauschritt. Der `aufstellungsauftrag` (§ 8b) ist gebaut als
+# LESER und nur als Leser (_aufstellungsauftrag_pruefen): kein Entwurf, kein
+# Modell - die Anlagenprobe haelt jeden Beleg gegen die Dateien.
+LESBARE_ARTEN = ("abrechnungsauftrag", "rechnungsauftrag", "aufstellungsauftrag")
 
 # Ein Pflichtfeld, das da ist und leer, ist bei diesen beiden nicht da: ein
 # Auftrag ohne Gutschrift und eine Gutschrift ohne Position tun nichts.
-# `grundlagen` und `vortraege` duerfen leer sein - das sind Aussagen.
+# `grundlagen` und `vortraege` duerfen leer sein - das sind Aussagen. Die
+# `anlagen` des § 8b zaehlen NICHT hierher: Eine leere Liste ist dort keine
+# Leerstelle, sondern eine falsche Besetzung (WERT_UNBRAUCHBAR), denn der
+# Auftrag verlangt GENAU ZWEI.
 _LEER_IST_FEHLEND = ("gutschriften", "positionen")
 
 _CENT = Decimal("0.01")
@@ -144,6 +148,20 @@ class Empfangslage:
         """
         return None
 
+    def anlagen_bytes(self, sha256: str) -> Optional[bytes]:
+        """Die Bytes der Anlage, die unter diesem Hash abgelegt ist - oder
+        None, wenn dort keine liegt.
+
+        § 8b: Die Anlagen liegen unter anlagen/<sha256>.xlsx im Uebergabeordner
+        der Richtung, VOR dem Beleg geschrieben; der Name ist der Hash. Der
+        Ordner gehoert zur Empfangslage und nicht zum Leser, denn der Leser
+        kennt keinen Ordner (siehe oben). Die leere Lage kennt keine Anlage,
+        und das ist die ehrliche Antwort: Jeder aufstellungsauftrag bekaeme
+        ANLAGE_FEHLT. Die Fassung mit Ordner steht in uebergabe_eingang.py,
+        sobald der Empfang der Art gebaut wird.
+        """
+        return None
+
 
 def _zahl(wert) -> Optional[Decimal]:
     """Betrag oder Satz als Decimal, OHNE zu runden.
@@ -203,6 +221,25 @@ _MONAT_FORM = re.compile(r"^[0-9]{4}-(0[1-9]|1[0-2])$")
 # abhaengig. Die Form steht hier und nicht in FELDFORMEN, denn dort stehen
 # die Geld- und Satzformen des § 4, die JEDE Art betreffen.
 _AUFTRAGSSCHLUESSEL_FORM = re.compile(r"^[a-z0-9:-]{1,128}$")
+
+
+# § 8b: die Formen, die nur der aufstellungsauftrag liest. Die waehrung ist
+# ISO 4217 als Form, aber ohne Wertevorrat - ein Vorrat stuende im
+# oeffentlichen Code dieses Empfaengers. Der kurs ist weder Geld (genau zwei
+# Nachkommastellen) noch Satz (mindestens zwei): Er steht drauf, wie ihn die
+# Plattform nennt. Die zahlungsnummer ist eine Kennung aus Ziffern, keine
+# Zahl - die xlsx speichert sie als Gleitkommazahl, und
+# '100000000000001.0' ist ein anderer Wert.
+_WAEHRUNG_FORM = re.compile(r"^[A-Z]{3}$")
+_KURS_FORM = re.compile(r"^[0-9]+\.[0-9]+$")
+_ZAHLUNGSNUMMER_FORM = re.compile(r"^[0-9]+$")
+
+# § 8b: der geschlossene Bestand der Anlagen - GENAU zwei, je eine quelle,
+# hinter jedem anderen Namen steht ein anderer Bericht. groesse ist eine
+# Schutzgrenze fuer den Leser, keine Aussage ueber einen Versandweg.
+_ANLAGEN_QUELLEN = ("abrechnungsbericht", "zahlungsbericht")
+_ANLAGE_MEDIENTYP = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_ANLAGE_GROESSE_HOECHST = 20_000_000
 
 
 # § 8a, Teil 1b: Gleichheit von gruppe und bezeichnung ist Zeichengleichheit
@@ -345,36 +382,16 @@ def _felder_pruefen(objekt, verzeichnis, pfad) -> list:
     return funde
 
 
-def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage, art: str) -> list:
-    """§§ 8 und 8a: der Feldbestand aus dem Verzeichnis je Art, dann ihre Proben.
+def _auftragsschluessel_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
+    """§§ 8a und 8b, gemeinsam: die Form des auftragsschluessels und der
+    zweite Haken.
 
-    Die Formen des § 4 (Geld, Satz) hat _felder_pruefen schon geprueft; hier
-    wird nur noch gerechnet, und _zahl kann an keiner Angabe mehr scheitern.
-
-    Gesammelt wird alles Falsche, nicht bloss das Erste: § 10 verlangt JE
-    Grund einen Befund. Der Leser meldete bisher nur den ersten - der
-    Absender reparierte die eine Stelle, reichte wieder ein, und erst dann
-    kam der zweite Befund.
-    """
-    funde = _felder_pruefen(nutzlast, FELDER[art], "$.nutzlast")
-    if funde:
-        return funde
-    if art == "rechnungsauftrag":
-        return _rechnungsauftrag_pruefen(nutzlast, lage)
-    return _abrechnungsauftrag_pruefen(nutzlast, lage)
-
-
-def _rechnungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
-    """§ 8a (Fassung 1.7): Grundregeln (Teil 1a), die Gruppen, Bezeichnungen
-    und Grundlagen (Teil 1b) und den Auftragsschluessel samt Kunde (Teil 1c).
-    Wie beim abrechnungsauftrag gilt: Alles Falsche wird gesammelt.
+    Erst mit einer Form, die der Empfaenger zeichnen kann, lohnt die Frage
+    an die Lage, ob zu diesem Schluessel bereits ein Beleg besteht: Nach
+    einem Wert ausserhalb der Form wird nicht gesucht, denn der Absender
+    meinte einen anderen.
     """
     funde: list = []
-
-    # Teil 1c: Der Auftragsschluessel, zuerst die Form. Erst mit einer Form,
-    # die der Empfaenger zeichnen kann, lohnt die Frage an die Lage, ob zu
-    # diesem Schluessel bereits ein Beleg besteht: Nach einem Wert ausserhalb
-    # der Form wird nicht gesucht, denn der Absender meinte einen anderen.
     schluessel = nutzlast["auftragsschluessel"]
     if not isinstance(schluessel, str) \
             or not _AUFTRAGSSCHLUESSEL_FORM.match(schluessel):
@@ -393,37 +410,29 @@ def _rechnungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
                 "AUFTRAG_SCHON_GERECHNET", "$.nutzlast.auftragsschluessel",
                 erhalten=schon,
             ))
+    return funde
 
-    # Teil 1c: § 8a wie § 8 - der Kunde hinter partner_id muss im Stamm
-    # stehen. Ohne ihn gibt es keine Steuerkategorie und keinen Vermerk, und
-    # die Steuer wird nicht geraten.
+
+def _kunde_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
+    """§§ 8a und 8b, gemeinsam: der Kunde hinter partner_id muss im Stamm
+    stehen. Ohne ihn gibt es keine Steuerkategorie und keinen Vermerk, und
+    die Steuer wird nicht geraten; beim aufstellungsauftrag gibt es ohne ihn
+    niemanden, dem die Aufstellung zugeordnet waere."""
     partner_id = nutzlast["kunde"]["partner_id"]
     if not lage.partner_bekannt(str(partner_id)):
-        funde.append(Feststellung(
+        return [Feststellung(
             "PARTNER_ID_UNBEKANNT", "$.nutzlast.kunde.partner_id",
             erhalten=str(partner_id),
-        ))
+        )]
+    return []
 
-    # Geschlossene Vorraete. 380 ist die Ausgangsrechnung; 389 ist die
-    # Gutschrift aus § 8, ein anderer Beleg, kein Typcode mehr. EUR, bis die
-    # Kursfrage beantwortet ist: GBP als Euro zu lesen waere schlimmer als
-    # die Ablehnung.
-    if nutzlast["typcode"] != "380":
-        funde.append(Feststellung(
-            "WERT_UNBRAUCHBAR", "$.nutzlast.typcode",
-            erwartet="380", erhalten=str(nutzlast["typcode"]),
-        ))
-    if nutzlast["waehrung"] != "EUR":
-        funde.append(Feststellung(
-            "WERT_UNBRAUCHBAR", "$.nutzlast.waehrung",
-            erwartet="EUR", erhalten=str(nutzlast["waehrung"]),
-        ))
 
-    # Genau ein Kalendermonat: von der Erste, bis der Letzte desselben Monats.
-    # Wer sammelt, verliert die Zuordnung zur Zahlung. Gelesen wird mit
-    # derselben Regel wie beim abrechnungsauftrag (_datum), damit kein
-    # gueltiger Auftrag abgelehnt wird; die Monatsprobe kommt dazu.
-    zeitraum = nutzlast["leistungszeitraum"]
+def _kalendermonat_pruefen(zeitraum: dict) -> list:
+    """§§ 8a und 8b, gemeinsam: genau ein Kalendermonat - von der Erste, bis
+    der Letzte desselben Monats. Wer sammelt, verliert die Zuordnung zur
+    Zahlung. Gelesen wird mit derselben Regel wie beim abrechnungsauftrag
+    (_datum), damit kein gueltiger Auftrag abgelehnt wird."""
+    funde: list = []
     von = _datum(zeitraum["von"])
     bis = _datum(zeitraum["bis"])
     if von is None:
@@ -444,6 +453,60 @@ def _rechnungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
                 erwartet="ein Kalendermonat",
                 erhalten=f"von {zeitraum['von']}, bis {zeitraum['bis']}",
             ))
+    return funde
+
+
+def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage, art: str) -> list:
+    """§§ 8, 8a und 8b: der Feldbestand aus dem Verzeichnis je Art, dann
+    ihre Proben.
+
+    Die Formen des § 4 (Geld, Satz) hat _felder_pruefen schon geprueft; hier
+    wird nur noch gerechnet, und _zahl kann an keiner Angabe mehr scheitern.
+
+    Gesammelt wird alles Falsche, nicht bloss das Erste: § 10 verlangt JE
+    Grund einen Befund. Der Leser meldete bisher nur den ersten - der
+    Absender reparierte die eine Stelle, reichte wieder ein, und erst dann
+    kam der zweite Befund.
+    """
+    funde = _felder_pruefen(nutzlast, FELDER[art], "$.nutzlast")
+    if funde:
+        return funde
+    if art == "rechnungsauftrag":
+        return _rechnungsauftrag_pruefen(nutzlast, lage)
+    if art == "aufstellungsauftrag":
+        return _aufstellungsauftrag_pruefen(nutzlast, lage)
+    return _abrechnungsauftrag_pruefen(nutzlast, lage)
+
+
+def _rechnungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
+    """§ 8a (Fassung 1.7): Grundregeln (Teil 1a), die Gruppen, Bezeichnungen
+    und Grundlagen (Teil 1b) und den Auftragsschluessel samt Kunde (Teil 1c).
+    Wie beim abrechnungsauftrag gilt: Alles Falsche wird gesammelt.
+    """
+    funde: list = []
+
+    # Teil 1c: Auftragsschluessel und Kunde - seit § 8b gemeinsam mit dem
+    # aufstellungsauftrag, eine Quelle, keine Kopie.
+    funde += _auftragsschluessel_pruefen(nutzlast, lage)
+    funde += _kunde_pruefen(nutzlast, lage)
+
+    # Geschlossene Vorraete. 380 ist die Ausgangsrechnung; 389 ist die
+    # Gutschrift aus § 8, ein anderer Beleg, kein Typcode mehr. EUR, bis die
+    # Kursfrage beantwortet ist: GBP als Euro zu lesen waere schlimmer als
+    # die Ablehnung.
+    if nutzlast["typcode"] != "380":
+        funde.append(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.nutzlast.typcode",
+            erwartet="380", erhalten=str(nutzlast["typcode"]),
+        ))
+    if nutzlast["waehrung"] != "EUR":
+        funde.append(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.nutzlast.waehrung",
+            erwartet="EUR", erhalten=str(nutzlast["waehrung"]),
+        ))
+
+    # Teil 1a: Genau ein Kalendermonat, seit § 8b gemeinsam.
+    funde += _kalendermonat_pruefen(nutzlast["leistungszeitraum"])
 
     summe = Decimal("0")
     for nummer, position in enumerate(nutzlast["positionen"]):
@@ -600,6 +663,188 @@ def _rechnungsauftrag_grundlagen_pruefen(nutzlast: dict) -> list:
             "SUMME_STIMMT_NICHT", "$.nutzlast.grundlagen",
             erwartet=str(genannt), erhalten=str(summe),
         ))
+    return funde
+
+
+def _aufstellungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
+    """§ 8b (Fassung 1.7): die Abrechnungsaufstellung bei Drittlandzahlung.
+
+    Keine Rechnung (§ 14 UStG): kein typcode, keine Steuerfelder - die
+    Quellensteuer ist ein Einbehalt des Auszahlers, keine Steuer, die hier
+    entstuende. Auftragsschluessel, Kunde und Kalendermonat teilt die Art mit
+    dem rechnungsauftrag (§ 8a), deshalb die gemeinsamen Proben. Die
+    Reihenfolge: Felder (schon geprueft), dann Werte und Summen, DANN die
+    Dateien - nur ein in sich brauchbarer Beleg wird gegen die Dateien
+    gehalten, sonst hiesse der Befund ANLAGE_FEHLT, obwohl der Absender
+    zuerst die Nutzlast reparieren muss.
+    """
+    funde: list = []
+
+    # §§ 8a und 8b gemeinsam: der Schluessel und der Kunde hinter ihm.
+    funde += _auftragsschluessel_pruefen(nutzlast, lage)
+    funde += _kunde_pruefen(nutzlast, lage)
+
+    # Die waehrung als Form (ISO 4217), ohne Wertevorrat: Ein Vorrat stuende
+    # im oeffentlichen Code dieses Empfaengers. Eine gebrochene Form traegt
+    # die genau-dann-Regel der umrechnung nicht - nach ihr wird nicht
+    # entschieden, der Befund steht schon.
+    waehrung = nutzlast["waehrung"]
+    waehrung_formig = isinstance(waehrung, str) and _WAEHRUNG_FORM.match(waehrung)
+    if not waehrung_formig:
+        funde.append(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.nutzlast.waehrung",
+            erwartet="drei Grossbuchstaben", erhalten=str(waehrung),
+        ))
+    elif waehrung == "EUR":
+        # Bei EUR gibt es nichts umzurechnen; das Feld ist dann unbekannt -
+        # nicht nach dem Verzeichnis (dort steht es als erlaubt), sondern
+        # nach der genau-dann-Regel hier.
+        if "umrechnung" in nutzlast:
+            funde.append(Feststellung("UNBEKANNTES_FELD", "$.nutzlast.umrechnung"))
+    elif "umrechnung" not in nutzlast:
+        funde.append(Feststellung("PFLICHTFELD_FEHLT", "$.nutzlast.umrechnung"))
+
+    # Genau ein Kalendermonat, wie § 8a.
+    funde += _kalendermonat_pruefen(nutzlast["leistungszeitraum"])
+
+    # netto ist der eine abgeleitete Wert: Der Sender rundet brutto und
+    # quellensteuer kaufmaennisch und bildet netto daraus. Exakt, ohne
+    # Toleranz - ein Cent daneben ist keiner.
+    betraege = nutzlast["betraege"]
+    brutto = _zahl(betraege["brutto"])
+    quellensteuer = _zahl(betraege["quellensteuer"])
+    netto = _zahl(betraege["netto"])
+    if brutto - quellensteuer != netto:
+        funde.append(Feststellung(
+            "SUMME_STIMMT_NICHT", "$.nutzlast.betraege.netto",
+            erwartet=str(brutto - quellensteuer), erhalten=str(betraege["netto"]),
+        ))
+    # Ein Einbehalt des Auszahlers ist nie negativ; die Betraege gehen hier
+    # gerade auf, und deshalb faellt es sonst nicht auf.
+    if quellensteuer < 0:
+        funde.append(Feststellung(
+            "SUMME_STIMMT_NICHT", "$.nutzlast.betraege.quellensteuer",
+            erwartet="nie negativ", erhalten=str(betraege["quellensteuer"]),
+        ))
+    # Unbrauchbar ist der Wert, nicht die Summe: Der Sender bildet netto aus
+    # brutto und quellensteuer und haette ueber nichts keinen Auftrag
+    # erzeugen duerfen.
+    if netto <= 0:
+        funde.append(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.nutzlast.betraege.netto",
+            erwartet="groesser als 0.00", erhalten=str(betraege["netto"]),
+        ))
+
+    umrechnung = nutzlast.get("umrechnung")
+    if isinstance(umrechnung, dict):
+        # Der kurs steht drauf, wie ihn die Plattform nennt: Dezimalpunkt,
+        # so viele Nachkommastellen wie gedruckt - weder Geld- noch Satzform.
+        kurs = umrechnung["kurs"]
+        if not isinstance(kurs, str) or not _KURS_FORM.match(kurs):
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", "$.nutzlast.umrechnung.kurs",
+                erwartet="Dezimalbruch als Zeichenkette", erhalten=str(kurs),
+            ))
+        if umrechnung["waehrung"] != "EUR":
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", "$.nutzlast.umrechnung.waehrung",
+                erwartet="EUR", erhalten=str(umrechnung["waehrung"]),
+            ))
+        # netto x kurs == zahlbetrag wird NICHT geprueft: Die Plattform
+        # rechnet die Umrechnung, eine Abweichung waere eine gedruckte
+        # Tatsache.
+
+    # Die Zahlung: eine Kennung aus Ziffern und ein Datum. Wer die Nummer
+    # als Zahl parst, verliert die fuehrenden Nullen und verwechselt zwei
+    # Zahlungen; die xlsx speichert sie als Gleitkommazahl, und
+    # '100000000000001.0' ist ein anderer Wert.
+    nummer = nutzlast["zahlung"]["zahlungsnummer"]
+    if not isinstance(nummer, str) or not _ZAHLUNGSNUMMER_FORM.match(nummer):
+        funde.append(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.nutzlast.zahlung.zahlungsnummer",
+            erwartet="Ziffernfolge als Zeichenkette", erhalten=str(nummer),
+        ))
+    if _datum(nutzlast["zahlung"]["datum"]) is None:
+        funde.append(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.nutzlast.zahlung.datum",
+            erwartet="Datum", erhalten=str(nutzlast["zahlung"]["datum"]),
+        ))
+
+    # GENAU zwei Anlagen, je eine quelle: Die Aufstellung zaehlt beiden
+    # Berichten, und ein anderer Bestand waere eine andere Aufstellung. Eine
+    # andere Anzahl ist WERT_UNBRAUCHBAR, nicht PFLICHTFELD_FEHLT - auch die
+    # leere Liste, denn anlagen zaehlt nicht zu _LEER_IST_FEHLEND.
+    anlagen = nutzlast["anlagen"]
+    quellen = [anlage["quelle"] for anlage in anlagen]
+    if len(anlagen) != 2:
+        funde.append(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.nutzlast.anlagen",
+            erwartet="zwei Anlagen (abrechnungsbericht und zahlungsbericht)",
+            erhalten=str(len(anlagen)),
+        ))
+    elif sorted(quellen) != sorted(_ANLAGEN_QUELLEN):
+        funde.append(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.nutzlast.anlagen",
+            erwartet="je eine Anlage aus abrechnungsbericht und zahlungsbericht",
+            erhalten=", ".join(quellen),
+        ))
+    for nummer, anlage in enumerate(anlagen):
+        pfad = f"$.nutzlast.anlagen[{nummer}]"
+        if not isinstance(anlage["sha256"], str) \
+                or not _SHA256_FORM.match(anlage["sha256"]):
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", f"{pfad}.sha256",
+                erwartet="64 Kleinbuchstaben-Hex",
+                erhalten=str(anlage["sha256"]),
+            ))
+        # True ist in Python eine Ganzzahl, aber keine Groesse; die Grenzen
+        # schuetzen den Leser, nicht den Versandweg.
+        groesse = anlage["groesse"]
+        if not isinstance(groesse, int) or isinstance(groesse, bool) \
+                or not 1 <= groesse <= _ANLAGE_GROESSE_HOECHST:
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", f"{pfad}.groesse",
+                erwartet=f"Ganzzahl von 1 bis {_ANLAGE_GROESSE_HOECHST}",
+                erhalten=str(groesse),
+            ))
+        if anlage["medientyp"] != _ANLAGE_MEDIENTYP:
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", f"{pfad}.medientyp",
+                erwartet=_ANLAGE_MEDIENTYP, erhalten=str(anlage["medientyp"]),
+            ))
+        # dateiname bleibt ungeprueft: freier Text, und der Name nennt
+        # vielleicht eine Plattform oder eine Firma - abgehakt ist
+        # oeffentlich, solche Namen reisen als freie Daten.
+
+    if funde:
+        return funde
+
+    # Erst jetzt die Dateien (§ 8b): Die Anlage liegt unter
+    # anlagen/<sha256>.xlsx im Uebergabeordner der Richtung, VOR dem Beleg
+    # geschrieben - es gibt keinen Zwischenzustand, in dem der Beleg ohne
+    # Anlage sinnvoll laege. Der Leser oeffnet sie nicht: Hash und Groesse
+    # der Bytes sagen, ob die Datei die ist, die der Eintrag nennt; was IN
+    # ihr steht, liest der Mensch.
+    for nummer, anlage in enumerate(anlagen):
+        pfad = f"$.nutzlast.anlagen[{nummer}]"
+        bytes_ = lage.anlagen_bytes(anlage["sha256"])
+        if bytes_ is None:
+            funde.append(Feststellung(
+                "ANLAGE_FEHLT", pfad,
+                erwartet=f"anlagen/{anlage['sha256']}.xlsx",
+            ))
+            continue
+        gelesen = hashlib.sha256(bytes_).hexdigest()
+        if gelesen != anlage["sha256"]:
+            funde.append(Feststellung(
+                "ANLAGE_HASH_FALSCH", f"{pfad}.sha256",
+                erwartet=gelesen, erhalten=str(anlage["sha256"]),
+            ))
+        elif len(bytes_) != anlage["groesse"]:
+            funde.append(Feststellung(
+                "ANLAGE_HASH_FALSCH", f"{pfad}.groesse",
+                erwartet=str(len(bytes_)), erhalten=str(anlage["groesse"]),
+            ))
     return funde
 
 
