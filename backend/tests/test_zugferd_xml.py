@@ -12,7 +12,8 @@ hinzufügen** — sie geben falsche Sicherheit; Struktur gehört in den Schema-T
 Abgedeckte Spec-Regeln (Werte):
   BR-2 (Rechnungsnummer), BR-3 (Datum YYYYMMDD), BR-4 (TypeCode),
   BR-10 (Verkäufername), BR-15 (Käufername), BR-16 (Betragsberechnung),
-  BR-22 (Menge), BR-25 (Zeilenbetrag), BR-54 (MwSt.-Kategorie-Codes),
+  BR-22 (Menge), BR-25 (Zeilenbetrag), BR-27 (Einzelpreis nicht negativ:
+  Vorzeichen auf der Menge), BR-54 (MwSt.-Kategorie-Codes),
   BR-65 (Steuerberechnung), BT-24 (Profile-ID Factur-X 1.09).
 """
 import pytest
@@ -685,6 +686,30 @@ def test_amount_formatted_to_2_decimals():
     charge = _text(root, ".//ram:NetPriceProductTradePrice/ram:ChargeAmount")
     assert "." in charge
     assert len(charge.split(".")[1]) == 2
+
+
+def test_negativer_einzelpreis_traegt_das_vorzeichen_auf_der_menge():
+    """BR-27: Der Einzelpreis (BT-146) darf nicht negativ sein - Mustang lehnt
+    die XML sonst ab, obwohl die Anwendung negative Positionen erlaubt
+    (Festlegung 11: Erstattung im Abrechnungsmonat, nur 380 aus einem
+    Beleg). Das Vorzeichen wandert deshalb auf die Menge (BT-129), BR-26
+    bleibt gewahrt: (-1) x 3.10 = -3.10. Der Positionsbetrag (BT-131)
+    bleibt negativ, die Erstattung bleibt als solche sichtbar."""
+    item = _item(unit_price=Decimal("-3.10"), net_amount=Decimal("-3.10"),
+                 gross_amount=Decimal("-3.10"), tax_amount=Decimal("0.00"),
+                 quantity=Decimal("1"))
+    inv = _invoice(items=[item], net_total=Decimal("-3.10"),
+                   tax_total=Decimal("0.00"), gross_total=Decimal("-3.10"))
+    root = _parse(generate_xml(inv, _company()))
+
+    charge = _text(root, ".//ram:NetPriceProductTradePrice/ram:ChargeAmount")
+    assert charge == "3.10"
+    qty = _text(root, ".//ram:SpecifiedLineTradeDelivery/ram:BilledQuantity")
+    assert qty == "-1.0000"
+    line_total = _text(
+        root, ".//ram:SpecifiedTradeSettlementLineMonetarySummation/ram:LineTotalAmount"
+    )
+    assert line_total == "-3.10"
 
 
 def test_payment_reference_equals_invoice_number():

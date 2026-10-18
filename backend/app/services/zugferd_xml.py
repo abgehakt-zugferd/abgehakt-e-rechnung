@@ -150,6 +150,17 @@ def _line_items_xml(invoice: Invoice) -> str:
             if grund:
                 exemption_block = f"\n                    <ram:ExemptionReason>{_esc(grund)}</ram:ExemptionReason>"
         rate_line = _rate_percent_xml(item.tax_rate, inv_cat, "\n                    ")
+        # BR-27 (EN 16931): Der Einzelpreis (BT-146) darf nicht negativ sein.
+        # Eine Erstattungsposition traegt ihr Vorzeichen in der Anwendung auf
+        # dem Einzelpreis (Festlegung 11, pruefregeln/positionen.py erlaubt
+        # das nur bei einer 380 aus einem Beleg); auf dem Draht gehoert es
+        # auf die Menge (BT-129), denn BR-26 verlangt Positionsbetrag =
+        # Menge x Preis: (-Menge) x |Preis| = derselbe Negative Betrag.
+        preis = item.unit_price
+        menge = item.quantity
+        if preis < 0:
+            preis = -preis
+            menge = -menge
         parts.append(f"""
         <ram:IncludedSupplyChainTradeLineItem>
             <ram:AssociatedDocumentLineDocument>
@@ -160,11 +171,11 @@ def _line_items_xml(invoice: Invoice) -> str:
             </ram:SpecifiedTradeProduct>
             <ram:SpecifiedLineTradeAgreement>
                 <ram:NetPriceProductTradePrice>
-                    <ram:ChargeAmount>{_fmt_amount(item.unit_price)}</ram:ChargeAmount>
+                    <ram:ChargeAmount>{_fmt_amount(preis)}</ram:ChargeAmount>
                 </ram:NetPriceProductTradePrice>
             </ram:SpecifiedLineTradeAgreement>
             <ram:SpecifiedLineTradeDelivery>
-                <ram:BilledQuantity unitCode="{unit_code}">{str(item.quantity.quantize(Decimal("0.0001")))}</ram:BilledQuantity>
+                <ram:BilledQuantity unitCode="{unit_code}">{str(menge.quantize(Decimal("0.0001")))}</ram:BilledQuantity>
             </ram:SpecifiedLineTradeDelivery>
             <ram:SpecifiedLineTradeSettlement>
                 <ram:ApplicableTradeTax>
