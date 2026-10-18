@@ -1,0 +1,85 @@
+from app.services.belegsprache.texte_geteilt import AE_HINWEIS
+
+DARSTELLUNG_EN = {
+    "code": "en",
+    "titel_rechnung": "INVOICE",
+    "titel_anzahlung": "PREPAYMENT INVOICE",
+    "titel_storno": "CANCELLATION INVOICE",
+    "titel_gutschrift": "SELF-BILLED INVOICE (Gutschrift)",
+    "titel_korrektur": "CORRECTIVE INVOICE",
+    "label_rechnungsnummer": "Invoice number:",
+    "label_rechnungsdatum": "Invoice date:",
+    "label_leistungsdatum": "Date of supply:",
+    "label_leistungszeitraum": "Period of supply:",
+    "label_vorauss_leistungszeitraum": "Expected period of supply:",
+    "label_faelligkeit": "Due date:",
+    "label_kundennummer": "Customer number:",
+    "label_ihre_referenz": "Your reference:",
+    "label_bestellnummer": "Purchase order number:",
+    "label_ust_id_kunde": "Customer VAT ID:",
+    "label_pos": "No.",
+    "label_beschreibung": "Description",
+    "label_menge": "Quantity",
+    "label_einheit": "Unit",
+    "label_einzelpreis": "Unit price",
+    "label_mwst": "VAT",
+    "label_betrag": "Amount",
+    "label_netto": "Net amount",
+    "label_positionssumme": "Subtotal",
+    "label_zwischensumme": "Subtotal",
+    "abzugzeile_muster": "Allowance: {grund}",
+    "label_gutschriftbetrag": "Credit note amount",
+    "label_rechnungsbetrag": "Invoice total",
+    "steuerzeile_muster": "plus {satz} VAT on {basis}",
+    "label_verwendungszweck": "Reference:",
+    "label_scan_to_pay": "Scan to pay",
+    "label_ust_id": "VAT ID:",
+    "label_artikelnummer": "Item no.",
+    "seite_muster": "Page {seite} of {gesamt}",
+    "label_steuernummer": "Tax number:",
+    "stempel_entwurf": "DRAFT",
+    "fallback_gutschrift_ueberweisung": (
+        "Please transfer the credit note amount to the bank account below."
+    ),
+    "fallback_gutschrift_ohne": "Credit note without payment request.",
+    "fallback_zahlbar": "Payable without deduction.",
+    "storno_zahlungsbedingungen": "Cancellation of invoice {nummer}.",
+    "storno_bemerkung": "Cancellation of invoice {nummer} dated {datum}.",
+    "storno_gutschrift_bezug": "Cancellation of self-billed invoice {nummer} of {datum}.",
+    "ersatz_hinweis": "Replaces invoice {nummer} dated {datum}.",
+    "hinweis_ae": AE_HINWEIS,
+    "hinweis_e": (
+        "No VAT charged as the supplier is a small business under "
+        "section 19 of the German VAT Act (UStG)."
+    ),
+    "hinweis_k": (
+        "VAT-exempt intra-Community supply under section 4 no. 1b UStG "
+        "in conjunction with section 6a UStG."
+    ),
+    "hinweis_o": (
+        "Not taxable in the supplier's territory under section 3a (2) UStG."
+    ),
+    "titel_storno_aufstellung": "Cancellation of settlement statement no. {nummer}",
+    "label_original_aufstellung": "Original dated:",
+    "label_original_anlagen": "Attachments of the original",
+    "titel_aufstellung": "SETTLEMENT STATEMENT",
+    "label_aufstellungsnummer": "Statement number:",
+    "label_ausstellungsdatum": "Date of issue:",
+    "label_leistungsmonat": "Month of service:",
+    "label_zahlungsnummer": "Payment number:",
+    "label_zahlungsdatum": "Payment date:",
+    "label_aussteller": "Issuer",
+    "label_auszahler": "Payer",
+    "label_brutto": "Gross",
+    "label_quellensteuer": "Withholding tax",
+    "label_kurs": "Exchange rate",
+    "label_zahlbetrag": "Payment amount (EUR)",
+    "label_anlagen": "Attachments",
+    "label_quelle": "Source",
+    "label_dateiname": "File name",
+    "label_groesse_bytes": "Size (bytes)",
+    "label_sha256": "SHA-256",
+    "hinweis_keine_rechnung": (
+        "Not an invoice within the meaning of section 14 of the German VAT Act."
+    ),
+}

@@ -8,7 +8,7 @@ stand. Zwei Kopien einer Regel driften; hier war die zweite von Anfang an
 daneben. Wer eine dritte Stelle braucht, importiert von hier — und schreibt die
 Umwandlung nicht noch einmal auf.
 
-Die Beleg-PDF-Darstellung (auch Englisch) liegt in `services/belegsprache.py`.
+Die Beleg-PDF-Darstellung (auch Englisch) liegt in `services/belegsprache/`.
 Hier bleibt die deutsche UI-Darstellung; Betrag und Menge nutzen dieselbe
 zustandsfreie Rechenregel wie `Belegdarstellung` für `de` (kein locale.setlocale).
 
