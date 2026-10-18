@@ -28,6 +28,7 @@ import calendar
 import hashlib
 import json
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -60,7 +61,8 @@ from app.services.uebergabebeleg import (
 # Was dieser Empfaenger liest. Die `erloesmeldung` geht an tantiemen, die
 # `quittung` schreibt diese Anwendung noch nicht (Stufe 7), der
 # `aufstellungsauftrag` (§ 8b) wartet auf seinen Bau. Der `rechnungsauftrag`
-# (§ 8a) wird gelesen, bislang nach seinen Grundregeln (_rechnungsauftrag_pruefen).
+# (§ 8a) ist bis auf seinen Auftragsschluessel gebaut
+# (_rechnungsauftrag_pruefen).
 LESBARE_ARTEN = ("abrechnungsauftrag", "rechnungsauftrag")
 
 # Ein Pflichtfeld, das da ist und leer, ist bei diesen beiden nicht da: ein
@@ -170,6 +172,31 @@ def _hat_geldform(wert) -> bool:
 
 def _hat_satzform(wert) -> bool:
     return isinstance(wert, str) and _SATZFORM.match(wert) is not None
+
+
+# § 8a, Teil 1b: die Formen der grundlagen[]. beleg_sha256 ist der Hash des
+# Abrechnungsberichts, klein wie hashlib.hexdigest() ihn bildet - Grossbuchstaben
+# sind eine andere Form, kein anderer Wert. leistungsperiode ist ein Monat
+# JJJJ-MM, kein Quartal und kein Zeitraum.
+_SHA256_FORM = re.compile(r"^[0-9a-f]{64}$")
+_MONAT_FORM = re.compile(r"^[0-9]{4}-(0[1-9]|1[0-2])$")
+
+
+# § 8a, Teil 1b: Gleichheit von gruppe und bezeichnung ist Zeichengleichheit
+# nach Unicode-NFC - zerlegtes und zusammengesetztes "ue" sind derselbe Text.
+# Keine Nachsicht bei Gross- und Kleinschreibung, und der Wortlaut selbst wird
+# nie geprueft: gruppe ist freier Anzeigetext.
+def _nfc(wert):
+    return unicodedata.normalize("NFC", wert) if isinstance(wert, str) else wert
+
+
+# Σ grundlagen[feld], die eine Schleife fuer beide Arten: § 8 zaehlt erloes_netto
+# gegen bemessung (hoechstens, NIE gleich), § 8a zaehlt netto gegen summe (gleich).
+def _grundlagen_summe(nutzlast: dict, feld: str) -> Decimal:
+    summe = Decimal("0")
+    for grundlage in nutzlast["grundlagen"]:
+        summe += _zahl(grundlage[feld])
+    return summe
 
 
 # § 2, die gemeinsame Formprobe fuer Beleg und Schluesselbeiblatt, steht in
@@ -315,11 +342,10 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage, art: str) -> list:
 
 
 def _rechnungsauftrag_pruefen(nutzlast: dict) -> list:
-    """§ 8a (Fassung 1.7), Teil 1a: die Grundregeln des Rechnungsauftrags.
-
-    Gruppen, Bezeichnungen, Grundlagen und der Auftragsschluessel folgen in
-    eigenen Teilen; hier stehen typcode, waehrung, der Kalendermonat und die
-    Summen. Wie beim abrechnungsauftrag gilt: Alles Falsche wird gesammelt.
+    """§ 8a (Fassung 1.7): Grundregeln (Teil 1a) und, unten angehaengt, die
+    Gruppen, Bezeichnungen und Grundlagen (Teil 1b). Der Auftragsschluessel
+    folgt in einem eigenen Teil. Wie beim abrechnungsauftrag gilt: Alles
+    Falsche wird gesammelt.
     """
     funde: list = []
 
@@ -391,6 +417,129 @@ def _rechnungsauftrag_pruefen(nutzlast: dict) -> list:
             "SUMME_STIMMT_NICHT", "$.nutzlast.summe.netto",
             erwartet="groesser als 0.00", erhalten=str(nutzlast["summe"]["netto"]),
         ))
+
+    # Teil 1b haengt unten an: Gruppen, Bezeichnungen, Grundlagen.
+    funde += _rechnungsauftrag_gruppen_pruefen(nutzlast)
+    funde += _rechnungsauftrag_bezeichnungen_pruefen(nutzlast)
+    funde += _rechnungsauftrag_grundlagen_pruefen(nutzlast)
+    return funde
+
+
+def _rechnungsauftrag_gruppen_pruefen(nutzlast: dict) -> list:
+    """§ 8a, Teil 1b: gruppe an allen Positionen oder an keiner, jede Gruppe
+    in einem Zug, ihre Positionen in nr lueckenlos.
+
+    Gleiche Gruppe heisst zeichengleich nach Unicode-NFC (_nfc); der Wortlaut
+    selbst wird nie geprueft. Ohne jede gruppe ist die Rechnung ungegliedert
+    und gueltig - der Zwang gilt erst, wenn EINE Position eine gruppe traegt.
+    """
+    funde: list = []
+    positionen = nutzlast["positionen"]
+
+    # Alle oder keine: Eine gruppe an EINER Position gliedert die ganze
+    # Rechnung. Eine einzelne Position ohne gliedert nichts und verdoppelt
+    # die Lesart; null zaehlt wie die § 2-Klarstellung als nicht vorhanden.
+    if any(position.get("gruppe") is not None for position in positionen):
+        for nummer, position in enumerate(positionen):
+            if position.get("gruppe") is None:
+                funde.append(Feststellung(
+                    "WERT_UNBRAUCHBAR", f"$.nutzlast.positionen[{nummer}].gruppe",
+                    erwartet="Gruppe an jeder Position", erhalten="keine Gruppe",
+                ))
+
+    # Zusammenhaengend: Kehrt eine Gruppe nach einer anderen zurueck, bricht
+    # genau die zurueckkehrende Position den Zusammenhang. Die Reihenfolge der
+    # Gruppen ist die ihrer ersten Position; nr zaehlt je Gruppe ohne Luecke
+    # weiter (nur ganze Zahlen: nr traegt keine Formprobe, eine andere Form
+    # prueft hier niemand).
+    offen = None
+    geschlossen: list = []
+    vorige_nr = None
+    for nummer, position in enumerate(positionen):
+        gruppe = position.get("gruppe")
+        if gruppe is None:
+            continue
+        schluessel = _nfc(gruppe)
+        if schluessel != offen:
+            if schluessel in geschlossen:
+                funde.append(Feststellung(
+                    "WERT_UNBRAUCHBAR", f"$.nutzlast.positionen[{nummer}].gruppe",
+                    erwartet="zusammenhaengende Gruppe", erhalten=str(gruppe),
+                ))
+            if offen is not None and offen not in geschlossen:
+                geschlossen.append(offen)
+            offen = schluessel
+            vorige_nr = None
+        nr = position.get("nr")
+        if isinstance(nr, int) and isinstance(vorige_nr, int) and nr != vorige_nr + 1:
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", f"$.nutzlast.positionen[{nummer}].nr",
+                erwartet=str(vorige_nr + 1), erhalten=str(nr),
+            ))
+        vorige_nr = nr
+    return funde
+
+
+def _rechnungsauftrag_bezeichnungen_pruefen(nutzlast: dict) -> list:
+    """§ 8a, Teil 1b: keine zwei Positionen mit derselben bezeichnung.
+
+    Gleich ist zeichengleich nach Unicode-NFC (_nfc). Der Befund trifft die
+    zweite Stelle: Die erste blieb unbeanstandet, und der Absender sieht so,
+    welche zu aendern ist.
+    """
+    funde: list = []
+    gesehen: list = []
+    for nummer, position in enumerate(nutzlast["positionen"]):
+        bezeichnung = _nfc(position["bezeichnung"])
+        if bezeichnung in gesehen:
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", f"$.nutzlast.positionen[{nummer}].bezeichnung",
+                erwartet="nur einmal je Beleg", erhalten=str(position["bezeichnung"]),
+            ))
+        else:
+            gesehen.append(bezeichnung)
+    return funde
+
+
+def _rechnungsauftrag_grundlagen_pruefen(nutzlast: dict) -> list:
+    """§ 8a, Teil 1b: die Grundlagen sind die Herleitung, kein Auszug.
+
+    quelle ist heute nur der abrechnungsbericht - hinter jedem anderen Namen
+    steht ein anderer Bericht, und Grossschreibung ist ein anderer Name.
+    beleg_sha256 (_SHA256_FORM) und leistungsperiode (_MONAT_FORM) tragen ihre
+    Form hier und nur hier, denn nur der rechnungsauftrag liest sie. Σ netto
+    == summe.netto, exakt: Anders als § 8 (dort hoechstens, NIE gleich) ist
+    die Herleitung kein Auszug.
+    """
+    funde: list = []
+    for nummer, grundlage in enumerate(nutzlast["grundlagen"]):
+        pfad = f"$.nutzlast.grundlagen[{nummer}]"
+        if grundlage["quelle"] != "abrechnungsbericht":
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", f"{pfad}.quelle",
+                erwartet="abrechnungsbericht", erhalten=str(grundlage["quelle"]),
+            ))
+        if not isinstance(grundlage["beleg_sha256"], str) \
+                or not _SHA256_FORM.match(grundlage["beleg_sha256"]):
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", f"{pfad}.beleg_sha256",
+                erwartet="64 Kleinbuchstaben-Hex",
+                erhalten=str(grundlage["beleg_sha256"]),
+            ))
+        if not isinstance(grundlage["leistungsperiode"], str) \
+                or not _MONAT_FORM.match(grundlage["leistungsperiode"]):
+            funde.append(Feststellung(
+                "WERT_UNBRAUCHBAR", f"{pfad}.leistungsperiode",
+                erwartet="JJJJ-MM", erhalten=str(grundlage["leistungsperiode"]),
+            ))
+
+    summe = _grundlagen_summe(nutzlast, "netto")
+    genannt = _zahl(nutzlast["summe"]["netto"])
+    if summe != genannt:
+        funde.append(Feststellung(
+            "SUMME_STIMMT_NICHT", "$.nutzlast.grundlagen",
+            erwartet=str(genannt), erhalten=str(summe),
+        ))
     return funde
 
 
@@ -403,9 +552,7 @@ def _abrechnungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
     # kommt heute nur ein Kanal; die uebrigen liest der Absender aus eigenen
     # Importen. Ein Pruefhaken auf Gleichheit lehnte jeden echten Auftrag ab.
     erloes = _zahl(nutzlast["bemessung"]["erloes_netto"])
-    summe_grundlagen = Decimal("0")
-    for grundlage in nutzlast["grundlagen"]:
-        summe_grundlagen += _zahl(grundlage["erloes_netto"])
+    summe_grundlagen = _grundlagen_summe(nutzlast, "erloes_netto")
     if summe_grundlagen > erloes:
         funde.append(Feststellung(
             "SUMME_STIMMT_NICHT", "$.nutzlast.grundlagen",
