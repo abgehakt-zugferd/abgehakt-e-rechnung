@@ -1,14 +1,18 @@
-"""Handgriffe der Abrechnungsaufstellung (§ 8b, Bauschritte 7c bis 7e).
+"""Liste, Detail und Handgriffe der eigenständigen Abrechnungsaufstellung.
 
-Liste und Detailseiten kommen mit 7g — jetzt gibt es nur den Handgriff,
-der den Entwurf stellt, Versand, Storno und das archivierte PDF. Kein XML-Weg,
-kein E-Rechnungs-Endpoint: Die Aufstellung ist KEINE Rechnung.
+Kein XML-Weg und kein E-Rechnungs-Endpoint: Die Aufstellung ist keine Rechnung.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
+from fastapi.templating import Jinja2Templates
+
+from app.branding import register_branding_globals
+from app.darstellung import registriere_darstellungsfilter
+from app.models.aufstellung_send_log import AufstellungSendLog
+from app.services.aufstellung_entwurf import wechseln
 
 from app.config import get_settings
 from app.database import get_db
@@ -18,6 +22,62 @@ from app.services.aufstellung_storno import StornoFehler
 
 router = APIRouter()
 settings = get_settings()
+templates = Jinja2Templates(directory="app/templates")
+register_branding_globals(templates)
+registriere_darstellungsfilter(templates)
+SEITENGROESSE = 50
+STATUS = {"draft": "Entwurf", "issued": "Gestellt", "cancelled": "Storniert", "discarded": "Verworfen"}
+
+
+@router.get("")
+@router.get("/")
+def liste(request: Request, db: Session = Depends(get_db), status: str = "", seite: int = 1):
+    query = db.query(Aufstellung)
+    if status:
+        query = query.filter(Aufstellung.status == status)
+    gesamt = query.count()
+    seiten = max(1, -(-gesamt // SEITENGROESSE))
+    seite = min(max(seite, 1), seiten)
+    zeilen = (query.options(joinedload(Aufstellung.customer))
+              .order_by(Aufstellung.created_at.desc(), Aufstellung.id)
+              .offset((seite - 1) * SEITENGROESSE).limit(SEITENGROESSE).all())
+    return templates.TemplateResponse("aufstellungen/list.html", {
+        "request": request, "aufstellungen": zeilen, "status_filter": status,
+        "statusnamen": STATUS, "gesamt": gesamt, "seite": seite, "seiten": seiten,
+    })
+
+
+@router.get("/{aufstellung_id}")
+def detail(aufstellung_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
+    a = db.get(Aufstellung, aufstellung_id)
+    if not a:
+        raise HTTPException(404)
+    stornos = db.query(Aufstellung).filter(Aufstellung.storniert_id == a.id).order_by(Aufstellung.created_at).all()
+    logs = db.query(AufstellungSendLog).filter(
+        AufstellungSendLog.aufstellung_id == a.id,
+    ).order_by(AufstellungSendLog.sent_at.desc()).all()
+    return templates.TemplateResponse("aufstellungen/detail.html", {
+        "request": request, "a": a, "stornos": stornos, "logs": logs, "statusnamen": STATUS,
+    })
+
+
+def _entwurf_wechsel(aufstellung_id, db, zurueckholen=False):
+    a = db.query(Aufstellung).filter(Aufstellung.id == aufstellung_id).with_for_update().first()
+    if not a:
+        raise HTTPException(404)
+    wechseln(db, a, zurueckholen)
+    return RedirectResponse(url=f"/aufstellungen/{a.id}", status_code=303)
+
+
+@router.post("/{aufstellung_id}/verwerfen")
+def verwerfen(aufstellung_id: uuid.UUID, db: Session = Depends(get_db)):
+    return _entwurf_wechsel(aufstellung_id, db)
+
+
+@router.post("/{aufstellung_id}/zurueckholen")
+def zurueckholen(aufstellung_id: uuid.UUID, db: Session = Depends(get_db)):
+    return _entwurf_wechsel(aufstellung_id, db, True)
+
 
 
 @router.post("/{aufstellung_id}/finalisieren")
@@ -40,7 +100,7 @@ def finalisiere_aufstellung(aufstellung_id: uuid.UUID, db: Session = Depends(get
         # 400 mit Meldung: Der Mensch soll wissen, warum nichts gestellt
         # wurde — ein nackter Status waere "nochmal versuchen".
         raise HTTPException(400, str(fehler)) from fehler
-    # 7g bringt die Detailseite; dahin kehrt der Handgriff zurueck.
+    # Der Handgriff kehrt zur Detailseite des gestellten Belegs zurück.
     return RedirectResponse(url=f"/aufstellungen/{aufstellung_id}", status_code=303)
 
 

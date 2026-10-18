@@ -12,6 +12,7 @@ from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import AuditLog, Invoice
 from app.models.uebergabe_eingang import UebergabeEingang
+from app.services.gobd_export_aufstellungen import auswahl
 from app.services.gobd_export import build_gobd_export
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
@@ -46,7 +47,8 @@ def download_gobd(von: date, bis: date, db: Session = Depends(get_db)):
         .order_by(Invoice.invoice_number)
         .all()
     )
-    customer_ids = {inv.customer_id for inv in invoices}
+    aufstellungen = auswahl(db, von, bis)
+    customer_ids = {inv.customer_id for inv in [*invoices, *aufstellungen]}
     customers = (
         db.query(Customer).filter(Customer.id.in_(customer_ids)).order_by(Customer.customer_number).all()
         if customer_ids else []
@@ -69,11 +71,10 @@ def download_gobd(von: date, bis: date, db: Session = Depends(get_db)):
         .order_by(UebergabeEingang.angenommen_am)
         .all()
     )
-
     settings = get_settings()
     zip_bytes = build_gobd_export(
         invoices=invoices, customers=customers, audit_rows=audit_rows,
-        uebergaben=uebergaben,
+        uebergaben=uebergaben, aufstellungen=aufstellungen,
         storage_path=settings.storage_path, date_from=von, date_to=bis,
         # GDPdU-Datenlieferant ist die eigene Firma, nicht die Software (#99 §4.4)
         company=db.query(Company).filter(Company.id == 1).first(),

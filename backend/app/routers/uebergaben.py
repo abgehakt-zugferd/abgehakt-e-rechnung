@@ -264,8 +264,7 @@ def rechnung_anlegen(dateiname: str, db: Session = Depends(get_db)):
 @router.post("/{dateiname}/aufstellung-anlegen")
 def aufstellung_anlegen(dateiname: str, db: Session = Depends(get_db)):
     """§ 8b: Aus dem angenommenen aufstellungsauftrag wird der ENTWURF einer
-    Abrechnungsaufstellung - kein Beleg der Rechnung, keine eigene Seite bis
-    Bauschritt 7g; bis dahin kehrt der Knopf mit der Nummer zur Liste."""
+    Abrechnungsaufstellung, deren Detailseite danach die vergebene Nummer zeigt."""
     _schalter(db)
     ordner = _belegordner()
     if ordner is None:
@@ -292,6 +291,6 @@ def aufstellung_anlegen(dateiname: str, db: Session = Depends(get_db)):
         )
 
     def folgen(ergebnis):
-        return _gemeldet(f"Abrechnungsaufstellung {ergebnis.nummer} angelegt (Entwurf)")
+        return RedirectResponse(url=f"/aufstellungen/{ergebnis.id}", status_code=303)
 
     return _anlegen(db, urteil, roh, wirken, folgen, schluesselart=True)

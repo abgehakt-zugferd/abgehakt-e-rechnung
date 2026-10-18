@@ -124,15 +124,11 @@ def test_der_knopf_legt_den_entwurf_an_und_meldet_die_nummer(
         "abrechnungsbericht", "zahlungsbericht",
     ]
     assert pg_session.query(UebergabeEingang).count() == 1
-    # Bis 7g die eigene Seite bringt, ist die Liste das Ziel, und die Meldung
-    # nennt die Nummer, die der Absender in seiner Kette wiedererkennt.
-    assert antwort.headers["location"].startswith("/uebergaben?")
-    meldung = _meldung(antwort)["meldung"][0]
-    assert meldung == (
-        f"Abrechnungsaufstellung AA-{heute().year}-001 angelegt (Entwurf)"
-    )
+    # Die Detailseite zeigt die Nummer aus der Annahme unmittelbar an.
+    assert antwort.headers["location"] == f"/aufstellungen/{entwurf.id}"
     seite = client.get(antwort.headers["location"])
-    assert meldung in seite.text
+    assert entwurf.nummer in seite.text
+
 
 
 def test_die_anlagen_liegen_danach_im_eigenen_speicher(client, pg_session, belegordner):

@@ -233,3 +233,5 @@ Entscheidung des Betreibers vom 2026-09-30:
    Rechnungsdatum.
 
 Die Kachel „Offene Rechnungen“ heisst in der Oberflaeche „Offene Forderungen“.
+
+Abrechnungsaufstellungen zählen nicht in Umsatz- und Steuerkennzahlen.

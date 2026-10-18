@@ -985,3 +985,35 @@ Die Ergebnisse erscheinen als Banner oben auf den Seiten:
   nicht nach Updates gesucht. Bleib auf dem neuesten Stand."), mit Knopf **Jetzt suchen**.
   War die letzte Prüfung nicht möglich, steht stattdessen „Die letzte Update-Prüfung war
   nicht möglich.".
+
+
+## Abrechnungsaufstellung
+
+Eine Abrechnungsaufstellung dokumentiert eine Abrechnung mit Leistungsmonat,
+Zahlungsnummer und Zahlungsdatum. Sie ist keine Rechnung im Sinne des § 14 UStG.
+Sie entsteht aus einem angenommenen Aufstellungsauftrag in **BELEGE** über
+**ALS AUFSTELLUNG ANLEGEN**. Danach öffnet sich ihre Detailseite. Der Menüpunkt
+**AUFSTELLUNGEN** ist bei eingeschalteter Beleg-Integration sichtbar; die Liste
+lässt sich nach Status filtern und durchblättern.
+
+Prüfe die Angaben und beide Anlagen mit Dateiname, Größe und SHA-256.
+Brutto, Quellensteuer und Netto stehen in Berichtswährung. Bei Fremdwährung
+werden der mitgelieferte Kurs und Zahlbetrag in Euro übernommen, nicht berechnet.
+Bei Euro entspricht der Zahlbetrag dem Netto.
+
+**FINALISIEREN** erzeugt das archivierte PDF/A und macht die Angaben unveränderlich.
+Ein Entwurf kann stattdessen **VERWORFEN** werden. Seine Nummer bleibt erhalten.
+**ZURÜCKHOLEN** ist möglich, sofern der Auftragsschlüssel inzwischen nicht anderweitig
+belegt ist und bei einem Storno das Original weiterhin stornierbar ist.
+
+**AN BUCHHALTUNG SENDEN** versendet ausschließlich das PDF an die konfigurierte
+Buchhaltungsadresse. Es gibt keinen Versand an den Kunden. Das Versandprotokoll
+zeigt die Versuche und deren Ausgang. Die beiden xlsx-Anlagen bleiben im Archiv
+und sind Bestandteil des GoBD-Exports, nicht der E-Mail.
+
+**STORNIEREN** legt einen eigenen Stornoentwurf mit Verweis auf das Original an.
+Erst dessen Finalisierung hebt das Original auf und gibt den Auftragsschlüssel
+frei. Das Storno-PDF kann anschließend ebenfalls an die Buchhaltung gesendet
+werden. Original und Storno verweisen aufeinander; Korrekturen erfolgen durch
+Storno und einen neuen Auftrag. Archivierte PDFs sind im Archivbereich
+**Aufstellungen** zugänglich.

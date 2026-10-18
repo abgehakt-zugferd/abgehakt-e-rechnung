@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Aufstellungen | {{ PRODUCT_NAME }}{% endblock %}
+{% block content %}
+<h1 class="mb-6">AUFSTELLUNGEN</h1>
+<div class="card mb-5">
+    <form method="get" class="flex flex-wrap gap-3">
+        <select name="status" class="input" style="width:200px;" aria-label="Status">
+            <option value="">Alle Status</option>
+            {% for wert, name in statusnamen.items() %}
+            <option value="{{ wert }}" {% if status_filter == wert %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn-secondary" type="submit">FILTERN</button>
+        <a href="/aufstellungen" class="btn-secondary">RESET</a>
+    </form>
+</div>
+<div class="card">
+    <div class="overflow-x-auto">
+        <table class="w-full" style="font-family:'VT323',monospace; font-size:var(--fs-gross);">
+            <thead><tr>{% for titel in ['Nummer', 'Kunde', 'Leistungsmonat', 'Netto', 'Zahlbetrag EUR', 'Status', 'Buchhaltung versendet'] %}
+                <th class="table-header" style="padding:10px 14px; text-align:left;">{{ titel }}</th>
+            {% endfor %}</tr></thead>
+            <tbody>{% for a in aufstellungen %}
+                <tr class="table-row">
+                    <td style="padding:10px 14px;"><a href="/aufstellungen/{{ a.id }}" style="color:var(--cyan);">{{ a.nummer }}</a>{% if a.storniert_id %} (Storno){% endif %}</td>
+                    <td>{{ a.customer.name }}</td><td>{{ a.leistung_von.strftime('%m.%Y') }}</td>
+                    <td>{{ a.netto|betrag }} {{ a.waehrung }}</td>
+                    <td>{{ (a.netto if a.waehrung == 'EUR' else a.zahlbetrag_eur)|euro }}</td>
+                    <td><span class="badge">{{ statusnamen[a.status] }}</span></td>
+                    <td>{{ a.datev_sent_at.strftime('%d.%m.%Y %H:%M') if a.datev_sent_at else 'Nein' }}</td>
+                </tr>
+            {% else %}<tr><td colspan="7">Keine Aufstellungen gefunden.</td></tr>{% endfor %}</tbody>
+        </table>
+    </div>
+    <div class="flex items-center justify-between gap-3 mt-4">
+        <span>{{ gesamt }} Aufstellungen, Seite {{ seite }} von {{ seiten }}</span>
+        {% if seite > 1 %}<a href="?status={{ status_filter|urlencode }}&amp;seite={{ seite - 1 }}" class="btn-secondary">ZURÜCK</a>{% endif %}
+        {% if seite < seiten %}<a href="?status={{ status_filter|urlencode }}&amp;seite={{ seite + 1 }}" class="btn-secondary">WEITER</a>{% endif %}
+    </div>
+</div>
+{% endblock %}

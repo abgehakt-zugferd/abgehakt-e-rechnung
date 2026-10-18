@@ -4,7 +4,7 @@ Warum in der App statt „Ordner öffnen": Browser navigieren von einer `http://
 nicht auf `file://`, ein Knopf zum Finder ist also nicht baubar — und der Container
 kennt den Host-Pfad gar nicht, er sieht nur sein gemountetes `/app/storage`.
 
-Sichtbar sind ausschließlich `pdfs/` und `xml/`. `temp/` (Vorschau-Reste,
+Sichtbar sind `pdfs/`, `xml/` und `aufstellungen/`. `temp/` (Vorschau-Reste,
 Zwischendateien) und `imports/` (fremde Uploads) sind kein Archiv.
 """
 import os
@@ -22,6 +22,7 @@ from app.darstellung import registriere_darstellungsfilter
 from app.config import get_settings
 from app.database import get_db
 from app.models.invoice import Invoice
+from app.models.aufstellung import Aufstellung
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -32,7 +33,7 @@ settings = get_settings()
 
 # Schlüssel = Verzeichnisname unter storage/ UND Wert des URL-Segments `bereich`.
 # Was hier nicht steht, ist über die Route nicht erreichbar.
-BEREICHE: dict[str, str] = {"pdfs": "PDF", "xml": "XML"}
+BEREICHE: dict[str, str] = {"pdfs": "PDF", "xml": "XML", "aufstellungen": "Aufstellungen"}
 
 
 # Wie viele Dateien eine Seite zeigt. Siehe `SEITENGROESSE` in `routers/invoices.py`:
@@ -107,13 +108,13 @@ def _dateien(bereich: str, erlaubt: set[str], q: str = "", seite: int = 1) -> Da
 
 @router.get("/archiv", response_class=HTMLResponse)
 def archive_page(request: Request, db: Session = Depends(get_db), q: str = "", seite: int = 1):
-    pdfs, xmls = _bekannte_dateien(db)
+    bekannt = _alle_bekannten_dateien(db)
     return templates.TemplateResponse("archive/index.html", {
         "request": request,
         "q": q,
         "bereiche": [
             {"schluessel": schluessel, "titel": titel,
-             "seite": _dateien(schluessel, pdfs if schluessel == "pdfs" else xmls, q, seite)}
+             "seite": _dateien(schluessel, bekannt[schluessel], q, seite)}
             for schluessel, titel in BEREICHE.items()
         ],
     })
@@ -130,8 +131,8 @@ def archive_file(bereich: str, name: str, db: Session = Depends(get_db)):
     """
     if bereich not in BEREICHE:
         raise HTTPException(404, "Unbekannter Archivbereich.")
-    pdfs, xmls = _bekannte_dateien(db)
-    erlaubt = pdfs if bereich == "pdfs" else xmls
+    bekannt = _alle_bekannten_dateien(db)
+    erlaubt = bekannt[bereich]
     if Path(name).name not in erlaubt:
         raise HTTPException(404, "Datei nicht gefunden.")
     basis = (settings.storage_path / bereich).resolve()
@@ -139,3 +140,12 @@ def archive_file(bereich: str, name: str, db: Session = Depends(get_db)):
     if ziel.parent != basis or not ziel.is_file():
         raise HTTPException(404, "Datei nicht gefunden.")
     return FileResponse(str(ziel), filename=ziel.name)
+
+
+def _alle_bekannten_dateien(db):
+    pdfs, xmls = _bekannte_dateien(db)
+    aufstellungen = {pdf for (pdf,) in db.query(Aufstellung.pdf_filename).filter(
+        Aufstellung.status.in_(("issued", "cancelled")),
+        Aufstellung.pdf_filename.isnot(None),
+    )}
+    return {"pdfs": pdfs, "xml": xmls, "aufstellungen": aufstellungen}
