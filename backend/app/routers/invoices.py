@@ -846,10 +846,12 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
     app_config = db.query(AppConfig).filter(AppConfig.id == 1).first()
     cc_default, cc_herkunft = _cc_vorbelegung(invoice, app_config)
     # Knopf nur, wenn das Anlegen auch durchginge: dieselbe Regel, keine zweite.
+    # Ein unbekannter gespeicherter Typ ist kein ersetzbarer Beleg, aber die
+    # Detailseite muss ihn trotzdem zeigen (Befund 1: nie 500 auf den Bestand).
     try:
         pruefe_ersetzbar(db, invoice.id)
         ersetzbar = True
-    except ErsatzNichtMoeglich:
+    except (ErsatzNichtMoeglich, UnknownInvoiceTypeError):
         ersetzbar = False
     # Gutschrift (#142): statt "stornieren" den Weg zur Ersatzrechnung zeigen,
     # wenn sie fuer das Original angelegt werden kann.

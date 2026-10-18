@@ -176,10 +176,21 @@ class Belegdarstellung:
         return mapping[belegart(belegart_intern).intern]
 
     def bezeichnung(self, art: str | None) -> str:
-        """Name in der Oberfläche; der PDF-Titel enthält die Pflichtangabe."""
-        from app.services.belegart import belegart
+        """Name in der Oberfläche; der PDF-Titel enthält die Pflichtangabe.
 
-        intern = belegart(art).intern
+        Ein unbekannter gespeicherter Wert wird gezeigt statt geworfen: die
+        Spalte invoice_type ist unbeschraenkt, und Liste und Detailseite
+        muessen den Bestand erreichbar lassen (200), damit er korrigiert
+        werden kann. Der PDF-Titel (titel()) bleibt fail-closed.
+        """
+        from app.services.belegart import UnknownInvoiceTypeError, belegart
+
+        try:
+            intern = belegart(art).intern
+        except UnknownInvoiceTypeError:
+            if self.code == "de":
+                return f"Unbekannte Belegart: {art}"
+            return f"Unknown document type: {art}"
         if intern == "self_billing_storno":
             return self.titel(intern)
         if intern == "self_billing":
