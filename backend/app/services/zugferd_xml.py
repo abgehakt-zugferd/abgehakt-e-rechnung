@@ -16,10 +16,10 @@ from app.services.bankverbindung import iban_fuer_ausgabe
 # hier nur re-exportiert, damit Bestandsleser ihre Importstelle behalten —
 # es gibt kein zweites Mapping.
 from app.services.belegart import (  # noqa: F401
-    GUTSCHRIFT_TYPEN,
     TYPE_CODE_MAP,
     UnknownInvoiceTypeError,
     belegart,
+    zahlung_an_kunde,
 )
 from app.services.belegsummen import Belegsummen, belegsummen
 from app.services.einheiten import resolve_einheit
@@ -423,8 +423,9 @@ def _company_payment_means_xml(company: Company) -> str:
 
 
 def _gutschrift_zahlung_an_kunde(invoice: Invoice) -> bool:
-    # Die Menge steht einmal in belegart.GUTSCHRIFT_TYPEN, hier nur der Leser.
-    return getattr(invoice, "invoice_type", None) in GUTSCHRIFT_TYPEN
+    # Zahlungsfluss entscheidet belegart.zahlung_an_kunde ueber die
+    # aufgeloeste Belegart — hier nur der Leser.
+    return zahlung_an_kunde(getattr(invoice, "invoice_type", None))
 
 
 def _payment_terms_xml(invoice: Invoice) -> str:

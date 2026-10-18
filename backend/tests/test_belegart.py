@@ -33,6 +33,7 @@ from app.services.belegart import (
     belegart_aus_bt3,
     manuelle_belegart,
     manuelle_belegarten,
+    zahlung_an_kunde,
 )
 from app.services.invoice_guard import InvoiceStateError
 from app.services.validator import validate_invoice
@@ -180,6 +181,19 @@ class TestV5Typaufloesung:
         assert belegart("prepayment").intern == "prepayment"
         assert belegart("storno").intern == "credit_note"
         assert belegart("self-billing").intern == "self_billing"
+
+    @pytest.mark.parametrize("wert,erwartung", [
+        ("self-billing", True),
+        ("self_billing", True),
+        ("credit", True),
+        ("self_billing_storno", False),
+        ("altwert", False),
+    ])
+    def test_zahlung_an_kunde_loest_aliase_ueber_die_belegart_auf(self, wert, erwartung):
+        """PDF-Bankblock und XML-PaymentMeans fragen den Zahlungsfluss hier ab
+        (nicht mehr per roher Alias-Menge): derselbe Aliasraum wie
+        belegrollen.besetzung; unbekannte Werte zahlen nie an den Kunden."""
+        assert zahlung_an_kunde(wert) is erwartung
 
     @pytest.mark.parametrize("bt3,intern", [
         ("380", None),

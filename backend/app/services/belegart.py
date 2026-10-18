@@ -121,15 +121,30 @@ TYPE_CODE_MAP: dict[str | None, str] = {
 }
 
 # Gutschriften im Geldfluss samt den Alias-Schreibweisen, die aeltere
-# Versionen gespeichert haben: Diese Belegarten zahlen an den KUNDEN
-# (pdf_generator: Bankblock des Kunden; zugferd_xml: PaymentMeans des
-# Kunden; validator: Warnung zur fehlenden Kunden-IBAN). Bewusst NICHT
-# dabei: das 389-Storno (261) hebt die Honorargutschrift auf, der
-# Geldfluss kehrt sich um und der Kunde zahlt der Firma; und die
-# Korrektur (384) ist eine normale Zahlung des Kunden. Genau einmal
-# hier (Issue #160); vorher stand die Menge in drei Dateien, die
-# auseinanderlaufen konnten.
+# Versionen gespeichert haben. Bewusst NICHT dabei: das 389-Storno (261)
+# hebt die Honorargutschrift auf, der Geldfluss kehrt sich um und der Kunde
+# zahlt der Firma; und die Korrektur (384) ist eine normale Zahlung des
+# Kunden. Genau einmal hier (Issue #160). PDF-Bankblock und
+# XML-PaymentMeans fragen seit dem Alias-Fund den Zahlungsfluss ueber
+# zahlung_an_kunde() ab (aufgeloeste Belegart statt roher Menge); einzige
+# verbleibende Leserin dieser Menge ist die Validator-Empfehlung
+# (pruefregeln/empfehlungen.py: Warnung zur fehlenden Kunden-IBAN).
 GUTSCHRIFT_TYPEN = frozenset({"credit_note", "credit", "storno", "self_billing"})
+
+
+def zahlung_an_kunde(invoice_type: str | None) -> bool:
+    """Zahlungsfluss dieser Belegart geht an den KUNDEN (nicht an die Firma).
+
+    PDF-Bankblock und XML-PaymentMeans rufen das hier ab. Entscheidend ist die
+    aufgeloeste Belegart, damit gespeicherte Aliase ("self-billing", "credit",
+    "storno") mitgemeint sind — belegrollen.besetzung loest genauso auf, die
+    rohe Menge in GUTSCHRIFT_TYPEN tat es nicht. Bewusst False fuer das
+    389-Storno (261): der Geldfluss kehrt sich um, der Kunde zahlt der Firma.
+    Ein unbekannter Wert zahlt niemals an den Kunden (False statt Wurf)."""
+    try:
+        return belegart(invoice_type).intern in {"credit_note", "self_billing"}
+    except UnknownInvoiceTypeError:
+        return False
 
 
 def belegart(internal_value: str | None) -> Belegart:
