@@ -400,8 +400,11 @@ def _items_as_json(invoice: Invoice, *, vorlage: bool = False) -> str:
             "unit": item.unit,
             "quantity": dezimal_klartext(item.quantity),
             "unit_price": str(item.unit_price),
-            "basis_netto": str(item.basis_netto) if item.basis_netto is not None else "",
-            "satz": str(item.satz) if item.satz is not None else "",
+            # Die Herleitung gehoert zum alten Betrag: Bei vorlage=True faellt
+            # sie weg (wie der Leistungszeitraum), sonst liesse sich der neue
+            # Betrag mit der alten Basis nicht mehr speichern.
+            "basis_netto": "" if vorlage or item.basis_netto is None else str(item.basis_netto),
+            "satz": "" if vorlage or item.satz is None else str(item.satz),
             "tax_rate": dezimal_klartext(item.tax_rate),
             "net_amount": float(item.net_amount),
             "tax_amount": float(item.tax_amount),

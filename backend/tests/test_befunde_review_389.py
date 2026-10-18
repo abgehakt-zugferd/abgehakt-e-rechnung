@@ -205,3 +205,55 @@ def test_einspielen_ueberspringt_die_systemnotiz_einer_389(pg_session):
         "Die Systemnotiz der Vorlage ist als Nutzernotiz gespeichert und wird "
         "bei der Neuerausgabe verdoppelt"
     )
+
+
+# ── Befund 4: Vorlage kopiert die Herleitung ────────────────────────────────
+
+
+def test_vorlage_einer_389_vererbt_die_herleitung_nicht(client, pg_session):
+    """_items_as_json(quelle, vorlage=True) schrieb basis_netto und satz mit,
+    obwohl die Herleitung zum alten Betrag gehoert (wie leistung_von/bis).
+    Betrag aendern und speichern endete in 400, weil die neue Summe nicht zur
+    uebernommenen Herleitung passte."""
+    import json
+    import re
+    from tests.test_belegart import _payload
+
+    kunde = _kunde(pg_session)
+    vorlage = Invoice(
+        invoice_number=f"RE-HERL-{uuid.uuid4().hex[:6]}",
+        customer_id=kunde.id,
+        issue_date=date(2026, 10, 1), due_date=date(2026, 10, 15),
+        currency="EUR", tax_category="S", invoice_type="self_billing",
+        status="draft", net_total=Decimal("125.00"),
+        tax_total=Decimal("23.75"), gross_total=Decimal("148.75"),
+        payment_terms="Zahlbar in 14 Tagen.",
+    )
+    vorlage.items = [InvoiceItem(
+        position=1, description="Beteiligung", unit="Pauschal",
+        quantity=Decimal("1"), unit_price=Decimal("125.00"),
+        tax_rate=Decimal("19"), net_amount=Decimal("125.00"),
+        tax_amount=Decimal("23.75"), gross_amount=Decimal("148.75"),
+        basis_netto=Decimal("1000"), satz=Decimal("12.5"),
+    )]
+    pg_session.add(vorlage)
+    pg_session.commit()
+
+    r = client.get(f"/invoices/neu?vorlage={vorlage.id}")
+    assert r.status_code == 200
+    items = json.loads(re.search(
+        r'id="vorhandene-positionen">(.*?)</script>', r.text, re.S,
+    ).group(1))
+    assert items[0]["basis_netto"] == "" and items[0]["satz"] == "", (
+        "Die Vorlage schreibt die Herleitung des alten Betrags in das neue "
+        "Formular"
+    )
+
+    items[0]["unit_price"] = "150"  # Betrag aendern, Herleitung passt nicht mehr
+    response = client.post("/invoices/neu", data=_payload(kunde, items=items))
+    assert response.status_code == 303, response.text
+
+    neue_id = uuid.UUID(response.headers["location"].rsplit("/", 1)[-1])
+    pg_session.expire_all()
+    neu = pg_session.get(Invoice, neue_id)
+    assert (neu.items[0].basis_netto, neu.items[0].satz) == (None, None)
