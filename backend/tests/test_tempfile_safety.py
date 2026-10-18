@@ -22,7 +22,9 @@ import inspect
 
 import pytest
 
-from app.routers.invoices import _run_validation, finalize_invoice, preview_pdf
+from app.services.rechnung.pruefung import run_validation as _run_validation
+from app.services.rechnung.finalisieren import arbeitsverzeichnis_anlegen as finalize_invoice
+from app.routers.invoices.ansicht import preview_pdf
 
 # Zweiter Wert: die atomare API, die diese Funktion benutzen MUSS. `finalize_invoice`
 # braucht ein ganzes Wegwerf-VERZEICHNIS statt einer einzelnen Datei (#12/#13: die

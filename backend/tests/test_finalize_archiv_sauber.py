@@ -87,12 +87,12 @@ def test_archiv_bleibt_waehrend_der_pipeline_unberuehrt(pg_session):
         return True
 
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
-             patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
-             patch("app.routers.invoices.pdfa.to_pdfa3", side_effect=_pdfa), \
-             patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-             patch("app.routers.invoices.mustang.combine", side_effect=_combine), \
-             patch("app.routers.invoices.mustang.validate", return_value=valid_mustang()):
+        with patch("app.services.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
+             patch("app.services.pdfa.gs_available", return_value=True), \
+             patch("app.services.pdfa.to_pdfa3", side_effect=_pdfa), \
+             patch("app.services.mustang.jar_available", return_value=True), \
+             patch("app.services.mustang.combine", side_effect=_combine), \
+             patch("app.services.mustang.validate", return_value=valid_mustang()):
             r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
 
         assert r.status_code == 303, r.text
@@ -122,12 +122,12 @@ def test_nach_erfolg_liegt_genau_der_fertige_beleg_im_archiv(pg_session):
         return True
 
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
-             patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
-             patch("app.routers.invoices.pdfa.to_pdfa3", side_effect=_pdfa), \
-             patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-             patch("app.routers.invoices.mustang.combine", side_effect=_combine), \
-             patch("app.routers.invoices.mustang.validate", return_value=valid_mustang()):
+        with patch("app.services.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
+             patch("app.services.pdfa.gs_available", return_value=True), \
+             patch("app.services.pdfa.to_pdfa3", side_effect=_pdfa), \
+             patch("app.services.mustang.jar_available", return_value=True), \
+             patch("app.services.mustang.combine", side_effect=_combine), \
+             patch("app.services.mustang.validate", return_value=valid_mustang()):
             r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
 
         assert r.status_code == 303, r.text
@@ -169,12 +169,12 @@ def test_kein_beleg_im_archiv_wenn_der_commit_scheitert(pg_session):
         return True
 
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
-             patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
-             patch("app.routers.invoices.pdfa.to_pdfa3", side_effect=_pdfa), \
-             patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-             patch("app.routers.invoices.mustang.combine", side_effect=_combine), \
-             patch("app.routers.invoices.mustang.validate", return_value=valid_mustang()):
+        with patch("app.services.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
+             patch("app.services.pdfa.gs_available", return_value=True), \
+             patch("app.services.pdfa.to_pdfa3", side_effect=_pdfa), \
+             patch("app.services.mustang.jar_available", return_value=True), \
+             patch("app.services.mustang.combine", side_effect=_combine), \
+             patch("app.services.mustang.validate", return_value=valid_mustang()):
             pg_session.commit = _commit_scheitert
             with pytest.raises(RuntimeError):
                 client(pg_session).post(f"/invoices/{inv.id}/finalisieren")

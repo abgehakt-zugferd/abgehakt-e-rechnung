@@ -74,8 +74,8 @@ def test_erster_versand_schreibt_protokollzeile(pg_session):
     inv = _seed(pg_session)
     _upload_adresse(pg_session)
     with patch.object(datev_email, "send_invoice"), \
-         patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):
+         patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=_valid_mustang()):
         r = _client(pg_session).post(f"/invoices/{inv.id}/datev-senden",
                                      data={"cc_email": "ablage@example.de"})
     assert r.status_code == 303
@@ -96,8 +96,8 @@ def test_zweiter_versand_ohne_guard_fehler(pg_session):
     inv = _seed(pg_session)
     _upload_adresse(pg_session)
     with patch.object(datev_email, "send_invoice"), \
-         patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):
+         patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=_valid_mustang()):
         c = _client(pg_session)
         assert c.post(f"/invoices/{inv.id}/datev-senden").status_code == 303
         pg_session.expire_all()
@@ -118,8 +118,8 @@ def test_fehlversuch_wird_protokolliert(pg_session):
     inv = _seed(pg_session)
     with patch.object(datev_email, "send_invoice",
                       side_effect=datev_email.EmailError("SMTP-Fehler: 550 blocked")), \
-         patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):
+         patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=_valid_mustang()):
         r = _client(pg_session).post(f"/invoices/{inv.id}/datev-senden")
 
     assert r.status_code == 400
@@ -136,8 +136,8 @@ def test_nach_fehlversuch_gelingt_der_zweite_und_setzt_den_zeitstempel(pg_sessio
     inv = _seed(pg_session)
     _upload_adresse(pg_session)
     c = _client(pg_session)
-    with patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):
+    with patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=_valid_mustang()):
         with patch.object(datev_email, "send_invoice",
                           side_effect=datev_email.EmailError("SMTP-Fehler: 550 blocked")):
             assert c.post(f"/invoices/{inv.id}/datev-senden").status_code == 400
@@ -172,8 +172,8 @@ def test_bezahlte_rechnung_darf_erneut_gesendet_werden(pg_session):
     verschicken zu können — die Route erlaubt es, die Oberfläche zeigt es jetzt auch."""
     inv = _seed(pg_session, status="paid")
     with patch.object(datev_email, "send_invoice"), \
-         patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):
+         patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=_valid_mustang()):
         r = _client(pg_session).post(f"/invoices/{inv.id}/datev-senden")
     assert r.status_code == 303
     assert len(_logs(pg_session, inv.id)) == 1
@@ -183,8 +183,8 @@ def test_detailseite_zeigt_das_versandprotokoll(pg_session):
     inv = _seed(pg_session)
     with patch.object(datev_email, "send_invoice",
                       side_effect=datev_email.EmailError("SMTP-Fehler: 550 blocked")), \
-         patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):
+         patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=_valid_mustang()):
         _client(pg_session).post(f"/invoices/{inv.id}/datev-senden")
 
     r = _client(pg_session).get(f"/invoices/{inv.id}")

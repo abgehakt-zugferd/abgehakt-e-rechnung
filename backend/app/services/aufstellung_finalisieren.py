@@ -1,6 +1,6 @@
 """Stellt die Abrechnungsaufstellung: PDF erzeugen, PDF/A heben, archivieren.
 
-Muster ist das Finalisieren der Rechnung (routers/invoices.py, Bauschritt 4):
+Muster ist das Finalisieren der Rechnung (services/rechnung/finalisieren.py, Bauschritt 4):
 Das PDF entsteht in einem Wegwerf-Verzeichnis UNTER dem storage-Mount, wird
 mit Ghostscript auf PDF/A-3 gehoben und mit os.replace veroeffentlicht —
 erst DANN wird committet. Scheitert ein Schritt, liegt nichts im Archiv und

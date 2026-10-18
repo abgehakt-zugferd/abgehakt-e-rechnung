@@ -3,7 +3,7 @@
 Voller Weg gegen die echte Datenbank und die ECHTE Pipeline (ReportLab,
 Ghostscript, Mustang): angenommener Auftrag → Entwurf → prüfen → finalisieren
 → Archiv. Mustang ist die Wahrheit: gefordert sind is_valid UND XML:valid,
-genau wie im Finalisieren (routers/invoices.py); XML:valid allein genügt
+genau wie im Finalisieren (services/rechnung/finalisieren.py); XML:valid allein genügt
 nicht. Scheitert eine Stufe, liegt am Ende kein Beleg im Archiv.
 
 Übersprungene Tests gelten hier als Fehlschlag; fehlt Mustang, ist der Lauf

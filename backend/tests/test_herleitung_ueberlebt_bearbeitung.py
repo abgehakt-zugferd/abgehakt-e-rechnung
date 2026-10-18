@@ -2,7 +2,7 @@
 import json
 from decimal import Decimal
 import pytest
-from app.routers.invoices import _items_as_json
+from app.routers.invoices.formular_lesen import items_as_json as _items_as_json
 from app.services.abrechnungsauftrag_wirkung import entwuerfe_anlegen
 from tests.test_abrechnungsauftrag_wirkung import _kunde, _urteil, _gutschrift, PARTNER_A
 from tests.test_belegart import _payload, _frisch

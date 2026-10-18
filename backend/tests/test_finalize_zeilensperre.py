@@ -33,7 +33,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
-from app.routers.invoices import finalize_invoice
+from app.routers.invoices.finalisieren import finalize_invoice
 
 
 def _valid_draft(pg_session) -> uuid.UUID:
@@ -85,7 +85,7 @@ def test_verlierer_startet_die_pipeline_nicht_solange_die_zeile_gehalten_wird(
     anfrage_session.execute(text("SET lock_timeout = '400ms'"))
     anfrage_session.commit()
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf") as erzeuge:
+        with patch("app.services.pdf_generator.generate_pdf") as erzeuge:
             with pytest.raises(OperationalError):
                 finalize_invoice(invoice_id, db=anfrage_session)
         erzeuge.assert_not_called()
@@ -121,7 +121,7 @@ def test_verlierer_sieht_nach_der_sperre_den_neuen_status(pg_session, pg_engine,
     faden.start()
     assert gewinner_haelt.wait(timeout=5), "Der Gewinner bekam die Zeile nicht"
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf") as erzeuge:
+        with patch("app.services.pdf_generator.generate_pdf") as erzeuge:
             with pytest.raises(HTTPException) as fehler:
                 finalize_invoice(invoice_id, db=anfrage_session)
         assert fehler.value.status_code == 400
@@ -140,7 +140,7 @@ def test_der_gewinner_finalisiert_ungehindert(pg_session, pg_engine, anfrage_ses
     """
     invoice_id = _valid_draft(pg_session)
 
-    with patch("app.routers.invoices.pdf_generator.generate_pdf") as erzeuge:
+    with patch("app.services.pdf_generator.generate_pdf") as erzeuge:
         with pytest.raises(HTTPException) as fehler:
             finalize_invoice(invoice_id, db=anfrage_session)
     # Die Pipeline lief los und scheiterte erst an der fehlenden PDF-Stufe, nicht an

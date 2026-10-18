@@ -1,6 +1,6 @@
 """Finalisieren der Abrechnungsaufstellung (§ 8b, Bauschritt 7c).
 
-Muster ist das Finalisieren der Rechnung (routers/invoices.py): erst das
+Muster ist das Finalisieren der Rechnung (services/rechnung/finalisieren.py): erst das
 Archiv, dann der Commit — scheitert ein Schritt, liegt nichts im Archiv
 und der Entwurf bleibt Entwurf. KEIN Mustang, KEINE XML: Die Aufstellung
 ist keine Rechnung, PDF/A-3 ist die Ablageform.

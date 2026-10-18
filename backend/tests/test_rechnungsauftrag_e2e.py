@@ -4,7 +4,7 @@ Voller Weg gegen die echte Datenbank und die ECHTE Pipeline (ReportLab,
 Ghostscript, Mustang), angefangen beim Belegordner: angenommener Auftrag →
 Knopf → Entwurf 380 mit Reverse Charge und einer NEGATIVEN Position (Festlegung
 11) → prüfen → finalisieren → Archiv. Mustang ist die Wahrheit: gefordert sind
-is_valid UND XML:valid, genau wie im Finalisieren (routers/invoices.py).
+is_valid UND XML:valid, genau wie im Finalisieren (services/rechnung/finalisieren.py).
 
 Übersprungene Tests gelten hier als Fehlschlag; fehlt Mustang, ist der Lauf
 rot (deshalb kein stiller Skip im Container-Lauf von run-tests.sh).

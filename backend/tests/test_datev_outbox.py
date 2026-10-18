@@ -72,8 +72,8 @@ def _logs(session, invoice_id):
 
 
 def _mustang_patches():
-    return (patch("app.routers.invoices.mustang.jar_available", return_value=True),
-            patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()))
+    return (patch("app.services.mustang.jar_available", return_value=True),
+            patch("app.services.mustang.validate", return_value=_valid_mustang()))
 
 
 def test_der_versuch_ist_committet_bevor_smtp_angesprochen_wird(pg_session, pg_engine):

@@ -116,8 +116,8 @@ def test_versandroute_zieht_den_absender_aus_der_firma(pg_session):
     gesendet, smtp_cls = smtp_doppel()
     valid = {"is_valid": True, "raw": "Parsed PDF:valid\nXML:valid",
              "errors": [], "warnings": []}
-    with patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=valid), \
+    with patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=valid), \
          patch("smtplib.SMTP", smtp_cls):
         r = client_fuer(pg_session).post(f"/invoices/{inv.id}/datev-senden")
     assert r.status_code == 303

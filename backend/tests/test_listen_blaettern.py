@@ -30,7 +30,7 @@ from app.database import get_db
 from app.main import app
 from app.models.customer import Customer
 from app.models.invoice import Invoice
-from app.routers.invoices import SEITENGROESSE
+from app.routers.invoices.liste import SEITENGROESSE
 
 
 def teardown_function():

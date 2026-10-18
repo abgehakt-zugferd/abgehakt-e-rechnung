@@ -36,7 +36,7 @@ settings = get_settings()
 BEREICHE: dict[str, str] = {"pdfs": "PDF", "xml": "XML", "aufstellungen": "Aufstellungen"}
 
 
-# Wie viele Dateien eine Seite zeigt. Siehe `SEITENGROESSE` in `routers/invoices.py`:
+# Wie viele Dateien eine Seite zeigt. Siehe `SEITENGROESSE` in `routers/invoices/liste.py`:
 # bewusst eine Konstante, keine Einstellung.
 SEITENGROESSE = 100
 

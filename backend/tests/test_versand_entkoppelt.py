@@ -42,8 +42,8 @@ def _valid_mustang():
 
 
 def _mustang_patches():
-    return (patch("app.routers.invoices.mustang.jar_available", return_value=True),
-            patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()))
+    return (patch("app.services.mustang.jar_available", return_value=True),
+            patch("app.services.mustang.validate", return_value=_valid_mustang()))
 
 
 def _upload_adresse(pg_session, adresse="upload@example.de"):

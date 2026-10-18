@@ -82,8 +82,8 @@ def test_send_success_sets_datev_sent_at(pg_session):
     # Route-Orchestrierung (Status/E-Mail/Timestamp) — die echte E-Rechnungs-
     # Validität beweist die Mustang-Integration weiter unten; hier gemockt.
     with patch.object(datev_email, "send_invoice") as send, \
-         patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):
+         patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=_valid_mustang()):
         r = TestClient(app, follow_redirects=False).post(f"/invoices/{inv.id}/datev-senden")
     assert r.status_code == 303
     assert send.call_args.kwargs["bcc_datev"] is True
@@ -143,8 +143,8 @@ def test_send_emailerror_returns_400_and_no_timestamp(pg_session):
     inv = _seed(pg_session, status="issued")
     app.dependency_overrides[get_db] = lambda: pg_session
     with patch.object(datev_email, "send_invoice", side_effect=datev_email.EmailError("SMTP kaputt")), \
-         patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()):
+         patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=_valid_mustang()):
         r = TestClient(app, follow_redirects=False).post(f"/invoices/{inv.id}/datev-senden")
     assert r.status_code == 400
     pg_session.expire_all()
@@ -201,8 +201,8 @@ def test_send_refuses_pdf_valid_pdfa_but_no_embedded_xml(pg_session):
     no_xml = {"is_valid": True, "raw": "Parsed PDF:valid\nSummary: 0 errors",
               "errors": [], "warnings": []}
     with patch.object(datev_email, "send_invoice") as send, \
-         patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=no_xml):
+         patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=no_xml):
         r = TestClient(app, follow_redirects=False).post(f"/invoices/{inv.id}/datev-senden")
     assert r.status_code == 400, r.text
     send.assert_not_called()
@@ -218,7 +218,7 @@ def test_send_refuses_when_mustang_unavailable(pg_session):
     inv = _seed(pg_session, status="issued", pdf="RE-x.pdf")
     app.dependency_overrides[get_db] = lambda: pg_session
     with patch.object(datev_email, "send_invoice") as send, \
-         patch("app.routers.invoices.mustang.jar_available", return_value=False):
+         patch("app.services.mustang.jar_available", return_value=False):
         r = TestClient(app, follow_redirects=False).post(f"/invoices/{inv.id}/datev-senden")
     assert r.status_code == 400, r.text
     send.assert_not_called()
