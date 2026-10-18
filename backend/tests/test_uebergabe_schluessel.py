@@ -9,13 +9,18 @@ kann immer sagen, WELCHE Bytes er abgelehnt hat.
 
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from app.services.uebergabe_befund import Empfangslage, beleg_beurteilen
-from app.services.uebergabe_schluessel import SchluesselUnbekannt, schluessel_laden
+from app.services.uebergabe_schluessel import (
+    _BEIBLATT_PFLICHT,
+    SchluesselUnbekannt,
+    schluessel_laden,
+)
 from tests.helpers.uebergabe import (
     ABSENDER_TANTIEMEN,
     PARTNER_A,
@@ -219,3 +224,17 @@ def test_ein_verweis_aus_dem_schluesselordner_hinaus_wird_nicht_gefolgt(schluess
 
     with pytest.raises(SchluesselUnbekannt):
         schluessel_laden("verweis", SCHLUESSEL_ID, ERZEUGT_AM, wurzel=ordner)
+
+
+def test_die_integrationsdoku_nennt_den_geschlossenen_feldbestand():
+    """docs/INTEGRATION-TESTINSTANZ.md stand bei 'gueltig_von, gueltig_bis'
+    zurueck und hinter dem Feldbestand, den der Schluessellader seit #166
+    durchsetzt. Der Testcontainer mountet docs/ nicht: Wo die Doku nicht
+    liegt, wird uebergangen, nirgends wird sie erfunden."""
+    doku = Path(__file__).resolve().parents[2] / "docs" / "INTEGRATION-TESTINSTANZ.md"
+    if not doku.exists():
+        pytest.skip("docs/ ist hier nicht erreichbar (Testcontainer mountet es nicht)")
+    text = doku.read_text(encoding="utf-8")
+    for feld in _BEIBLATT_PFLICHT + ("gueltig_bis", "notizen"):
+        assert f"`{feld}`" in text, feld
+    assert "YYYY-MM-DDTHH:MM:SSZ" in text
