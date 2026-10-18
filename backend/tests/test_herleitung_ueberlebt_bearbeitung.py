@@ -36,6 +36,28 @@ def test_import_bearbeitung_herleitung(client, pg_session, tmp_path):
     assert "12,5" in text and "Bemessungsgrundlage" in text
 
 
+def test_importierter_satz_mit_sechs_nachkommastellen_ueberlebt_speichern(client, pg_session):
+    """797.30 x 33.333333 % sind 265.77. Numeric(5,2) rundete den Satz beim
+    Import auf 33.33, das Neuladen trug 265.74 statt 265.77 nach, und jedes
+    Speichern des unveraenderten Entwurfs scheiterte an der Nachgerechnung."""
+    kunde = _kunde(pg_session, PARTNER_A)
+    g = _gutschrift(PARTNER_A)
+    g["positionen"][0]["herleitung"] = dict(basis_netto="797.30", satz="33.333333")
+    g["positionen"][0]["netto"] = "265.77"
+    g["summe"]["netto"] = "265.77"
+    inv = entwuerfe_anlegen(pg_session, _urteil([g]), dateiname="auftrag.json")[0]
+    pg_session.commit()
+
+    inv = _frisch(pg_session, inv.id)
+    assert inv.items[0].satz == Decimal("33.333333")
+    items = json.loads(_items_as_json(inv))
+    response = client.post(f"/invoices/{inv.id}/bearbeiten", data=_payload(kunde, items=items))
+    assert response.status_code == 303, response.text
+
+    inv = _frisch(pg_session, inv.id)
+    assert inv.items[0].satz == Decimal("33.333333")
+
+
 @pytest.mark.parametrize("basis,satz,preis,ok", [
     ("697.30", "25", "174.33", True), ("697.30", "25", "174.32", False),
     ("1000", "", "125", False), ("", "", "125", True),

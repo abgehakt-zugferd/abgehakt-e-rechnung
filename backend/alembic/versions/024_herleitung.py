@@ -10,7 +10,10 @@ depends_on = None
 
 def upgrade():
     op.add_column("invoice_items", sa.Column("basis_netto", sa.Numeric(12, 2), nullable=True))
-    op.add_column("invoice_items", sa.Column("satz", sa.Numeric(5, 2), nullable=True))
+    # Der satz ohne Skala: Das Uebergabeformat erlaubt mindestens zwei, beliebig
+    # viele Nachkommastellen ("33.333333"); Numeric(5,2) rundete beim Import und
+    # machte den Entwurf uneditierbar (siehe models/invoice.py).
+    op.add_column("invoice_items", sa.Column("satz", sa.Numeric(), nullable=True))
     op.create_check_constraint("ck_invoice_items_herleitung_beide_oder_keine",
         "invoice_items", "(basis_netto IS NULL) = (satz IS NULL)")
 

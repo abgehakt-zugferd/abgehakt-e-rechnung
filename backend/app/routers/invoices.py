@@ -218,17 +218,21 @@ def _herleitung_aus_formular(raw, netto):
         return {"basis_netto": None, "satz": None}
     try:
         basis, satz = map(Decimal, werte)
+        # Der Beteiligungssatz trägt beliebig viele Nachkommastellen (wie das
+        # Übergabeformat, "33.333333"): Der importierte Entwurf bindet ihn aus
+        # dem Bestand (belegsperre), und eine Zwei-Nachkommastellen-Probe hier
+        # ließe sich nicht mehr speichern. Die Bemessungsgrundlage bleibt Geld
+        # mit genau zwei Stellen, und die Nachgerechnung gilt für beide.
         if (not basis.is_finite() or not satz.is_finite()
                 or basis != basis.quantize(Decimal("0.01"))
-                or satz != satz.quantize(Decimal("0.01"))
                 or abs(basis) >= Decimal("10000000000") or abs(satz) >= 1000):
             raise ValueError
         if herleitungsbetrag(basis, satz) != netto:
             raise ValueError
     except (InvalidOperation, ValueError):
         raise HTTPException(status_code=400, detail=
-            "Herleitung: Bemessungsgrundlage und Beteiligungssatz gemeinsam "
-            "mit höchstens zwei Nachkommastellen eingeben; der Betrag muss "
+            "Herleitung: Bemessungsgrundlage mit höchstens zwei Nachkommastellen, "
+            "Beteiligungssatz beliebig genau eingeben; der Betrag muss "
             "Bemessungsgrundlage × Beteiligungssatz / 100 entsprechen.")
     return {"basis_netto": basis, "satz": satz}
 
