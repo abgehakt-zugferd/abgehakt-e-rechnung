@@ -821,6 +821,52 @@ def test_eine_389_ohne_positive_summe_ist_unbrauchbar(schluessel):
     assert urteil.feststellungen[0].erhalten == "-174.33"
 
 
+# ── Optionale Unterobjekte: null heisst nicht da, nicht unbrauchbar. Seit #164
+# meldete _pruefe_objekt jeden Wert, der nicht dict/list ist, auch null - die
+# Wirkung aber liest "herleitung": null als fehlend (position.get(...) or {}).
+
+def test_herleitung_null_gilt_als_nicht_vorhanden(schluessel):
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["positionen"][0]["herleitung"] = None
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert urteil.angenommen, _codes(urteil)
+
+
+def test_vortraege_null_gilt_als_nicht_vorhanden(schluessel):
+    nutzlast = _auftrag()
+    nutzlast["vortraege"] = None
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert urteil.angenommen, _codes(urteil)
+
+
+def test_herleitung_als_zeichenkette_bleibt_unbrauchbar(schluessel):
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["positionen"][0]["herleitung"] = "x"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].positionen[0].herleitung"
+    )
+
+
+def test_ein_pflicht_unterobjekt_null_bleibt_unbrauchbar(schluessel):
+    """Nur die OPTIONALEN Unterobjekte ertragen null: bemessung ist Pflicht,
+    und null ist hier ein unbrauchbarer Wert, nicht ein fehlendes Feld."""
+    nutzlast = _auftrag()
+    nutzlast["bemessung"] = None
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.bemessung"
+
+
 def test_eine_niedrigere_hauptfassung_ist_kein_ablehnungsgrund(schluessel):
     """§ 2 nennt als einzigen Fassungsgrund den HOEHEREN major: abgelehnt,
     nicht interpretiert. Eine NIEDRIGERE Hauptfassung (hier 0.9 gegen die 1.x

@@ -230,7 +230,15 @@ def _pruefe_objekt(objekt, spec, unterobjekte, pfad_verzeichnis, pfad, funde) ->
             funde.append(Feststellung("UNBEKANNTES_FELD", f"{pfad}.{name}"))
             continue
         kind = f"{pfad_verzeichnis}.{name}" if pfad_verzeichnis else name
+        # null am OPTIONALEN Unterobjekt heisst "nicht vorhanden", nicht
+        # "unbrauchbar" - die Wirkung liest es genau so (position.get(
+        # "herleitung") or {}). Ein PFLICHT-Unterobjekt ertraegt null nicht: Es
+        # ist da und unbrauchbar. Jeder andere falsche Typ bleibt, was er
+        # seit #164 ist.
+        fehlt = wert is None and name not in spec["pflicht"]
         if f"{kind}[]" in unterobjekte:
+            if fehlt:
+                continue
             # Formprobe vor der Annahme: Ein Objekt oder eine Zeichenkette
             # statt der Liste wurde frueher stillschweigend uebernommen und
             # war erst in der Wirkung ein TypeError. Das Feld ist bekannt
@@ -247,6 +255,8 @@ def _pruefe_objekt(objekt, spec, unterobjekte, pfad_verzeichnis, pfad, funde) ->
                     f"{kind}[]", f"{pfad}.{name}[{nummer}]", funde,
                 )
         elif kind in unterobjekte:
+            if fehlt:
+                continue
             if not isinstance(wert, dict):
                 funde.append(Feststellung(
                     "WERT_UNBRAUCHBAR", f"{pfad}.{name}",
