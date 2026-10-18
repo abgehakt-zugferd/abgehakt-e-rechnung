@@ -20,7 +20,7 @@ from app.services.customer_guard import CustomerDeleteError
 from app.services.invoice_guard import InvoiceStateError
 from app.routers import (
     customers, invoices, settings as settings_router, export, setup,
-    updates, archive, uebergaben,
+    updates, archive, uebergaben, aufstellungen,
 )
 from app.dependencies.herkunft import pruefe_herkunft
 from app.dependencies.beleg_integration_dep import lade_beleg_integration
@@ -142,6 +142,7 @@ app.include_router(archive.router, tags=["Archiv"])
 app.include_router(updates.router, prefix="/updates", tags=["Updates"])
 app.include_router(setup.router, prefix="/setup", tags=["Ersteinrichtung"])
 app.include_router(uebergaben.router, prefix="/uebergaben", tags=["Beleg-Integration"])
+app.include_router(aufstellungen.router, prefix="/aufstellungen", tags=["Abrechnungsaufstellungen"])
 
 
 # Überschrift und Ersatztext je Statuscode. Starlette setzt ohne eigenen Text die

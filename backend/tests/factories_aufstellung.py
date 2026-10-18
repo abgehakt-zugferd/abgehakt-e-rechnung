@@ -71,3 +71,19 @@ def orm_aufstellung(schluessel=None, *, status="draft", anlagen=(), **over):
         # beiden Tabellen braucht eine Session und laeuft beim Aufrufer.
         belegen(a, schluessel)
     return a
+
+
+def speichere_aufstellung(pg_session, **over):
+    """Committete Aufstellung mit beiden Anlagen (§ 8b: genau zwei).
+
+    Fuer die Router- und Finalisieren-Tests (7c): Sie brauchen eine Zeile
+    mit id in der DB, kein transientes Objekt. Kann jede Fabrik-
+    Option uebernehmen, `anlagen` stehen beide standardmaessig.
+    """
+    kw = dict(anlagen=[orm_anlage("abrechnungsbericht"),
+                       orm_anlage("zahlungsbericht", sha256="b" * 64, groesse=4096)])
+    kw.update(over)
+    a = orm_aufstellung(**kw)
+    pg_session.add(a)
+    pg_session.commit()
+    return a

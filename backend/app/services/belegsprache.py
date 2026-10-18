@@ -149,6 +149,30 @@ class Belegdarstellung:
     hinweis_k: str
     hinweis_o: str
 
+    # Abrechnungsaufstellung (§ 8b, Bauschritt 7c): eigene Beschriftungen,
+    # denn die Aufstellung ist KEINE Rechnung — keine Steuertitel, kein
+    # Rechnungswortlaut, keine Fälligkeit. Der Keine-Rechnung-Satz grenzt
+    # gegen § 14 UStG ab; die Zahlung ist die des Auszahlers, nicht eine
+    # Forderung des Ausstellers.
+    titel_aufstellung: str
+    label_aufstellungsnummer: str
+    label_ausstellungsdatum: str
+    label_leistungsmonat: str
+    label_zahlungsnummer: str
+    label_zahlungsdatum: str
+    label_aussteller: str
+    label_auszahler: str
+    label_brutto: str
+    label_quellensteuer: str
+    label_kurs: str
+    label_zahlbetrag: str
+    label_anlagen: str
+    label_quelle: str
+    label_dateiname: str
+    label_groesse_bytes: str
+    label_sha256: str
+    hinweis_keine_rechnung: str
+
     def format_betrag(self, wert, waehrung: str = "EUR") -> str:
         if self.code == "de":
             zahl = _betrag_de(wert)
@@ -228,6 +252,15 @@ class Belegdarstellung:
         }
         return hinweise.get(kategorie)
 
+    def anlagenquelle(self, quelle: str) -> str:
+        """Sichtbarer Name einer Anlagenquelle der Aufstellung (§ 8b: genau
+        zwei, der DB-CHECK schreibt die internen Werte fest). Ein unbekannter
+        Wert wirft statt still durchzurutschen — fail-closed wie titel()."""
+        try:
+            return ANLAGENQUELLEN[self.code][quelle]
+        except KeyError:
+            raise ValueError(f"Unbekannte Anlagenquelle: {quelle!r}")
+
     def steuerzeile(self, satz: str, basis: str) -> str:
         return self.steuerzeile_muster.format(satz=satz, basis=basis)
 
@@ -239,6 +272,19 @@ class Belegdarstellung:
 SELF_BILLING_STORNO_TITEL = {
     "de": "Stornierung der Gutschrift",
     "en": "Cancellation of self-billed invoice",
+}
+
+# Anlagen der Aufstellung (§ 8b): genau zwei Quellen, die internen Werte
+# stehen im DB-CHECK der Tabelle; hier nur der sichtbare Name je Sprache.
+ANLAGENQUELLEN: dict[str, dict[str, str]] = {
+    "de": {
+        "abrechnungsbericht": "Abrechnungsbericht",
+        "zahlungsbericht": "Zahlungsbericht",
+    },
+    "en": {
+        "abrechnungsbericht": "Settlement report",
+        "zahlungsbericht": "Payment report",
+    },
 }
 
 _DE = Belegdarstellung(
@@ -295,6 +341,24 @@ _DE = Belegdarstellung(
         "i.V.m. § 6a UStG."
     ),
     hinweis_o="Nicht im Steuergebiet des Ausstellers steuerbar gemäß § 3a Abs. 2 UStG.",
+    titel_aufstellung="ABRECHNUNGSAUFSTELLUNG",
+    label_aufstellungsnummer="Aufstellungsnummer:",
+    label_ausstellungsdatum="Ausstellungsdatum:",
+    label_leistungsmonat="Leistungsmonat:",
+    label_zahlungsnummer="Zahlungsnummer:",
+    label_zahlungsdatum="Zahlungsdatum:",
+    label_aussteller="Aussteller",
+    label_auszahler="Auszahler",
+    label_brutto="Brutto",
+    label_quellensteuer="Quellensteuer",
+    label_kurs="Kurs",
+    label_zahlbetrag="Zahlbetrag (EUR)",
+    label_anlagen="Anlagen",
+    label_quelle="Quelle",
+    label_dateiname="Dateiname",
+    label_groesse_bytes="Größe (Bytes)",
+    label_sha256="SHA-256",
+    hinweis_keine_rechnung="Keine Rechnung im Sinne des § 14 UStG.",
 )
 
 _EN = Belegdarstellung(
@@ -355,6 +419,26 @@ _EN = Belegdarstellung(
     ),
     hinweis_o=(
         "Not taxable in the supplier's territory under section 3a (2) UStG."
+    ),
+    titel_aufstellung="SETTLEMENT STATEMENT",
+    label_aufstellungsnummer="Statement number:",
+    label_ausstellungsdatum="Date of issue:",
+    label_leistungsmonat="Month of service:",
+    label_zahlungsnummer="Payment number:",
+    label_zahlungsdatum="Payment date:",
+    label_aussteller="Issuer",
+    label_auszahler="Payer",
+    label_brutto="Gross",
+    label_quellensteuer="Withholding tax",
+    label_kurs="Exchange rate",
+    label_zahlbetrag="Payment amount (EUR)",
+    label_anlagen="Attachments",
+    label_quelle="Source",
+    label_dateiname="File name",
+    label_groesse_bytes="Size (bytes)",
+    label_sha256="SHA-256",
+    hinweis_keine_rechnung=(
+        "Not an invoice within the meaning of section 14 of the German VAT Act."
     ),
 )
 

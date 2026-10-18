@@ -10,6 +10,7 @@ from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services import pdf_generator
 from app.services.pdf_generator import _document_title
+from tests.helpers.pdf import schrift_ist_eingebettet, schrift_objekte
 
 
 def test_document_title_standard():
@@ -67,38 +68,14 @@ def _sample_invoice(customer, invoice_type=None, original_invoice_id=None):
     return inv
 
 
-def _iter_font_objects(reader):
-    for page in reader.pages:
-        res = page.get("/Resources")
-        if not res:
-            continue
-        fonts = res.get("/Font")
-        if not fonts:
-            continue
-        for ref in fonts.values():
-            yield ref.get_object()
-
-
-def _font_is_embedded(font_obj):
-    fd = font_obj.get("/FontDescriptor")
-    if fd is None and "/DescendantFonts" in font_obj:
-        desc = font_obj["/DescendantFonts"][0].get_object()
-        fd = desc.get("/FontDescriptor")
-    if fd is None:
-        return False
-    fd = fd.get_object()
-    return any(k in fd for k in ("/FontFile", "/FontFile2", "/FontFile3"))
-
-
 def test_generated_pdf_embeds_all_fonts(tmp_path):
     out = tmp_path / "invoice.pdf"
     pdf_generator.generate_pdf(_sample_invoice(_sample_customer()), _sample_company(), out)
-    reader = PdfReader(str(out))
-    font_objs = list(_iter_font_objects(reader))
+    font_objs = list(schrift_objekte(out))
     assert font_objs, "PDF enthält keine Font-Ressourcen"
     for fo in font_objs:
         base = str(fo.get("/BaseFont", ""))
-        assert _font_is_embedded(fo), f"Font nicht eingebettet: {base}"
+        assert schrift_ist_eingebettet(fo), f"Font nicht eingebettet: {base}"
         assert "Helvetica" not in base and "Times" not in base and "Courier" not in base, \
             f"Standard-14-Font verblieben: {base}"
 
