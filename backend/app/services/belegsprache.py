@@ -133,6 +133,9 @@ class Belegdarstellung:
     # Storno-automatisierte Texte (Muster mit {nummer} und {datum})
     storno_zahlungsbedingungen: str
     storno_bemerkung: str
+    # Storno einer 389 (self_billing): Zahlungsbedingungen und Bemerkung in
+    # einem Text, Zahlung und Bezug nennen dasselbe (Muster mit {nummer}/{datum})
+    storno_gutschrift_bezug: str
     # Ersatzrechnung (docs/specs/ersatzrechnung.md), Muster mit {nummer} und {datum}
     ersatz_hinweis: str
 
@@ -160,6 +163,21 @@ class Belegdarstellung:
         if self.code == "de":
             return datum.strftime("%d.%m.%Y")
         return datum.strftime("%Y-%m-%d")
+
+    def herleitungszeile(self, basis, satz, waehrung: str = "EUR") -> str:
+        """Zusaetzzeile unter einer Position: Bemessungsgrundlage × Beteiligungssatz.
+
+        Der Beteiligungssatz gehoert zur Herleitung, nie zur Umsatzsteuerspalte;
+        Betrag und Satz laufen durch die Formatierer der Sprache."""
+        if self.code == "de":
+            return (
+                f"Bemessungsgrundlage {self.format_betrag(basis, waehrung)} "
+                f"× {self.format_menge(satz)} %"
+            )
+        return (
+            f"Assessment base {self.format_betrag(basis, waehrung)} "
+            f"× {self.format_menge(satz)} %"
+        )
 
     def titel(self, belegart_intern: str | None) -> str:
         """Sichtbarer Belegtitel zum fachlichen internen Wert (nach belegart())."""
@@ -263,6 +281,7 @@ _DE = Belegdarstellung(
     fallback_zahlbar="Zahlbar ohne Abzug.",
     storno_zahlungsbedingungen="Storno zur Rechnung {nummer}.",
     storno_bemerkung="Storno zur Rechnung {nummer} vom {datum}.",
+    storno_gutschrift_bezug="Storno zur Gutschrift {nummer} vom {datum}.",
     ersatz_hinweis="Ersetzt Rechnung {nummer} vom {datum}.",
     hinweis_ae=AE_HINWEIS,
     hinweis_e="Kein Ausweis von Umsatzsteuer, da Kleinunternehmer gemäß § 19 UStG.",
@@ -317,6 +336,7 @@ _EN = Belegdarstellung(
     fallback_zahlbar="Payable without deduction.",
     storno_zahlungsbedingungen="Cancellation of invoice {nummer}.",
     storno_bemerkung="Cancellation of invoice {nummer} dated {datum}.",
+    storno_gutschrift_bezug="Cancellation of self-billed invoice {nummer} of {datum}.",
     ersatz_hinweis="Replaces invoice {nummer} dated {datum}.",
     hinweis_ae=AE_HINWEIS,
     hinweis_e=(

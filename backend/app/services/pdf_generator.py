@@ -315,8 +315,7 @@ def _beschreibung_mit_angaben(item, d: Belegdarstellung, waehrung: str = "EUR") 
     satz = getattr(item, "satz", None)
     if basis is not None and satz is not None:
         # Beteiligungssatz gehoert zur Herleitung, nie zur Umsatzsteuerspalte.
-        herleitung = f"Bemessungsgrundlage {d.format_betrag(basis, waehrung)} × {d.format_menge(satz)} %"
-        markup += f'<br/><font size="7">{escape(herleitung)}</font>'
+        markup += f'<br/><font size="7">{escape(d.herleitungszeile(basis, satz, waehrung))}</font>'
     return markup
 
 

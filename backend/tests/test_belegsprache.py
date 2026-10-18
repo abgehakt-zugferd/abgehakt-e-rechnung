@@ -336,6 +336,30 @@ def test_s4_storno_englischer_rechnung_bleibt_englisch(pg_session, tmp_path):
     assert "CANCELLATION INVOICE" in text
 
 
+def test_s4_storno_einer_englischen_389_spricht_englisch(pg_session):
+    kunde = _kunde(pg_session)
+    original = _entwurf(pg_session, kunde, document_language="en",
+                        invoice_type="self-billing", status="issued")
+    storno = build_storno(original, "RE-STORNO-389-EN", date(2026, 10, 15))
+    erwartet = f"Cancellation of self-billed invoice {original.invoice_number} of 2026-10-09."
+    assert storno.payment_terms == erwartet
+    assert storno.notes == erwartet
+
+
+@pytest.mark.parametrize("code,bezug,herleitung", [
+    ("de", "Storno zur Gutschrift RE-389 vom 09.10.2026.",
+     "Bemessungsgrundlage 1.050,00 € × 60 %"),
+    ("en", "Cancellation of self-billed invoice RE-389 of 2026-10-09.",
+     "Assessment base EUR 1,050.00 × 60 %"),
+])
+def test_s4_storno_389_texte_und_herleitung_je_sprache(code, bezug, herleitung):
+    d = darstellung(code)
+    assert d.storno_gutschrift_bezug.format(
+        nummer="RE-389", datum=d.format_datum(date(2026, 10, 9)),
+    ) == bezug
+    assert d.herleitungszeile(Decimal("1050"), Decimal("60")) == herleitung
+
+
 # ── S5 ─────────────────────────────────────────────────────────────────────
 
 

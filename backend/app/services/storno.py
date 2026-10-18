@@ -24,10 +24,19 @@ def build_storno(original: Invoice, invoice_number: str, today: date) -> Invoice
     d = darstellung(sprache)
     datum_text = d.format_datum(original.issue_date)
     self_billing = belegart(original.invoice_type).intern == "self_billing"
-    bezug = f"Storno zur Gutschrift {original.invoice_number} vom {datum_text}."
-    zahlung = bezug if self_billing else d.storno_zahlungsbedingungen.format(
-        nummer=original.invoice_number,
-    )
+    if self_billing:
+        # 389-Storno: Zahlung und Bezug nennen dasselbe, in der Belegsprache.
+        bezug = d.storno_gutschrift_bezug.format(
+            nummer=original.invoice_number, datum=datum_text,
+        )
+        zahlung = bezug
+    else:
+        bezug = d.storno_bemerkung.format(
+            nummer=original.invoice_number, datum=datum_text,
+        )
+        zahlung = d.storno_zahlungsbedingungen.format(
+            nummer=original.invoice_number,
+        )
     storno = Invoice(
         invoice_number=invoice_number,
         customer_id=original.customer_id,
@@ -37,9 +46,7 @@ def build_storno(original: Invoice, invoice_number: str, today: date) -> Invoice
         service_period_start=original.service_period_start,
         service_period_end=original.service_period_end,
         payment_terms=zahlung,
-        notes=bezug if self_billing else d.storno_bemerkung.format(
-            nummer=original.invoice_number, datum=datum_text,
-        ),
+        notes=bezug,
         currency=original.currency,
         zugferd_profile="EN16931",
         tax_category=original.tax_category,
