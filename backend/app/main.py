@@ -28,6 +28,7 @@ from app.dependencies.update_banner_dep import load_update_banner
 from app.config import get_settings
 from app.installation import is_testinstanz, testinstanz_mail_to
 from app.services.audit import register_audit_listeners
+from app.services.aufstellung_guard import register_aufstellung_guard
 from app.services.customer_guard import register_customer_guard
 from app.services.invoice_guard import register_invoice_guard
 from app.branding import PRODUCT_NAME, register_branding_globals
@@ -56,6 +57,7 @@ from app.services.steuer_ruecklage import steuerruecklage_anteil_prozent
 # Guards ZUERST: sie müssen werfen, bevor der Audit-Listener Pending-Einträge sammelt
 # (sonst Geister-Audit-Zeilen beim nächsten Flush nach einem Rollback).
 register_invoice_guard()
+register_aufstellung_guard()
 register_customer_guard()
 register_audit_listeners()
 
