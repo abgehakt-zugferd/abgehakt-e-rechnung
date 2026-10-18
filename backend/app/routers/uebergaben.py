@@ -164,6 +164,14 @@ def rechnung_anlegen(dateiname: str, db: Session = Depends(get_db)):
     if not urteil.angenommen:
         return _zurueck(urteil.befund or "ABGELEHNT")
 
+    # Der rechnungsauftrag ist lesbar (sein Leser ist gebaut), aber das
+    # Anlegen ist fuer diese Art noch nicht gebaut: Erst ein spaeterer
+    # Bauschritt macht daraus einen Beleg. Der Weg bleibt erreichbar und
+    # meldet - ein alter Tab oder eine eigene Ansicht drueckt den Knopf
+    # trotzdem, und niemandem ist mit einem Serverfehler geholfen.
+    if urteil.nutzlast_art == "rechnungsauftrag":
+        return _zurueck("Rechnungsaufträge werden in einem späteren Schritt verarbeitet.")
+
     # Erst die eigene Aufbewahrungskopie (§ 12), dann die Datenbankzeilen: ohne
     # gepruefte Kopie wird der Beleg nicht angenommen, denn sonst haette der
     # Empfaenger nur den Absenderordner als Beleg. Scheitert spaeter der Commit,

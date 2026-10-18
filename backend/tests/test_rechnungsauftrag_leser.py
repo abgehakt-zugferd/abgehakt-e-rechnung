@@ -1,18 +1,40 @@
-"""Der Leser fuer rechnungsauftrag (§ 8a, Fassung 1.7) - Teil 1a und 1b.
+"""Der Leser fuer rechnungsauftrag (§ 8a, Fassung 1.7) - Teil 1a bis 1c.
 
 Teil 1a, die Grundregeln: die Art ist lesbar, der Feldbestand, typcode,
 waehrung, der Kalendermonat, die Geldform und die Summen. Teil 1b: gruppe
 (an allen Positionen oder keiner, zusammenhaengend, nr lueckenlos), bezeichnung
 (nur einmal je Beleg, Gleichheit nach Unicode-NFC) und grundlagen (quelle,
-beleg_sha256, leistungsperiode, Σ netto == summe). Der Auftragsschluessel
-folgt in einem eigenen Teil; jeder Fall hier ist erfunden
+beleg_sha256, leistungsperiode, Σ netto == summe). Teil 1c: der
+auftragsschluessel in Form und als zweiter-Haken-Sperre, und der Kunde hinter
+partner_id. Jeder Fall hier ist erfunden
 (helpers/uebergabe.rechnungsauftrag).
 """
 
 import pytest
 
 from app.services.uebergabe_befund import Empfangslage, beleg_beurteilen
-from tests.helpers.uebergabe import beleg, rechnungsauftrag, schluesselpaar
+from tests.helpers.uebergabe import PARTNER_A, beleg, rechnungsauftrag, schluesselpaar
+
+
+class _Lage(Empfangslage):
+    """Eine Lage mit Bestand: je Auftragsschluessel der Beleg, der dazu
+    bereits besteht (Rechnungsnummer oder 'Entwurf').
+
+    Ohne partner gilt der Kunde als unbekannt - die leere Lage ist hier nicht
+    die sichere Voreinstellung, denn § 8a prueft den Kunden hinter
+    partner_id (Teil 1c) und wuerde jeden sonst gueltigen Auftrag dieser
+    Datei allein daran ablehnen.
+    """
+
+    def __init__(self, dokumente=None, partner=()):
+        self._dokumente = dokumente or {}
+        self._partner = partner
+
+    def dokument_zu_auftragsschluessel(self, schluessel):
+        return self._dokumente.get(schluessel)
+
+    def partner_bekannt(self, partner_id):
+        return partner_id in self._partner
 
 
 @pytest.fixture
@@ -20,12 +42,14 @@ def schluessel(tmp_path):
     return schluesselpaar(tmp_path)
 
 
-def _urteil(schluessel, nutzlast, **umschlag_aenderungen):
+def _urteil(schluessel, nutzlast, lage=None, **umschlag_aenderungen):
     roh = beleg(
         schluessel[0], nutzlast,
         nutzlast_art="rechnungsauftrag", **umschlag_aenderungen,
     )
-    return beleg_beurteilen(roh, Empfangslage(), schluessel_wurzel=schluessel[1])
+    if lage is None:
+        lage = _Lage(partner=(PARTNER_A,))
+    return beleg_beurteilen(roh, lage, schluessel_wurzel=schluessel[1])
 
 
 def _befunde(urteil) -> list:
@@ -399,3 +423,85 @@ def test_die_grundlagen_muessen_der_summe_entsprechen(schluessel):
     assert _befunde(urteil) == [
         ("SUMME_STIMMT_NICHT", "$.nutzlast.grundlagen"),
     ]
+
+
+# ---- Teil 1c: auftragsschluessel und kunde ----
+
+SCHLUESSEL_IM_BELEG = "plattform:2026-02:kanal-a:x1"
+
+
+@pytest.mark.parametrize("wert", [
+    "Plattform:2026-02",     # Grossbuchstabe ist eine andere Form
+    "plattform 2026",        # Leerzeichen
+    "plattform_2026",        # Unterstrich
+    "plattform/2026",        # Schraegstrich
+    "",                      # leer
+    "a" * 129,               # 129 Zeichen
+    2026,                    # keine Zeichenkette
+])
+def test_die_form_des_auftragsschluessels(schluessel, wert):
+    """Teil 1c: kleine Buchstaben, Ziffern, Doppelpunkt und Bindestrich,
+    1 bis 128 Zeichen - ein Schluessel ausserhalb dieser Form ist keiner,
+    nach dem nicht gesucht wird."""
+    urteil = _urteil(schluessel, rechnungsauftrag(auftragsschluessel=wert))
+
+    assert _befunde(urteil) == [("WERT_UNBRAUCHBAR", "$.nutzlast.auftragsschluessel")]
+
+
+def test_128_zeichen_sind_noch_ein_schluessel(schluessel):
+    """Teil 1c: Die Grenze selbst ist erlaubt."""
+    urteil = _urteil(schluessel, rechnungsauftrag(auftragsschluessel="a" * 128))
+
+    assert urteil.angenommen, _befunde(urteil)
+
+
+def test_zum_schluessel_gerechnet_ist_keine_zweite_rechnung(schluessel):
+    """Teil 1c: Der Auftragsschluessel schuetzt vor der zweiten Rechnung zum
+    selben Auftrag. Der Befund nennt im erhalten die Rechnungsnummer des
+    Belegs, der dazu bereits besteht."""
+    urteil = _urteil(
+        schluessel, rechnungsauftrag(),
+        lage=_Lage(dokumente={SCHLUESSEL_IM_BELEG: "RE-2026-08-001"},
+                   partner=(PARTNER_A,)),
+    )
+
+    feststellung, = urteil.feststellungen
+    assert (feststellung.code, feststellung.pfad, feststellung.erhalten) == (
+        "AUFTRAG_SCHON_GERECHNET", "$.nutzlast.auftragsschluessel",
+        "RE-2026-08-001",
+    )
+
+
+def test_ein_entwurf_zaehlt_als_gerechnet(schluessel):
+    """Teil 1c: Auch ein Entwurf ist ein nicht storniertes Dokument - der
+    zweite Haken wuerde ihn nur verdoppeln."""
+    urteil = _urteil(
+        schluessel, rechnungsauftrag(),
+        lage=_Lage(dokumente={SCHLUESSEL_IM_BELEG: "Entwurf"},
+                   partner=(PARTNER_A,)),
+    )
+
+    feststellung, = urteil.feststellungen
+    assert (feststellung.code, feststellung.erhalten) == (
+        "AUFTRAG_SCHON_GERECHNET", "Entwurf",
+    )
+
+
+def test_ein_anderer_schluessel_ist_ein_anderer_auftrag(schluessel):
+    """Teil 1c: Die Sperre gilt dem Schluessel, nicht dem Kunden oder Monat -
+    ein anderer Marktplatz im selben Monat ist ein eigener Auftrag."""
+    urteil = _urteil(
+        schluessel, rechnungsauftrag(),
+        lage=_Lage(dokumente={"plattform:2026-02:kanal-b": "RE-2026-08-002"},
+                   partner=(PARTNER_A,)),
+    )
+
+    assert urteil.angenommen, _befunde(urteil)
+
+
+def test_der_kunde_muss_im_stamm_stehen(schluessel):
+    """Teil 1c: § 8a wie § 8 - ohne den Kunden hinter partner_id gibt es keine
+    Steuerkategorie und keinen Vermerk, und abgehakt raet die Steuer nicht."""
+    urteil = _urteil(schluessel, rechnungsauftrag(), lage=_Lage())
+
+    assert _befunde(urteil) == [("PARTNER_ID_UNBEKANNT", "$.nutzlast.kunde.partner_id")]

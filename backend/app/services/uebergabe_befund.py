@@ -61,8 +61,9 @@ from app.services.uebergabebeleg import (
 # Was dieser Empfaenger liest. Die `erloesmeldung` geht an tantiemen, die
 # `quittung` schreibt diese Anwendung noch nicht (Stufe 7), der
 # `aufstellungsauftrag` (§ 8b) wartet auf seinen Bau. Der `rechnungsauftrag`
-# (§ 8a) ist bis auf seinen Auftragsschluessel gebaut
-# (_rechnungsauftrag_pruefen).
+# (§ 8a) ist mit seinem Auftragsschluessel vollstaendig gebaut
+# (_rechnungsauftrag_pruefen); was aus ihm WIRD, entscheidet sich in einem
+# spaeteren Bauschritt.
 LESBARE_ARTEN = ("abrechnungsauftrag", "rechnungsauftrag")
 
 # Ein Pflichtfeld, das da ist und leer, ist bei diesen beiden nicht da: ein
@@ -130,6 +131,19 @@ class Empfangslage:
     def partner_bekannt(self, partner_id: str) -> bool:
         return False
 
+    def dokument_zu_auftragsschluessel(self, schluessel: str) -> Optional[str]:
+        """Die Rechnungsnummer oder 'Entwurf' des Belegs, der zu diesem
+        Auftragsschluessel bereits besteht - oder None.
+
+        § 8a: Der Auftragsschluessel schuetzt vor der zweiten Rechnung zum
+        selben Auftrag. Er zaehlt nur Belege, die weder storniert noch
+        verworfen sind: Ein stornierter hat nicht gerechnet, und ein
+        verworfener Entwurf ist keiner. `beleg_id` schuetzt davor, dass
+        DERSELBE Beleg zweimal wirkt - ein neu eingelesener Bericht ist ein
+        neuer Beleg, und nur der Schluessel erkennt ihn wieder.
+        """
+        return None
+
 
 def _zahl(wert) -> Optional[Decimal]:
     """Betrag oder Satz als Decimal, OHNE zu runden.
@@ -180,6 +194,15 @@ def _hat_satzform(wert) -> bool:
 # JJJJ-MM, kein Quartal und kein Zeitraum.
 _SHA256_FORM = re.compile(r"^[0-9a-f]{64}$")
 _MONAT_FORM = re.compile(r"^[0-9]{4}-(0[1-9]|1[0-2])$")
+
+# § 8a, Teil 1c: die Form des auftragsschluessels - kleine Buchstaben,
+# Ziffern, Doppelpunkt und Bindestrich, 1 bis 128 Zeichen. Grossbuchstaben
+# und Leerzeichen sind eine andere Form: Der Schluessel wird gezeichnet und
+# verglichen, nicht gelesen, und ein anderer Zeichenvorrat machte den
+# Vergleich zweier Umsetzungen vom Zufall der Gross- und Kleinschreibung
+# abhaengig. Die Form steht hier und nicht in FELDFORMEN, denn dort stehen
+# die Geld- und Satzformen des § 4, die JEDE Art betreffen.
+_AUFTRAGSSCHLUESSEL_FORM = re.compile(r"^[a-z0-9:-]{1,128}$")
 
 
 # § 8a, Teil 1b: Gleichheit von gruppe und bezeichnung ist Zeichengleichheit
@@ -337,17 +360,49 @@ def _auftrag_pruefen(nutzlast: dict, lage: Empfangslage, art: str) -> list:
     if funde:
         return funde
     if art == "rechnungsauftrag":
-        return _rechnungsauftrag_pruefen(nutzlast)
+        return _rechnungsauftrag_pruefen(nutzlast, lage)
     return _abrechnungsauftrag_pruefen(nutzlast, lage)
 
 
-def _rechnungsauftrag_pruefen(nutzlast: dict) -> list:
-    """§ 8a (Fassung 1.7): Grundregeln (Teil 1a) und, unten angehaengt, die
-    Gruppen, Bezeichnungen und Grundlagen (Teil 1b). Der Auftragsschluessel
-    folgt in einem eigenen Teil. Wie beim abrechnungsauftrag gilt: Alles
-    Falsche wird gesammelt.
+def _rechnungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
+    """§ 8a (Fassung 1.7): Grundregeln (Teil 1a), die Gruppen, Bezeichnungen
+    und Grundlagen (Teil 1b) und den Auftragsschluessel samt Kunde (Teil 1c).
+    Wie beim abrechnungsauftrag gilt: Alles Falsche wird gesammelt.
     """
     funde: list = []
+
+    # Teil 1c: Der Auftragsschluessel, zuerst die Form. Erst mit einer Form,
+    # die der Empfaenger zeichnen kann, lohnt die Frage an die Lage, ob zu
+    # diesem Schluessel bereits ein Beleg besteht: Nach einem Wert ausserhalb
+    # der Form wird nicht gesucht, denn der Absender meinte einen anderen.
+    schluessel = nutzlast["auftragsschluessel"]
+    if not isinstance(schluessel, str) \
+            or not _AUFTRAGSSCHLUESSEL_FORM.match(schluessel):
+        funde.append(Feststellung(
+            "WERT_UNBRAUCHBAR", "$.nutzlast.auftragsschluessel",
+            erwartet="1 bis 128 Zeichen aus a-z, 0-9, : und -",
+            erhalten=str(schluessel),
+        ))
+    else:
+        schon = lage.dokument_zu_auftragsschluessel(schluessel)
+        if schon is not None:
+            # Kein Fehler des Absenders, sondern die Abbildung des Bestands:
+            # Der Auftrag wurde bereits gerechnet, und im erhalten steht die
+            # Rechnungsnummer oder 'Entwurf' des Belegs, der daraus entstand.
+            funde.append(Feststellung(
+                "AUFTRAG_SCHON_GERECHNET", "$.nutzlast.auftragsschluessel",
+                erhalten=schon,
+            ))
+
+    # Teil 1c: § 8a wie § 8 - der Kunde hinter partner_id muss im Stamm
+    # stehen. Ohne ihn gibt es keine Steuerkategorie und keinen Vermerk, und
+    # die Steuer wird nicht geraten.
+    partner_id = nutzlast["kunde"]["partner_id"]
+    if not lage.partner_bekannt(str(partner_id)):
+        funde.append(Feststellung(
+            "PARTNER_ID_UNBEKANNT", "$.nutzlast.kunde.partner_id",
+            erhalten=str(partner_id),
+        ))
 
     # Geschlossene Vorraete. 380 ist die Ausgangsrechnung; 389 ist die
     # Gutschrift aus § 8, ein anderer Beleg, kein Typcode mehr. EUR, bis die
@@ -448,24 +503,29 @@ def _rechnungsauftrag_gruppen_pruefen(nutzlast: dict) -> list:
                 ))
 
     # Zusammenhaengend: Kehrt eine Gruppe nach einer anderen zurueck, bricht
-    # genau die zurueckkehrende Position den Zusammenhang. Die Reihenfolge der
-    # Gruppen ist die ihrer ersten Position; nr zaehlt je Gruppe ohne Luecke
-    # weiter (nur ganze Zahlen: nr traegt keine Formprobe, eine andere Form
-    # prueft hier niemand).
+    # die ERSTE zurueckkehrende Position den Zusammenhang - und genau sie
+    # wird gemeldet (gemessen am Vektor gruppe_unterbrochen). Kehrt danach
+    # noch eine zweite zurueck, so kehrt sie nur zurueck, WEIL die erste es
+    # tat: Das ist ein Grund, nicht zwei. Die Reihenfolge der Gruppen ist
+    # die ihrer ersten Position; nr zaehlt je Gruppe ohne Luecke weiter
+    # (nur ganze Zahlen: nr traegt keine Formprobe, eine andere Form prueft
+    # hier niemand).
     offen = None
     geschlossen: list = []
     vorige_nr = None
+    gemeldet = False
     for nummer, position in enumerate(positionen):
         gruppe = position.get("gruppe")
         if gruppe is None:
             continue
         schluessel = _nfc(gruppe)
         if schluessel != offen:
-            if schluessel in geschlossen:
+            if schluessel in geschlossen and not gemeldet:
                 funde.append(Feststellung(
                     "WERT_UNBRAUCHBAR", f"$.nutzlast.positionen[{nummer}].gruppe",
                     erwartet="zusammenhaengende Gruppe", erhalten=str(gruppe),
                 ))
+                gemeldet = True
             if offen is not None and offen not in geschlossen:
                 geschlossen.append(offen)
             offen = schluessel

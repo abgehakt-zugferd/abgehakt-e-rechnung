@@ -28,6 +28,7 @@ from tests.helpers.uebergabe import (
     auftrag,
     beleg,
     gutschrift,
+    rechnungsauftrag,
     schluesselpaar,
 )
 
@@ -232,6 +233,49 @@ def test_ein_dateiname_ausserhalb_des_ordners_fuehrt_nirgendwohin(
 
     assert antwort.status_code == 404
     assert pg_session.query(Invoice).count() == 0
+
+
+# --- Der rechnungsauftrag (§ 8a): gelesen, aber noch nicht verarbeitet ---
+
+
+def _rechnungsauftrag(signieren) -> bytes:
+    return beleg(signieren, rechnungsauftrag(), nutzlast_art="rechnungsauftrag")
+
+
+def test_ein_rechnungsauftrag_wird_angezeigt_ohne_knopf(client, pg_session, belegordner):
+    """Der Leser nimmt ihn an, aber das Anlegen ist fuer diese Art noch nicht
+    gebaut - der Knopf darf nicht versprechen, was keiner verarbeitet."""
+    ordner, signieren = belegordner
+    _kunde(pg_session)
+    _schalter(pg_session)
+    (ordner / "rechnungsauftrag.json").write_bytes(_rechnungsauftrag(signieren))
+
+    text = client.get("/uebergaben").text
+
+    assert "ANGENOMMEN" in text
+    assert "rechnung-anlegen" not in text
+    assert "Rechnungsaufträge werden in einem späteren Schritt verarbeitet." in text
+
+
+def test_der_knopf_fuer_einen_rechnungsauftrag_meldet_statt_einen_500_zu_werfen(
+    client, pg_session, belegordner,
+):
+    """Der Weg bleibt erreichbar: Wer den Knopf fuer diese Art trotzdem drueckt
+    (alter Tab, eigene HTML-Ansicht), erhaelt eine Meldung und keinen
+    Serverfehler - und nichts wird angelegt."""
+    ordner, signieren = belegordner
+    _kunde(pg_session)
+    _schalter(pg_session)
+    (ordner / "rechnungsauftrag.json").write_bytes(_rechnungsauftrag(signieren))
+
+    antwort = client.post("/uebergaben/rechnungsauftrag.json/rechnung-anlegen")
+
+    assert antwort.status_code == 303
+    ort = urlparse(antwort.headers["location"])
+    meldung = parse_qs(ort.query)["fehler"][0]
+    assert "Rechnungsaufträge" in meldung
+    assert pg_session.query(Invoice).count() == 0
+    assert pg_session.query(UebergabeEingang).count() == 0
 
 
 def test_ohne_eingerichteten_ordner_bleibt_die_seite_ruhig(client, pg_session, belegordner):

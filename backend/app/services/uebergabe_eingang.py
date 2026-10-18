@@ -68,6 +68,12 @@ class DatenbankLage(Empfangslage):
             is not None
         )
 
+    def dokument_zu_auftragsschluessel(self, schluessel: str) -> Optional[str]:
+        # Die Spalte auftragsschluessel_offen kommt mit Bauschritt 4; bis
+        # dahin entsteht aus einem rechnungsauftrag kein Beleg, also gibt es
+        # nichts zu finden.
+        return None
+
 
 def merken(db: Session, urteil: Belegurteil, *, dateiname: Optional[str] = None) -> UebergabeEingang:
     """Haelt einen angenommenen Beleg fest. Committet nicht.
