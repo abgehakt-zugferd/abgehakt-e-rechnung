@@ -182,7 +182,8 @@
                     </div>
                     <div>
                         <p class="label">Fälligkeitsdatum</p>
-                        <p style="color:var(--text-hi);">{{ invoice.due_date.strftime('%d.%m.%Y') }}</p>
+                        {# Ohne Fälligkeit gilt der Zahlungshinweis (BR-CO-25). #}
+                        <p style="color:var(--text-hi);">{{ invoice.due_date.strftime('%d.%m.%Y') if invoice.due_date else ('laut Zahlungshinweis' if invoice.payment_terms else '') }}</p>
                     </div>
                     {% if invoice.delivery_date %}
                     <div>

@@ -53,6 +53,13 @@ class Invoice(Base):
             "OR (abzug_betrag > 0 AND abzug_grund IS NOT NULL)",
             name="ck_invoices_abzug_beide_oder_gueltig",
         ),
+        # BR-CO-25 (Bauschritt 2b): bei offenem Betrag BT-9 oder BT-20. Zweite
+        # Linie hinter Formular und Validator. Identisch zu Migration 026
+        # (alembic check).
+        CheckConstraint(
+            "due_date IS NOT NULL OR (payment_terms IS NOT NULL AND payment_terms <> '')",
+            name="ck_invoices_faelligkeit_oder_bedingungen",
+        ),
     )
 
     id: Mapped[uuid.UUID] = _id_col
@@ -67,7 +74,12 @@ class Invoice(Base):
         UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True
     )
     issue_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    due_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # BT-9, optional seit Bauschritt 2b: ein Kunde, der nach eigenem Takt zahlt,
+    # bekommt kein Fälligkeitsdatum, sondern einen Zahlungshinweis in
+    # payment_terms (BT-20). EN 16931 BR-CO-25 verlangt bei offenem Betrag eines
+    # von beiden; Formular und Validator sind die erste Linie, der CHECK unten
+    # die zweite.
+    due_date: Mapped[Optional[date]] = mapped_column(Date)
     delivery_date: Mapped[Optional[date]] = mapped_column(Date)
     service_period_start: Mapped[Optional[date]] = mapped_column(Date)
     service_period_end: Mapped[Optional[date]] = mapped_column(Date)

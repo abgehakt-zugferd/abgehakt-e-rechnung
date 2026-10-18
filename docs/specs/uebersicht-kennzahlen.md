@@ -83,7 +83,8 @@ angemahnt. Das entspricht dem heutigen `standard`-Filter in `main.py:280`.
 `cancelled` und `discarded` sind heraus.
 
 **Ueberfaellig** heisst offen **und** `due_date < heute`. Der Faelligkeitstag selbst ist
-nicht ueberfaellig. `aeltester_tage` ist die Differenz in Tagen zwischen heute und dem
+nicht ueberfaellig. Ein Beleg ohne Faelligkeitsdatum zaehlt nie als ueberfaellig: er zahlt
+nach dem Zahlungshinweis, nicht nach einem Termin (EN 16931 BR-CO-25). `aeltester_tage` ist die Differenz in Tagen zwischen heute und dem
 kleinsten `due_date` der ueberfaelligen Menge; ohne ueberfaellige Belege ist der Wert `None`
 und die Kachel zeigt an dieser Stelle nichts, keine Null.
 

@@ -429,9 +429,14 @@ def _gutschrift_zahlung_an_kunde(invoice: Invoice) -> bool:
 
 
 def _payment_terms_xml(invoice: Invoice) -> str:
-    """Gutschrift ohne Fälligkeit: keine Zahlungsaufforderung in der XML (#48)."""
+    """Gutschrift ohne Fälligkeit: keine Zahlungsaufforderung in der XML (#48).
+
+    Ohne due_date (Bauschritt 2b) entfällt BT-9 ganz: ein leeres
+    DueDateDateTime wäre kein gültiges Datum, und der Zahlungshinweis in
+    BT-20 (Description) trägt die Zahlungsregel allein (BR-CO-25).
+    """
     text = invoice.payment_terms or "Zahlbar ohne Abzug."
-    if invoice.invoice_type == "credit_note":
+    if invoice.invoice_type == "credit_note" or invoice.due_date is None:
         return f"""
             <ram:SpecifiedTradePaymentTerms>
                 <ram:Description>{_esc(text)}</ram:Description>

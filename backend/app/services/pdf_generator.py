@@ -514,7 +514,11 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path,
             meta_rows.append((d.label_vorauss_leistungszeitraum, period_str))
         else:
             meta_rows.append((d.label_leistungszeitraum, period_str))
-    meta_rows.append((d.label_faelligkeit, d.format_datum(invoice.due_date)))
+    # Ohne due_date (BR-CO-25) entfällt die Kopfzeile statt leer zu bleiben:
+    # der Zahlungsblock unten druckt die payment_terms schon, eine zweite
+    # Zeile mit dem Hinweis oben wäre eine Doppelung.
+    if invoice.due_date is not None:
+        meta_rows.append((d.label_faelligkeit, d.format_datum(invoice.due_date)))
     if getattr(customer, "customer_number", None):
         meta_rows.append((d.label_kundennummer, customer.customer_number))
     if getattr(invoice, "buyer_reference", None):

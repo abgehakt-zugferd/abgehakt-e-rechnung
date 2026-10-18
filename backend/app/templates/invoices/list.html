@@ -102,7 +102,8 @@
                         </td>
                         <td style="padding:10px 14px; color:var(--text);">{{ inv.customer.name if inv.customer else '–' }}</td>
                         <td style="padding:10px 14px; color:var(--text-dim); white-space:nowrap;">{{ inv.issue_date.strftime('%d.%m.%Y') }}</td>
-                        <td style="padding:10px 14px; color:var(--text-dim); white-space:nowrap;">{{ inv.due_date.strftime('%d.%m.%Y') }}</td>
+                        {# Ohne Fälligkeit gilt der Zahlungshinweis (BR-CO-25). #}
+                        <td style="padding:10px 14px; color:var(--text-dim); white-space:nowrap;">{{ inv.due_date.strftime('%d.%m.%Y') if inv.due_date else ('laut Zahlungshinweis' if inv.payment_terms else '') }}</td>
                         <td style="padding:10px 14px; text-align:right; color:var(--text-hi); font-family:'Share Tech Mono',monospace;">{{ inv.gross_total|euro }}</td>
                         <td style="padding:10px 14px;">
                             {# .get statt [..]: ein unbekannter Status wirft sonst KeyError

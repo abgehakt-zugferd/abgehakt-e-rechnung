@@ -143,6 +143,11 @@ def _werte(invoice, company, sprache: Belegsprache) -> dict[str, str]:
     faellig = ""
     if getattr(invoice, "due_date", None) is not None:
         faellig = form.format_datum(invoice.due_date)
+    else:
+        # Ohne Fälligkeitsdatum trägt der Zahlungshinweis die Zahlungsregel
+        # (BR-CO-25): der Platzhalter bleibt dann nicht leer, sondern nennt
+        # sie, und die Mail sagt dasselbe wie der Beleg.
+        faellig = (getattr(invoice, "payment_terms", None) or "").strip()
     betrag = form.format_betrag(invoice.gross_total, invoice.currency or "EUR")
     return {
         "rechnungsnummer": invoice.invoice_number or "",

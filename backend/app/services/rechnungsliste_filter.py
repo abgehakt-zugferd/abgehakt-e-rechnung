@@ -57,7 +57,12 @@ def filtere_rechnungsliste(
         art = ""
 
     if faellig == "ueberfaellig":
-        query = query.filter(Invoice.due_date < (heute or kalender_heute()))
+        # Ein Beleg ohne Fälligkeit ist nie überfällig (BR-CO-25, Bauschritt 2b):
+        # dieselbe Bedingung wie die Kennzahl der Uebersicht.
+        query = query.filter(
+            Invoice.due_date.isnot(None),
+            Invoice.due_date < (heute or kalender_heute()),
+        )
     else:
         faellig = ""
 

@@ -55,7 +55,8 @@
                         <dt>Rechnungsdatum</dt><dd style="color:var(--text);">{{ invoice.issue_date.strftime('%d.%m.%Y') }}</dd>
                     </div>
                     <div class="flex justify-between" style="margin-bottom:4px;">
-                        <dt>Fällig</dt><dd style="color:var(--text);">{{ invoice.due_date.strftime('%d.%m.%Y') }}</dd>
+                        {# Ohne Fälligkeit gilt der Zahlungshinweis (BR-CO-25). #}
+                        <dt>Fällig</dt><dd style="color:var(--text);">{{ invoice.due_date.strftime('%d.%m.%Y') if invoice.due_date else ('laut Zahlungshinweis' if invoice.payment_terms else '') }}</dd>
                     </div>
                     <div class="flex justify-between">
                         <dt>Brutto</dt>

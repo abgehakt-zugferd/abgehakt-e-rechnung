@@ -39,9 +39,20 @@ def _pruefe_ausstellungsdatum(kontext: Pruefkontext) -> list[Issue]:
 
 
 def _pruefe_faelligkeit(kontext: Pruefkontext) -> list[Issue]:
-    # Fälligkeitsdatum logisch prüfen
+    # BR-CO-25: bei offenem Betrag verlangt EN 16931 Fälligkeit (BT-9) ODER
+    # Zahlungsbedingungen (BT-20). Der Validator meldet die Lage als erster,
+    # damit niemand die Datenbank-CHECK (Migration 026) als 500er erfaehrt.
     invoice = kontext.invoice
-    if invoice.issue_date and invoice.due_date and invoice.due_date < invoice.issue_date:
+    if not invoice.due_date:
+        if not (invoice.payment_terms or "").strip():
+            return [Issue(
+                "DUE_DATE_OR_PAYMENT_TERMS_REQUIRED", "error",
+                "Weder Fälligkeitsdatum noch Zahlungsbedingungen sind gesetzt "
+                "(EN 16931 BR-CO-25 verlangt bei offenem Betrag BT-9 oder BT-20).",
+                "due_date",
+            )]
+        return []
+    if invoice.issue_date and invoice.due_date < invoice.issue_date:
         return [Issue("DUE_DATE_BEFORE_ISSUE", "error", "Fälligkeitsdatum liegt vor dem Ausstellungsdatum.", "due_date")]
     return []
 

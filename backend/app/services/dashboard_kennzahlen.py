@@ -213,6 +213,9 @@ def ueberfaellige_forderungen(db: Session, heute: date) -> Ueberfaellig:
         Invoice.status == "issued",
         UMSATZ_BELEGARTEN_FILTER,
         ~WIRKSAM_STORNIERT,
+        # Ein Beleg ohne Fälligkeit ist nie überfällig: er zahlt nach dem
+        # Zahlungshinweis, nicht nach einem Termin (BR-CO-25, Bauschritt 2b).
+        Invoice.due_date.isnot(None),
         Invoice.due_date < heute,
     )
     anzahl = db.query(func.count(Invoice.id)).filter(*filter_).scalar() or 0

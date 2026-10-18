@@ -155,6 +155,15 @@ def _kunde_id(form) -> uuid.UUID | None:
     return uuid.UUID(roh) if roh else None
 
 
+def _faelligkeit_aus_form(form) -> date | None:
+    """Leeres Feld heisst None, kein date.fromisoformat auf "": ein Kunde, der
+    nach eigenem Takt zahlt (z. B. eine Plattform nach ihrem Bericht), bekommt
+    keinen Termin, sondern den Zahlungshinweis in den Zahlungsbedingungen
+    (BR-CO-25, Bauschritt 2b)."""
+    roh = (form.get("due_date") or "").strip()
+    return date.fromisoformat(roh) if roh else None
+
+
 def _normalize_description(raw) -> str:
     """Zeilenenden vereinheitlichen, Rand-Whitespace weg. Der Rest bleibt wörtlich
     stehen — was der Nutzer tippt, geht so in `ram:Name` (BT-153) der CII-XML."""
@@ -600,7 +609,7 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
 
     customer_id = _kunde_id(form)
     issue_date = date.fromisoformat(form.get("issue_date"))
-    due_date = date.fromisoformat(form.get("due_date"))
+    due_date = _faelligkeit_aus_form(form)
     delivery_date, service_period_start, service_period_end = parse_leistungszeit_from_form(form)
     tax_category = form.get("tax_category", "S").strip() or "S"
 
@@ -634,6 +643,19 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
     payment_terms = _zahlungsbedingungen(
         form, company, document_language, kunden_hinweis=vorgabe.zahlungshinweis,
     )
+
+    # Vor Nummernvergabe: BR-CO-25 verlangt bei offenem Betrag Fälligkeit (BT-9)
+    # ODER Zahlungsbedingungen (BT-20). Der Validator meldet dasselbe als
+    # DUE_DATE_OR_PAYMENT_TERMS_REQUIRED; hier stoppt es die Eingabe als
+    # Formularfehler, bevor die DB-CHECK (Migration 026) den Commit kippt und
+    # der Zaehler durch eine abgewiesene Eingabe steigt.
+    if due_date is None and not (payment_terms or "").strip():
+        raise HTTPException(
+            400,
+            "DUE_DATE_OR_PAYMENT_TERMS_REQUIRED: Ohne Fälligkeitsdatum braucht der "
+            "Beleg Zahlungsbedingungen (EN 16931 BR-CO-25). Bitte eines von "
+            "beiden angeben.",
+        )
 
     items_json = form.get("items_json", "[]")
     raw_items = json.loads(items_json)
@@ -708,7 +730,7 @@ def edit_invoice_form(invoice_id: uuid.UUID, request: Request, db: Session = Dep
         "customers": customers,
         "company": company,
         "today": heute().isoformat(),
-        "due_default": invoice.due_date.isoformat(),
+        "due_default": invoice.due_date.isoformat() if invoice.due_date else "",
         "delivery_default": heute().isoformat(),
         "belegart_waehlbar": _belegart_waehlbar(invoice),
         "error": None,
@@ -733,7 +755,7 @@ def _bearbeiten_mit_fehler(request: Request, db: Session, invoice: Invoice, meld
         "customers": customers,
         "company": company,
         "today": heute().isoformat(),
-        "due_default": invoice.due_date.isoformat(),
+        "due_default": invoice.due_date.isoformat() if invoice.due_date else "",
         "delivery_default": heute().isoformat(),
         "belegart_waehlbar": _belegart_waehlbar(invoice),
         "error": meldung,
@@ -804,7 +826,7 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
         return _bearbeiten_mit_fehler(request, db, invoice, fehler.detail)
 
     invoice.issue_date = date.fromisoformat(form.get("issue_date"))
-    invoice.due_date = date.fromisoformat(form.get("due_date"))
+    invoice.due_date = _faelligkeit_aus_form(form)
     invoice.delivery_date = delivery_date
     invoice.tax_category = form.get("tax_category", "S").strip() or "S"
     try:
@@ -816,6 +838,16 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
         )
     except HTTPException as fehler:
         return _bearbeiten_mit_fehler(request, db, invoice, fehler.detail)
+
+    # Wie beim Anlegen: BR-CO-25, als Formularfehler statt eines 500ers durch
+    # die DB-CHECK beim Commit. Der Entwurf bleibt unveraendert.
+    if invoice.due_date is None and not (invoice.payment_terms or "").strip():
+        return _bearbeiten_mit_fehler(
+            request, db, invoice,
+            "DUE_DATE_OR_PAYMENT_TERMS_REQUIRED: Ohne Fälligkeitsdatum braucht der "
+            "Beleg Zahlungsbedingungen (EN 16931 BR-CO-25). Bitte eines von "
+            "beiden angeben.",
+        )
     invoice.buyer_reference = form.get("buyer_reference", "").strip() or None
     invoice.buyer_order_reference = form.get("buyer_order_reference", "").strip() or None
     invoice.notes = form.get("notes", "").strip() or None

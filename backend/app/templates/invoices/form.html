@@ -423,8 +423,10 @@
                         <input type="date" name="issue_date" value="{{ invoice.issue_date.isoformat() if invoice else today }}" required class="input">
                     </div>
                     <div>
-                        <label class="label">Fälligkeitsdatum *</label>
-                        <input type="date" name="due_date" value="{{ invoice.due_date.isoformat() if invoice else due_default }}" required class="input">
+                        {# Ohne Fälligkeitsdatum gilt der Zahlungshinweis (BR-CO-25);
+                           leer ist erlaubt, wenn Zahlungsbedingungen dastehen. #}
+                        <label class="label">Fälligkeitsdatum</label>
+                        <input type="date" name="due_date" value="{{ invoice.due_date.isoformat() if invoice and invoice.due_date else due_default }}" class="input">
                     </div>
                     <div>
                         <label class="label">Leistungsdatum</label>
