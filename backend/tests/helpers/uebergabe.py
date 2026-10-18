@@ -151,6 +151,20 @@ def probe_anlagen() -> dict:
             for b in (ANLAGE_ABRECHNUNGSBERICHT, ANLAGE_ZAHLUNGSBERICHT)}
 
 
+def anlagen_ablegen(ordner, nutzlast):
+    """Legt die Anlagen eines aufstellungsauftrags als anlagen/<sha256>.xlsx
+    in den Uebergabeordner, wie der Absender sie vor dem Beleg ablegt (§ 8b).
+    Die Bytes kommen aus probe_anlagen - derselbe Bestand, den die
+    Empfangslage eines Tests hinterlegt hat."""
+    bestand = probe_anlagen()
+    anlagen = ordner / "anlagen"
+    anlagen.mkdir(parents=True, exist_ok=True)
+    for eintrag in nutzlast["anlagen"]:
+        (anlagen / f"{eintrag['sha256']}.xlsx").write_bytes(
+            bestand[eintrag["sha256"]]
+        )
+
+
 def aufstellungsauftrag(**aenderungen):
     """§ 8b (Fassung 1.7): Abrechnungsaufstellung bei Drittlandzahlung - keine
     Rechnung, kein typcode, keine Steuerfelder, zwei Anlagen neben dem Beleg.

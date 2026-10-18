@@ -29,7 +29,11 @@ from app.config import get_settings
 from app.darstellung import registriere_darstellungsfilter
 from app.database import get_db
 from app.models.app_config import AppConfig
-from app.services import auftragsschluessel, rechnungsauftrag_wirkung
+from app.services import (
+    auftragsschluessel,
+    aufstellungsauftrag_wirkung,
+    rechnungsauftrag_wirkung,
+)
 from app.services.abrechnungsauftrag_wirkung import (
     BelegSchonVerarbeitet,
     WirkungFehler,
@@ -37,6 +41,7 @@ from app.services.abrechnungsauftrag_wirkung import (
 )
 from app.services.uebergabe_befund import Belegurteil, Feststellung, beleg_beurteilen
 from app.services.uebergabe_eingang import (
+    RICHTUNG,
     DatenbankLage,
     KopieFehler,
     kopie_aufbewahren,
@@ -48,10 +53,6 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
 registriere_darstellungsfilter(templates)
-
-# Die Richtung, aus der Belege kommen. Nur diese eine: was in der Gegenrichtung
-# liegt, hat dieser Empfaenger geschrieben.
-RICHTUNG = "tantiemen-app-nach-abgehakt"
 
 
 def _schalter(db: Session) -> None:
@@ -72,6 +73,14 @@ def _belegordner() -> Optional[Path]:
         return None
     ordner = Path(wurzel) / RICHTUNG
     return ordner if ordner.is_dir() else None
+
+
+def _anlagen_ordner(ordner: Path) -> Optional[Path]:
+    """§ 8b: Die Anlagen liegen neben den Belegen im Unterordner anlagen -
+    der Leser geht ueber die Empfangslage denselben Weg, der Knopf braucht ihn
+    fuer die Kopien."""
+    pfad = ordner / "anlagen"
+    return pfad if pfad.is_dir() else None
 
 
 def _datei(ordner: Path, dateiname: str) -> Path:
@@ -97,7 +106,11 @@ def _zeile(datei: Path, db: Session) -> dict:
     roh = datei.read_bytes()
     try:
         urteil = beleg_beurteilen(
-            roh, DatenbankLage(db), schluessel_wurzel=_schluesselwurzel(),
+            roh,
+            # Nur mit Anlagenordner sieht der Leser des § 8b die Dateien -
+            # ohne ihn ist ANLAGE_FEHLT die ehrliche Antwort der Lage.
+            DatenbankLage(db, anlagen_ordner=_anlagen_ordner(datei.parent)),
+            schluessel_wurzel=_schluesselwurzel(),
         )
     except Exception:
         # Sicherheitsnetz, kein Ersatz fuer die Befunde des Lesers: Eine
@@ -130,10 +143,36 @@ def _zurueck(fehler: str) -> RedirectResponse:
     )
 
 
+def _gemeldet(meldung: str) -> RedirectResponse:
+    """Zur Liste mit einer Erfolgsmeldung - dieselbe Kodierung wie beim
+    Fehler, denn auch eine Belegnummer kann Sonderzeichen tragen."""
+    return RedirectResponse(
+        url=f"/uebergaben?{urlencode({'meldung': meldung})}", status_code=303,
+    )
+
+
+def _wettlauf(db: Session, urteil: Belegurteil) -> RedirectResponse:
+    """Der partielle Unique-Index des Auftragsschluessels schlug beim Commit
+    zu (Festlegung 19): Der Leser fragt die Lage ohne Sperre, zwei
+    gleichzeitige Annahmen sehen beide 'frei'. Der Befund ist derselbe wie
+    der des Lesers, kein HTTP 500; genannt wird, was der Absender
+    wiedererkennt. Die Meldung fragt die eine Stelle fuer die Sperre, die
+    nicht geglaubt wurde."""
+    db.rollback()
+    schluessel = (urteil.nutzlast or {}).get("auftragsschluessel")
+    belegt_durch = (
+        auftragsschluessel.dokument_zu(db, schluessel) if schluessel else None
+    )
+    return _zurueck(
+        "AUFTRAG_SCHON_GERECHNET: Zu diesem Auftrag gibt es inzwischen "
+        f"einen anderen Beleg: {belegt_durch or 'Entwurf'}."
+    )
+
+
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 def belegliste(request: Request, db: Session = Depends(get_db), hinweis: str = "",
-               fehler: str = ""):
+               fehler: str = "", meldung: str = ""):
     _schalter(db)
     ordner = _belegordner()
     zeilen = []
@@ -146,7 +185,41 @@ def belegliste(request: Request, db: Session = Depends(get_db), hinweis: str = "
         "zeilen": zeilen,
         "hinweis": hinweis,
         "fehler": fehler,
+        "meldung": meldung,
     })
+
+
+def _anlegen(
+    db: Session, urteil: Belegurteil, roh: bytes, wirkung, folgeweg, *, schluesselart: bool,
+) -> RedirectResponse:
+    """Der gemeinsame Weg beider Anlege-Knoepfe: erst die eigene
+    Aufbewahrungskopie des Belegs (§ 12), dann die Wirkung, dann committen.
+    Scheitert spaeter der Commit, bleibt die Kopie liegen; sie ist byte-gleich
+    mit dem Beleg und schadet niemandem.
+
+    `schluesselart` benennt, ob die Wirkung einen Auftragsschluessel belegt
+    (§ 8a, § 8b): Nur dann ist der IntegrityError der Wettlauf, sonst waere
+    die Meldung erfunden.
+    """
+    try:
+        kopie_aufbewahren(roh, urteil.beleg_sha256, richtung=RICHTUNG)
+    except KopieFehler as fehler:
+        return _zurueck(str(fehler))
+    try:
+        ergebnis = wirkung()
+        db.commit()
+    except BelegSchonVerarbeitet:
+        db.rollback()
+        return RedirectResponse(url="/uebergaben?hinweis=bereits", status_code=303)
+    except WirkungFehler as fehler:
+        # Alles oder nichts: was halb entstanden waere, ist damit weg.
+        db.rollback()
+        return _zurueck(str(fehler))
+    except IntegrityError:
+        if not schluesselart:
+            raise
+        return _wettlauf(db, urteil)
+    return folgeweg(ergebnis)
 
 
 @router.post("/{dateiname}/rechnung-anlegen")
@@ -166,56 +239,59 @@ def rechnung_anlegen(dateiname: str, db: Session = Depends(get_db)):
     if not urteil.angenommen:
         return _zurueck(urteil.befund or "ABGELEHNT")
 
-    # Erst die eigene Aufbewahrungskopie (§ 12), dann die Datenbankzeilen: ohne
-    # gepruefte Kopie wird der Beleg nicht angenommen, denn sonst haette der
-    # Empfaenger nur den Absenderordner als Beleg. Scheitert spaeter der Commit,
-    # bleibt die Kopie liegen; sie ist byte-gleich mit dem Beleg und schadet
-    # niemandem.
-    try:
-        kopie_aufbewahren(roh, urteil.beleg_sha256, richtung=RICHTUNG)
-    except KopieFehler as fehler:
-        return _zurueck(str(fehler))
-
     # Beide lesbaren Arten wirken ueber denselben Knopf, aber unterschiedlich:
     # Der abrechnungsauftrag wird zu Gutschriften (§ 8), der rechnungsauftrag
     # zu einem Entwurf der Ausgangsrechnung (§ 8a). Getrennte Stellen, dieselbe
     # Zusage: alles oder nichts, committet der Aufrufer hier.
     aus_auftrag = urteil.nutzlast_art == "rechnungsauftrag"
-    try:
+
+    def wirken():
         if aus_auftrag:
-            entwurf = rechnungsauftrag_wirkung.entwurf_anlegen(
+            return rechnungsauftrag_wirkung.entwurf_anlegen(
                 db, urteil, dateiname=datei.name,
             )
-        else:
-            entwuerfe = entwuerfe_anlegen(db, urteil, dateiname=datei.name)
-        db.commit()
-    except BelegSchonVerarbeitet:
-        db.rollback()
-        return RedirectResponse(url="/uebergaben?hinweis=bereits", status_code=303)
-    except WirkungFehler as fehler:
-        # Alles oder nichts: was halb entstanden waere, ist damit weg.
-        db.rollback()
-        return _zurueck(str(fehler))
-    except IntegrityError:
-        # Wettlauf um den Auftragsschluessel (Festlegung 19): Der Leser fragt
-        # die Lage ohne Sperre, zwei gleichzeitige Annahmen sehen beide
-        # 'frei', und der partielle Unique-Index schlaegt erst hier zu. Der
-        # Befund ist derselbe wie der des Lesers, kein HTTP 500. Nur der Weg
-        # des rechnungsauftrags schreibt in diesen Index; die 389 behaelt ihren
-        # bisherigen Ausgang.
-        if not aus_auftrag:
-            raise
-        db.rollback()
-        schluessel = (urteil.nutzlast or {}).get("auftragsschluessel")
-        belegt_durch = (
-            auftragsschluessel.dokument_zu(db, schluessel)
-            if schluessel else None
-        )
-        return _zurueck(
-            "AUFTRAG_SCHON_GERECHNET: Zu diesem Auftrag gibt es inzwischen "
-            f"einen anderen Beleg: {belegt_durch or 'Entwurf'}."
+        return entwuerfe_anlegen(db, urteil, dateiname=datei.name)
+
+    def folgen(ergebnis):
+        entwurf = ergebnis if aus_auftrag else ergebnis[0]
+        return RedirectResponse(url=f"/invoices/{entwurf.id}/vorschau", status_code=303)
+
+    return _anlegen(
+        db, urteil, roh, wirken, folgen, schluesselart=aus_auftrag,
+    )
+
+
+@router.post("/{dateiname}/aufstellung-anlegen")
+def aufstellung_anlegen(dateiname: str, db: Session = Depends(get_db)):
+    """§ 8b: Aus dem angenommenen aufstellungsauftrag wird der ENTWURF einer
+    Abrechnungsaufstellung - kein Beleg der Rechnung, keine eigene Seite bis
+    Bauschritt 7g; bis dahin kehrt der Knopf mit der Nummer zur Liste."""
+    _schalter(db)
+    ordner = _belegordner()
+    if ordner is None:
+        raise HTTPException(status_code=404)
+    datei = _datei(ordner, dateiname)
+
+    # Noch einmal beurteilen wie beim rechnungsauftrag; die Lage sieht die
+    # Anlagen, denn ohne sie waere der Beleg gar nicht angenommen.
+    roh = datei.read_bytes()
+    lage = DatenbankLage(db, anlagen_ordner=_anlagen_ordner(ordner))
+    urteil = beleg_beurteilen(
+        roh, lage, schluessel_wurzel=_schluesselwurzel(),
+    )
+    if not urteil.angenommen:
+        return _zurueck(urteil.befund or "ABGELEHNT")
+    # Die Adresse gehoert zur Art: Ein anderer Beleg hierher gepostet waere
+    # eine veraltete Seite, kein Wirken - die Wirkung kennt nur diese Felder.
+    if urteil.nutzlast_art != "aufstellungsauftrag":
+        return _zurueck("Aus diesem Beleg entsteht keine Abrechnungsaufstellung.")
+
+    def wirken():
+        return aufstellungsauftrag_wirkung.entwurf_anlegen(
+            db, urteil, anlagen_bytes=lage.anlagen_bytes, dateiname=datei.name,
         )
 
-    if aus_auftrag:
-        return RedirectResponse(url=f"/invoices/{entwurf.id}/vorschau", status_code=303)
-    return RedirectResponse(url=f"/invoices/{entwuerfe[0].id}/vorschau", status_code=303)
+    def folgen(ergebnis):
+        return _gemeldet(f"Abrechnungsaufstellung {ergebnis.nummer} angelegt (Entwurf)")
+
+    return _anlegen(db, urteil, roh, wirken, folgen, schluesselart=True)

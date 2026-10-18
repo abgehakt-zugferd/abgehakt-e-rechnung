@@ -96,7 +96,11 @@ def test_gobd_download_filtert_uebergabekopien_nach_annahmezeitpunkt(pg_session)
 
     richtung = "tantiemen-app-nach-abgehakt"
     wurzel = get_settings().storage_path / "uebergaben" / richtung
-    wurzel.mkdir(parents=True)
+    # exist_ok: Der Wegwerf-Speicher der Sitzung ist gemeinsam; wer vor diesem
+    # Test uebergaben kopiert hat (z. B. der Knopf eines Uebergabe-Tests), hat
+    # das Verzeichnis schon angelegt. Der Befund unten zaehlt nur die Zeilen
+    # mit Annahme im Zeitraum - Bestand aus anderen Tests faellt nicht auf.
+    wurzel.mkdir(parents=True, exist_ok=True)
     innen, draussen = b'{"beleg": "innen"}', b'{"beleg": "draussen"}'
     (wurzel / f"{hashlib.sha256(innen).hexdigest()}.json").write_bytes(innen)
     (wurzel / f"{hashlib.sha256(draussen).hexdigest()}.json").write_bytes(draussen)
