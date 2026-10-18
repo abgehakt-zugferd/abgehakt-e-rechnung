@@ -6,9 +6,18 @@ vor den Tests entsprechen der Reihenfolge des Review-Protokolls.
 import uuid
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
+from app.services.zugferd_xml import generate_xml
+from tests.factories import company_stub, customer_stub, item_stub, zugferd_invoice_stub
+from tests.probe_daten import STEUER_PROBE_ZEHN, UST_DE_PROBE
+from tests.test_beleg_aus_xml_einspielen import (
+    _kunde as _einspiel_kunde,
+    _lege_xml_und_pdf,
+)
+from scripts.beleg_aus_xml_einspielen import einspielen
 
 
 def _kunde(pg_session, **over):
@@ -77,3 +86,64 @@ def test_liste_und_detail_bleiben_200_bei_unbekannter_belegart(client, pg_sessio
     # Der Rohwert bleibt sichtbar, damit der Bestand erkennbar und korrigierbar ist.
     assert "altwert" in liste.text
     assert "altwert" in detail.text
+
+
+# ── Befund 2: Einspielskript übersieht das Storno einer 389 (261) ───────────
+
+
+def _xml_261(nummer, kunde):
+    """261-XML im eigenen Format: Rollen wie bei 389 getauscht, mit Originalbezug.
+
+    Der Generator baut sie aus derselben Besetzung, die auch das Einspielen
+    beantworten muss; die Steuersätze sind die der gutschrifttypischen Probe.
+    """
+    cust = customer_stub(
+        name=kunde.name, address_line1=kunde.address_line1,
+        zip_code=kunde.zip_code, city=kunde.city, country=kunde.country,
+        vat_id=kunde.vat_id,
+    )
+    netto = Decimal("100.00")
+    steuer = Decimal("7.00")
+    inv = zugferd_invoice_stub(
+        invoice_number=nummer,
+        invoice_type="self_billing_storno",
+        original_invoice_id=uuid.uuid4(),
+        original_invoice=SimpleNamespace(
+            invoice_number="HG-2026-001", issue_date=date(2026, 7, 8),
+        ),
+        customer=cust,
+        issue_date=date(2026, 8, 1),
+        due_date=date(2026, 8, 15),
+        delivery_date=date(2026, 7, 8),
+        tax_category="S",
+        items=[item_stub(
+            tax_rate=Decimal("7.00"), net_amount=netto,
+            tax_amount=steuer, gross_amount=netto + steuer,
+            quantity=Decimal("1.0000"), unit_price=netto,
+        )],
+        net_total=netto, tax_total=steuer, gross_total=netto + steuer,
+    )
+    return generate_xml(inv, company_stub(
+        name="Muster Handwerk GmbH", tax_number=STEUER_PROBE_ZEHN, vat_id=UST_DE_PROBE,
+    ))
+
+
+def test_einspielen_findet_den_kunden_einer_261_im_verkaeuferblock(pg_session):
+    """Das Skript suchte den Kunden nur bei invoice_type == "self_billing" im
+    Verkaeuferblock; belegrollen tauscht die Rollen auch beim Storno einer 389
+    (BT-3 261). Eine 261 fand deshalb keinen Kunde und wurde nie eingespielt."""
+    from app.models.invoice import Invoice
+
+    nummer = "ST-EIN-261"
+    kunde = _einspiel_kunde(pg_session, ust_status="regelbesteuert")
+    _lege_xml_und_pdf(nummer, _xml_261(nummer, kunde))
+
+    einspielen([nummer], db=pg_session)
+
+    pg_session.expire_all()
+    row = pg_session.query(Invoice).filter(Invoice.invoice_number == nummer).one()
+    assert row.invoice_type == "self_billing_storno"
+    assert row.customer_id == kunde.id, (
+        "Der Kunde einer 261 steht im Verkaeuferblock; das Skript hat die "
+        "Rollenfrage nicht aus belegrollen bezogen"
+    )

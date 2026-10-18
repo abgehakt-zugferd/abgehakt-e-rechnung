@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from types import SimpleNamespace
 from xml.etree import ElementTree as ET
 
 from sqlalchemy.orm import Session
@@ -24,6 +25,7 @@ from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services.archive_frist import berechne_archive_until
 from app.services.belegart import UnknownInvoiceTypeError, belegart_aus_bt3
+from app.services.belegrollen import besetzung
 from app.services.steuerstatus import pruefe_honorargutschrift
 
 RAM = "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"
@@ -57,9 +59,17 @@ def _date102(raw: str | None) -> date | None:
     return date(int(raw[:4]), int(raw[4:6]), int(raw[6:8]))
 
 
+def _kunde_ist_verkaeufer(invoice_type: str | None) -> bool:
+    # Die Rollenfrage beantwortet belegrollen (eine Quelle, auch für 261): Bei
+    # 389 und seinem Storno trägt der externe Kunde die Verkäuferrolle im Beleg.
+    return not besetzung(
+        SimpleNamespace(invoice_type=invoice_type), SimpleNamespace(), SimpleNamespace(),
+    ).verkaeufer_ist_firma
+
+
 def _find_customer_vat(root: ET.Element, invoice_type: str | None) -> str | None:
-    # Beim Rückimport ist der externe Kunde bei 389 der Verkäufer.
-    party_name = "SellerTradeParty" if invoice_type == "self_billing" else "BuyerTradeParty"
+    # Beim Rückimport ist der externe Kunde im Gutschriftverfahren der Verkäufer.
+    party_name = "SellerTradeParty" if _kunde_ist_verkaeufer(invoice_type) else "BuyerTradeParty"
     party = root.find(f".//{_q(RAM, 'ApplicableHeaderTradeAgreement')}/{_q(RAM, party_name)}")
     if party is None:
         return None
