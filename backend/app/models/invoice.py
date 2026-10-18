@@ -60,6 +60,24 @@ class Invoice(Base):
             "due_date IS NOT NULL OR (payment_terms IS NOT NULL AND payment_terms <> '')",
             name="ck_invoices_faelligkeit_oder_bedingungen",
         ),
+        # Entscheidung 7 / Festlegung 12: Solange zu einem Auftragsschluessel
+        # ein Beleg besteht, der weder storniert noch verworfen ist, darf kein
+        # zweiter entstehen. Der partielle Index sichert diese Zusage gegen zwei
+        # gleichzeitige Anfragen; NULL (freigegeben) sperrt nicht. Identisch
+        # zu Migration 028 (alembic check).
+        Index(
+            "uq_invoices_auftragsschluessel_offen",
+            "auftragsschluessel_offen",
+            unique=True,
+            postgresql_where=text("auftragsschluessel_offen IS NOT NULL"),
+        ),
+        # Die Sperre ist kein zweiter, freier Wert: Sie ist entweder weg oder
+        # deckt sich mit dem Nachweis. Identisch zu Migration 028 (alembic
+        # check).
+        CheckConstraint(
+            "auftragsschluessel_offen IS NULL OR auftragsschluessel_offen = auftragsschluessel",
+            name="ck_invoices_auftragsschluessel_offen_wie_nachweis",
+        ),
     )
 
     id: Mapped[uuid.UUID] = _id_col
@@ -157,6 +175,17 @@ class Invoice(Base):
         nullable=True,
         index=True
     )
+    # Auftragsschluessel des vorgelagerten Systems (Bauschritt 4a,
+    # Entscheidung 7): der Nachweis, aus welchem Auftrag der Beleg entstand.
+    # Nach dem Finalisieren unveraenderlich (nicht in MUTABLE_AFTER_FINALIZE).
+    # Gesetzt und geleert wird er nur ueber services/auftragsschluessel.py.
+    auftragsschluessel: Mapped[Optional[str]] = mapped_column(Text)
+    # Dieselbe Zeichenkette, solange der Beleg den Schluessel sperrt, sonst
+    # NULL. Der Status taugt dafuer nicht: Eine per Stornorechnung aufgehobene
+    # Rechnung bleibt 'issued' oder 'paid' (Festlegung 12), deshalb sperrt eine
+    # eigene Spalte mit partiellem Unique-Index (unten). Nach dem Finalisieren
+    # darf sie nur geleert werden (invoice_guard, Muster datev_sent_at).
+    auftragsschluessel_offen: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

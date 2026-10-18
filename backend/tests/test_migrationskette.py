@@ -195,6 +195,72 @@ def test_faelligkeit_optional_nach_upgrade_head(migrationsdatenbank):
     assert "ck_invoices_faelligkeit_oder_bedingungen" in checks
 
 
+def test_auftragsschluessel_nach_upgrade_head(migrationsdatenbank):
+    """Migration 028 (Bauschritt 4a): Nachweis und Sperre des
+    Auftragsschluessels an invoices.
+
+    Der partielle Unique-Index und der CHECK werden hier direkt beprobt,
+    weil sie die Zusage auch ohne Anwendung sichern (Festlegung 12): Der
+    Status taugt nicht als Kriterium — eine per Stornorechnung aufgehobene
+    Rechnung bleibt 'issued' oder 'paid' —, also sperrt eine eigene Spalte,
+    und zwei gleichzeitige Anfragen schlaegt der Index, nicht die Route.
+    """
+    url, _ = migrationsdatenbank
+    engine = create_engine(url)
+    try:
+        with engine.connect() as conn:
+            spalten = {
+                zeile[0] for zeile in conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'invoices'"
+                ))
+            }
+            indizes = {
+                zeile[0] for zeile in conn.execute(text(
+                    "SELECT indexname FROM pg_indexes WHERE tablename = 'invoices'"
+                ))
+            }
+            checks = {
+                zeile[0] for zeile in conn.execute(text(
+                    "SELECT conname FROM pg_constraint "
+                    "WHERE conrelid = 'invoices'::regclass AND contype = 'c'"
+                ))
+            }
+            conn.execute(text(
+                "INSERT INTO invoices (invoice_number, issue_date, payment_terms, "
+                "auftragsschluessel, auftragsschluessel_offen) "
+                "VALUES ('RE-SK-1', '2026-01-05', 'Zahlbar.', "
+                "'plattform:2026-01:kanal-a:x1', 'plattform:2026-01:kanal-a:x1')"
+            ))
+            conn.commit()
+        # Zweiter Beleg mit demselben sperrenden Schluessel: der Index schlaegt zu.
+        with pytest.raises(IntegrityError):
+            with engine.connect() as conn:
+                conn.execute(text(
+                    "INSERT INTO invoices (invoice_number, issue_date, payment_terms, "
+                    "auftragsschluessel, auftragsschluessel_offen) "
+                    "VALUES ('RE-SK-2', '2026-01-05', 'Zahlbar.', "
+                    "'plattform:2026-01:kanal-a:x1', 'plattform:2026-01:kanal-a:x1')"
+                ))
+                conn.commit()
+        # Sperre ohne gleichen Nachweis: der CHECK schlaegt zu.
+        with pytest.raises(IntegrityError):
+            with engine.connect() as conn:
+                conn.execute(text(
+                    "INSERT INTO invoices (invoice_number, issue_date, payment_terms, "
+                    "auftragsschluessel, auftragsschluessel_offen) "
+                    "VALUES ('RE-SK-3', '2026-01-05', 'Zahlbar.', "
+                    "'plattform:2026-01:kanal-a:x1', 'plattform:2026-01:kanal-b:y2')"
+                ))
+                conn.commit()
+    finally:
+        engine.dispose()
+
+    assert {"auftragsschluessel", "auftragsschluessel_offen"} <= spalten
+    assert "uq_invoices_auftragsschluessel_offen" in indizes
+    assert "ck_invoices_auftragsschluessel_offen_wie_nachweis" in checks
+
+
 def test_upgrade_head_legt_beide_singleton_zeilen_an(migrationsdatenbank):
     """`company` und `app_config` sind Singletons mit id=1.
 

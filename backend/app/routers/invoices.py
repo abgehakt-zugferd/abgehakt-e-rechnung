@@ -32,7 +32,8 @@ from app.services.belegsprache import (
 from app.services.leistungszeit import parse_leistungszeit_from_form
 from app.models.app_config import AppConfig
 from app.services import (mustang, zugferd_xml, pdf_generator, pdfa, validator,
-                          datev_email, aenderungsprotokoll, mailtext, kundenvorgaben)
+                          datev_email, aenderungsprotokoll, mailtext, kundenvorgaben,
+                          auftragsschluessel)
 from app.services.einheiten import (
     UnknownUnitError,
     formular_bezeichnungen,
@@ -1203,6 +1204,16 @@ def finalize_invoice(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
         invoice.pdf_filename = zugferd_pdf.name
         invoice.status = "issued"
 
+        # Festlegung 12: Erst die GESTELLTE Stornorechnung hebt das Original
+        # auf — nicht ihr Entwurf, denn ein verworfener Storno bleibt
+        # folgenlos. Das Original behaelt seinen Status ('issued'/'paid'),
+        # nur seine Sperre weicht; der Nachweis bleibt fuer die Akte.
+        if invoice.invoice_type in {"credit_note", "self_billing_storno"} \
+                and invoice.original_invoice_id is not None:
+            original = invoice.original_invoice
+            if original is not None:
+                auftragsschluessel.freigeben(original)
+
         # Erst ins Archiv, dann committen. Die umgekehrte Reihenfolge wäre der
         # schlechtere Fehler: eine gestellte Rechnung ohne Beleg auf der Platte ist
         # unveränderlich und damit nicht mehr reparierbar, während ein Beleg ohne
@@ -1373,6 +1384,11 @@ def update_status(
             raise HTTPException(400, str(exc)) from exc
 
     invoice.status = new_status
+    if new_status == "cancelled":
+        # Festlegung 12: Der manuell stornierte Beleg sperrt den
+        # Auftragsschluessel nicht weiter; der Nachweis bleibt. (Bezahlen
+        # gibt nichts frei — der Beleg besteht ja weiter.)
+        auftragsschluessel.freigeben(invoice)
     db.commit()
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
 
@@ -1394,6 +1410,10 @@ def discard_draft(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
             400, "Nur Entwürfe können verworfen werden. Eine gestellte Rechnung "
             "bleibt erhalten — Korrektur nur per Storno.")
     invoice.status = "discarded"
+    # Festlegung 12: Der verworfene Entwurf sperrt nicht weiter. Der Nachweis
+    # bleibt stehen — das Zurueckholen nimmt die Sperre wieder auf, wenn
+    # zwischenzeitlich kein anderer Beleg sie gezogen hat.
+    auftragsschluessel.freigeben(invoice)
     db.commit()
     return RedirectResponse(url="/invoices", status_code=303)
 
@@ -1412,8 +1432,38 @@ def restore_draft(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
             pruefe_ersetzbar(db, invoice.ersetzt_invoice_id)
         except ErsatzNichtMoeglich as fehler:
             raise HTTPException(400, str(fehler)) from fehler
+    # Festlegung 19: Ein verworfener Entwurf mit Auftragsschluessel nimmt seine
+    # Sperre nur zurueck, wenn zwischenzeitlich kein anderer Beleg den
+    # Schluessel gezogen hat. Die Vorabpruefung nimmt keine Sperre; den
+    # Wettlauf schlaegt der partielle Unique-Index unten, und die Meldung ist
+    # in beiden Faellen dieselbe.
+    if invoice.auftragsschluessel is not None:
+        belegt_durch = auftragsschluessel.dokument_zu(db, invoice.auftragsschluessel)
+        if belegt_durch is not None:
+            raise HTTPException(
+                400,
+                "Zu diesem Auftrag gibt es inzwischen einen anderen Beleg: "
+                f"{belegt_durch}.",
+            )
+        auftragsschluessel.belegen(invoice, invoice.auftragsschluessel)
     invoice.status = "draft"
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Zweite Schicht (Festlegung 19): Der Index sieht, was die Pruefung
+        # oben ohne Sperre verpasst hat. Rollback nimmt die Sperre zurueck;
+        # die Meldung entspricht der Vorabpruefung, kein HTTP 500 (Muster:
+        # der Gutschrift-Index in create_storno).
+        db.rollback()
+        if invoice.auftragsschluessel is not None:
+            belegt_durch = auftragsschluessel.dokument_zu(db, invoice.auftragsschluessel)
+            if belegt_durch is not None:
+                raise HTTPException(
+                    400,
+                    "Zu diesem Auftrag gibt es inzwischen einen anderen Beleg: "
+                    f"{belegt_durch}.",
+                )
+        raise
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
 
 

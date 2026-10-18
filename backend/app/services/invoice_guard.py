@@ -42,8 +42,11 @@ ALLOWED_TRANSITIONS: dict[str, set[str]] = {
 
 # Felder, die auch NACH Finalisierung noch geschrieben werden dürfen — Metadaten,
 # kein Rechnungsinhalt. `status` wird separat über ALLOWED_TRANSITIONS geprüft.
+# `auftragsschluessel_offen` ist dabei Sonderfall (Festlegung 12): erlaubt ist
+# nach dem Finalisieren nur das LEEREN; das Prüfen der Richtung steht unten.
 MUTABLE_AFTER_FINALIZE: set[str] = {
-    "status", "datev_sent_at", "bezahlt_am", "updated_at",
+    "status", "datev_sent_at", "bezahlt_am", "auftragsschluessel_offen",
+    "updated_at",
 }
 
 # Session-Schlüssel für die in DIESER Transaktion neu erzeugten Rechnungen. Sie
@@ -232,6 +235,29 @@ def _before_flush(session: Session, flush_context, instances) -> None:
                     raise InvoiceStateError(
                         "bezahlt_am darf nur beim Statuswechsel issued → paid gesetzt werden."
                     )
+
+        # Auftragsschluessel-Sperre (Festlegung 12): Nach dem Finalisieren darf
+        # auftragsschluessel_offen nur GELEERT werden (Wert → NULL). Setzen
+        # wuerde einen bereits freigegebenen Beleg wieder sperren — Verwerfen
+        # gibt es dann nicht mehr, der Schluessel bliebe fuer immer blockiert —,
+        # und Aendern wuerde einen zweiten Beleg zum selben Auftrag erlauben,
+        # nachdem der erste bereits gilt. Der Unique-Index schluege im zweiten
+        # Fall trotzdem zu, aber mit HTTP 500 statt einer Meldung. Vor dem
+        # Finalisieren bleibt alles erlaubt: Verwerfen und Zurueckholen
+        # brauchen freie Hand. (Wie bezahlt_am in MUTABLE_AFTER_FINALIZE, damit
+        # das Leeren — Storno-Finalisierung des Originals, manuelles Stornieren
+        # — nicht an der allgemeinen Sperre scheitert.)
+        ao_hist = get_history(obj, "auftragsschluessel_offen")
+        if ao_hist.has_changes() and old_status in FINALIZED:
+            # get_history liefert das Leeren (Wert → NULL) als added=[None];
+            # verboten ist jeder NEUE Wert, erlaubt ist nur None.
+            neuer_wert = ao_hist.added[0] if ao_hist.added else None
+            if neuer_wert is not None:
+                raise InvoiceStateError(
+                    "auftragsschluessel_offen darf nach dem Finalisieren nur geleert "
+                    "werden — Setzen oder Aendern sperrt einen Auftragsschluessel, "
+                    "der schon freigegeben oder von einem anderen Beleg belegt ist."
+                )
 
         # Inhalt einer finalisierten Rechnung ist unveränderlich
         if old_status in FINALIZED:

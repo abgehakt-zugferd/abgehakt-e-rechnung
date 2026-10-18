@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models.customer import Customer
 from app.models.uebergabe_eingang import UebergabeEingang
+from app.services import auftragsschluessel
 from app.services.uebergabe_befund import Belegurteil, Empfangslage
 
 
@@ -69,10 +70,13 @@ class DatenbankLage(Empfangslage):
         )
 
     def dokument_zu_auftragsschluessel(self, schluessel: str) -> Optional[str]:
-        # Die Spalte auftragsschluessel_offen kommt mit Bauschritt 4; bis
-        # dahin entsteht aus einem rechnungsauftrag kein Beleg, also gibt es
-        # nichts zu finden.
-        return None
+        # Die Frage geht an die eine Stelle fuer die Sperre
+        # (services/auftragsschluessel.py): Was dort sperrt, ist der Bestand,
+        # den dieser Empfanger zu kennen hat. Bauschritt 4b fragt dort
+        # zusaetzlich die Abrechnungsaufstellung ab — das Format spricht von
+        # "einem Dokument" (Festlegung 12), beide Tabellen gehoeren in die
+        # Antwort.
+        return auftragsschluessel.dokument_zu(self._db, schluessel)
 
 
 def merken(db: Session, urteil: Belegurteil, *, dateiname: Optional[str] = None) -> UebergabeEingang:
