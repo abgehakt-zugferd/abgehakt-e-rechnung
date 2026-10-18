@@ -829,7 +829,15 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
     invoice.issue_date = date.fromisoformat(form.get("issue_date"))
     invoice.due_date = _faelligkeit_aus_form(form)
     invoice.delivery_date = delivery_date
-    invoice.tax_category = form.get("tax_category", "S").strip() or "S"
+    # Festlegung 13: Die Steuerkategorie eines Auftragsentwurfs (Beleg mit
+    # Auftragsschluessel) stammt aus der Vorgabe am Kunden (AE) und ist wie
+    # die Beträge gebunden — ein anderer Wert aus dem Formular wäre dieselbe
+    # Fälschung wie ein anderer Betrag. Beim 389-Entwurf bleibt sie dagegen
+    # korrigierbar (belegsperre.py): Dort wird sie erst hier aus dem Status
+    # des Kunden abgeleitet, und eine falsche Ableitung muss man richten
+    # können.
+    if not (aus_beleg and invoice.auftragsschluessel is not None):
+        invoice.tax_category = form.get("tax_category", "S").strip() or "S"
     try:
         invoice.document_language = _belegsprache_aus_form(
             form, fehlt=invoice.document_language or "de",
@@ -1118,6 +1126,22 @@ def finalize_invoice(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(404)
     if invoice.status != "draft":
         raise HTTPException(400, "Nur Entwürfe können finalisiert werden.")
+
+    # Festlegung 14: Ein Entwurf aus einem Auftrag trägt sein Ausstellungsdatum
+    # nur vorläufig (Kalendertag von erzeugt_am); gestellt wird die Rechnung am
+    # Tag des Finalisierens. Die Verschiebung steht VOR dem Validierungs-Gate,
+    # damit der Warnbefund AUSSTELLUNGSFRIST_14A (pruefregeln/kopf.py) den Tag
+    # sieht, der wirklich auf dem Beleg steht — die Frist des § 14a Abs. 1
+    # Satz 2 UStG hängt am Ausstellungsdatum. Das Fälligkeitsdatum wandert um
+    # denselben Abstand mit (14 Tage bleiben 14 Tage), und die Archivfrist
+    # wird erst danach berechnet, denn sie hängt am neuen Tag.
+    if invoice.auftragsschluessel is not None:
+        stelltag = heute()
+        abstand = stelltag - invoice.issue_date
+        invoice.issue_date = stelltag
+        if invoice.due_date is not None:
+            invoice.due_date += abstand
+        invoice.archive_until = berechne_archive_until(invoice.issue_date)
 
     company = _get_company(db)
 

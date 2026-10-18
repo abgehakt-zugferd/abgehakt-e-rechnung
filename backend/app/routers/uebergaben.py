@@ -21,6 +21,7 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.branding import register_branding_globals
@@ -28,6 +29,7 @@ from app.config import get_settings
 from app.darstellung import registriere_darstellungsfilter
 from app.database import get_db
 from app.models.app_config import AppConfig
+from app.services import auftragsschluessel, rechnungsauftrag_wirkung
 from app.services.abrechnungsauftrag_wirkung import (
     BelegSchonVerarbeitet,
     WirkungFehler,
@@ -164,14 +166,6 @@ def rechnung_anlegen(dateiname: str, db: Session = Depends(get_db)):
     if not urteil.angenommen:
         return _zurueck(urteil.befund or "ABGELEHNT")
 
-    # Der rechnungsauftrag ist lesbar (sein Leser ist gebaut), aber das
-    # Anlegen ist fuer diese Art noch nicht gebaut: Erst ein spaeterer
-    # Bauschritt macht daraus einen Beleg. Der Weg bleibt erreichbar und
-    # meldet - ein alter Tab oder eine eigene Ansicht drueckt den Knopf
-    # trotzdem, und niemandem ist mit einem Serverfehler geholfen.
-    if urteil.nutzlast_art == "rechnungsauftrag":
-        return _zurueck("Rechnungsaufträge werden in einem späteren Schritt verarbeitet.")
-
     # Erst die eigene Aufbewahrungskopie (§ 12), dann die Datenbankzeilen: ohne
     # gepruefte Kopie wird der Beleg nicht angenommen, denn sonst haette der
     # Empfaenger nur den Absenderordner als Beleg. Scheitert spaeter der Commit,
@@ -182,8 +176,18 @@ def rechnung_anlegen(dateiname: str, db: Session = Depends(get_db)):
     except KopieFehler as fehler:
         return _zurueck(str(fehler))
 
+    # Beide lesbaren Arten wirken ueber denselben Knopf, aber unterschiedlich:
+    # Der abrechnungsauftrag wird zu Gutschriften (§ 8), der rechnungsauftrag
+    # zu einem Entwurf der Ausgangsrechnung (§ 8a). Getrennte Stellen, dieselbe
+    # Zusage: alles oder nichts, committet der Aufrufer hier.
+    aus_auftrag = urteil.nutzlast_art == "rechnungsauftrag"
     try:
-        entwuerfe = entwuerfe_anlegen(db, urteil, dateiname=datei.name)
+        if aus_auftrag:
+            entwurf = rechnungsauftrag_wirkung.entwurf_anlegen(
+                db, urteil, dateiname=datei.name,
+            )
+        else:
+            entwuerfe = entwuerfe_anlegen(db, urteil, dateiname=datei.name)
         db.commit()
     except BelegSchonVerarbeitet:
         db.rollback()
@@ -192,5 +196,26 @@ def rechnung_anlegen(dateiname: str, db: Session = Depends(get_db)):
         # Alles oder nichts: was halb entstanden waere, ist damit weg.
         db.rollback()
         return _zurueck(str(fehler))
+    except IntegrityError:
+        # Wettlauf um den Auftragsschluessel (Festlegung 19): Der Leser fragt
+        # die Lage ohne Sperre, zwei gleichzeitige Annahmen sehen beide
+        # 'frei', und der partielle Unique-Index schlaegt erst hier zu. Der
+        # Befund ist derselbe wie der des Lesers, kein HTTP 500. Nur der Weg
+        # des rechnungsauftrags schreibt in diesen Index; die 389 behaelt ihren
+        # bisherigen Ausgang.
+        if not aus_auftrag:
+            raise
+        db.rollback()
+        schluessel = (urteil.nutzlast or {}).get("auftragsschluessel")
+        belegt_durch = (
+            auftragsschluessel.dokument_zu(db, schluessel)
+            if schluessel else None
+        )
+        return _zurueck(
+            "AUFTRAG_SCHON_GERECHNET: Zu diesem Auftrag gibt es inzwischen "
+            f"einen anderen Beleg: {belegt_durch or 'Entwurf'}."
+        )
 
+    if aus_auftrag:
+        return RedirectResponse(url=f"/invoices/{entwurf.id}/vorschau", status_code=303)
     return RedirectResponse(url=f"/invoices/{entwuerfe[0].id}/vorschau", status_code=303)

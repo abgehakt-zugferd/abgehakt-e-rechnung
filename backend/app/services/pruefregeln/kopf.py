@@ -1,9 +1,11 @@
 """§ 14 Abs. 4 UStG – Rechnungskopf: Nummer, Datum, Fälligkeit, Leistungsdatum.
 
 Die Reihenfolge der Teilregeln ist Bestandteil des Vertrags (Tests pruefen
-Listen): Rechnungsnummer, Ausstellungsdatum, Fälligkeit, Leistungszeitraum,
-Leistungsdatum.
+Listen): Rechnungsnummer, Ausstellungsdatum, Ausstellungsfrist § 14a,
+Fälligkeit, Leistungszeitraum, Leistungsdatum.
 """
+from datetime import date
+
 from app.services.leistungszeit import (
     hat_leistungszeitpunkt,
     leistungszeitraum_teilweise,
@@ -18,6 +20,7 @@ def pruefe_kopf(kontext: Pruefkontext) -> list[Issue]:
     befunde: list[Issue] = []
     befunde.extend(_pruefe_rechnungsnummer(kontext))
     befunde.extend(_pruefe_ausstellungsdatum(kontext))
+    befunde.extend(_pruefe_ausstellungsfrist(kontext))
     befunde.extend(_pruefe_faelligkeit(kontext))
     befunde.extend(_pruefe_leistungszeitraum(kontext))
     befunde.extend(_pruefe_leistungsdatum(kontext))
@@ -35,6 +38,36 @@ def _pruefe_ausstellungsdatum(kontext: Pruefkontext) -> list[Issue]:
     # § 14 Abs. 4 Nr. 3 UStG – Ausstellungsdatum
     if not kontext.invoice.issue_date:
         return [Issue("ISSUE_DATE_MISSING", "error", "Ausstellungsdatum fehlt.", "issue_date")]
+    return []
+
+
+def _pruefe_ausstellungsfrist(kontext: Pruefkontext) -> list[Issue]:
+    # § 14a Abs. 1 Satz 2 UStG (Festlegung 14): Bei Steuerschuldnerschaft des
+    # Leistungsempfängers (AE) ist die Rechnung spätestens am 15. des Monats
+    # auszustellen, der auf das Ende des Leistungszeitraums folgt. Eine
+    # Warnung, kein Fehler: Die versäumte Frist macht die Rechnung nicht
+    # ungültig, sie begrenzt den Vorsteuerabzug des Empfängers — ein harter
+    # Fehler sperrte den Beleg, den der Empfänger dafür braucht. Der Entwurf
+    # aus einem Auftrag erhält sein Ausstellungsdatum ohnehin erst beim
+    # Finalisieren, der Befund sieht also den Tag, der auf dem Beleg steht.
+    invoice = kontext.invoice
+    if kontext.steuerkategorie != "AE":
+        return []
+    if not invoice.issue_date or not invoice.service_period_end:
+        return []
+    ende = invoice.service_period_end
+    folgemonat = 1 if ende.month == 12 else ende.month + 1
+    folgejahr = ende.year + 1 if ende.month == 12 else ende.year
+    frist = date(folgejahr, folgemonat, 15)
+    if invoice.issue_date > frist:
+        return [Issue(
+            "AUSSTELLUNGSFRIST_14A", "warning",
+            "Ausstellungsdatum liegt nach dem 15. des Monats, der auf das "
+            "Ende des Leistungszeitraums folgt (§ 14a Abs. 1 Satz 2 UStG) — "
+            "die Ausstellungsfrist für Reverse-Charge-Rechnungen ist "
+            "versäumt.",
+            "issue_date",
+        )]
     return []
 
 

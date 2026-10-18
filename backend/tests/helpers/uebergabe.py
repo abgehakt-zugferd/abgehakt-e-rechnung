@@ -106,8 +106,8 @@ def rechnungsauftrag(**aenderungen):
         "leistungszeitraum": {"von": "2026-02-01", "bis": "2026-02-28"},
         "waehrung": "EUR",
         "positionen": [
-            {"nr": 1, "gruppe": "Digital", "bezeichnung": "Nutzungsrechte A", "netto": "174.44"},
-            {"nr": 2, "gruppe": "Druck", "bezeichnung": "Nutzungsrechte B", "netto": "-3.10"},
+            {"nr": 1, "gruppe": "Gruppe A", "bezeichnung": "Nutzungsrechte A", "netto": "174.44"},
+            {"nr": 2, "gruppe": "Gruppe B", "bezeichnung": "Nutzungsrechte B", "netto": "-3.10"},
         ],
         "summe": {"netto": "171.34"},
         "grundlagen": [{

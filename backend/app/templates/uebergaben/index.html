@@ -71,10 +71,7 @@
                         {% endif %}
                     </td>
                     <td style="padding:10px 14px;">
-                        {% if urteil.angenommen and not urteil.bereits_verarbeitet and urteil.nutzlast_art == 'rechnungsauftrag' %}
-                        {# Gelesen, aber noch nicht verarbeitet: Der Knopf darf nicht versprechen, was keiner verarbeitet. #}
-                        <span style="color:var(--text-dim); font-family:'VT323',monospace; font-size:var(--fs-gross);">Rechnungsaufträge werden in einem späteren Schritt verarbeitet.</span>
-                        {% elif urteil.angenommen and not urteil.bereits_verarbeitet %}
+                        {% if urteil.angenommen and not urteil.bereits_verarbeitet %}
                         <form method="post" action="/uebergaben/{{ zeile.dateiname }}/rechnung-anlegen">
                             <button type="submit" class="btn-primary" style="white-space:nowrap;">ALS RECHNUNG ANLEGEN</button>
                         </form>
