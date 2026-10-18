@@ -226,6 +226,12 @@ class InvoiceItem(Base):
     # Pflichtangabe nach § 14 Abs. 4 Nr. 6 UStG.
     leistung_von: Mapped[Optional[date]] = mapped_column(Date)
     leistung_bis: Mapped[Optional[date]] = mapped_column(Date)
+    # Freier Anzeigetext, der Positionen zu einer (zusammenhaengenden) Gruppe
+    # ordnet (Bauschritt 3, Entscheidung 3). Nur Form, nie Wortlaut: dieselbe
+    # Zeichenkette, zusammenhaengende Positionsnummern. Pruefungen und Grenzen
+    # liegen in services/positionsangaben.py und pruefregeln/positionen.py —
+    # der Zusammenhang reicht ueber Zeilen, ein CHECK koennte ihn nicht ausdruecken.
+    gruppe: Mapped[Optional[str]] = mapped_column(Text)
     unit: Mapped[str] = mapped_column(String(20), nullable=False, default="Stück", server_default="Stück")
     # basis_netto ist Geld (der Leser erzwingt genau zwei Nachkommastellen),
     # der satz aber nicht: Das Übergabeformat erlaubt mindestens zwei, beliebig

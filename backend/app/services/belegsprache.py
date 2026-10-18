@@ -113,6 +113,10 @@ class Belegdarstellung:
     # Summen
     label_netto: str
     label_positionssumme: str
+    # Zwischensumme einer Positionsgruppe (Bauschritt 3): eigenes Feld, denn
+    # der Begriff ist nicht die Positionssumme des Belegs — in en tragen beide
+    # zufaellig dasselbe Wort, in de verschiedene.
+    label_zwischensumme: str
     abzugzeile_muster: str  # mit {grund}
     label_gutschriftbetrag: str
     label_rechnungsbetrag: str
@@ -263,6 +267,7 @@ _DE = Belegdarstellung(
     label_betrag="Betrag",
     label_netto="Nettobetrag",
     label_positionssumme="Positionssumme",
+    label_zwischensumme="Zwischensumme",
     abzugzeile_muster="Abzug: {grund}",
     label_gutschriftbetrag="Gutschriftbetrag",
     label_rechnungsbetrag="Rechnungsbetrag",
@@ -318,6 +323,7 @@ _EN = Belegdarstellung(
     label_betrag="Amount",
     label_netto="Net amount",
     label_positionssumme="Subtotal",
+    label_zwischensumme="Subtotal",
     abzugzeile_muster="Allowance: {grund}",
     label_gutschriftbetrag="Credit note amount",
     label_rechnungsbetrag="Invoice total",

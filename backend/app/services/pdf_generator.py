@@ -320,6 +320,24 @@ def _beschreibung_mit_angaben(item, d: Belegdarstellung, waehrung: str = "EUR") 
     return markup
 
 
+def _gruppen_runs(items) -> list:
+    """Zerlegt die Positionen in zusammenhängende Laeufe gleicher Gruppe.
+
+    Der Validator (und der Leser) erzwingen, dass Positionen derselben Gruppe
+    aufeinanderfolgen; hier wird das nicht noch einmal geprueft, sondern nur
+    gezaehlt: zwei getrennte Laeufe desselben Gruppentextes wuerden zwei
+    Zwischensummen desselben Namens drucken.
+    """
+    runs = []
+    for item in items:
+        gruppe = getattr(item, "gruppe", None) or None
+        if runs and runs[-1][0] == gruppe:
+            runs[-1][1].append(item)
+        else:
+            runs.append((gruppe, [item]))
+    return runs
+
+
 def _build_item_rows(invoice: Invoice, d: Belegdarstellung) -> list[list]:
     """Zeilen für die Positionstabelle. Die Beschreibung wird als Paragraph
     ausgegeben, damit sie in ihrer Spalte umbricht statt überzulaufen."""
@@ -334,21 +352,35 @@ def _build_item_rows(invoice: Invoice, d: Belegdarstellung) -> list[list]:
     kopf.append(d.label_betrag)
     rows = [kopf]
     waehrung = getattr(invoice, "currency", "EUR") or "EUR"
-    for item in invoice.items:
-        zeile = [
-            str(item.position),
-            Paragraph(_beschreibung_mit_angaben(item, d, waehrung), desc_style),
-            # NICHT `str(x.normalize())`: das kippt bei durch zehn teilbaren
-            # Mengen in die Exponentialform — 120 Stunden stünden als "1.2E+2"
-            # auf der Rechnung an den Kunden.
-            d.format_menge(item.quantity),
-            item.unit,
-            d.format_betrag(item.unit_price, waehrung),
-        ]
-        if mit_steuer:
-            zeile.append(_pct(item.tax_rate))
-        zeile.append(d.format_betrag(item.net_amount, waehrung))
-        rows.append(zeile)
+    for gruppe, run_items in _gruppen_runs(invoice.items):
+        spalten = len(kopf)
+        if gruppe:
+            # Ueberschrift vor der ersten Position der Gruppe; der Text steht
+            # in der Beschreibungsspalte, die als einzige umbricht — ein langer
+            # Gruppentext laeuft so nicht aus der Tabelle.
+            rows.append(["", gruppe] + [""] * (spalten - 2))
+        for item in run_items:
+            zeile = [
+                str(item.position),
+                Paragraph(_beschreibung_mit_angaben(item, d, waehrung), desc_style),
+                # NICHT `str(x.normalize())`: das kippt bei durch zehn teilbaren
+                # Mengen in die Exponentialform — 120 Stunden stünden als "1.2E+2"
+                # auf der Rechnung an den Kunden.
+                d.format_menge(item.quantity),
+                item.unit,
+                d.format_betrag(item.unit_price, waehrung),
+            ]
+            if mit_steuer:
+                zeile.append(_pct(item.tax_rate))
+            zeile.append(d.format_betrag(item.net_amount, waehrung))
+            rows.append(zeile)
+        if gruppe:
+            # Reine Addition der Positionsnetto, keine Rundung, kein Steueranteil:
+            # Die Zwischensumme gliedert, sie ist keine eigene Postenart. Das
+            # Label steht in der Belegsprache (belegsprache.py).
+            summe = sum((item.net_amount for item in run_items), Decimal("0"))
+            rows.append(["", f"{d.label_zwischensumme} {gruppe}"]
+                        + [""] * (spalten - 3) + [d.format_betrag(summe, waehrung)])
     return rows
 
 

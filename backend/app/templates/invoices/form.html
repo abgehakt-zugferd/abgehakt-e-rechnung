@@ -185,6 +185,14 @@
                                         <label class="label">Artikel-/Leistungsnummer (optional)</label>
                                         <input type="text" x-model="item.artikelnummer" maxlength="50"
                                                class="input font-mono" style="font-size:var(--fs-gross); padding:6px 8px; max-width:220px;">
+                                        {# Gruppe (Bauschritt 3): freier Anzeigetext, der im PDF eine
+                                           Ueberschrift und eine Zwischensumme bekommt und in der E-Rechnung
+                                           als Positionsnotiz (BT-127) steht. Bei Belegen aus einem
+                                           Uebergabebeleg ist die Gliederung wie die Betraege gebunden. #}
+                                        <label class="label">Gruppe (optional)</label>
+                                        <input type="text" x-model="item.gruppe"
+                                               class="input font-mono" style="font-size:var(--fs-gross); padding:6px 8px; max-width:220px;"
+                                               {% if aus_beleg %}readonly title="aus dem Beleg übernommen"{% endif %}>
                                     </div>
 
                                     <div>
@@ -557,6 +565,7 @@ function invoiceForm() {
                 basis_netto: '',
                 satz: '',
                 artikelnummer: '',
+                gruppe: '',
                 leistung_von: '',
                 leistung_bis: '',
                 quantity: 1,

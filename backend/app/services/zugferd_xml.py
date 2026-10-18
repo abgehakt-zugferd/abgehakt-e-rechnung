@@ -124,6 +124,20 @@ def _line_period_xml(item) -> str:
                 </ram:BillingSpecifiedPeriod>"""
 
 
+def _line_note_xml(item) -> str:
+    """BT-127: Die Gruppe der Position als Positionsnotiz, im
+    AssociatedDocumentLineDocument NACH LineID (CII-Sequenz). EN 16931 kennt
+    keine Zwischensummen, deshalb steht die Gruppe hier und nirgends als
+    Rechenzeile. Ohne Gruppe kein Element (kein leeres IncludedNote)."""
+    gruppe = (getattr(item, "gruppe", None) or "").strip()
+    if not gruppe:
+        return ""
+    return f"""
+                <ram:IncludedNote>
+                    <ram:Content>Gruppe: {_esc(gruppe)}</ram:Content>
+                </ram:IncludedNote>"""
+
+
 def _line_items_xml(invoice: Invoice) -> str:
     inv_cat = getattr(invoice, "tax_category", "S")
     parts = []
@@ -139,7 +153,7 @@ def _line_items_xml(invoice: Invoice) -> str:
         parts.append(f"""
         <ram:IncludedSupplyChainTradeLineItem>
             <ram:AssociatedDocumentLineDocument>
-                <ram:LineID>{item.position}</ram:LineID>
+                <ram:LineID>{item.position}</ram:LineID>{_line_note_xml(item)}
             </ram:AssociatedDocumentLineDocument>
             <ram:SpecifiedTradeProduct>{_seller_item_id_xml(item)}
                 <ram:Name>{_esc(item.description)}</ram:Name>

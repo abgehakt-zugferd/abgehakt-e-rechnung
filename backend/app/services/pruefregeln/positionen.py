@@ -5,6 +5,7 @@ pruefen Befund-Listen, diese Reihenfolge ist Vertragsbestandteil.
 """
 from decimal import Decimal, ROUND_HALF_UP
 
+from app.services import belegsperre
 from app.services.einheiten import UnknownUnitError, resolve_einheit
 from app.services.pruefregeln.befund import Issue
 from app.services.pruefregeln.kontext import Pruefkontext
@@ -17,13 +18,28 @@ def pruefe_positionen(kontext: Pruefkontext) -> list[Issue]:
     if not items:
         return [Issue("NO_ITEMS", "error", "Keine Rechnungspositionen vorhanden.", "items")]
     befunde: list[Issue] = []
+    erstattung_zulaessig = _erstattung_zulaessig(kontext)
     for item in items:
-        befunde.extend(_pruefe_felder(kontext, item))
+        befunde.extend(_pruefe_felder(kontext, item, erstattung_zulaessig))
         befunde.extend(_pruefe_betraege(kontext, item))
+    befunde.extend(_pruefe_gruppen(kontext, items))
     return befunde
 
 
-def _pruefe_felder(kontext: Pruefkontext, item) -> list[Issue]:
+def _erstattung_zulaessig(kontext: Pruefkontext) -> bool:
+    """Festlegung 11: Ein negativer Einzelpreis ist zulaessig NUR bei einer
+    Standardrechnung (380) aus einem signierten Beleg — eine Erstattung im
+    Abrechnungsmonat — und solange die Rechnungssumme netto positiv bleibt.
+    Jede andere Konstellation (manuelle Rechnung, Gutschrift, Summe <= 0)
+    behaelt ITEM_PRICE_NEGATIVE."""
+    if kontext.belegart is None or kontext.belegart.bt3 != "380":
+        return False
+    if not belegsperre.gilt(kontext.invoice):
+        return False
+    return Decimal(str(getattr(kontext.invoice, "net_total", 0) or 0)) > 0
+
+
+def _pruefe_felder(kontext: Pruefkontext, item, erstattung_zulaessig: bool) -> list[Issue]:
     befunde: list[Issue] = []
     if not item.description or not item.description.strip():
         befunde.append(Issue(
@@ -43,7 +59,7 @@ def _pruefe_felder(kontext: Pruefkontext, item) -> list[Issue]:
             f"Position {item.position}: unbekannte Einheit {(item.unit or '')!r}.",
             f"items[{item.position}].unit",
         ))
-    if item.unit_price < 0:
+    if item.unit_price < 0 and not erstattung_zulaessig:
         befunde.append(Issue(
             "ITEM_PRICE_NEGATIVE", "error",
             f"Position {item.position}: Negativer Einzelpreis ist nicht erlaubt.", f"items[{item.position}].unit_price"
@@ -90,4 +106,33 @@ def _pruefe_betraege(kontext: Pruefkontext, item) -> list[Issue]:
             f"(gefunden {item.tax_amount}).",
             f"items[{item.position}].tax_amount",
         ))
+    return befunde
+
+
+def _pruefe_gruppen(kontext: Pruefkontext, items) -> list[Issue]:
+    """Positionen derselben Gruppe muessen aufeinanderfolgen (Entscheidung 3).
+
+    Nur am MANUELLEN Entwurf: Fuer Belege aus einem Auftrag erzwingt der Leser
+    den Zusammenhang, eine zweite Pruefung am gebundenen Beleg wiederholte nur
+    den Beleg. Fehler ist das KEHREN einer Gruppe nach einer anderen — zweimal
+    dieselbe Gruppe hintereinander ist der Normalfall, deshalb zaehlt der
+    Wechsel, nicht das Wiederkommen."""
+    if belegsperre.gilt(kontext.invoice):
+        return []
+    befunde: list[Issue] = []
+    gesehen: set[str] = set()
+    vorherige = None
+    for item in items:
+        gruppe = getattr(item, "gruppe", None)
+        if gruppe and gruppe != vorherige:
+            if gruppe in gesehen:
+                befunde.append(Issue(
+                    "POSITION_GRUPPE_GETRENNT", "error",
+                    f"Position {item.position}: Gruppe {gruppe!r} kehrt nach einer "
+                    f"anderen Gruppe zurück. Positionen einer Gruppe müssen "
+                    f"aufeinanderfolgen.",
+                    f"items[{item.position}].gruppe",
+                ))
+            gesehen.add(gruppe)
+        vorherige = gruppe
     return befunde

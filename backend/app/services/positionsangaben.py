@@ -6,7 +6,8 @@ lesen, für Bearbeiten und Vorlage zurückgeben, beim Storno kopieren. Jede Stat
 hatte ihre eigene Feldliste, und ein neues Feld ging an jeder einzeln verloren.
 Hier steht die Liste einmal.
 
-Derzeit: Artikelnummer (BT-155) und Leistungszeitraum (BT-134/135).
+Derzeit: Artikelnummer (BT-155), Leistungszeitraum (BT-134/135) und
+Positionsgruppe (BT-127, freier Anzeigetext).
 """
 import unicodedata
 from datetime import date
@@ -33,8 +34,15 @@ def aus_formular(roh: dict, nr: int) -> dict:
         raise PositionsangabeUngueltig(
             f"Position {nr}: Artikelnummer darf keine Steuerzeichen oder Zeilenumbrüche enthalten."
         )
+    gruppe = str(roh.get("gruppe") or "").strip()
+    if not _einzeilig_und_xml_tauglich(gruppe):
+        raise PositionsangabeUngueltig(
+            f"Position {nr}: Gruppe darf keine Steuerzeichen oder Zeilenumbrüche enthalten."
+        )
     von, bis = _zeitraum(roh, nr)
-    return {"artikelnummer": artikelnummer or None, "leistung_von": von, "leistung_bis": bis}
+    return {"artikelnummer": artikelnummer or None,
+            "gruppe": gruppe or None,
+            "leistung_von": von, "leistung_bis": bis}
 
 
 def _zeitraum(roh: dict, nr: int) -> tuple[date | None, date | None]:
@@ -82,6 +90,10 @@ def fuer_formular(item, *, vorlage: bool = False) -> dict:
     zeitraum = not vorlage
     return {
         "artikelnummer": item.artikelnummer or "",
+        # Die Gruppe ist wie die Artikelnummer Rechnungsinhalt und kein Bezug
+        # auf die alte Rechnung: Vorlage (und damit Ersatzrechnung) und Storno
+        # uebernehmen sie (Bauschritt 3).
+        "gruppe": getattr(item, "gruppe", None) or "",
         "leistung_von": item.leistung_von.isoformat() if zeitraum and item.leistung_von else "",
         "leistung_bis": item.leistung_bis.isoformat() if zeitraum and item.leistung_bis else "",
     }
@@ -91,6 +103,7 @@ def kopie(item) -> dict:
     """Spalten, die eine Storno-Position von ihrem Original übernimmt."""
     return {
         "artikelnummer": item.artikelnummer,
+        "gruppe": getattr(item, "gruppe", None),
         "leistung_von": item.leistung_von,
         "leistung_bis": item.leistung_bis,
     }

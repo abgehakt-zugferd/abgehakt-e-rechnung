@@ -27,6 +27,7 @@ GESPERRTE_FELDER = (
     "Netto-Beträge der Positionen",
     "Bemessungsgrundlage netto",
     "Beteiligungssatz",
+    "Gruppen der Positionen",
 )
 
 
@@ -67,6 +68,10 @@ def positionen_binden(invoice, rohe_positionen: list) -> list:
         bis = getattr(alt, "leistung_bis", None)
         neu["leistung_von"] = von.isoformat() if von else ""
         neu["leistung_bis"] = bis.isoformat() if bis else ""
+        # Die Gliederung in Gruppen stammt aus dem Beleg (Entscheidung 1:
+        # zusammen mit Betraegen und Leistungszeitraum gebunden). Ein anderer
+        # Gruppentext waere dieselbe Faellschung wie ein anderer Betrag.
+        neu["gruppe"] = getattr(alt, "gruppe", None) or ""
         gebunden.append(neu)
     return gebunden
 
