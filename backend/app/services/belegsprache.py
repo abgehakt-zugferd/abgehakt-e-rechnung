@@ -154,6 +154,9 @@ class Belegdarstellung:
     # Rechnungswortlaut, keine Fälligkeit. Der Keine-Rechnung-Satz grenzt
     # gegen § 14 UStG ab; die Zahlung ist die des Auszahlers, nicht eine
     # Forderung des Ausstellers.
+    titel_storno_aufstellung: str
+    label_original_aufstellung: str
+    label_original_anlagen: str
     titel_aufstellung: str
     label_aufstellungsnummer: str
     label_ausstellungsdatum: str
@@ -341,6 +344,9 @@ _DE = Belegdarstellung(
         "i.V.m. § 6a UStG."
     ),
     hinweis_o="Nicht im Steuergebiet des Ausstellers steuerbar gemäß § 3a Abs. 2 UStG.",
+    titel_storno_aufstellung="Stornierung der Abrechnungsaufstellung Nr. {nummer}",
+    label_original_aufstellung="Original vom:",
+    label_original_anlagen="Anlagen des Originals",
     titel_aufstellung="ABRECHNUNGSAUFSTELLUNG",
     label_aufstellungsnummer="Aufstellungsnummer:",
     label_ausstellungsdatum="Ausstellungsdatum:",
@@ -420,6 +426,9 @@ _EN = Belegdarstellung(
     hinweis_o=(
         "Not taxable in the supplier's territory under section 3a (2) UStG."
     ),
+    titel_storno_aufstellung="Cancellation of settlement statement no. {nummer}",
+    label_original_aufstellung="Original dated:",
+    label_original_anlagen="Attachments of the original",
     titel_aufstellung="SETTLEMENT STATEMENT",
     label_aufstellungsnummer="Statement number:",
     label_ausstellungsdatum="Date of issue:",

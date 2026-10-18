@@ -1,7 +1,7 @@
-"""Die zwei ersten Routen der Abrechnungsaufstellung (§ 8b, Bauschritt 7c).
+"""Handgriffe der Abrechnungsaufstellung (§ 8b, Bauschritte 7c bis 7e).
 
 Liste und Detailseiten kommen mit 7g — jetzt gibt es nur den Handgriff,
-der den Entwurf stellt, und den Weg zum archivierten PDF. Kein XML-Weg,
+der den Entwurf stellt, Versand, Storno und das archivierte PDF. Kein XML-Weg,
 kein E-Rechnungs-Endpoint: Die Aufstellung ist KEINE Rechnung.
 """
 import uuid
@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.models.aufstellung import Aufstellung
 from app.services.aufstellung_finalisieren import FinalisierenFehler, finalisieren
+from app.services.aufstellung_storno import StornoFehler
 
 router = APIRouter()
 settings = get_settings()
@@ -35,7 +36,7 @@ def finalisiere_aufstellung(aufstellung_id: uuid.UUID, db: Session = Depends(get
         raise HTTPException(404)
     try:
         finalisieren(db, aufstellung, settings)
-    except FinalisierenFehler as fehler:
+    except (FinalisierenFehler, StornoFehler) as fehler:
         # 400 mit Meldung: Der Mensch soll wissen, warum nichts gestellt
         # wurde — ein nackter Status waere "nochmal versuchen".
         raise HTTPException(400, str(fehler)) from fehler
@@ -56,3 +57,43 @@ def aufstellung_pdf_abrufen(aufstellung_id: uuid.UUID, db: Session = Depends(get
         raise HTTPException(404, "PDF-Datei nicht auf dem Server gefunden")
     return FileResponse(str(pfad), media_type="application/pdf",
                         filename=aufstellung.pdf_filename)
+
+
+@router.post("/{aufstellung_id}/an-buchhaltung")
+def an_buchhaltung(aufstellung_id: uuid.UUID, db: Session = Depends(get_db)):
+    from app.services.aufstellung_versand import VersandFehler, senden
+    from app.services.belegsprache import UnknownDocumentLanguageError
+    from app.services.mailtext import BetreffMitZeilenumbruchError
+
+    aufstellung = db.get(Aufstellung, aufstellung_id)
+    if not aufstellung:
+        raise HTTPException(404)
+    try:
+        senden(db, aufstellung, settings)
+    except (VersandFehler, UnknownDocumentLanguageError, BetreffMitZeilenumbruchError) as fehler:
+        raise HTTPException(400, str(fehler)) from fehler
+    return RedirectResponse(url=f"/aufstellungen/{aufstellung_id}", status_code=303)
+
+
+@router.post("/{aufstellung_id}/stornieren")
+def storniere_aufstellung(aufstellung_id: uuid.UUID, db: Session = Depends(get_db)):
+    from sqlalchemy.exc import IntegrityError
+    from app.services.aufstellung_storno import StornoFehler, entwurf_anlegen
+
+    original = db.get(Aufstellung, aufstellung_id)
+    if not original:
+        raise HTTPException(404)
+    try:
+        storno = entwurf_anlegen(db, original)
+        db.commit()
+    except StornoFehler as fehler:
+        db.rollback()
+        raise HTTPException(400, str(fehler)) from fehler
+    except IntegrityError as fehler:
+        db.rollback()
+        if getattr(getattr(fehler.orig, "diag", None), "constraint_name", None) != (
+            "uq_aufstellungen_ein_aktives_storno_pro_original"
+        ):
+            raise
+        raise HTTPException(400, "Zu dieser Aufstellung besteht bereits ein Storno.") from fehler
+    return RedirectResponse(url=f"/aufstellungen/{storno.id}", status_code=303)

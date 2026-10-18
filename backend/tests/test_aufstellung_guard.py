@@ -43,7 +43,6 @@ def _gestellt(pg_session, **over):
     ("draft", "issued"),
     ("draft", "discarded"),
     ("discarded", "draft"),
-    ("issued", "cancelled"),
 ])
 def test_erlaubte_uebergaenge(pg_session, von, nach):
     a = orm_aufstellung(status=von,
@@ -112,12 +111,14 @@ def test_inhalt_einer_gestellten_aufstellung_unveraenderlich(pg_session):
     pg_session.rollback()
 
 
-def test_stornieren_ist_der_einzige_weitere_uebergang(pg_session):
+def test_stornieren_ohne_finalisiertes_storno_verboten(pg_session):
     a = _gestellt(pg_session, schluessel=SCHLUESSEL)
 
     a.status = "cancelled"
     a.auftragsschluessel_offen = None
-    pg_session.commit()
+    with pytest.raises(AufstellungStateError):
+        pg_session.commit()
+    pg_session.rollback()
 
 
 def test_datev_sent_at_einmal_setzen(pg_session):

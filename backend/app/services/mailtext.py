@@ -74,9 +74,7 @@ _BUCHHALTUNG_RUMPF_DE = (
     "\n"
     "anbei erhalten Sie den Beleg {rechnungsnummer} zur Verbuchung.\n"
     "\n"
-    "Das Dokument enthält die strukturierten ZUGFeRD-Rechnungsdaten "
-    "(Factur-X EN16931) gemäß § 14 UStG.\n"
-    "\n"
+    "{rechnungsdaten}"
     "Mit freundlichen Grüßen\n"
     "{firma}"
 )
@@ -86,9 +84,7 @@ _BUCHHALTUNG_RUMPF_EN = (
     "\n"
     "please find attached document {rechnungsnummer} for booking.\n"
     "\n"
-    "The document contains the structured ZUGFeRD invoice data (Factur-X EN16931) "
-    "pursuant to section 14 of the German VAT Act (UStG).\n"
-    "\n"
+    "{rechnungsdaten}"
     "Kind regards\n"
     "{firma}"
 )
@@ -241,8 +237,28 @@ def buchhaltungsmail(invoice, company) -> Mailinhalt:
     """
     sprache = resolve_belegsprache(getattr(invoice, "document_language", None))
     werte = _werte(invoice, company, sprache)
+    hinweis = {
+        "de": "Das Dokument enthält die strukturierten ZUGFeRD-Rechnungsdaten "
+              "(Factur-X EN16931) gemäß § 14 UStG.\n\n",
+        "en": "The document contains the structured ZUGFeRD invoice data (Factur-X EN16931) "
+              "pursuant to section 14 of the German VAT Act (UStG).\n\n",
+    }
+    return _buchhaltungsmail(werte, company, sprache, hinweis[sprache])
+
+
+def aufstellung_buchhaltungsmail(aufstellung, company) -> Mailinhalt:
+    sprache = resolve_belegsprache(aufstellung.customer.belegsprache_vorgabe or "de")
+    werte = {"rechnungsnummer": aufstellung.nummer,
+             "firma": (company.name or "").strip() if company else ""}
+    # Die neutrale Schablone bleibt gemeinsam. Nur Rechnungen duerfen
+    # strukturierte Rechnungsdaten behaupten; die Aufstellung hat keine XML.
+    return _buchhaltungsmail(werte, company, sprache, "")
+
+
+def _buchhaltungsmail(werte, company, sprache, rechnungsdaten):
     betreff = _ersetze(_BUCHHALTUNG_BETREFF[sprache], werte)
     pruefe_betreff(betreff)
-    rumpf = _ohne_leerzeilen_am_ende(_ersetze(_BUCHHALTUNG_RUMPF[sprache], werte))
+    vorlage = _BUCHHALTUNG_RUMPF[sprache].replace("{rechnungsdaten}", rechnungsdaten)
+    rumpf = _ohne_leerzeilen_am_ende(_ersetze(vorlage, werte))
     rumpf = rumpf + _fuss(company, sprache) + "\n"
     return Mailinhalt(betreff=betreff, rumpf=rumpf)

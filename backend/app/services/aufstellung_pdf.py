@@ -86,9 +86,7 @@ def _darstellung(aufstellung) -> Belegdarstellung:
 
 
 def _story(aufstellung, d, fonts, rollen):
-    story = [TitleBand(_BREITE, d.titel_aufstellung, aufstellung.nummer,
-                      title_font=fonts["pixel"], number_font=fonts["retro"]),
-             Spacer(1, 0.6 * cm)]
+    story = [_titel(aufstellung, d, fonts), Spacer(1, 0.6 * cm)]
     story.append(_parteien(d, fonts, rollen))
     story.append(Spacer(1, 0.6 * cm))
     story.append(_kopf(aufstellung, d, fonts))
@@ -99,6 +97,18 @@ def _story(aufstellung, d, fonts, rollen):
     story.append(Spacer(1, 0.6 * cm))
     story.append(_keine_rechnung_hinweis(d, fonts))
     return story
+
+
+def _titel(aufstellung, d, fonts):
+    if aufstellung.original is None:
+        return TitleBand(_BREITE, d.titel_aufstellung, aufstellung.nummer,
+                         title_font=fonts["pixel"], number_font=fonts["retro"])
+    # Der vollstaendige Stornotitel ist zu lang fuer das einzeilige TitleBand.
+    # Ein Paragraph bricht ihn um, statt Nummer oder Rand zu uebermalen.
+    stil = ParagraphStyle("stornotitel", fontName=fonts["body_bold"],
+                          fontSize=13, leading=17, textColor=INK)
+    return Paragraph(escape(d.titel_storno_aufstellung.format(
+        nummer=aufstellung.original.nummer)), stil)
 
 
 def _adresse(partei) -> list[str]:
@@ -146,6 +156,9 @@ def _kopf(aufstellung, d, fonts) -> Table:
     im Entwurf fehlt die Zeile, statt eines erfundenen Datums.
     """
     zeilen = [(d.label_aufstellungsnummer, aufstellung.nummer)]
+    if aufstellung.original is not None:
+        zeilen.append((d.label_original_aufstellung,
+                       d.format_datum(aufstellung.original.ausstellungsdatum)))
     if aufstellung.ausstellungsdatum is not None:
         zeilen.append((d.label_ausstellungsdatum,
                        d.format_datum(aufstellung.ausstellungsdatum)))
@@ -219,7 +232,9 @@ def _anlagen(aufstellung, d, fonts) -> list:
     (pdf_fonts): Hex bleibt lesbar als das, was es ist. Als Paragraph bricht
     er in der Zeile, statt ueberzulaufen (rohe Tabellenzellen brechen nie).
     """
-    if not aufstellung.anlagen:
+    original = aufstellung.original
+    anlagen = original.anlagen if original is not None else aufstellung.anlagen
+    if not anlagen:
         return []
     kopf = ParagraphStyle("anlage_kopf", fontName=fonts["body_bold"], fontSize=8,
                           textColor=INK)
@@ -229,7 +244,7 @@ def _anlagen(aufstellung, d, fonts) -> list:
                                leading=10, textColor=INK)
     zeilen = [[d.label_quelle, d.label_dateiname, d.label_groesse_bytes]]
     sha_zeilen = []
-    for anlage in aufstellung.anlagen:
+    for anlage in anlagen:
         zeilen.append([
             Paragraph(escape(d.anlagenquelle(anlage.quelle)), stil),
             Paragraph(escape(anlage.dateiname), stil),
@@ -248,7 +263,8 @@ def _anlagen(aufstellung, d, fonts) -> list:
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ("LINEBELOW", (0, 0), (-1, 0), 0.6, INK),
     ] + [("SPAN", (0, r), (-1, r)) for r in sha_zeilen]))
-    return [Paragraph(f"<b>{escape(d.label_anlagen)}</b>", kopf),
+    label = d.label_original_anlagen if original is not None else d.label_anlagen
+    return [Paragraph(f"<b>{escape(label)}</b>", kopf),
             Spacer(1, 0.2 * cm), tabelle]
 
 

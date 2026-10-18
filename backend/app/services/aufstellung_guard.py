@@ -18,6 +18,8 @@ aber GoBD-gebunden wie einer — Entscheidung 8):
   - Aufstellungen werden NIE hard-gelöscht — auch keine Entwürfe.
   - Entwürfe (draft) und verworfene Entwürfe (discarded) bleiben frei
     bearbeitbar; discarded erklärt die Nummernlücke (Festlegung 18).
+    Ausnahme Storno: Originalbezug und dessen Werte bleiben gebunden,
+    eigene Anlagen sind schon im Entwurf verboten (Festlegung 17).
 
 Warum eine eigene Datei neben invoice_guard.py statt gemeinsame Maschinerie:
 Der invoice_guard ist rechnungsspezifisch durch und durch (bezahlt_am an
@@ -46,6 +48,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import get_history
 
 from app.models.aufstellung import Aufstellung, AufstellungAnlage
+from app.services.aufstellung_storno_guard import (
+    pruefe_storno, pruefe_aufhebung, pruefe_storno_anlage, pruefe_stornobezug,
+)
 
 FINALIZED: set[str] = {"issued", "cancelled"}
 
@@ -149,6 +154,11 @@ def _pruefe_forward_only(session: Session, obj: Aufstellung, attr: str, label: s
 
 
 def _before_flush(session: Session, flush_context, instances) -> None:
+    for obj in set(session.new) | set(session.dirty):
+        if isinstance(obj, Aufstellung):
+            pruefe_storno(session, obj, AufstellungStateError)
+        elif isinstance(obj, AufstellungAnlage):
+            pruefe_storno_anlage(session, obj, AufstellungStateError)
     neue: set = session.info.setdefault(_NEW_KEY, set())
     for obj in session.new:
         if isinstance(obj, Aufstellung):
@@ -159,7 +169,7 @@ def _before_flush(session: Session, flush_context, instances) -> None:
         if isinstance(obj, Aufstellung):
             raise AufstellungStateError(
                 "Aufstellungen dürfen nicht gelöscht werden (GoBD) — "
-                "Status 'cancelled' setzen oder Storno-Zeile erzeugen."
+                "Korrektur nur durch eine Storno-Zeile."
             )
         if isinstance(obj, AufstellungAnlage):
             raise AufstellungStateError(
@@ -175,51 +185,7 @@ def _before_flush(session: Session, flush_context, instances) -> None:
         if not session.is_modified(obj, include_collections=False):
             continue
 
-        old_status = _resolve_old_status(session, obj)
-        status_hist = get_history(obj, "status")
-
-        if status_hist.has_changes():
-            new_status = status_hist.added[0] if status_hist.added else None
-            if new_status not in ALLOWED_TRANSITIONS.get(old_status, set()):
-                raise AufstellungStateError(
-                    f"Illegaler Statusübergang {old_status!r} → {new_status!r}."
-                )
-            # Stellen heisst: mit Ausstellungsdatum. Es ist die einzige
-            # Pflicht, die erst beim Uebergang entsteht — ohne Datum waere
-            # der gestellte Beleg im Archiv undatiert.
-            if new_status == "issued" and obj.ausstellungsdatum is None:
-                raise AufstellungStateError(
-                    "Eine Aufstellung lässt sich nur mit Ausstellungsdatum stellen."
-                )
-
-        # Versandvermerk forward-only (Muster datev_sent_at, Bauschritt 5a):
-        # None → Zeitpunkt erlaubt, danach unveraenderlich.
-        _pruefe_forward_only(session, obj, "datev_sent_at", "datev_sent_at (Versandnachweis)")
-
-        # Sperre (Festlegung 12): nach dem Finalisieren nur GELEERT werden.
-        ao_hist = get_history(obj, "auftragsschluessel_offen")
-        if ao_hist.has_changes() and old_status in FINALIZED:
-            neuer_wert = ao_hist.added[0] if ao_hist.added else None
-            if neuer_wert is not None:
-                raise AufstellungStateError(
-                    "auftragsschluessel_offen darf nach dem Finalisieren nur "
-                    "geleert werden — Setzen oder Aendern sperrt einen "
-                    "Auftragsschluessel, der schon freigegeben oder von einem "
-                    "anderen Beleg belegt ist."
-                )
-
-        # Inhalt einer finalisierten Aufstellung ist unveränderlich
-        if old_status in FINALIZED:
-            for col_attr in obj.__mapper__.column_attrs:
-                key = col_attr.key
-                if key in MUTABLE_AFTER_FINALIZE:
-                    continue
-                if get_history(obj, key).has_changes():
-                    raise AufstellungStateError(
-                        f"Finalisierte Aufstellung ({old_status}) ist unveränderlich "
-                        f"(GoBD) — Feld {key!r} darf nicht geändert werden. "
-                        "Korrektur nur per Storno."
-                    )
+        _pruefe_aenderung(session, obj)
 
     # 3. Anlagen: Ändern (dirty) und Nachschieben (new) bei finalisierter
     #    Aufstellung verboten; Löschen immer (siehe 1.).
@@ -231,6 +197,61 @@ def _before_flush(session: Session, flush_context, instances) -> None:
     for obj in session.new:
         if isinstance(obj, AufstellungAnlage):
             _guard_anlage(session, obj, neue)
+
+
+def _pruefe_aenderung(session, obj):
+    pruefe_stornobezug(obj, AufstellungStateError)
+    old_status = _resolve_old_status(session, obj)
+    status_hist = get_history(obj, "status")
+
+    if status_hist.has_changes():
+        new_status = status_hist.added[0] if status_hist.added else None
+        if new_status not in ALLOWED_TRANSITIONS.get(old_status, set()):
+            raise AufstellungStateError(
+                f"Illegaler Statusübergang {old_status!r} → {new_status!r}."
+            )
+        if new_status == "cancelled":
+            pruefe_aufhebung(session, obj, AufstellungStateError)
+        # Stellen heisst: mit Ausstellungsdatum. Es ist die einzige
+        # Pflicht, die erst beim Uebergang entsteht — ohne Datum waere
+        # der gestellte Beleg im Archiv undatiert.
+        if new_status == "issued" and obj.ausstellungsdatum is None:
+            raise AufstellungStateError(
+                "Eine Aufstellung lässt sich nur mit Ausstellungsdatum stellen."
+            )
+
+    # Versandvermerk forward-only (Muster datev_sent_at, Bauschritt 5a):
+    # None → Zeitpunkt erlaubt, danach unveraenderlich.
+    _pruefe_forward_only(session, obj, "datev_sent_at", "datev_sent_at (Versandnachweis)")
+
+    _pruefe_inhalt(obj, old_status)
+
+
+def _pruefe_inhalt(obj, old_status):
+    # Sperre (Festlegung 12): nach dem Finalisieren nur GELEERT werden.
+    ao_hist = get_history(obj, "auftragsschluessel_offen")
+    if ao_hist.has_changes() and old_status in FINALIZED:
+        neuer_wert = ao_hist.added[0] if ao_hist.added else None
+        if neuer_wert is not None:
+            raise AufstellungStateError(
+                "auftragsschluessel_offen darf nach dem Finalisieren nur "
+                "geleert werden — Setzen oder Aendern sperrt einen "
+                "Auftragsschluessel, der schon freigegeben oder von einem "
+                "anderen Beleg belegt ist."
+            )
+
+    # Inhalt einer finalisierten Aufstellung ist unveränderlich
+    if old_status in FINALIZED:
+        for col_attr in obj.__mapper__.column_attrs:
+            key = col_attr.key
+            if key in MUTABLE_AFTER_FINALIZE:
+                continue
+            if get_history(obj, key).has_changes():
+                raise AufstellungStateError(
+                    f"Finalisierte Aufstellung ({old_status}) ist unveränderlich "
+                    f"(GoBD) — Feld {key!r} darf nicht geändert werden. "
+                    "Korrektur nur per Storno."
+                )
 
 
 def _clear_new_this_txn(session: Session) -> None:

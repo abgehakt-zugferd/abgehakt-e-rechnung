@@ -78,6 +78,11 @@ class Aufstellung(Base):
             unique=True,
             postgresql_where=text("auftragsschluessel_offen IS NOT NULL"),
         ),
+        Index(
+            "uq_aufstellungen_ein_aktives_storno_pro_original", "storniert_id",
+            unique=True,
+            postgresql_where=text("status <> 'discarded' AND storniert_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = _id_col
@@ -129,7 +134,7 @@ class Aufstellung(Base):
     # Erstversand an die Buchhaltung (Bauschritt 5a, Entscheidung 6): einmal
     # setzen, nie aendern (aufstellung_guard). Der Kunde hat hier keinen
     # eigenen Vermerk — die Aufstellung geht nur an die Buchhaltung
-    # (Entscheidung 9), der PDF-Weg des Kunden kommt mit Schritt 7d.
+    # (Entscheidung 9); auch Schritt 7d kennt keinen Kundenversand.
     datev_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     archive_until: Mapped[Optional[date]] = mapped_column(Date)
     # Storno als eigene Zeile (Festlegung 17): gesetzt an der Storno-Zeile,
@@ -143,6 +148,9 @@ class Aufstellung(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    original: Mapped[Optional["Aufstellung"]] = relationship(
+        "Aufstellung", remote_side=[_id_col], foreign_keys=[storniert_id],
+    )
     customer: Mapped["Customer"] = relationship("Customer")  # noqa: F821
     # KEIN delete-cascade: Anlagen sind Nachweise, ihre Zeile zu entfernen
     # waere Loeschen von Belegbestandteilen — verboten (Trigger und Guard).

@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.models.aufstellung import Aufstellung
 from app.models.company import Company
 from app.services import aufstellung_pdf, pdfa
+from app.services.aufstellung_storno import original_aufheben
 from app.services.archive_frist import berechne_archive_until
 from app.zeit import heute
 
@@ -60,6 +61,10 @@ def finalisieren(db: Session, aufstellung: Aufstellung, settings) -> Aufstellung
         aufstellung.archive_until = berechne_archive_until(stelltag)
         aufstellung.status = "issued"
         try:
+            # Kein Autoflush zwischen Storno und Original: Der Guard prueft
+            # beide Seiten gemeinsam; erst das archivierte Storno gibt frei.
+            with db.no_autoflush:
+                original_aufheben(db, aufstellung)
             db.commit()
         except Exception:
             # Erst Archiv, dann Commit — scheitert der Commit, wird das eben
