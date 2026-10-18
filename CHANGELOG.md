@@ -118,6 +118,9 @@ den Tag ihrer letzten Änderung (Migration 018, #130). Die Umsatzkennzahlen der
 - Feste Gruppen-ID 2000 für den Belegordner, Datenbankpasswörter fail-closed (#68).
 - Abbild auf aktuellem Debian-Sicherheitsstand (Ghostscript, curl) (#77, #151).
 - Der Testläufer räumt sein Wegwerf-Volume weg (#100).
+- Innerer Umbau ohne sichtbare Änderung: Rechnungs-Router, Prüfung, XML- und
+  PDF-Erzeugung und die Belegsprache sind in kleinere Module geteilt. Erzeugte
+  XML und PDF bleiben gleich (#161).
 
 ## v1.0.1 (2026-08-12)
 

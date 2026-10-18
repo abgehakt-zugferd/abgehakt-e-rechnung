@@ -47,7 +47,7 @@ backend/app/
 ├── config.py                 # Einstellungen aus .env (pydantic-settings)
 ├── database.py               # SQLAlchemy-Engine + get_db()
 ├── branding.py               # AGPL-§13-Hinweis im Footer (nicht abschaltbar)
-├── darstellung.py            # Zahlenformat der Oberfläche; Beleg-PDF über belegsprache.py
+├── darstellung.py            # Zahlenformat der Oberfläche; Beleg-PDF über belegsprache/
 ├── zeit.py                   # heute()/jetzt() fest Europe/Berlin (eine Uhr-Naht)
 ├── installation.py           # Installationstyp: Produktion vs. Ketten-Testinstanz
 ├── laender.py                # LAENDER (kuratiert) und ISO_LAENDER für die Landesauswahl
@@ -63,7 +63,7 @@ backend/app/
 ├── routers/                  # HTTP-Handler
 │   ├── setup.py              # Ersteinrichtung, Tor vor allem anderen
 │   ├── customers.py
-│   ├── invoices.py           # anlegen, bearbeiten, prüfen, finalisieren, senden
+│   ├── invoices/             # je Zweck ein Modul: Liste, Formular, Ansicht, Finalisieren, Versand, Storno
 │   ├── export.py             # GoBD-Datenexport (Z3)
 │   ├── archive.py            # Archivansicht storage/{pdfs,xml}
 │   ├── updates.py            # Update-Hinweis (nur auf Klick)
@@ -71,15 +71,16 @@ backend/app/
 │   ├── settings.py           # Firmendaten, SMTP-Test
 │   └── settings_mailtext.py  # Mailtext der Rechnungsmail je Sprache
 ├── services/                 # Fachlogik, framework-unabhängig
-│   ├── zugferd_xml.py        # CII-XML nach EN 16931
-│   ├── pdf_generator.py      # sichtbares PDF (ReportLab)
+│   ├── rechnung/             # Ablaufschritte der Rechnung: Prüfen, Finalisieren, Versenden, Storno
+│   ├── zugferd_xml/          # CII-XML nach EN 16931, je CII-Abschnitt ein Baustein
+│   ├── pdf_generator/        # sichtbares PDF (ReportLab), je Belegabschnitt ein Baustein
 │   ├── pdf_fonts.py          # Schriften registrieren; ohne Einbettung kein PDF/A-3
 │   ├── pdfa.py               # PDF/A-3 via Ghostscript
 │   ├── mustang.py            # Mustang-CLI als Subprozess
 │   ├── validator.py          # § 14 UStG, regelbasiert
 │   ├── einheiten.py          # fester Einheitenkatalog für Formular, Validator und CII
 │   ├── belegart.py           # Belegart → BT-3 TypeCode, manuelle Wählbarkeit
-│   ├── belegsprache.py       # Belegsprache de|en → PDF-Darstellung
+│   ├── belegsprache/         # Belegsprache de|en → PDF-Darstellung, Texte je Sprache
 │   ├── mailtext.py           # Betreff und Rumpf der Rechnungsmail je Belegsprache
 │   ├── invoice_number.py     # fortlaufende Nummern
 │   ├── customer_number.py    # Vorschlag für Kundennummern, überschreibbar

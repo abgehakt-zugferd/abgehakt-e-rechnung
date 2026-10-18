@@ -36,10 +36,10 @@ Alle Pfade unter `backend/app/`, sofern nicht anders angegeben.
 | Wenn Sie … | … schauen Sie in |
 |---|---|
 | eine Seite oder einen Knopf suchen | `routers/` (Routen) und `templates/` (Oberfläche) |
-| den Rechnungsablauf verstehen wollen | `routers/invoices.py`: Anlegen, Prüfen, Finalisieren, Versenden, Status, Storno |
+| den Rechnungsablauf verstehen wollen | `routers/invoices/` (Routen) und `services/rechnung/` (Prüfen, Finalisieren, Versenden, Storno) |
 | eine Pflichtangabe prüfen oder ergänzen | `services/validator.py` (Fehler sperren das Finalisieren) |
-| die E-Rechnung (CII-XML) ändern | `services/zugferd_xml.py` |
-| das PDF ändern | `services/pdf_generator.py`, `pdf_fuss.py`, `pdf_spalten.py`, `pdf_fonts.py` |
+| die E-Rechnung (CII-XML) ändern | `services/zugferd_xml/` |
+| das PDF ändern | `services/pdf_generator/`, `pdf_fuss.py`, `pdf_spalten.py`, `pdf_fonts.py` |
 | die PDF/A-Kette nachvollziehen | `services/pdfa.py` (Ghostscript), `services/mustang.py` (Einbetten, Validieren) |
 | Belegarten, Typcodes, Wählbarkeit | `services/belegart.py` |
 | Summen, Rundung, Abzug auf Belegebene | `services/belegsummen.py` |
@@ -48,7 +48,7 @@ Alle Pfade unter `backend/app/`, sofern nicht anders angegeben.
 | das Änderungsprotokoll | `services/audit.py` (schreiben), `aenderungsprotokoll.py` (anzeigen) |
 | Kennzahlen der Übersicht | `services/dashboard_kennzahlen.py`, `main.py` (Route `/dashboard`) |
 | Mailversand an Kunde und Buchhaltung | `services/datev_email.py`, `empfaenger.py`, `mailtext.py` |
-| Sprache und Beschriftungen des Belegs | `services/belegsprache.py` |
+| Sprache und Beschriftungen des Belegs | `services/belegsprache/` |
 | Steuerstatus des Kunden, Kategorie gegen Land | `services/steuerstatus.py`, `steuerkategorie_land.py` |
 | Rechnungs- und Kundennummern | `services/invoice_number.py`, `customer_number.py` |
 | GoBD-Export und Archiv | `services/gobd_export.py`, `routers/export.py`, `routers/archive.py`, `services/archive_frist.py` |

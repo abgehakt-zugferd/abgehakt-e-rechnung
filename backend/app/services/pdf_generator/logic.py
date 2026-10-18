@@ -146,7 +146,7 @@ def _gruppenzeilen(gruppe, run_items, d, waehrung, spalten, mit_steuer, desc_sty
     if gruppe:
         # Reine Addition der Positionsnetto, keine Rundung, kein Steueranteil:
         # Die Zwischensumme gliedert, sie ist keine eigene Postenart. Das
-        # Label steht in der Belegsprache (belegsprache.py).
+        # Label steht in der Belegsprache (belegsprache/).
         summe = sum((item.net_amount for item in run_items), Decimal("0"))
         rows.append(["", f"{d.label_zwischensumme} {gruppe}"] + [""] * (spalten - 3) + [d.format_betrag(summe, waehrung)])
     return rows

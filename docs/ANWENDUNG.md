@@ -45,7 +45,7 @@ Der Hinweiskasten der Seite sagt genau das, denn ein Entwurf trägt bereits die 
 Nummer und könnte sonst wie eine Rechnung wirken.
 
 Das Vorschau-PDF trägt deshalb diagonal den Stempel **ENTWURF**, bei englischem Beleg
-**DRAFT** (services/pdf_generator.py, `_draft_watermark`), und heißt
+**DRAFT** (services/pdf_generator/), und heißt
 `<Nummer>_ENTWURF.pdf`. Einem Entwurf ohne Kunde zeigt das Programm keine PDF-Vorschau:
 ohne Empfänger gibt es keine Anschrift, und die Meldung sagt, was zu tun ist. Die
 XML-Vorschau funktioniert auch ohne Kunden.
@@ -279,7 +279,7 @@ lässt sich also als Lesezeichen ablegen. Unbekannte Werte für Art, Frist oder 
 ignoriert; andere Filter bleiben wirksam. Ein unbekannter Status liefert eine leere Liste.
 
 Die Liste zeigt höchstens 50 Belege je Seite (Konstante `SEITENGROESSE` in
-routers/invoices.py). Darunter steht die Gesamtzahl, in der Datenbank gezählt und nicht
+routers/invoices/liste.py). Darunter steht die Gesamtzahl, in der Datenbank gezählt und nicht
 auf der angezeigten Seite, und bei mehreren Seiten blättern Sie mit **ZURÜCK** und
 **WEITER**; die gesetzten Filter bleiben dabei stehen.
 
@@ -436,7 +436,7 @@ solcher Beleg lässt sich dann aber auch nicht stornieren: die Gutschrift müsst
 unbekannte Einheit unverändert übernehmen und wäre weder bearbeitbar noch finalisierbar.
 Das Programm lehnt deshalb vorab ab und nennt Position und Einheit, statt eine
 Rechnungsnummer für einen Entwurf zu verbrauchen, der nie fertig wird (Storno-Route in
-routers/invoices.py).
+routers/invoices/storno_entwurf.py).
 
 ### Artikel- oder Leistungsnummer
 
@@ -785,7 +785,7 @@ Kasten verlinkt sie.
 **Eine Rechnung mit unbekannter Einheit lässt sich nicht stornieren.**
 Die Gutschrift erbt die Einheiten des Originals unverändert; kennt der Katalog eine davon
 nicht, wäre der Entwurf weder bearbeitbar noch finalisierbar. Das Programm lehnt deshalb
-vorab ab und nennt Position und Einheit (Storno-Route in routers/invoices.py); die
+vorab ab und nennt Position und Einheit (Storno-Route in routers/invoices/storno_entwurf.py); die
 Einheit muss im Beleg berichtigt werden, und der Stornoweg bietet dafür keinen Eingriff.
 
 **Sie können ein storniertes Original nicht als bezahlt markieren.**
@@ -881,7 +881,7 @@ Kunde, Positionen samt Einheiten und Steuersätzen, Abzug mit Grund, Steuerkateg
 Bestellnummer und Referenz des Kunden, Leistungsdatum und Leistungszeitraum,
 Zahlungsbedingungen, Bemerkung, Belegsprache und die Belegart des Originals. Anders als bei
 einer Vorlage gehört der Abzug dazu: die Ersatzrechnung erbringt dieselbe Leistung, die
-einmalige Anrechnung gilt weiter (routers/invoices.py, `_vorbelegung_aus` mit
+einmalige Anrechnung gilt weiter (routers/invoices/, `vorbelegung_aus` mit
 `mit_abzug=True`). Rechnungs- und Fälligkeitsdatum setzt das Formular wie bei jeder neuen
 Rechnung auf heute beziehungsweise heute plus 14 Tage; beide können Sie ändern.
 

@@ -142,7 +142,7 @@ class Invoice(Base):
         String(2), nullable=False, default="de", server_default="de"
     )
     # P7: TypeCode für ZUGFeRD (380=Rechnung, 381=Gutschrift/Storno, 384=Korrektur, 389=Gutschriftverfahren)
-    # Wird in zugferd_xml.py verwendet, um den richtigen TypeCode zu setzen
+    # Wird in zugferd_xml/ verwendet, um den richtigen TypeCode zu setzen
     invoice_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
     # Herkunft aus einem signierten Uebergabebeleg (#22). Gesetzt heisst: die
     # Betraege, der Beteiligte und der Leistungszeitraum stammen aus einem Beleg,

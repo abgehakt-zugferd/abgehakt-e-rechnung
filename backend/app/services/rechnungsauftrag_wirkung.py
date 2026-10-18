@@ -124,7 +124,7 @@ def entwurf_anlegen(
         # deshalb wird hier nicht gerundet - wie bei der 389 (#163). Ein
         # negativer Einzelpreis ist bei einer 380 aus einem Auftrag
         # zulaessig (Festlegung 11, pruefregeln/positionen.py); in der XML
-        # traegt die Menge das Vorzeichen (BR-27, zugferd_xml.py).
+        # traegt die Menge das Vorzeichen (BR-27, zugferd_xml/).
         netto = Decimal(str(position["netto"]))
         db.add(InvoiceItem(
             invoice_id=entwurf.id,
