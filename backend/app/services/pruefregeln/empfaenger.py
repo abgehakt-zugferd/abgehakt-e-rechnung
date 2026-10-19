@@ -1,6 +1,7 @@
 """§ 14 Abs. 4 Nr. 1 UStG – Leistungsempfänger."""
 from decimal import Decimal
 
+from app.services.kunde_zuordenbar import MELDUNG_DEAKTIVIERT, MELDUNG_NICHT_ZUORDENBAR, ist_zuordenbar
 from app.services.pruefregeln.befund import Issue
 from app.services.pruefregeln.kontext import Pruefkontext
 from app.services.pruefregeln.ust_id import ust_id_befunde
@@ -14,6 +15,13 @@ def pruefe_leistungsempfaenger(kontext: Pruefkontext) -> list[Issue]:
     customer = invoice.customer
     if not customer:
         return [Issue("BUYER_MISSING", "error", "Kein Kunde zugeordnet.", "customer_id")]
+    if not ist_zuordenbar(customer):
+        text = (
+            MELDUNG_DEAKTIVIERT
+            if getattr(customer, "deleted_at", None) is None and not customer.is_active
+            else MELDUNG_NICHT_ZUORDENBAR
+        )
+        return [Issue("BUYER_NOT_ASSIGNABLE", "error", text, "customer_id")]
     befunde: list[Issue] = []
     if not customer.name or not customer.name.strip():
         befunde.append(Issue("BUYER_NAME_MISSING", "error", "Name des Kunden fehlt.", "customer.name"))

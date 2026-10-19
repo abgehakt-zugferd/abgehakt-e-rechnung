@@ -26,6 +26,12 @@ from app.services.archive_frist import berechne_archive_until
 from app.services.belegart import InvoiceTypeNotSelectable, manuelle_belegart
 from app.services.belegsummen import Belegsummen, belegsummen
 from app.services.ersatzrechnung import ErsatzNichtMoeglich, pruefe_ersetzbar
+from app.services.kunde_zuordenbar import (
+    Zuordnung,
+    kennung_aufloesen,
+    meldung_fuer,
+    zuordenbare_kunden,
+)
 from app.services.leistungszeit import parse_leistungszeit_from_form
 
 
@@ -99,12 +105,16 @@ def summen_schreiben(
 
 def waehlbare_kunden(db: Session) -> list[Customer]:
     """Kunden, die das Formular zur Auswahl anbietet (nicht gelöscht, aktiv)."""
-    return (
-        db.query(Customer)
-        .filter(Customer.deleted_at.is_(None), Customer.is_active == True)  # noqa: E712
-        .order_by(Customer.name)
-        .all()
-    )
+    return zuordenbare_kunden(db)
+
+
+def kunde_zuordnung_pruefen(db: Session, customer_id) -> None:
+    """Hand-gesendete kunde_id: nur zuordenbare Kunden, sonst fachliche Absage."""
+    if customer_id is None:
+        return
+    lage, _kunde = kennung_aufloesen(db, customer_id)
+    if lage is not Zuordnung.ZUORDENBAR:
+        raise HTTPException(400, meldung_fuer(lage))
 
 
 def leerer_formularzustand() -> SimpleNamespace:
@@ -207,6 +217,7 @@ FRIST_ODER_BEDINGUNGEN_FEHLT = (
 def kopfdaten_lesen(db: Session, form, company: Company) -> dict:
     """Kopffelder der Neuanlage als Invoice-Argumente; alle Prüfungen vor der Nummernvergabe."""
     customer_id = kunde_id(form)
+    kunde_zuordnung_pruefen(db, customer_id)
     issue_date = date.fromisoformat(form.get("issue_date"))
     due_date = faelligkeit_aus_form(form)
     leistungszeit = parse_leistungszeit_from_form(form)
