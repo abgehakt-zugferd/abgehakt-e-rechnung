@@ -204,6 +204,57 @@
         </div>
         </div>
 
+        <div class="card space-y-4">
+            <h2>VORGABEN FÜR RECHNUNGEN</h2>
+            <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.4;">
+                Diese Vorgaben gelten für neue Rechnungsentwürfe an diesen Kunden und werden
+                beim Anlegen übernommen. Bereits erstellte Belege bleiben unverändert.
+            </p>
+            <div>
+                <label class="label">Steuervorgabe für Rechnungsaufträge</label>
+                {% set steuer = (customer.auftrag_steuer if customer else values.get('auftrag_steuer')) or '' %}
+                <select name="auftrag_steuer" class="input">
+                    <option value="" {% if not steuer %}selected{% endif %}>Keine Vorgabe</option>
+                    <option value="AE" {% if steuer == 'AE' %}selected{% endif %}>AE – Steuerschuldnerschaft des Leistungsempfängers</option>
+                </select>
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                    Steuer für Rechnungen aus Rechnungsaufträgen; AE heißt Steuerschuldnerschaft
+                    des Leistungsempfängers. Verlangt eine USt-IdNr. des Kunden.
+                </p>
+            </div>
+            <div>
+                <label class="label">Kopftext</label>
+                <textarea name="kopftext" rows="3" class="input" placeholder="Erscheint auf der Rechnung über den Positionen">{{ (customer.kopftext if customer else values.get('kopftext','')) or '' }}</textarea>
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                    Platzhalter <span class="font-mono">{leistungsmonat}</span> wird zu MM/JJJJ des Leistungszeitraums.
+                </p>
+            </div>
+            <div>
+                <label class="label">Fußtext</label>
+                <textarea name="fusstext" rows="3" class="input" placeholder="Erscheint auf der Rechnung unter dem Summenblock">{{ (customer.fusstext if customer else values.get('fusstext','')) or '' }}</textarea>
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                    Platzhalter <span class="font-mono">{leistungsmonat}</span> wird zu MM/JJJJ des Leistungszeitraums.
+                    Den Reverse-Charge-Vermerk druckt das Programm selbst; hier nicht wiederholen.
+                </p>
+            </div>
+            <div>
+                <label class="label">Zahlungshinweis</label>
+                <textarea name="zahlungshinweis" rows="2" class="input" placeholder="z. B. Zahlung nach Auszahlungsbericht">{{ (customer.zahlungshinweis if customer else values.get('zahlungshinweis','')) or '' }}</textarea>
+                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                    Setzt bei neuen Rechnungen dieses Kunden die Zahlungsbedingungen, solange dort nichts anderes eingetragen wird.
+                </p>
+            </div>
+            <div>
+                <label class="label">Belegsprache</label>
+                {% set sprache = (customer.belegsprache_vorgabe if customer else values.get('belegsprache_vorgabe')) or '' %}
+                <select name="belegsprache_vorgabe" class="input">
+                    <option value="" {% if not sprache %}selected{% endif %}>Keine Vorgabe (wie im Rechnungsformular gewählt)</option>
+                    <option value="de" {% if sprache == 'de' %}selected{% endif %}>Deutsch</option>
+                    <option value="en" {% if sprache == 'en' %}selected{% endif %}>Englisch</option>
+                </select>
+            </div>
+        </div>
+
         <div style="display:flex; gap:12px;">
             <button type="submit" class="btn-primary">SPEICHERN</button>
             <a href="/customers" class="btn-secondary">ABBRECHEN</a>

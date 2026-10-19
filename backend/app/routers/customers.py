@@ -116,18 +116,24 @@ def new_customer_form(request: Request, db: Session = Depends(get_db)):
     return response
 
 
-def _kunde_anlegen(request, db, *, number, values, bank, stamm, steuer, vat_id):
+def _kunde_anlegen(request, db, *, number, values, bank, stamm, steuer, vorgaben, vat_id):
     bank_felder, bank_fehler = bank
     if bank_fehler:
         return _render_form(request, None, number, values, bank_fehler)
     cc_fehler = empfaenger.pruefe(stamm["cc_emails"])
     if cc_fehler:
         return _render_form(request, None, number, values, cc_fehler)
+    vorgaben_fehler = kform.vorgaben_pruefen(
+        vorgaben["auftrag_steuer"], vorgaben["belegsprache_vorgabe"],
+    )
+    if vorgaben_fehler:
+        return _render_form(request, None, number, values, vorgaben_fehler)
     if _number_taken(db, number):
         return _render_form(request, None, number, values,
                             f"Kundennummer bereits vergeben: {number}")
     customer = Customer(customer_number=number)
     _stammdaten_und_steuer(customer, **stamm, **steuer)
+    kform.vorgaben_speichern(customer, **vorgaben)
     kform.bank_speichern(customer, bank_felder)
     _, ust_fehler = _ust_id_verarbeiten(customer, vat_id)
     if ust_fehler:
@@ -154,6 +160,9 @@ def create_customer(
     email: str = Form(""), cc_emails: str = Form(""), phone: str = Form(""),
     bank_iban: str = Form(""), bank_bic: str = Form(""), bank_name: str = Form(""),
     notes: str = Form(""), is_active: str = Form("1"),
+    auftrag_steuer: str = Form(""), kopftext: str = Form(""),
+    fusstext: str = Form(""), zahlungshinweis: str = Form(""),
+    belegsprache_vorgabe: str = Form(""),
 ):
     number = customer_number.strip() or next_customer_number(db)
     values = kform.formularwerte(
@@ -162,6 +171,8 @@ def create_customer(
         country=country, vat_id=vat_id, tax_number=tax_number,
         ust_status=ust_status, gutschriftempfaenger=gutschriftempfaenger,
         email=email, phone=phone, notes=notes, cc_emails=cc_emails,
+        auftrag_steuer=auftrag_steuer, kopftext=kopftext, fusstext=fusstext,
+        zahlungshinweis=zahlungshinweis, belegsprache_vorgabe=belegsprache_vorgabe,
     )
     bank = kform.bank_felder(bank_iban, bank_bic, bank_name)
     values.update(bank[0])
@@ -174,9 +185,13 @@ def create_customer(
         ust_status=ust_status, gutschriftempfaenger=gutschriftempfaenger,
         tax_number=tax_number,
     )
+    vorgaben = dict(
+        auftrag_steuer=auftrag_steuer, kopftext=kopftext, fusstext=fusstext,
+        zahlungshinweis=zahlungshinweis, belegsprache_vorgabe=belegsprache_vorgabe,
+    )
     return _kunde_anlegen(
         request, db, number=number, values=values, bank=bank,
-        stamm=stamm, steuer=steuer, vat_id=vat_id,
+        stamm=stamm, steuer=steuer, vorgaben=vorgaben, vat_id=vat_id,
     )
 
 
@@ -194,18 +209,24 @@ def edit_customer_form(customer_id: uuid.UUID, request: Request, db: Session = D
     )
 
 
-def _kunde_aktualisieren(request, db, customer, *, number, bank, stamm, steuer, vat_id):
+def _kunde_aktualisieren(request, db, customer, *, number, bank, stamm, steuer, vorgaben, vat_id):
     bank_felder, bank_fehler = bank
     if bank_fehler:
         return _render_form(request, customer, "", bank_felder, bank_fehler)
     cc_fehler = empfaenger.pruefe(stamm["cc_emails"])
     if cc_fehler:
         return _render_form(request, customer, "", {}, cc_fehler)
+    vorgaben_fehler = kform.vorgaben_pruefen(
+        vorgaben["auftrag_steuer"], vorgaben["belegsprache_vorgabe"],
+    )
+    if vorgaben_fehler:
+        return _render_form(request, customer, "", {}, vorgaben_fehler)
     if number != customer.customer_number and _number_taken(db, number, exclude_id=customer.id):
         return _render_form(request, customer, "", {},
                             f"Kundennummer bereits vergeben: {number}")
     customer.customer_number = number
     _stammdaten_und_steuer(customer, **stamm, **steuer)
+    kform.vorgaben_speichern(customer, **vorgaben)
     kform.bank_speichern(customer, bank_felder)
     _, ust_fehler = _ust_id_verarbeiten(customer, vat_id)
     if ust_fehler:
@@ -233,6 +254,9 @@ def update_customer(
     email: str = Form(""), cc_emails: str = Form(""), phone: str = Form(""),
     bank_iban: str = Form(""), bank_bic: str = Form(""), bank_name: str = Form(""),
     notes: str = Form(""), is_active: str = Form("1"),
+    auftrag_steuer: str = Form(""), kopftext: str = Form(""),
+    fusstext: str = Form(""), zahlungshinweis: str = Form(""),
+    belegsprache_vorgabe: str = Form(""),
 ):
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
@@ -246,11 +270,15 @@ def update_customer(
         ust_status=ust_status, gutschriftempfaenger=gutschriftempfaenger,
         tax_number=tax_number,
     )
+    vorgaben = dict(
+        auftrag_steuer=auftrag_steuer, kopftext=kopftext, fusstext=fusstext,
+        zahlungshinweis=zahlungshinweis, belegsprache_vorgabe=belegsprache_vorgabe,
+    )
     return _kunde_aktualisieren(
         request, db, customer,
         number=customer_number.strip() or customer.customer_number,
         bank=kform.bank_felder(bank_iban, bank_bic, bank_name),
-        stamm=stamm, steuer=steuer, vat_id=vat_id,
+        stamm=stamm, steuer=steuer, vorgaben=vorgaben, vat_id=vat_id,
     )
 
 

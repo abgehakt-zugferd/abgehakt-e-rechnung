@@ -148,8 +148,8 @@ def _gobd_zip(tmp_path, inv) -> zipfile.ZipFile:
     c.id = uuid.uuid4()
     inv.customer = c
     data = build_gobd_export(
-        invoices=[inv], customers=[c], audit_rows=[], storage_path=tmp_path,
-        date_from=date(2026, 1, 1), date_to=date(2026, 12, 31),
+        invoices=[inv], customers=[c], audit_rows=[], uebergaben=[],
+        storage_path=tmp_path, date_from=date(2026, 1, 1), date_to=date(2026, 12, 31),
     )
     return zipfile.ZipFile(io.BytesIO(data))
 

@@ -76,12 +76,12 @@ def valid_draft(pg_session, *, prefix="RE-FC"):
 def patched_success_pipeline(*, combine=fake_combine, validate=None):
     """Standard-Patches fuer einen erfolgreichen Finalize-Lauf."""
     mustang = validate if validate is not None else valid_mustang()
-    with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
-         patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
-         patch("app.routers.invoices.pdfa.to_pdfa3", return_value=True), \
-         patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.combine", side_effect=combine), \
-         patch("app.routers.invoices.mustang.validate", return_value=mustang):
+    with patch("app.services.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
+         patch("app.services.pdfa.gs_available", return_value=True), \
+         patch("app.services.pdfa.to_pdfa3", return_value=True), \
+         patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.combine", side_effect=combine), \
+         patch("app.services.mustang.validate", return_value=mustang):
         yield
 
 

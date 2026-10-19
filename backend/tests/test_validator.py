@@ -12,7 +12,7 @@ Abgedeckte Regeln:
   § 33 UStDV (Kleinbetragsregelung).
 """
 import pytest
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import date
 
 from app.services.validator import validate_invoice, Issue
@@ -154,6 +154,25 @@ def test_exactly_10000_no_warning():
     inv = _invoice(gross_total=Decimal("10000.00"), customer=_customer(vat_id=None))
     _, warnings = validate_invoice(inv, _company())
     assert "HIGH_VALUE_NO_BUYER_VAT_ID" not in _codes(warnings)
+
+
+@pytest.mark.parametrize("brutto,warnt", [
+    (Decimal("9999.99"), False),   # knapp unter der Grenze
+    (Decimal("10000.00"), False),  # genau die Grenze: der Vergleich in pruefregeln/empfaenger.py ist strikt
+    (Decimal("10000.01"), True),   # der erste Cent darüber
+])
+def test_zehntausend_grenze_liegt_genau_beim_vergleich_der_regel(brutto, warnt):
+    """Die Regel in pruefregeln/empfaenger.py lautet brutto > 10.000, ohne USt-IdNr.
+    des Empfängers: Warnung. Genau 10.000,00 € warnen deshalb NICHT, der erste
+    Cent darüber schon. Erst die drei Werte zusammen beweisen, dass die Grenze
+    dort liegt, wo sie die Regel nennt, und nicht auf der anderen Seite oder
+    einen Cent daneben.
+    """
+    inv = _invoice(gross_total=brutto, customer=_customer(vat_id=None))
+
+    _, warnings = validate_invoice(inv, _company())
+
+    assert ("HIGH_VALUE_NO_BUYER_VAT_ID" in _codes(warnings)) is warnt
 
 
 # ── Tests: Rechnungsdaten ──────────────────────────────────────────────────
@@ -356,6 +375,28 @@ def test_item_quantity_zero():
     """BR-22: Menge 0 → ITEM_QUANTITY_INVALID."""
     errors, _ = validate_invoice(_invoice(items=[_item(quantity=Decimal("0"))]), _company())
     assert "ITEM_QUANTITY_INVALID" in _codes(errors)
+
+
+@pytest.mark.parametrize("menge,ungueltig", [
+    (Decimal("0.0000"), True),    # die Grenze selbst: die Regel in pruefregeln/positionen.py ist menge <= 0
+    (Decimal("0.0001"), False),   # der kleinste Wert darüber kommt durch
+])
+def test_menge_null_ist_der_rand_und_jeder_wert_darueber_gilt(menge, ungueltig):
+    """Die Regel in pruefregeln/positionen.py verwirft menge <= 0. Menge 0 ist
+    der Rand selbst und faellt, der kleinste Wert darüber gilt. Beides zusammen
+    pinnt den Vergleich an der Stelle, an der ihn die Regel nennt: Ein strikteres
+    als <= wuerde gueltige Positionen verwerfen, ein laxeres die 0 durchlassen.
+    """
+    netto = (menge * Decimal("100.00")).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    steuer = (netto * Decimal("19") / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    item = _item(quantity=menge, net_amount=netto, tax_amount=steuer,
+                  gross_amount=netto + steuer)
+    inv = _invoice(items=[item], net_total=netto, tax_total=steuer,
+                   gross_total=netto + steuer)
+
+    errors, _ = validate_invoice(inv, _company())
+
+    assert ("ITEM_QUANTITY_INVALID" in _codes(errors)) is ungueltig
 
 
 def test_item_quantity_negative():

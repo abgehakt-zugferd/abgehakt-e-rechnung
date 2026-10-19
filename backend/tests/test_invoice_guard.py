@@ -144,6 +144,39 @@ def test_datev_sent_at_overwrite_forbidden(pg_session):
     pg_session.rollback()
 
 
+def test_kunde_zugestellt_am_settable_on_issued(pg_session):
+    """Erstzustellung an den Kunden (Bauschritt 5a, Entscheidung 6): dasselbe
+    Muster wie datev_sent_at — an einer gestellten Rechnung darf der Vermerk
+    nachgetragen werden, denn die Zustellung passiert erst nach dem Finalisieren."""
+    inv = _invoice(pg_session, status="issued")
+    inv.kunde_zugestellt_am = datetime.now(timezone.utc)
+    pg_session.commit()
+    assert inv.kunde_zugestellt_am is not None
+
+
+def test_kunde_zugestellt_am_clear_forbidden(pg_session):
+    """Einmal gesetzt, darf der Zustellvermerk nicht geleert werden — sonst
+    ließe sich die Zustellung an den Kunden nachträglich verleugnen."""
+    inv = _invoice(pg_session, status="issued")
+    inv.kunde_zugestellt_am = datetime.now(timezone.utc)
+    pg_session.commit()
+    inv.kunde_zugestellt_am = None
+    with pytest.raises(InvoiceStateError):
+        pg_session.commit()
+    pg_session.rollback()
+
+
+def test_kunde_zugestellt_am_overwrite_forbidden(pg_session):
+    """Und nicht umdatieren: der Vermerk ist ein Nachweis, keine Bearbeitung."""
+    inv = _invoice(pg_session, status="issued")
+    inv.kunde_zugestellt_am = datetime(2026, 6, 1, 10, 0, tzinfo=timezone.utc)
+    pg_session.commit()
+    inv.kunde_zugestellt_am = datetime(2026, 7, 1, 10, 0, tzinfo=timezone.utc)
+    with pytest.raises(InvoiceStateError):
+        pg_session.commit()
+    pg_session.rollback()
+
+
 def test_create_as_issued_then_populate_in_same_txn_is_allowed(pg_session):
     """Storno-/Import-Muster: Rechnung als 'issued' anlegen → flush → zugferd_xml
     setzen → commit, alles in EINER Transaktion. Das ist Erstellung, kein Eingriff

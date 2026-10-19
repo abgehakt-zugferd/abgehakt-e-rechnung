@@ -8,10 +8,10 @@ Name wird als abgeleitete Sicht weitergereicht (kein zweites Mapping).
 
 Zwei reale Adapter lesen aus derselben Beschreibung: die XML schreibt BT-3,
 das PDF den Titel ueber Belegdarstellung.titel(intern); das Formular hat
-zusaetzlich eine engere Auswahl (manuelle Waehlbarkeit). 381/384/389 sind
-allgemein gueltige Codes, aber keine manuelle Wahl: Gutschrift/Storno entsteht
-im Stornoweg, 389 im Integrationsweg aus signierten Uebergabebelegen, 384 ist
-systemreserviert.
+zusaetzlich eine engere Auswahl (manuelle Waehlbarkeit). 381/384 und das
+389-Storno sind Systembelege. 389 entsteht entweder manuell
+oder im Integrationsweg aus signierten Uebergabebelegen; dort bleiben die
+gebundenen Felder durch die Herkunft gesperrt.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ class UnknownInvoiceTypeError(ValueError):
 class InvoiceTypeNotSelectable(ValueError):
     """Formularwert ist keine manuell waehlbare Belegart.
 
-    Eine eigene Pruefung, kein Nebenprodukt der Typtabelle: 381 und 389 sind
+    Eine eigene Pruefung, kein Nebenprodukt der Typtabelle: 381 und 384 sind
     allgemein gueltige Codes, Mitgliedschaft in TYPE_CODE_MAP wuerde sie als
     manuelle Wahl durchlassen. Der Fehlercode steht im Text, damit er in der
     HTTP-400-Antwort sichtbar ist.
@@ -38,8 +38,8 @@ class InvoiceTypeNotSelectable(ValueError):
         self.wert = wert
         super().__init__(
             f"{self.code}: Belegart {wert!r} ist nicht manuell waehlbar. "
-            "Waehlbar sind nur Standardrechnung und Anzahlungsrechnung; "
-            "Gutschrift, Korrektur und Gutschriftverfahren entstehen auf "
+            "Waehlbar sind Standardrechnung, Anzahlungsrechnung und Honorargutschrift; "
+            "Storno und Korrektur entstehen auf "
             "ihren eigenen Wegen."
         )
 
@@ -87,6 +87,15 @@ _KORREKTUR = Belegart(
 )
 _SELF_BILLING = Belegart(
     intern="self_billing", bt3="389",
+    manuell_waehlbar=True, form_wert="honorargutschrift",
+    label="Honorargutschrift (Gutschriftverfahren)",
+    braucht_original=False,
+)
+
+# vorläufig, Prüfung durch Steuerberatung offen (#156)
+SELF_BILLING_STORNO_BT3 = "261"
+_SELF_BILLING_STORNO = Belegart(
+    intern="self_billing_storno", bt3=SELF_BILLING_STORNO_BT3,
     manuell_waehlbar=False, form_wert=None, label=None,
     braucht_original=True,
 )
@@ -102,6 +111,7 @@ _ALIASES: dict[str | None, Belegart] = {
     "correction": _KORREKTUR,
     "self_billing": _SELF_BILLING,
     "self-billing": _SELF_BILLING,
+    "self_billing_storno": _SELF_BILLING_STORNO,
 }
 
 # Abgeleitete Sicht auf _ALIASES, keine zweite Quelle: bisherige Leser
@@ -109,6 +119,32 @@ _ALIASES: dict[str | None, Belegart] = {
 TYPE_CODE_MAP: dict[str | None, str] = {
     wert: art.bt3 for wert, art in _ALIASES.items()
 }
+
+# Gutschriften im Geldfluss samt den Alias-Schreibweisen, die aeltere
+# Versionen gespeichert haben. Bewusst NICHT dabei: das 389-Storno (261)
+# hebt die Honorargutschrift auf, der Geldfluss kehrt sich um und der Kunde
+# zahlt der Firma; und die Korrektur (384) ist eine normale Zahlung des
+# Kunden. Genau einmal hier (Issue #160). PDF-Bankblock und
+# XML-PaymentMeans fragen seit dem Alias-Fund den Zahlungsfluss ueber
+# zahlung_an_kunde() ab (aufgeloeste Belegart statt roher Menge); einzige
+# verbleibende Leserin dieser Menge ist die Validator-Empfehlung
+# (pruefregeln/empfehlungen.py: Warnung zur fehlenden Kunden-IBAN).
+GUTSCHRIFT_TYPEN = frozenset({"credit_note", "credit", "storno", "self_billing"})
+
+
+def zahlung_an_kunde(invoice_type: str | None) -> bool:
+    """Zahlungsfluss dieser Belegart geht an den KUNDEN (nicht an die Firma).
+
+    PDF-Bankblock und XML-PaymentMeans rufen das hier ab. Entscheidend ist die
+    aufgeloeste Belegart, damit gespeicherte Aliase ("self-billing", "credit",
+    "storno") mitgemeint sind — belegrollen.besetzung loest genauso auf, die
+    rohe Menge in GUTSCHRIFT_TYPEN tat es nicht. Bewusst False fuer das
+    389-Storno (261): der Geldfluss kehrt sich um, der Kunde zahlt der Firma.
+    Ein unbekannter Wert zahlt niemals an den Kunden (False statt Wurf)."""
+    try:
+        return belegart(invoice_type).intern in {"credit_note", "self_billing"}
+    except UnknownInvoiceTypeError:
+        return False
 
 
 def belegart(internal_value: str | None) -> Belegart:
@@ -147,7 +183,7 @@ def belegart_aus_bt3(type_code: str | None) -> Belegart:
 
 
 def manuelle_belegarten() -> tuple[Belegart, ...]:
-    """Genau die Arten, die das Formular anbietet: Standard und Anzahlung."""
+    """Genau die Arten, die das Formular anbietet: Standard, Anzahlung und Honorargutschrift."""
     return tuple(a for a in dict.fromkeys(_ALIASES.values()) if a.manuell_waehlbar)
 
 
@@ -157,7 +193,7 @@ def manuelle_belegart(form_value: str | None) -> str | None:
     Ein fehlendes Feld (None) bleibt abwaertskompatibel Standard. Alles
     andere muss eine der manuellen Arten sein: die leere Zeichenfolge wird
     nicht still zu 380, und Mitgliedschaft in TYPE_CODE_MAP genuegt nicht —
-    381/389 sind allgemein gueltig, aber nie eine manuelle Wahl.
+    381/384 sind allgemein gueltig, aber nie eine manuelle Wahl.
     """
     if form_value is None:
         return None

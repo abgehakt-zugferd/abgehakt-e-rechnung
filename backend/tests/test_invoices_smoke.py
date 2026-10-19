@@ -64,10 +64,11 @@ def test_list_invoices_status_filter(pg_session):
 
 
 def test_liste_zeigt_versandstatus_fuer_issued(pg_session):
-    """issued ohne Versand ≠ issued mit Versand — beides muss in der Liste lesbar sein."""
+    """issued ohne Kundenzustellung ≠ issued mit Kundenzustellung (Bauschritt
+    5b: „nicht versendet“ meint den Kunden) — beides muss lesbar sein."""
     offen = _invoice(pg_session, number="RE-2026-880", status="issued")
     versendet = _invoice(pg_session, number="RE-2026-881", status="issued")
-    versendet.datev_sent_at = datetime(2026, 9, 2, 13, 0, tzinfo=timezone.utc)
+    versendet.kunde_zugestellt_am = datetime(2026, 9, 2, 13, 0, tzinfo=timezone.utc)
     pg_session.commit()
 
     html = _client(pg_session).get("/invoices/").text
@@ -157,13 +158,18 @@ def test_liste_zeigt_aktive_filter_sichtbar_und_aufhebbar(pg_session):
 
 
 def test_liste_versand_offen_blendet_versendete_aus(pg_session):
+    """versand=offen filtert die fehlende KUNDENZUSTELLUNG (Bauschritt 5b):
+    Ein Beleg nur an die Buchhaltung bleibt in der Menge."""
     offen = _invoice(pg_session, number="RE-SEND-OFFEN", status="issued")
+    nur_buchhaltung = _invoice(pg_session, number="RE-SEND-DATEV", status="issued")
+    nur_buchhaltung.datev_sent_at = datetime(2026, 9, 2, 13, 0, tzinfo=timezone.utc)
     versendet = _invoice(pg_session, number="RE-SEND-OK", status="issued")
-    versendet.datev_sent_at = datetime(2026, 9, 2, 13, 0, tzinfo=timezone.utc)
+    versendet.kunde_zugestellt_am = datetime(2026, 9, 2, 13, 0, tzinfo=timezone.utc)
     pg_session.commit()
     r = _client(pg_session).get(
         "/invoices/?status=issued&art=rechnung&versand=offen"
     )
     assert r.status_code == 200
     assert offen.invoice_number in r.text
+    assert nur_buchhaltung.invoice_number in r.text
     assert versendet.invoice_number not in r.text

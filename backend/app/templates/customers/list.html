@@ -58,7 +58,7 @@
                                 <a href="/customers/{{ c.id }}/bearbeiten"
                                    style="font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); color:var(--cyan); text-decoration:none;">EDIT</a>
                                 <form method="post" action="/customers/{{ c.id }}/loeschen"
-                                      onsubmit="return confirm('Kunde {{ c.name }} wirklich deaktivieren?')">
+                                      onsubmit="return confirm('Kunde {{ c.name }} wirklich entfernen? Er verschwindet aus Listen und Auswahlen; Rechnungen bleiben unverändert erhalten.')">
                                     <button type="submit" style="font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); color:var(--pink); background:none; border:none; cursor:pointer; padding:0;">DEL</button>
                                 </form>
                             </div>

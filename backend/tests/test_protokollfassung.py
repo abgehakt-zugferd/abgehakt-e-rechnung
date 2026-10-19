@@ -42,13 +42,21 @@ def test_hoeherer_minor_wird_angenommen(fassung):
     assert fassung_annehmbar(fassung)
 
 
+@pytest.mark.parametrize("fassung", ["0.9", "0.1"])
+def test_niedrigerer_major_wird_angenommen(fassung):
+    """§ 2 lehnt nur den HOEHEREN major ab; eine niedrigere Hauptfassung ist
+    keiner. Der Beleg sagt, nach welchen Regeln ER gebaut ist - was ihm fehlt,
+    fallen Feldverzeichnis und Wertproben, nicht die Fassung."""
+    assert fassung_annehmbar(fassung)
+
+
 @pytest.mark.parametrize("fassung", ["2.0", "2.1", "3.0", "10.0"])
 def test_hoeherer_major_wird_abgelehnt(fassung):
     assert not fassung_annehmbar(fassung)
 
 
-@pytest.mark.parametrize("fassung", ["", "1", "0.9", "eins.null", "1.x", "-1.0", None])
-def test_unlesbare_oder_zu_alte_fassung_wird_abgelehnt(fassung):
+@pytest.mark.parametrize("fassung", ["", "1", "eins.null", "1.x", "-1.0", None])
+def test_unlesbare_fassung_wird_abgelehnt(fassung):
     assert not fassung_annehmbar(fassung)
 
 
@@ -64,8 +72,15 @@ def test_befundcodes_sind_ein_geschlossener_wertevorrat():
     assert "AUFTRAG_KAPUTT" not in BEFUNDCODES
 
 
-def test_nutzlast_arten_sind_die_drei_des_protokolls():
-    assert set(NUTZLAST_ARTEN) == {"erloesmeldung", "abrechnungsauftrag", "quittung"}
+def test_nutzlast_arten_sind_die_fuenf_des_protokolls():
+    """1.7 fuehrt rechnungsauftrag und aufstellungsauftrag dazu (§§ 8a, 8b).
+    Das Protokoll kennt sie; gelesen werden sie von diesem Empfaenger erst mit
+    der Freigabe des Baus, und das misst der Vektortest
+    test_die_neuen_arten_werden_noch_nicht_gelesen."""
+    assert set(NUTZLAST_ARTEN) == {
+        "erloesmeldung", "abrechnungsauftrag",
+        "rechnungsauftrag", "aufstellungsauftrag", "quittung",
+    }
 
 
 def test_einstellungen_zeigen_app_version_und_protokollfassung(client, pg_session):

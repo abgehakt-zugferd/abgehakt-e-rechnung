@@ -183,11 +183,11 @@ def test_titel_und_steuerhinweise_sprachmatrix():
     en = darstellung("en")
     assert de.titel(None) == "RECHNUNG"
     assert de.titel("prepayment") == "ANZAHLUNGSRECHNUNG"
-    assert de.titel("credit_note") == "GUTSCHRIFT"
+    assert de.titel("credit_note") == "STORNORECHNUNG"
     assert de.titel("correction") == "KORREKTURRECHNUNG"
     assert en.titel(None) == "INVOICE"
     assert en.titel("prepayment") == "PREPAYMENT INVOICE"
-    assert en.titel("credit_note") == "CREDIT NOTE"
+    assert en.titel("credit_note") == "CANCELLATION INVOICE"
     assert en.titel("correction") == "CORRECTIVE INVOICE"
     assert de.steuerhinweis("AE") == AE_HINWEIS
     assert en.steuerhinweis("AE") == AE_HINWEIS
@@ -304,7 +304,7 @@ def test_s3_reihenfolge_en_dann_de_aendert_nichts(pg_session, tmp_path):
 @pytest.mark.parametrize("typ,de_titel,en_titel", [
     (None, "RECHNUNG", "INVOICE"),
     ("prepayment", "ANZAHLUNGSRECHNUNG", "PREPAYMENT INVOICE"),
-    ("credit_note", "GUTSCHRIFT", "CREDIT NOTE"),
+    ("credit_note", "STORNORECHNUNG", "CANCELLATION INVOICE"),
     ("correction", "KORREKTURRECHNUNG", "CORRECTIVE INVOICE"),
 ])
 def test_s4_acht_titel(pg_session, tmp_path, typ, de_titel, en_titel):
@@ -333,7 +333,31 @@ def test_s4_storno_englischer_rechnung_bleibt_englisch(pg_session, tmp_path):
     assert "vom " not in storno.notes
     storno.customer = kunde
     text = _pdf_text(storno, company, tmp_path, "storno-en.pdf")
-    assert "CREDIT NOTE" in text
+    assert "CANCELLATION INVOICE" in text
+
+
+def test_s4_storno_einer_englischen_389_spricht_englisch(pg_session):
+    kunde = _kunde(pg_session)
+    original = _entwurf(pg_session, kunde, document_language="en",
+                        invoice_type="self-billing", status="issued")
+    storno = build_storno(original, "RE-STORNO-389-EN", date(2026, 10, 15))
+    erwartet = f"Cancellation of self-billed invoice {original.invoice_number} of 2026-10-09."
+    assert storno.payment_terms == erwartet
+    assert storno.notes == erwartet
+
+
+@pytest.mark.parametrize("code,bezug,herleitung", [
+    ("de", "Storno zur Gutschrift RE-389 vom 09.10.2026.",
+     "Bemessungsgrundlage 1.050,00 € × 60 %"),
+    ("en", "Cancellation of self-billed invoice RE-389 of 2026-10-09.",
+     "Assessment base EUR 1,050.00 × 60 %"),
+])
+def test_s4_storno_389_texte_und_herleitung_je_sprache(code, bezug, herleitung):
+    d = darstellung(code)
+    assert d.storno_gutschrift_bezug.format(
+        nummer="RE-389", datum=d.format_datum(date(2026, 10, 9)),
+    ) == bezug
+    assert d.herleitungszeile(Decimal("1050"), Decimal("60")) == herleitung
 
 
 # ── S5 ─────────────────────────────────────────────────────────────────────
@@ -663,7 +687,7 @@ def test_schablonentexte_vollstaendig_in_belegdarstellung():
     """Vollstaendige Liste der PDF-Schablonen; Befund, wenn etwas fehlt."""
     en = darstellung("en")
     erwartet = {
-        "INVOICE", "PREPAYMENT INVOICE", "CREDIT NOTE", "CORRECTIVE INVOICE",
+        "INVOICE", "PREPAYMENT INVOICE", "CANCELLATION INVOICE", "CORRECTIVE INVOICE",
         "Invoice number", "Invoice date", "Date of supply", "Period of supply",
         "Expected period of supply", "Due date", "Customer number", "Your reference",
         "Purchase order number", "Customer VAT ID", "No.", "Description", "Quantity",

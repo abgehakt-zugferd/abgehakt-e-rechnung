@@ -251,11 +251,12 @@ def test_dashboard_hinweisstreifen_fehlt_ohne_unversendete(pg_session, client):
     from datetime import datetime, timezone
 
     inv = _inv(pg_session, "issued", "100.00")
-    inv.datev_sent_at = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    inv.kunde_zugestellt_am = datetime(2026, 9, 1, tzinfo=timezone.utc)
     pg_session.commit()
     r = client.get("/dashboard")
     assert r.status_code == 200
-    assert "ohne Versand" not in r.text
+    # Der Streifen meint die ZUSTELLUNG AN DEN KUNDEN (Bauschritt 5b).
+    assert "ohne Zustellung an den Kunden" not in r.text
 
 
 def _href_fuer_kpi(html: str, kpi: str) -> str:
@@ -297,7 +298,7 @@ def test_dashboard_kachel_und_hinweis_links_stimmen_mit_liste(pg_session, client
     _inv(pg_session, "issued", "100.00", due=heute - timedelta(days=3))
     _inv(pg_session, "issued", "50.00", due=heute)
     versendet = _inv(pg_session, "issued", "70.00", due=heute)
-    versendet.datev_sent_at = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    versendet.kunde_zugestellt_am = datetime(2026, 9, 1, tzinfo=timezone.utc)
     for _ in range(4):
         _inv(pg_session, "paid", "10.00")
     for _ in range(5):
@@ -314,7 +315,7 @@ def test_dashboard_kachel_und_hinweis_links_stimmen_mit_liste(pg_session, client
     pg_session.commit()
 
     html = client.get("/dashboard").text
-    assert "ohne Versand" in html
+    assert "ohne Zustellung an den Kunden" in html
     ctx = main.dashboard(_request(), pg_session).context
 
     faelle = [

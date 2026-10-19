@@ -1,8 +1,10 @@
 """Wie Rechnungsstatus in der Oberfläche gelesen werden.
 
-`issued` bedeutet finalisiert (GoBD-Beleg steht), nicht zugestellt. Ob die Mail
-rausging, steht in `datev_sent_at` (Erstversand an Kunde, DATEV im BCC). Ohne
-diese Trennung sieht eine versendete Rechnung wie eine offene Forderung.
+`issued` bedeutet finalisiert (GoBD-Beleg steht), nicht zugestellt. Ob der
+KUNDE den Beleg hat, steht in `kunde_zugestellt_am`; die Buchhaltung hat ihren
+eigenen Vermerk in `datev_sent_at`. Ohne diese Trennung sieht eine Rechnung,
+die nur der Buchhaltung vorliegt, wie eine erledigte aus, obwohl die Forderung
+beim Kunden noch nicht einmal bekannt ist.
 """
 from datetime import datetime
 
@@ -16,12 +18,14 @@ _ETIKETT = {
 }
 
 
-def ist_nicht_versendet(status: str, datev_sent_at: datetime | None = None) -> bool:
-    """Finalisiert, aber ohne Erstversand — eine Bedingung fuer Etikett und Kennzahl."""
-    return status == "issued" and datev_sent_at is None
+def ist_nicht_versendet(status: str, kunde_zugestellt_am: datetime | None = None) -> bool:
+    """Finalisiert, aber ohne Erstzustellung an den KUNDEN — eine Bedingung
+    fuer Etikett und Kennzahl. `datev_sent_at` zaehlt hier bewusst nicht: Ein
+    Beleg nur an die Buchhaltung ist keine Zustellung an den Kunden."""
+    return status == "issued" and kunde_zugestellt_am is None
 
 
-def nicht_versendet_bedingung(status_spalte, versand_spalte):
+def nicht_versendet_bedingung(status_spalte, zustell_spalte):
     """`ist_nicht_versendet` als SQL-Ausdruck: beide Haelften der Regel, nicht eine.
 
     Die Spalten kommen als Parameter herein, statt dass dieses Modul `Invoice`
@@ -32,14 +36,14 @@ def nicht_versendet_bedingung(status_spalte, versand_spalte):
     sind unvermeidlich (ein `and`-Ausdruck ist keine SQL-Bedingung), nebeneinander
     im selben Modul faellt ihr Auseinanderlaufen aber auf.
     """
-    return and_(status_spalte == "issued", versand_spalte.is_(None))
+    return and_(status_spalte == "issued", zustell_spalte.is_(None))
 
 
-def ohne_erstversand_bedingung(spalte):
-    """SQLAlchemy-Ausdruck: kein Erstversand, unabhaengig vom Status.
+def ohne_zustellung_bedingung(spalte):
+    """SQLAlchemy-Ausdruck: keine Kundenzustellung, unabhaengig vom Status.
 
-    NICHT dasselbe wie `ist_nicht_versendet`: ein Entwurf hat auch keinen
-    Erstversand. Das ist die Filterdimension der Rechnungsliste und bleibt
+    NICHT dasselbe wie `ist_nicht_versendet`: ein Entwurf hat auch keine
+    Kundenzustellung. Das ist die Filterdimension der Rechnungsliste und bleibt
     absichtlich rechtwinklig zum Statusfilter daneben, damit `versand=offen`
     nicht heimlich den Status mitfiltert. Wer den Belegzustand meint, nimmt
     `nicht_versendet_bedingung`.
@@ -47,13 +51,13 @@ def ohne_erstversand_bedingung(spalte):
     return spalte.is_(None)
 
 
-def etikett(status: str, datev_sent_at: datetime | None = None) -> str:
+def etikett(status: str, kunde_zugestellt_am: datetime | None = None) -> str:
     if status == "issued":
-        return "Nicht versendet" if ist_nicht_versendet(status, datev_sent_at) else "Versendet"
+        return "Nicht versendet" if ist_nicht_versendet(status, kunde_zugestellt_am) else "Versendet"
     return _ETIKETT.get(status, status)
 
 
-def badge_klasse(status: str, datev_sent_at: datetime | None = None) -> str:
+def badge_klasse(status: str, kunde_zugestellt_am: datetime | None = None) -> str:
     if status == "issued":
-        return "offen" if ist_nicht_versendet(status, datev_sent_at) else "sent"
+        return "offen" if ist_nicht_versendet(status, kunde_zugestellt_am) else "sent"
     return status

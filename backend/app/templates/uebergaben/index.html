@@ -5,7 +5,8 @@
     <h1 style="margin-bottom:6px;">BELEGE</h1>
     <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:24px;">
         Was im Belegordner liegt. Ansehen ändert nichts: gespeichert wird erst mit
-        <strong style="color:var(--text);">ALS RECHNUNG ANLEGEN</strong>, und in den Ordner
+        <strong style="color:var(--text);">ALS RECHNUNG ANLEGEN</strong> bzw.
+        <strong style="color:var(--text);">ALS AUFSTELLUNG ANLEGEN</strong>, und in den Ordner
         schreibt dieses Programm nie.
     </p>
 
@@ -17,6 +18,11 @@
     {% if hinweis %}
     <div style="margin-bottom:16px; padding:12px 16px; background:rgba(0,229,255,0.05); border:1px solid rgba(0,229,255,0.18); font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">
         Dieser Beleg war schon verarbeitet. Zweimal eingelesen heißt einmal gewirkt.
+    </div>
+    {% endif %}
+    {% if meldung %}
+    <div style="margin-bottom:16px; padding:12px 16px; background:rgba(0,229,255,0.05); border:1px solid rgba(0,229,255,0.18); font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">
+        {{ meldung }}
     </div>
     {% endif %}
 
@@ -72,9 +78,17 @@
                     </td>
                     <td style="padding:10px 14px;">
                         {% if urteil.angenommen and not urteil.bereits_verarbeitet %}
+                        {# Der Knopf nennt das Ziel: § 8a wird zur Rechnung (380), § 8b
+                           zur Abrechnungsaufstellung - keine Rechnung, eigener Weg. #}
+                        {% if urteil.nutzlast_art == "aufstellungsauftrag" %}
+                        <form method="post" action="/uebergaben/{{ zeile.dateiname }}/aufstellung-anlegen">
+                            <button type="submit" class="btn-primary" style="white-space:nowrap;">ALS AUFSTELLUNG ANLEGEN</button>
+                        </form>
+                        {% else %}
                         <form method="post" action="/uebergaben/{{ zeile.dateiname }}/rechnung-anlegen">
                             <button type="submit" class="btn-primary" style="white-space:nowrap;">ALS RECHNUNG ANLEGEN</button>
                         </form>
+                        {% endif %}
                         {% else %}
                         <span style="color:var(--text-dim); font-family:'VT323',monospace; font-size:var(--fs-gross);">–</span>
                         {% endif %}

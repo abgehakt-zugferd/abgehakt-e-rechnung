@@ -57,6 +57,40 @@ _STANDARD_RUMPF_EN = (
 
 _STANDARD_RUMPF = {"de": _STANDARD_RUMPF_DE, "en": _STANDARD_RUMPF_EN}
 
+# Neutrale Schablone an die Buchhaltung (Festlegung 16): Der Empfänger ist
+# die Upload-Adresse der Buchhaltung, nicht der Kunde — deshalb keine Anrede
+# des Kunden und kein „Ihre Rechnung". Sie liegt bewusst fest im Code und
+# nicht bei den konfigurierbaren Schablonen der Einstellungen: Dort stehen die
+# Kundenschablonen mit Platzhaltern wie {kunde}, und eine uebernommene
+# Kundenschablone wuerde der Buchhaltung den Kundenanspruch der Mail
+# vorspielen. Je Belegsprache, wie der Beleg selbst.
+_BUCHHALTUNG_BETREFF = {
+    "de": "Beleg {rechnungsnummer} für die Buchhaltung",
+    "en": "Document {rechnungsnummer} for accounting",
+}
+
+_BUCHHALTUNG_RUMPF_DE = (
+    "Guten Tag,\n"
+    "\n"
+    "anbei erhalten Sie den Beleg {rechnungsnummer} zur Verbuchung.\n"
+    "\n"
+    "{rechnungsdaten}"
+    "Mit freundlichen Grüßen\n"
+    "{firma}"
+)
+
+_BUCHHALTUNG_RUMPF_EN = (
+    "Hello,\n"
+    "\n"
+    "please find attached document {rechnungsnummer} for booking.\n"
+    "\n"
+    "{rechnungsdaten}"
+    "Kind regards\n"
+    "{firma}"
+)
+
+_BUCHHALTUNG_RUMPF = {"de": _BUCHHALTUNG_RUMPF_DE, "en": _BUCHHALTUNG_RUMPF_EN}
+
 _FUSS_LABEL = {"de": "Verantwortlich:", "en": "Responsible:"}
 
 
@@ -143,6 +177,11 @@ def _werte(invoice, company, sprache: Belegsprache) -> dict[str, str]:
     faellig = ""
     if getattr(invoice, "due_date", None) is not None:
         faellig = form.format_datum(invoice.due_date)
+    else:
+        # Ohne Fälligkeitsdatum trägt der Zahlungshinweis die Zahlungsregel
+        # (BR-CO-25): der Platzhalter bleibt dann nicht leer, sondern nennt
+        # sie, und die Mail sagt dasselbe wie der Beleg.
+        faellig = (getattr(invoice, "payment_terms", None) or "").strip()
     betrag = form.format_betrag(invoice.gross_total, invoice.currency or "EUR")
     return {
         "rechnungsnummer": invoice.invoice_number or "",
@@ -184,5 +223,42 @@ def rechnungsmail(invoice, company, config) -> Mailinhalt:
     betreff = _ersetze(schablone.betreff, werte)
     pruefe_betreff(betreff)
     rumpf = _ohne_leerzeilen_am_ende(_ersetze(schablone.rumpf, werte))
+    rumpf = rumpf + _fuss(company, sprache) + "\n"
+    return Mailinhalt(betreff=betreff, rumpf=rumpf)
+
+
+def buchhaltungsmail(invoice, company) -> Mailinhalt:
+    """Neutrale Mail an die Upload-Adresse der Buchhaltung (Festlegung 16).
+
+    Keine Anrede des Kunden, kein Zahlungshinweis — die Buchhaltung verbucht,
+    sie zahlt nicht. Nur {rechnungsnummer} und {firma} aus denselben Werten
+    wie die Kundenmail, deshalb ohne eigenen config-Parameter (siehe
+    _BUCHHALTUNG_BETREFF, warum diese Schablone nicht konfigurierbar ist).
+    """
+    sprache = resolve_belegsprache(getattr(invoice, "document_language", None))
+    werte = _werte(invoice, company, sprache)
+    hinweis = {
+        "de": "Das Dokument enthält die strukturierten ZUGFeRD-Rechnungsdaten "
+              "(Factur-X EN16931) gemäß § 14 UStG.\n\n",
+        "en": "The document contains the structured ZUGFeRD invoice data (Factur-X EN16931) "
+              "pursuant to section 14 of the German VAT Act (UStG).\n\n",
+    }
+    return _buchhaltungsmail(werte, company, sprache, hinweis[sprache])
+
+
+def aufstellung_buchhaltungsmail(aufstellung, company) -> Mailinhalt:
+    sprache = resolve_belegsprache(aufstellung.customer.belegsprache_vorgabe or "de")
+    werte = {"rechnungsnummer": aufstellung.nummer,
+             "firma": (company.name or "").strip() if company else ""}
+    # Die neutrale Schablone bleibt gemeinsam. Nur Rechnungen duerfen
+    # strukturierte Rechnungsdaten behaupten; die Aufstellung hat keine XML.
+    return _buchhaltungsmail(werte, company, sprache, "")
+
+
+def _buchhaltungsmail(werte, company, sprache, rechnungsdaten):
+    betreff = _ersetze(_BUCHHALTUNG_BETREFF[sprache], werte)
+    pruefe_betreff(betreff)
+    vorlage = _BUCHHALTUNG_RUMPF[sprache].replace("{rechnungsdaten}", rechnungsdaten)
+    rumpf = _ohne_leerzeilen_am_ende(_ersetze(vorlage, werte))
     rumpf = rumpf + _fuss(company, sprache) + "\n"
     return Mailinhalt(betreff=betreff, rumpf=rumpf)

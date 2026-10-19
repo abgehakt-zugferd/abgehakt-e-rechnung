@@ -9,8 +9,11 @@ Erst der Knopf "Als Rechnung anlegen" schreibt fest.
 
 import base64
 import hashlib
+import html
 import json
+import logging
 import uuid
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -19,12 +22,14 @@ from app.models.app_config import AppConfig
 from app.models.customer import Customer
 from app.models.invoice import Invoice
 from app.models.uebergabe_eingang import UebergabeEingang
+from app.services.uebergabe_eingang import DatenbankLage
 from app.services.uebergabebeleg import kanonisch
 from tests.helpers.uebergabe import (
     PARTNER_A,
     auftrag,
     beleg,
     gutschrift,
+    rechnungsauftrag,
     schluesselpaar,
 )
 
@@ -55,11 +60,12 @@ def _schalter(pg_session, aktiv=True):
     pg_session.commit()
 
 
-def _kunde(pg_session, kennung=PARTNER_A, name="Autorin A"):
+def _kunde(pg_session, kennung=PARTNER_A, name="Autorin A", nummer=None,
+           gutschriftempfaenger=True):
     kunde = Customer(
-        customer_number=f"K-{uuid.uuid4().hex[:8]}", name=name,
+        customer_number=nummer or f"K-{uuid.uuid4().hex[:8]}", name=name,
         address_line1="Weg 1", zip_code="10115", city="Berlin", country="DE",
-        gutschriftempfaenger=True,
+        gutschriftempfaenger=gutschriftempfaenger,
         ust_status="regelbesteuert",
         tax_number="12/345/67890",
     )
@@ -230,6 +236,195 @@ def test_ein_dateiname_ausserhalb_des_ordners_fuehrt_nirgendwohin(
     assert pg_session.query(Invoice).count() == 0
 
 
+# --- Der rechnungsauftrag (§ 8a): vom Knopf bis zum Entwurf (Bauschritt 4b) ---
+
+SCHLUESSEL = "plattform:2026-02:kanal-a:x1"
+
+
+def _rechnungsauftrag(signieren, **aenderungen) -> bytes:
+    return beleg(
+        signieren, rechnungsauftrag(), nutzlast_art="rechnungsauftrag", **aenderungen
+    )
+
+
+def _plattform_kunde(pg_session, kennung=PARTNER_A, **felder):
+    """Kunde mit der Steuervorgabe fuer Auftraege (Festlegung 13): AE und
+    USt-IdNr. - ohne beides entsteht kein Entwurf, und der Knopf meldet das."""
+    angaben = dict(
+        customer_number=f"K-{uuid.uuid4().hex[:8]}",
+        name="Plattform Beispiel GmbH",
+        address_line1="Platz 1", zip_code="1015", city="Amsterdam", country="NL",
+        auftrag_steuer="AE", vat_id="NL123456789B01",
+        kopftext="Vereinbarung vom 1. Januar 2026, Abrechnungsmonat {leistungsmonat}.",
+        fusstext="Der Abrechnungsbericht ist die Einzelaufstellung.",
+        zahlungshinweis="Zahlung folgt dem Auszahlungsbericht der Plattform.",
+    )
+    angaben.update(felder)
+    kunde = Customer(**angaben)
+    kunde.id = uuid.UUID(str(kennung))
+    pg_session.add(kunde)
+    pg_session.commit()
+    return kunde
+
+
+def test_ein_rechnungsauftrag_hat_den_knopf(client, pg_session, belegordner):
+    """Der Hinweis aus Teil 1c ist entfallen: Die Wirkung ist gebaut, der
+    Knopf verspricht nur noch, was er verarbeitet."""
+    ordner, signieren = belegordner
+    _plattform_kunde(pg_session)
+    _schalter(pg_session)
+    (ordner / "rechnungsauftrag.json").write_bytes(_rechnungsauftrag(signieren))
+
+    text = client.get("/uebergaben").text
+
+    assert "ANGENOMMEN" in text
+    assert "rechnung-anlegen" in text
+    assert "späteren Schritt" not in text
+
+
+def test_der_knopf_legt_den_entwurf_aus_einem_rechnungsauftrag_an(
+    client, pg_session, belegordner,
+):
+    ordner, signieren = belegordner
+    _plattform_kunde(pg_session)
+    _schalter(pg_session)
+    (ordner / "rechnungsauftrag.json").write_bytes(_rechnungsauftrag(signieren))
+
+    antwort = client.post("/uebergaben/rechnungsauftrag.json/rechnung-anlegen")
+
+    assert antwort.status_code == 303
+    entwurf = pg_session.query(Invoice).one()
+    assert entwurf.status == "draft"
+    assert entwurf.invoice_type is None
+    assert entwurf.tax_category == "AE"
+    assert entwurf.auftragsschluessel == SCHLUESSEL
+    assert entwurf.auftragsschluessel_offen == SCHLUESSEL
+    assert antwort.headers["location"] == f"/invoices/{entwurf.id}/vorschau"
+    assert pg_session.query(UebergabeEingang).count() == 1
+
+
+def test_ohne_steuervorgabe_am_kunden_meldet_der_knopf(client, pg_session, belegordner):
+    """Festlegung 13: Die Steuer wird nicht geraten. Die Meldung sagt, was am
+    Kunden fehlt - das Muster ist der ungeklaerte Steuerstatus bei der 389."""
+    ordner, signieren = belegordner
+    _plattform_kunde(pg_session, auftrag_steuer=None)
+    _schalter(pg_session)
+    (ordner / "rechnungsauftrag.json").write_bytes(_rechnungsauftrag(signieren))
+
+    antwort = client.post("/uebergaben/rechnungsauftrag.json/rechnung-anlegen")
+
+    assert antwort.status_code == 303
+    meldung = parse_qs(urlparse(antwort.headers["location"]).query)["fehler"][0]
+    assert meldung == (
+        "Am Kunden fehlt die Steuervorgabe für Aufträge (AE) bzw. die USt-IdNr."
+    )
+    assert pg_session.query(Invoice).count() == 0
+    assert pg_session.query(UebergabeEingang).count() == 0
+
+
+def _folgebeleg(signieren, vorgaenger_sha, **aenderungen) -> bytes:
+    """Ein neuer Beleg zum selben Auftragsschluessel: eigene Kennung, eigener
+    Hash, und die Kette haengt am zuletzt ANGENOMMENEN Beleg (§ 5) - ein
+    abgelehnter wird nicht gemerkt und bleibt ohne Folge."""
+    return _rechnungsauftrag(
+        signieren,
+        beleg_id="11111111-2222-4333-8444-555555555577",
+        vorgaenger_hash=vorgaenger_sha,
+        **aenderungen,
+    )
+
+
+def test_zum_schluessel_gerechnet_gibt_es_keine_zweite_rechnung(
+    client, pg_session, belegordner,
+):
+    """Entscheidung 7: Solange zu einem Schluessel ein Beleg besteht, der
+    weder storniert noch verworfen ist, lehnt der Leser den naechsten Auftrag
+    mit AUFTRAG_SCHON_GERECHNET ab; genannt wird, was der Absender
+    wiedererkennt ('Entwurf')."""
+    ordner, signieren = belegordner
+    _plattform_kunde(pg_session)
+    _schalter(pg_session)
+    erster = _rechnungsauftrag(signieren)
+    (ordner / "erster.json").write_bytes(erster)
+    client.post("/uebergaben/erster.json/rechnung-anlegen")
+
+    (ordner / "zweiter.json").write_bytes(
+        _folgebeleg(signieren, hashlib.sha256(erster).hexdigest()))
+    antwort = client.post("/uebergaben/zweiter.json/rechnung-anlegen")
+
+    assert antwort.status_code == 303
+    meldung = parse_qs(urlparse(antwort.headers["location"]).query)["fehler"][0]
+    assert meldung == "AUFTRAG_SCHON_GERECHNET"
+    assert pg_session.query(Invoice).count() == 1
+    assert pg_session.query(UebergabeEingang).count() == 1
+
+
+def test_nach_dem_verwerfen_ist_der_schluessel_wieder_frei(
+    client, pg_session, belegordner,
+):
+    """Ein verworfener Entwurf hat nicht gerechnet: Der naechste Auftrag zum
+    selben Schluessel wird angenommen (Festlegung 12)."""
+    ordner, signieren = belegordner
+    _plattform_kunde(pg_session)
+    _schalter(pg_session)
+    erster = _rechnungsauftrag(signieren)
+    (ordner / "erster.json").write_bytes(erster)
+    client.post("/uebergaben/erster.json/rechnung-anlegen")
+    entwurf = pg_session.query(Invoice).one()
+    assert client.post(f"/invoices/{entwurf.id}/verwerfen").status_code == 303
+
+    (ordner / "dritter.json").write_bytes(
+        _folgebeleg(signieren, hashlib.sha256(erster).hexdigest()))
+    antwort = client.post("/uebergaben/dritter.json/rechnung-anlegen")
+
+    assert antwort.status_code == 303
+    pg_session.expire_all()
+    neu = pg_session.query(Invoice).filter(Invoice.status == "draft").one()
+    assert neu.auftragsschluessel == SCHLUESSEL
+    assert neu.auftragsschluessel_offen == SCHLUESSEL
+    verworfen = pg_session.get(Invoice, entwurf.id)
+    assert verworfen.status == "discarded"
+    assert verworfen.auftragsschluessel_offen is None
+
+
+def test_wettlauf_auf_dem_index_wird_zur_meldung_nicht_zu_500(
+    client, pg_session, belegordner, monkeypatch,
+):
+    """Festlegung 19: Der Leser fragt die Lage ohne Sperre, zwei gleichzeitige
+    Annahmen sehen beide 'frei'. Der partielle Unique-Index schlaegt beim
+    Commit zu - und der Befund ist derselbe wie oben, kein HTTP 500."""
+    from tests.factories import orm_invoice_aus_auftrag, orm_item
+
+    ordner, signieren = belegordner
+    _plattform_kunde(pg_session)
+    _schalter(pg_session)
+    pg_session.add(orm_invoice_aus_auftrag([orm_item(1, "1", "50.00", "0")], SCHLUESSEL))
+    pg_session.commit()
+    (ordner / "auftrag.json").write_bytes(_rechnungsauftrag(signieren))
+
+    fragen = []
+
+    def luegt_bei_der_ersten_frage(self, schluessel):
+        fragen.append(schluessel)
+        return None
+
+    monkeypatch.setattr(
+        DatenbankLage, "dokument_zu_auftragsschluessel", luegt_bei_der_ersten_frage,
+    )
+
+    antwort = client.post("/uebergaben/auftrag.json/rechnung-anlegen")
+
+    # Genau die Vorabfrage des Lesers ist die Luege (ein Aufruf); die Meldung
+    # des Fehlerwegs fragt die eine Stelle fuer die Sperre, die nicht luegt.
+    assert fragen == [SCHLUESSEL]
+    assert antwort.status_code == 303
+    meldung = parse_qs(urlparse(antwort.headers["location"]).query)["fehler"][0]
+    assert "AUFTRAG_SCHON_GERECHNET" in meldung
+    assert "Entwurf" in meldung
+    assert pg_session.query(Invoice).count() == 1
+    assert pg_session.query(UebergabeEingang).count() == 0
+
+
 def test_ohne_eingerichteten_ordner_bleibt_die_seite_ruhig(client, pg_session, belegordner):
     _schalter(pg_session)
     get_settings().uebergaben_ordner = ""
@@ -238,3 +433,141 @@ def test_ohne_eingerichteten_ordner_bleibt_die_seite_ruhig(client, pg_session, b
 
     assert antwort.status_code == 200
     assert "kein Belegordner" in antwort.text
+
+
+def test_eine_kaputte_datei_legt_die_belegliste_nicht_lahm(client, pg_session, belegordner):
+    """Eine kaputte Datei neben einer guten: Die Liste antwortet 200, zeigt
+    den guten Beleg und fuer die kaputte den Befund - nicht HTTP 500 fuer
+    die ganze Liste (abgehakt#164). Die Bytes der kaputten Datei werden
+    direkt geschrieben, signieren liess sie sich ohnehin nicht."""
+    ordner, signieren = belegordner
+    _kunde(pg_session)
+    _schalter(pg_session)
+    (ordner / "auftrag.json").write_bytes(beleg(signieren))
+    kaputt = json.loads(beleg(signieren))
+    kaputt["nutzlast"]["bemessung"]["erloes_netto"] = 797.30   # Gleitkommazahl
+    (ordner / "kaputt.json").write_bytes(json.dumps(kaputt).encode("utf-8"))
+
+    antwort = client.get("/uebergaben")
+
+    assert antwort.status_code == 200
+    assert "Probeverlag" in antwort.text
+    assert "WERT_UNBRAUCHBAR" in antwort.text
+
+
+def test_eine_unbekannte_kaputtheit_kostet_nur_die_eine_zeile(
+    client, pg_session, belegordner, monkeypatch, caplog,
+):
+    """Sicherheitsnetz des Routers: Jede unerwartete Ausnahme der Beurteilung
+    wird je Datei als BELEG_UNLESBAR gezeigt und geloggt - die Liste bleibt
+    200. Das ersetzt nicht die gezielten Befunde des Lesers."""
+    ordner, signieren = belegordner
+    _kunde(pg_session)
+    _schalter(pg_session)
+    (ordner / "auftrag.json").write_bytes(beleg(signieren))
+
+    def unbekannt(roh, lage, **kwargs):
+        raise RuntimeError("eine noch unbekannte Kaputtheit")
+
+    monkeypatch.setattr("app.routers.uebergaben.beleg_beurteilen", unbekannt)
+    with caplog.at_level(logging.ERROR):
+        antwort = client.get("/uebergaben")
+
+    assert antwort.status_code == 200
+    assert "BELEG_UNLESBAR" in antwort.text
+    assert any("auftrag.json" in eintrag.message for eintrag in caplog.records)
+
+
+# --- Die eigene Aufbewahrungskopie (§ 12: unveraendert, auch beim Empfaenger) ---
+
+def test_der_knopf_bewahrt_den_beleg_auf_und_die_kopie_ueberlebt_die_quelle(
+    client, pg_session, belegordner,
+):
+    ordner, signieren = belegordner
+    _kunde(pg_session)
+    _schalter(pg_session)
+    roh = beleg(signieren)
+    (ordner / "auftrag.json").write_bytes(roh)
+    sha = hashlib.sha256(roh).hexdigest()
+
+    client.post("/uebergaben/auftrag.json/rechnung-anlegen")
+
+    kopie = get_settings().storage_path / "uebergaben" / RICHTUNG / f"{sha}.json"
+    assert kopie.read_bytes() == roh
+    assert hashlib.sha256(kopie.read_bytes()).hexdigest() == sha
+    assert pg_session.query(UebergabeEingang).one().beleg_sha256 == sha
+
+    # Der Absender kann seinen Ordner leeren: die eigene Kopie bleibt (§ 12).
+    (ordner / "auftrag.json").unlink()
+    assert kopie.read_bytes() == roh
+
+
+def test_scheitert_die_kopie_wird_der_beleg_nicht_angenommen(
+    client, pg_session, belegordner,
+):
+    ordner, signieren = belegordner
+    _kunde(pg_session)
+    _schalter(pg_session)
+    (ordner / "auftrag.json").write_bytes(beleg(signieren))
+    zielordner = get_settings().storage_path / "uebergaben" / RICHTUNG
+    zielordner.mkdir(parents=True, exist_ok=True)
+    zielordner.chmod(0o500)
+
+    try:
+        antwort = client.post("/uebergaben/auftrag.json/rechnung-anlegen")
+    finally:
+        zielordner.chmod(0o700)
+
+    assert antwort.status_code == 303
+    meldung = parse_qs(urlparse(antwort.headers["location"]).query)["fehler"][0]
+    assert "Aufbewahrungskopie" in meldung
+    assert pg_session.query(Invoice).count() == 0
+    assert pg_session.query(UebergabeEingang).count() == 0
+
+
+def test_der_fehlertext_steht_url_kodiert_in_der_weiterleitung(
+    client, pg_session, belegordner,
+):
+    """Ein Fehlertext in einer Redirect-URL ist ein Query-Parameter: Leerzeichen,
+    & und Umlaute sind dort Sonderzeichen. Unkodiert schnitt das & die Query,
+    und die Zielseite zeigte den Text abgeschnitten. Der Weg dorthin ist echt:
+    Ein Kunde ohne Gutschriftempfaenger-Eigenschaft laesst die Wirkung am
+    Knopf scheitern, und seine Nummer geraet in die Meldung."""
+    ordner, signieren = belegordner
+    _schalter(pg_session)
+    _kunde(pg_session, nummer="K-Ü & 1", gutschriftempfaenger=False)
+    (ordner / "auftrag.json").write_bytes(beleg(signieren))
+
+    antwort = client.post("/uebergaben/auftrag.json/rechnung-anlegen")
+
+    assert antwort.status_code == 303
+    ort = antwort.headers["location"]
+    assert "K-Ü" not in ort
+    assert "&" not in ort
+    meldung = parse_qs(urlparse(ort).query)["fehler"][0]
+    assert meldung == "Kunde K-Ü & 1 ist kein Gutschriftempfaenger"
+
+    seite = client.get(ort)
+    assert seite.status_code == 200
+    assert "Kunde K-Ü & 1 ist kein Gutschriftempfaenger" in html.unescape(seite.text)
+
+
+def test_der_zweite_knopfdruck_laesst_die_kopie_unveraendert(
+    client, pg_session, belegordner,
+):
+    ordner, signieren = belegordner
+    _kunde(pg_session)
+    _schalter(pg_session)
+    roh = beleg(signieren)
+    (ordner / "auftrag.json").write_bytes(roh)
+    sha = hashlib.sha256(roh).hexdigest()
+
+    client.post("/uebergaben/auftrag.json/rechnung-anlegen")
+    kopie = get_settings().storage_path / "uebergaben" / RICHTUNG / f"{sha}.json"
+    # Der Speicher ist Sitzungseigentum: gezaehlt wird der Zuwachs, nicht der Bestand.
+    vorher = {p.name for p in kopie.parent.iterdir()}
+
+    client.post("/uebergaben/auftrag.json/rechnung-anlegen")
+
+    assert {p.name for p in kopie.parent.iterdir()} == vorher
+    assert kopie.read_bytes() == roh

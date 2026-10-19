@@ -192,7 +192,7 @@ def test_finalize_blocked_ig_lieferung_ohne_leistungsdatum(pg_session):
     """
     inv = _ig_draft(pg_session, delivery_date=None)
 
-    with patch("app.routers.invoices.pdf_generator.generate_pdf") as erzeuge:
+    with patch("app.services.pdf_generator.generate_pdf") as erzeuge:
         r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
 
     assert r.status_code == 400
@@ -238,7 +238,7 @@ def test_finalize_ae_ohne_verkaeufer_ust_id_wird_abgewiesen(pg_session):
     inv = _draft(pg_session, with_items=True, tax_category="AE", kunde=kunde,
                  net=Decimal("200.00"), tax=Decimal("0.00"), gross=Decimal("200.00"))
 
-    with patch("app.routers.invoices.pdf_generator.generate_pdf") as erzeuge:
+    with patch("app.services.pdf_generator.generate_pdf") as erzeuge:
         r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
 
     assert r.status_code == 400, r.text

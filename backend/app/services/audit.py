@@ -12,6 +12,7 @@ from sqlalchemy import event, inspect as sa_inspect, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import LoaderCallableStatus
 
+from app.models.aufstellung import Aufstellung, AufstellungAnlage
 from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import AuditLog, Invoice
@@ -44,7 +45,12 @@ def snapshot(obj) -> dict:
 # InvoiceItem wird bewusst NICHT auditiert — der invoice_guard ist dort die
 # einzige Verteidigungslinie (siehe docs/ARCHITEKTUR.md, „Zwei Verteidigungslinien").
 # InvoiceSendLog ebenfalls nicht: die Tabelle ist selbst ein Protokoll.
-AUDITED_MODELS = (Invoice, Customer, Company)
+# Die Abrechnungsaufstellung gehört dazu wie eine Rechnung (Bauschritt 7a,
+# Entscheidung 8); ihre Anlagen auditiert sie MIT, anders als die
+# Rechnungspositionen: Jede Anlage ist ein geprüfter Dateinachweis (Hash,
+# Größe) — eine still geänderte oder verschwundene Anlage wäre eine
+# verfälschte Dateiaussage, kein Eingabefehler.
+AUDITED_MODELS = (Invoice, Customer, Company, Aufstellung, AufstellungAnlage)
 
 _PENDING_KEY = "_audit_pending"
 _registered = False

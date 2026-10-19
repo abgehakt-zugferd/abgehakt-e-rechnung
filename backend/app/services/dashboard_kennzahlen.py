@@ -14,17 +14,30 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.company import Company
 from app.models.invoice import Invoice
 from app.services.beleg_status import nicht_versendet_bedingung
 from app.services.steuer_ruecklage import steuerruecklage_anteil
-from app.services.storno_wirkung import WIRKSAM_STORNIERT, summe_gutschriften
+from app.services.storno_wirkung import GESTELLT, WIRKSAM_STORNIERT, summe_gutschriften
 
-_AUSGESTELLT = ("issued", "paid")
-_STANDARD = Invoice.invoice_type.is_(None)
+# Umsatz-Belegarten (Standardrechnung und Anzahlungsrechnung) — einzige Quelle
+# dieser Menge. storno_wirkung definiert sie nicht neu, sondern bekommt sie als
+# `topf` gereicht (Issue #160); auch die Rechnungsliste filtert darueber
+# (rechnungsliste_filter importiert UMSATZ_BELEGARTEN_FILTER).
+UMSATZ_BELEGARTEN = (None, "prepayment")
+UMSATZ_BELEGARTEN_FILTER = or_(
+    Invoice.invoice_type.is_(None),
+    Invoice.invoice_type.in_([art for art in UMSATZ_BELEGARTEN if art is not None]),
+)
+# Anzahlungen loesen Steuer erst bei Zahlung aus; Rechnungen der Umsatz-Belegarten behalten
+# ihre bisherige Besteuerung nach Ausstellung. NULL bezahlt_am zaehlt nie.
+_UMSATZ_STEUERDATUM = case(
+    (Invoice.invoice_type == "prepayment", Invoice.bezahlt_am),
+    else_=Invoice.issue_date,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,8 +67,8 @@ def _summe_feld(
     feld,
     seit: date,
     *,
-    art: str | None,
-    bis: date | None = None,
+    art: str | tuple | None,
+    bis_ausschliesslich: date | None = None,
 ) -> Decimal:
     """Summiert ein Betragsfeld gestellter Belege einer Art seit `seit`.
 
@@ -63,23 +76,34 @@ def _summe_feld(
     Gutschriften summiert `storno_wirkung.summe_gutschriften`, nicht diese Funktion.
     Betraege werden ohne Ruecksicht auf `invoices.currency` addiert. Das ist eine
     bestehende Vereinfachung: gemischte Waehrungen werden nicht getrennt.
+
+    Halboffener Zeitraum [seit, bis_ausschliesslich) wie bei allen Kennzahlen
+    (Issue #160).
     """
-    if art is None:
+    datum = Invoice.issue_date
+    if art == UMSATZ_BELEGARTEN:
+        typ_filter = and_(UMSATZ_BELEGARTEN_FILTER, or_(
+            Invoice.invoice_type.is_(None), Invoice.status == "paid",
+            and_(Invoice.status == "cancelled", WIRKSAM_STORNIERT,
+                 Invoice.bezahlt_am.is_not(None)),
+        ))
+        datum = _UMSATZ_STEUERDATUM
+    elif art is None:
         typ_filter = Invoice.invoice_type.is_(None)
     else:
         typ_filter = Invoice.invoice_type == art
     # Von Hand auf cancelled gesetzt, aber schon per Gutschrift aufgehoben: das
     # Original zaehlt, die Gutschrift zieht ab. Sonst wirkte die Stornierung
     # doppelt (Issue #141).
-    gestellt = or_(Invoice.status.in_(_AUSGESTELLT),
+    gestellt = or_(Invoice.status.in_(GESTELLT),
                    and_(Invoice.status == "cancelled", WIRKSAM_STORNIERT))
     bedingungen = [
         gestellt,
         typ_filter,
-        Invoice.issue_date >= seit,
+        datum >= seit,
     ]
-    if bis is not None:
-        bedingungen.append(Invoice.issue_date <= bis)
+    if bis_ausschliesslich is not None:
+        bedingungen.append(datum < bis_ausschliesslich)
     return (
         db.query(func.coalesce(func.sum(feld), 0))
         .filter(*bedingungen)
@@ -88,11 +112,16 @@ def _summe_feld(
 
 
 def schuldige_umsatzsteuer(
-    db: Session, von: date, bis: date | None = None,
+    db: Session, von: date, bis_ausschliesslich: date | None = None,
 ) -> Decimal:
-    """Ausgewiesene USt auf gestellten Belegen im Zeitraum, netto nach Gutschriften."""
-    ust = _summe_feld(db, Invoice.tax_total, von, art=None, bis=bis)
-    gutschrift_ust = summe_gutschriften(db, Invoice.tax_total, von, topf=None, bis=bis)
+    """Ausgewiesene USt auf gestellten Belegen im halboffenen Zeitraum
+    [von, bis_ausschliesslich), netto nach Gutschriften."""
+    ust = _summe_feld(db, Invoice.tax_total, von, art=UMSATZ_BELEGARTEN,
+                      bis_ausschliesslich=bis_ausschliesslich)
+    gutschrift_ust = summe_gutschriften(
+        db, Invoice.tax_total, von, topf=UMSATZ_BELEGARTEN,
+        bis_ausschliesslich=bis_ausschliesslich,
+    )
     return (ust - gutschrift_ust).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
@@ -103,8 +132,8 @@ def schuldige_umsatzsteuer_ytd(db: Session, seit: date) -> Decimal:
 
 def nettoumsatz_ytd(db: Session, seit: date) -> Decimal:
     """Nettoumsatz gestellter Belege im Zeitraum, abzueglich Gutschriften."""
-    netto = _summe_feld(db, Invoice.net_total, seit, art=None)
-    gutschrift_netto = summe_gutschriften(db, Invoice.net_total, seit, topf=None)
+    netto = _summe_feld(db, Invoice.net_total, seit, art=UMSATZ_BELEGARTEN)
+    gutschrift_netto = summe_gutschriften(db, Invoice.net_total, seit, topf=UMSATZ_BELEGARTEN)
     return (netto - gutschrift_netto).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
@@ -162,26 +191,31 @@ def belegzaehlung(db: Session) -> Belegzaehlung:
 
 
 def offene_forderungen(db: Session) -> OffenePosten:
-    """Gestellte, nicht wirksam stornierte Standardrechnungen: Anzahl und Bruttosumme."""
-    anzahl = (
-        db.query(func.count(Invoice.id))
-        .filter(Invoice.status == "issued", _STANDARD, ~WIRKSAM_STORNIERT)
-        .scalar()
-    ) or 0
-    betrag = (
-        db.query(func.coalesce(func.sum(Invoice.gross_total), 0))
-        .filter(Invoice.status == "issued", _STANDARD, ~WIRKSAM_STORNIERT)
-        .scalar()
-    ) or Decimal("0")
+    """Gestellte, nicht wirksam stornierte Rechnungen der Umsatz-Belegarten: Anzahl und Bruttosumme."""
+    return _offene_posten(db, UMSATZ_BELEGARTEN_FILTER)
+
+
+def offene_auszahlungen(db: Session) -> OffenePosten:
+    """Unbezahlte 389 ohne wirksames Storno, Anzahl und Bruttosumme."""
+    return _offene_posten(db, Invoice.invoice_type == "self_billing")
+
+
+def _offene_posten(db: Session, typ_filter) -> OffenePosten:
+    anzahl, betrag = db.query(
+        func.count(Invoice.id), func.coalesce(func.sum(Invoice.gross_total), 0),
+    ).filter(Invoice.status == "issued", typ_filter, ~WIRKSAM_STORNIERT).one()
     return OffenePosten(anzahl=anzahl, betrag=betrag)
 
 
 def ueberfaellige_forderungen(db: Session, heute: date) -> Ueberfaellig:
-    """Offene Standardrechnungen mit Faelligkeit vor heute."""
+    """Offene Rechnungen der Umsatz-Belegarten mit Faelligkeit vor heute."""
     filter_ = (
         Invoice.status == "issued",
-        _STANDARD,
+        UMSATZ_BELEGARTEN_FILTER,
         ~WIRKSAM_STORNIERT,
+        # Ein Beleg ohne Fälligkeit ist nie überfällig: er zahlt nach dem
+        # Zahlungshinweis, nicht nach einem Termin (BR-CO-25, Bauschritt 2b).
+        Invoice.due_date.isnot(None),
         Invoice.due_date < heute,
     )
     anzahl = db.query(func.count(Invoice.id)).filter(*filter_).scalar() or 0
@@ -196,37 +230,39 @@ def ueberfaellige_forderungen(db: Session, heute: date) -> Ueberfaellig:
 
 
 def nicht_versendet_anzahl(db: Session) -> int:
-    """Gestellte Standardrechnungen ohne Erstversand.
+    """Gestellte Rechnungen der Umsatz-Belegarten ohne Zustellung an den Kunden.
 
     Gezaehlt wird in der Datenbank, nicht im Speicher: die Uebersicht laedt sonst
     bei jedem Aufruf die ganze Rechnungstabelle, um am Ende eine Zahl zu zeigen.
-    Die Bedingung kommt aus `beleg_status`, nicht noch einmal hier formuliert.
+    Die Bedingung kommt aus `beleg_status`, nicht noch einmal hier formuliert;
+    sie liest `kunde_zugestellt_am` (Bauschritt 5b): Ein Beleg nur an die
+    Buchhaltung zaehlt weiter als nicht versendet.
     """
     return (
         db.query(func.count(Invoice.id))
         .filter(
-            _STANDARD,
-            nicht_versendet_bedingung(Invoice.status, Invoice.datev_sent_at),
+            UMSATZ_BELEGARTEN_FILTER,
+            nicht_versendet_bedingung(Invoice.status, Invoice.kunde_zugestellt_am),
         )
         .scalar()
     ) or 0
 
 
 def bezahlt_im_zeitraum(
-    db: Session, von: date, bis: date | None = None,
+    db: Session, von: date, bis_ausschliesslich: date | None = None,
 ) -> Decimal:
-    """Bruttosumme bezahlter Standardrechnungen nach `bezahlt_am` (Geldeingang).
+    """Bruttosumme bezahlter Rechnungen der Umsatz-Belegarten nach `bezahlt_am` (Geldeingang).
 
-    `bis` ist die obere Grenze exklusiv (`bezahlt_am < bis`), damit angrenzende
-    Monate sich nicht ueberschneiden.
+    Halboffener Zeitraum [von, bis_ausschliesslich): Ein am Stichtag bezahlter
+    Beleg gehoert zum Folgezeitraum, angrenzende Monate greifen nicht ineinander.
     """
     bedingungen = [
         Invoice.status == "paid",
-        _STANDARD,
+        UMSATZ_BELEGARTEN_FILTER,
         Invoice.bezahlt_am >= von,
     ]
-    if bis is not None:
-        bedingungen.append(Invoice.bezahlt_am < bis)
+    if bis_ausschliesslich is not None:
+        bedingungen.append(Invoice.bezahlt_am < bis_ausschliesslich)
     return (
         db.query(func.coalesce(func.sum(Invoice.gross_total), 0))
         .filter(*bedingungen)
@@ -235,28 +271,33 @@ def bezahlt_im_zeitraum(
 
 
 def umsatz_im_zeitraum(
-    db: Session, von: date, bis: date | None = None,
+    db: Session, von: date, bis_ausschliesslich: date | None = None,
 ) -> Decimal:
-    """Nettoumsatz bezahlter Standardrechnungen nach `bezahlt_am`.
+    """Nettoumsatz bezahlter Rechnungen der Umsatz-Belegarten nach `bezahlt_am`.
 
     Entscheidung des Betreibers vom 2026-09-30: Umsatz ist, was bezahlt wurde.
     Gestellte, unbezahlte Rechnungen sind offene Forderungen und zaehlen hier nicht.
     Ausgezahlte Gutschriften mindern ihn nach ihrem `bezahlt_am` (Issue #141).
+
+    Halboffener Zeitraum [von, bis_ausschliesslich), wie `bezahlt_im_zeitraum`
+    (Issue #160): vorher zaehlte diese Funktion den Stichtag mit, die Bruttosumme
+    daneben nicht.
     """
     bedingungen = [
         Invoice.status == "paid",
-        _STANDARD,
+        UMSATZ_BELEGARTEN_FILTER,
         Invoice.bezahlt_am >= von,
     ]
-    if bis is not None:
-        bedingungen.append(Invoice.bezahlt_am <= bis)
+    if bis_ausschliesslich is not None:
+        bedingungen.append(Invoice.bezahlt_am < bis_ausschliesslich)
     eingang = (
         db.query(func.coalesce(func.sum(Invoice.net_total), 0))
         .filter(*bedingungen)
         .scalar()
     ) or Decimal("0")
     ausgezahlt = summe_gutschriften(
-        db, Invoice.net_total, von, topf=None, bis=bis, ausgezahlt=True,
+        db, Invoice.net_total, von, topf=UMSATZ_BELEGARTEN,
+        bis_ausschliesslich=bis_ausschliesslich, ausgezahlt=True,
     )
     return eingang - ausgezahlt
 

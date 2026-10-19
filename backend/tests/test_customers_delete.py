@@ -78,3 +78,15 @@ def test_loeschen_schreibt_audit_zeile(pg_session):
 def test_loeschen_unbekannte_id_404(pg_session):
     resp = _client(pg_session).post(f"/customers/{uuid.uuid4()}/loeschen")
     assert resp.status_code == 404
+
+
+def test_loesch_dialog_nennt_die_wirkung_nicht_deaktivieren(pg_session):
+    """#160: Die Route setzt deleted_at (Soft-Delete) und blendet den Kunden aus
+    Listen und Auswahlen aus; geloescht wird nichts (customer_guard). Der Dialog
+    muss die Wirkung treffen, sonst fuerchtet der Bediener Datenverlust, der
+    nicht droht."""
+    _customer(pg_session)
+    text = _client(pg_session).get("/customers/").text
+    assert "wirklich entfernen?" in text
+    assert "Rechnungen bleiben unverändert erhalten" in text
+    assert "deaktivieren" not in text

@@ -10,6 +10,7 @@ from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services import pdf_generator
 from app.services.pdf_generator import _document_title
+from tests.helpers.pdf import schrift_ist_eingebettet, schrift_objekte
 
 
 def test_document_title_standard():
@@ -18,8 +19,8 @@ def test_document_title_standard():
 
 
 def test_document_title_credit_note():
-    assert _document_title(SimpleNamespace(invoice_type="credit_note")) == "GUTSCHRIFT"
-    assert _document_title(SimpleNamespace(invoice_type="storno")) == "GUTSCHRIFT"
+    assert _document_title(SimpleNamespace(invoice_type="credit_note")) == "STORNORECHNUNG"
+    assert _document_title(SimpleNamespace(invoice_type="storno")) == "STORNORECHNUNG"
 
 
 def test_document_title_correction():
@@ -67,38 +68,14 @@ def _sample_invoice(customer, invoice_type=None, original_invoice_id=None):
     return inv
 
 
-def _iter_font_objects(reader):
-    for page in reader.pages:
-        res = page.get("/Resources")
-        if not res:
-            continue
-        fonts = res.get("/Font")
-        if not fonts:
-            continue
-        for ref in fonts.values():
-            yield ref.get_object()
-
-
-def _font_is_embedded(font_obj):
-    fd = font_obj.get("/FontDescriptor")
-    if fd is None and "/DescendantFonts" in font_obj:
-        desc = font_obj["/DescendantFonts"][0].get_object()
-        fd = desc.get("/FontDescriptor")
-    if fd is None:
-        return False
-    fd = fd.get_object()
-    return any(k in fd for k in ("/FontFile", "/FontFile2", "/FontFile3"))
-
-
 def test_generated_pdf_embeds_all_fonts(tmp_path):
     out = tmp_path / "invoice.pdf"
     pdf_generator.generate_pdf(_sample_invoice(_sample_customer()), _sample_company(), out)
-    reader = PdfReader(str(out))
-    font_objs = list(_iter_font_objects(reader))
+    font_objs = list(schrift_objekte(out))
     assert font_objs, "PDF enthält keine Font-Ressourcen"
     for fo in font_objs:
         base = str(fo.get("/BaseFont", ""))
-        assert _font_is_embedded(fo), f"Font nicht eingebettet: {base}"
+        assert schrift_ist_eingebettet(fo), f"Font nicht eingebettet: {base}"
         assert "Helvetica" not in base and "Times" not in base and "Courier" not in base, \
             f"Standard-14-Font verblieben: {base}"
 
@@ -125,26 +102,26 @@ def test_header_ohne_doppelten_firmennamen_in_adresszeile2(tmp_path):
     assert text.count("duplikat test gmbh") == 4
 
 
-def test_credit_note_pdf_shows_gutschrift_title(tmp_path):
+def test_credit_note_pdf_shows_stornorechnung_title(tmp_path):
     out = tmp_path / "storno.pdf"
     inv = _sample_invoice(_sample_customer(), invoice_type="credit_note", original_invoice_id=1)
     pdf_generator.generate_pdf(inv, _sample_company(), out)
     text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages)
-    assert "GUTSCHRIFT" in text
+    assert "STORNORECHNUNG" in text
 
 
-def test_credit_note_pdf_zeigt_gutschriftbetrag_ohne_zahlungsblock(tmp_path):
+def test_credit_note_pdf_zeigt_rechnungsbetrag_ohne_zahlungsblock(tmp_path):
     """#18: Gutschrift darf keine Zahlungsaufforderung (IBAN/Verwendungszweck) suggerieren."""
     out = tmp_path / "storno.pdf"
     inv = _sample_invoice(_sample_customer(), invoice_type="credit_note", original_invoice_id=1)
-    inv.payment_terms = "Gutschrift/Storno zur Rechnung RE-2026-001."
+    inv.payment_terms = "Storno zur Rechnung RE-2026-001."
     pdf_generator.generate_pdf(inv, _sample_company(), out)
     text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages)
-    assert "Gutschriftbetrag" in text
-    assert "Rechnungsbetrag" not in text
+    assert "Gutschriftbetrag" not in text
+    assert "Rechnungsbetrag" in text
     assert "IBAN:" not in text
     assert "Verwendungszweck:" not in text
-    assert "Gutschrift/Storno zur Rechnung RE-2026-001." in text
+    assert "Storno zur Rechnung RE-2026-001." in text
 
 
 def test_standard_pdf_behält_zahlungsblock(tmp_path):

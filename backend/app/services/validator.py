@@ -1,112 +1,69 @@
 """
 Regelbasierte Rechnungsprüfung nach § 14 UStG und ZUGFeRD EN16931-Anforderungen.
 
-Bewusst regelbasiert und nachlesbar: jede Meldung lässt sich auf eine Zeile in
-diesem Modul und von dort auf eine Vorschrift zurückführen. Eine Prüfung, deren
-Begründung niemand nachvollziehen kann, ist in einem Steuerkontext wertlos.
+Bewusst regelbasiert und nachlesbar: jede Meldung lässt sich auf eine Regel im
+Paket pruefregeln und von dort auf eine Vorschrift zurückführen. Eine Prüfung,
+deren Begründung niemand nachvollziehen kann, ist in einem Steuerkontext wertlos.
+
+validate_invoice löst Belegart und Kleinbetrag einmal auf, ruft die Regelgruppen
+in fester Reihenfolge und trennt die gesammelten Befunde erst am Ende nach
+Severity in Fehler und Warnungen. Die Aufrufruordnung ist Vertragsbestandteil:
+Tests prüfen Befund-Listen.
 """
-from decimal import Decimal, ROUND_HALF_UP
-from dataclasses import dataclass
-from app.services.leistungszeit import (
-    hat_leistungszeitpunkt,
-    leistungszeitraum_teilweise,
-    leistungszeitraum_ungueltig,
-)
-from app.services.ust_id_pruefung import vies_name_vergleichbar
-from app.models.invoice import Invoice
+from decimal import Decimal
+
 from app.models.company import Company
-from app.services.einheiten import UnknownUnitError, resolve_einheit
-from app.services.pflichtangaben import pflichtangaben
-from app.services.belegart import (
-    TYPE_CODE_MAP,
-    UnknownInvoiceTypeError,
-    belegart,
-)
-from app.services.zugferd_xml import COMPLIANT_PROFILES
-from app.services.steuerstatus import pruefe_honorargutschrift
+from app.models.invoice import Invoice
+from app.services.belegart import UnknownInvoiceTypeError, belegart
 from app.services.ersatzrechnung import pruefe_finalisierbar
-from app.services.steuerkategorie_land import kategorie_passt_zum_land
-from app.services.belegsummen import belegsummen
+from app.services.pruefregeln import (
+    aussteller,
+    belegbezug,
+    empfaenger,
+    empfehlungen,
+    kopf,
+    positionen,
+    profil,
+    steuerkategorie,
+)
+from app.services.pruefregeln.abzug_summen import pruefe_abzug_summen
+from app.services.pruefregeln.befund import Issue
+from app.services.pruefregeln.kontext import Pruefkontext
+from app.services.steuerstatus import pruefe_honorargutschrift
 
-
-VALID_TAX_RATES = {Decimal("0"), Decimal("7"), Decimal("19")}
 SIMPLIFIED_INVOICE_THRESHOLD = Decimal("250")  # § 33 UStDV
-# "E" ist seit #152 gültig und meint hier genau einen Fall: den Kleinunternehmer
-# nach § 19 UStG. Der Befreiungsgrund in EXEMPTION_REASONS nennt § 19 ausdrücklich,
-# und wer eine andere Befreiung nach § 4 UStG braucht (Heilbehandlung, Versicherung),
-# bekäme mit diesem Text eine falsche Begründung auf den Beleg. Solche Fälle daher
-# erst aufnehmen, wenn der Grund pro Rechnung wählbar ist — nicht heimlich mitnutzen.
-#
-# Weiterhin NICHT gültig: "G" (Ausfuhr Drittland). Inländische 0 %-Umsätze bleiben
-# "Z" (steuerpflichtig zum Satz null), das ist etwas anderes als steuerbefreit.
-VALID_TAX_CATEGORIES = {"S", "AE", "K", "O", "E"}
-# Kategorien, in denen keine Steuer ausgewiesen werden darf. Bei "E" ist das keine
-# Formalie: ein Kleinunternehmer, der Umsatzsteuer ausweist, schuldet sie nach
-# § 14c Abs. 2 UStG, obwohl er sie gar nicht erheben durfte.
-STEUERFREIE_KATEGORIEN = {"AE", "K", "O", "E"}
-
-
-@dataclass
-class Issue:
-    code: str
-    severity: str  # error | warning | info
-    message: str
-    field: str | None = None
-
-
-def _ust_id_validator_issues(
-    entity,
-    errors: list[Issue],
-    warnings: list[Issue],
-    prefix: str,
-    field: str,
-) -> None:
-    """VIES-Pruefstand aus Kunde/Firma in Validator-Meldungen."""
-    checked = getattr(entity, "vat_id_checked_at", None)
-    valid = getattr(entity, "vat_id_check_valid", None)
-    name_match = getattr(entity, "vat_id_name_match", None)
-    if not checked:
-        warnings.append(Issue(
-            f"{prefix}_VAT_ID_NOT_CHECKED", "warning",
-            "Eigene USt-IdNr. in den Einstellungen wurde noch nicht bei VIES geprueft."
-            if prefix == "SELLER" else
-            "USt-IdNr. des Kunden wurde noch nicht bei VIES geprueft.",
-            field,
-        ))
-        return
-    if valid is None:
-        warnings.append(Issue(
-            f"{prefix}_VAT_ID_VIES_UNAVAILABLE", "warning",
-            "VIES war beim letzten Pruefversuch nicht erreichbar; Gueltigkeit unbekannt.",
-            field,
-        ))
-        return
-    if valid is False:
-        errors.append(Issue(
-            f"{prefix}_VAT_ID_VIES_INVALID", "error",
-            "USt-IdNr. ist bei VIES als ungueltig oder nicht registriert gemeldet.",
-            field,
-        ))
-    if name_match == "weicht_ab":
-        stammname = (getattr(entity, "name", None) or "").strip()
-        vies_name = vies_name_vergleichbar(getattr(entity, "vat_id_vies_name", None))
-        if not stammname or not vies_name:
-            return
-        warnings.append(Issue(
-            f"{prefix}_VAT_ID_NAME_MISMATCH", "warning",
-            "Der bei VIES registrierte Firmenname weicht vom Namen in den Einstellungen ab."
-            if prefix == "SELLER" else
-            "Der bei VIES registrierte Name weicht vom Kundennamen ab.",
-            field,
-        ))
 
 
 def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], list[Issue]]:
-    errors: list[Issue] = []
-    warnings: list[Issue] = []
+    kontext = _pruefkontext(invoice, company)
+    befunde: list[Issue] = []
+    befunde.extend(profil.pruefe_profil(kontext))
+    befunde.extend(aussteller.pruefe_aussteller(kontext))
+    befunde.extend(empfaenger.pruefe_leistungsempfaenger(kontext))
+    befunde.extend(kopf.pruefe_kopf(kontext))
+    befunde.extend(positionen.pruefe_positionen(kontext))
+    befunde.extend(pruefe_abzug_summen(kontext))
+    befunde.extend(steuerkategorie.pruefe_steuerkategorie(kontext))
+    befunde.extend(belegbezug.pruefe_belegbezug(kontext))
 
-    gross = invoice.gross_total
-    tax_category = getattr(invoice, "tax_category", "S")
+    # Honorargutschrift (389): Steuerstatus und Kennung des Autors. Eigene
+    # Regeln im Modul steuerstatus; hier nur der Aufruf, damit validator.py
+    # nicht weiter waechst und keine zirkulaeren Imports entstehen.
+    if kontext.rechnungstyp == "self_billing":
+        befunde.extend(pruefe_honorargutschrift(invoice))
+
+    # Ersatzrechnung (docs/specs/ersatzrechnung.md): Regeln im eigenen Modul.
+    befunde.extend(pruefe_finalisierbar(invoice))
+
+    befunde.extend(empfehlungen.pruefe_empfehlungen(kontext))
+
+    errors = [b for b in befunde if b.severity == "error"]
+    warnings = [b for b in befunde if b.severity == "warning"]
+    return errors, warnings
+
+
+def _pruefkontext(invoice: Invoice, company: Company) -> Pruefkontext:
+    """Loest einmal auf, was mehrere Regeln brauchen."""
     # Belegart einmal aufloesen: sie steuert die Datumspruefungen (386 unten)
     # und die Originalbezug-Konsistenz (weiter unten). Unbekannte Typen werden
     # nicht hier, sondern als INVOICE_TYPE_INVALID gemeldet.
@@ -118,425 +75,16 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
     # „nicht uebersteigt" (§ 33 UStDV) heisst bis EINSCHLIESSLICH 250 €. Mit `<`
     # verlangte die Pruefung bei genau 250,00 € brutto ein Leistungsdatum und wies
     # die Finalisierung ab, fuer eine Rechnung, die das Gesetz davon befreit (#23).
-    simplified = gross <= SIMPLIFIED_INVOICE_THRESHOLD
-
-    # ZUGFeRD-Profil muss EN16931-konform sein (§ 14 UStG). MINIMUM/BASIC-WL sind
-    # nicht rechtskonform und werden NICHT als E-Rechnung akzeptiert (#98 E4) —
-    # harter Fehler, damit das Finalize-Gate fail-closed 400 statt 500 liefert.
-    # None/leer = Modell-Default EN16931 (Spalte nullable=False) → kein Fehler.
-    if (invoice.zugferd_profile or "EN16931") not in COMPLIANT_PROFILES:
-        errors.append(Issue(
-            "PROFILE_NOT_COMPLIANT", "error",
-            f"ZUGFeRD-Profil '{invoice.zugferd_profile}' ist als E-Rechnung unzulässig "
-            f"(mind. EN16931 erforderlich; MINIMUM/BASIC-WL sind nicht rechtskonform). "
-            f"Erlaubt: {', '.join(sorted(COMPLIANT_PROFILES))}.",
-            "zugferd_profile",
-        ))
-
-    # § 14 Abs. 4 UStG – Pflichtangaben Leistungserbringer
-    if not company.name or not company.name.strip():
-        errors.append(Issue("SELLER_NAME_MISSING", "error", "Firmenname fehlt in den Einstellungen.", "company.name"))
-    if not company.address_line1 or not company.zip_code or not company.city:
-        errors.append(Issue("SELLER_ADDRESS_MISSING", "error", "Vollständige Adresse des Leistungserbringers fehlt.", "company.address"))
-    if not company.tax_number and not company.vat_id:
-        errors.append(Issue("SELLER_TAX_ID_MISSING", "error", "Steuernummer oder USt-IdNr. des Leistungserbringers fehlt (§ 14 Abs. 4 Nr. 2 UStG).", "company.tax"))
-    elif tax_category == "O" and not company.tax_number:
-        errors.append(Issue(
-            "SELLER_TAX_NUMBER_REQUIRED_FOR_O", "error",
-            "Bei Kategorie O (nicht im Inland steuerbar, § 3a Abs. 2 UStG) muss die "
-            "Steuernummer in den Einstellungen hinterlegt sein (EN16931 BR-CO-26). "
-            "Die USt-IdNr. allein genügt hier nicht.",
-            "company.tax_number",
-        ))
-    elif tax_category == "AE" and not company.vat_id:
-        errors.append(Issue(
-            "SELLER_VAT_ID_REQUIRED", "error",
-            "Bei Reverse Charge (Kategorie AE) muss die USt-IdNr. des Leistungserbringers "
-            "in den Einstellungen hinterlegt sein (§ 14a Abs. 1 Satz 3 UStG). "
-            "Die Steuernummer allein genügt hier nicht.",
-            "company.vat_id",
-        ))
-    elif tax_category == "K" and not company.vat_id:
-        errors.append(Issue(
-            "SELLER_VAT_ID_REQUIRED", "error",
-            "Bei innergemeinschaftlicher Lieferung (Kategorie K) muss die USt-IdNr. des "
-            "Leistungserbringers in den Einstellungen hinterlegt sein "
-            "(§ 14a Abs. 3 Satz 2 UStG). Die Steuernummer allein genügt hier nicht.",
-            "company.vat_id",
-        ))
-    angaben = pflichtangaben(company)
-    if angaben.fehlend:
-        errors.append(Issue(
-            "SELLER_PFLICHTANGABEN_MISSING", "error",
-            f"Pflichtangaben für Geschäftsbriefe fehlen in den Einstellungen: {angaben.luecke()}.",
-            f"company.{angaben.fehlend[0]}",
-        ))
-    if company.vat_id:
-        _ust_id_validator_issues(
-            company,
-            errors,
-            warnings,
-            prefix="SELLER",
-            field="company.vat_id",
-        )
-
-    # § 14 Abs. 4 Nr. 1 UStG – Leistungsempfänger
-    customer = invoice.customer
-    if not customer:
-        errors.append(Issue("BUYER_MISSING", "error", "Kein Kunde zugeordnet.", "customer_id"))
-    else:
-        if not customer.name or not customer.name.strip():
-            errors.append(Issue("BUYER_NAME_MISSING", "error", "Name des Kunden fehlt.", "customer.name"))
-        if not customer.address_line1 or not customer.zip_code or not customer.city:
-            errors.append(Issue("BUYER_ADDRESS_MISSING", "error", "Vollständige Adresse des Kunden fehlt.", "customer.address"))
-
-        # Hoher Rechnungsbetrag ohne USt-IdNr. des Empfängers → Hinweis (kein harter Fehler).
-        # § 14a Abs. 1 UStG verlangt die USt-IdNr. des Empfängers nur bei Leistungen i.S.d.
-        # § 3a Abs. 2 UStG (grenzüberschreitend/Reverse Charge, Kategorie AE) bzw.
-        # § 14a Abs. 3 UStG (innergemeinschaftliche Lieferung, Kategorie K),
-        # nicht generell bei inländischen B2B-Rechnungen über 10.000 €. Eine inländische Rechnung
-        # über 10.000 € an einen Kunden ohne USt-IdNr. ist zulässig und darf nicht blockiert werden.
-        if gross > Decimal("10000") and not customer.vat_id:
-            warnings.append(Issue(
-                "HIGH_VALUE_NO_BUYER_VAT_ID", "warning",
-                f"Rechnungsbetrag {gross:.2f} € übersteigt 10.000 €. "
-                f"Bei B2B-Geschäften wird die Angabe der USt-IdNr. des Leistungsempfängers empfohlen.",
-                "customer.vat_id"
-            ))
-        # Steuerkategorie gegen das Land des Kunden (#145): Warnung, kein harter
-        # Fehler, weil Ausnahmen im Einzelfall zulässig bleiben. Die Regeln und
-        # Warntexte stehen im Modul steuerkategorie_land.py.
-        hinweis = kategorie_passt_zum_land(tax_category, customer.country)
-        if hinweis:
-            warnings.append(Issue(
-                "TAX_CATEGORY_COUNTRY_MISMATCH", "warning", hinweis, "tax_category"
-            ))
-        if customer.vat_id:
-            _ust_id_validator_issues(
-                customer,
-                errors,
-                warnings,
-                prefix="BUYER",
-                field="customer.vat_id",
-            )
-
-    # § 14 Abs. 4 Nr. 4 UStG – Rechnungsnummer
-    if not invoice.invoice_number:
-        errors.append(Issue("INVOICE_NUMBER_MISSING", "error", "Rechnungsnummer fehlt.", "invoice_number"))
-
-    # § 14 Abs. 4 Nr. 3 UStG – Ausstellungsdatum
-    if not invoice.issue_date:
-        errors.append(Issue("ISSUE_DATE_MISSING", "error", "Ausstellungsdatum fehlt.", "issue_date"))
-
-    # Fälligkeitsdatum logisch prüfen
-    if invoice.issue_date and invoice.due_date and invoice.due_date < invoice.issue_date:
-        errors.append(Issue("DUE_DATE_BEFORE_ISSUE", "error", "Fälligkeitsdatum liegt vor dem Ausstellungsdatum.", "due_date"))
-
-    # § 14 Abs. 4 Nr. 6 UStG – Leistungsdatum. Produktentscheid #98 E7 (2026-07-23):
-    # harter Gate statt Warnung. Bei Nicht-Kleinbetragsrechnungen (über 250 €) ist der
-    # Leistungszeitpunkt zwingend — fehlt er, blockiert das Finalize-Gate (400).
-    # Kleinbetrag (bis 250 € einschließlich, § 33 UStDV) bleibt ausgenommen.
-    #
-    # Bei innergemeinschaftlicher Lieferung (Kategorie K) gilt die
-    # Kleinbetragsausnahme NICHT: EN16931 verlangt über BR-IC-11 das Lieferdatum
-    # (BT-72) oder einen Abrechnungszeitraum, unabhängig vom Betrag. § 33 UStDV
-    # erlässt nur die nationale Pflichtangabe, die europäische Norm gilt daneben
-    # weiter. Ohne diese Zeile kam der Beleg am Gate vorbei und scheiterte danach
-    # an Mustang, mit einer Meldung aus dem Werkzeug statt einer aus der
-    # Anwendung (#47).
-    innergemeinschaftlich = tax_category == "K"
-    if leistungszeitraum_teilweise(invoice):
-        errors.append(Issue(
-            "SERVICE_PERIOD_INCOMPLETE", "error",
-            "Leistungszeitraum unvollständig: von- und bis-Datum müssen beide gesetzt sein.",
-            "service_period",
-        ))
-    if leistungszeitraum_ungueltig(invoice):
-        errors.append(Issue(
-            "SERVICE_PERIOD_INVALID", "error",
-            "Leistungszeitraum ungültig: das von-Datum liegt nach dem bis-Datum.",
-            "service_period",
-        ))
-    if art is not None and art.intern == "prepayment":
-        # Produktbegrenzung des ersten 386-Schnitts (docs/specs/vorabrechnung.md):
-        # nur die noch nicht bezahlte Vorausforderung mit bekanntem geplantem
-        # Leistungszeitraum. Das ist STRENGER als EN16931 — die Norm kennt diese
-        # Pflicht nicht — und ist eine Produktentscheidung, keine Normpflicht.
-        # Ein noch nicht eingetretenes Ereignis darf nicht als tatsaechliche
-        # Lieferung ausgegeben werden; das Rechnungsdatum wird nie als Lieferung
-        # eingesetzt. Teilzeitraum und falsche Reihenfolge melden die bestehenden
-        # Pruefungen oben (SERVICE_PERIOD_INCOMPLETE / _INVALID).
-        if invoice.delivery_date:
-            errors.append(Issue(
-                "PREPAYMENT_ACTUAL_DELIVERY", "error",
-                "Anzahlungsrechnung mit tatsaechlichem Leistungsdatum: dieser Schnitt "
-                "bildet nur die noch nicht bezahlte Vorausforderung mit geplantem "
-                "Zeitraum ab. Leistungsdatum leeren und stattdessen den "
-                "voraussichtlichen Leistungszeitraum (von und bis) setzen.",
-                "delivery_date",
-            ))
-        if not invoice.service_period_start and not invoice.service_period_end:
-            errors.append(Issue(
-                "PREPAYMENT_PERIOD_REQUIRED", "error",
-                "Anzahlungsrechnung braucht den voraussichtlichen Leistungszeitraum "
-                "(von und bis). Er ersetzt hier das Leistungsdatum, unabhaengig "
-                "vom Rechnungsbetrag.",
-                "service_period",
-            ))
-    elif not hat_leistungszeitpunkt(invoice) and (not simplified or innergemeinschaftlich):
-        errors.append(Issue(
-            "DELIVERY_DATE_MISSING", "error",
-            "Zeitpunkt der Leistungserbringung fehlt. Bei einer innergemeinschaftlichen "
-            "Lieferung ist er unabhängig vom Rechnungsbetrag zwingend (EN16931, BR-IC-11); "
-            "die Kleinbetragsregelung des § 33 UStDV gilt dafür nicht."
-            if innergemeinschaftlich else
-            "Zeitpunkt der Leistungserbringung fehlt (§ 14 Abs. 4 Nr. 6 UStG) — bei Rechnungen über 250 € zwingend erforderlich.",
-            "delivery_date"
-        ))
-
-    # § 14 Abs. 4 Nr. 5 UStG – Leistungsbeschreibung und Positionen
-    if not invoice.items:
-        errors.append(Issue("NO_ITEMS", "error", "Keine Rechnungspositionen vorhanden.", "items"))
-    else:
-        for item in invoice.items:
-            if not item.description or not item.description.strip():
-                errors.append(Issue(
-                    "ITEM_DESCRIPTION_MISSING", "error",
-                    f"Position {item.position}: Leistungsbeschreibung fehlt.", f"items[{item.position}].description"
-                ))
-            if item.quantity <= 0:
-                errors.append(Issue(
-                    "ITEM_QUANTITY_INVALID", "error",
-                    f"Position {item.position}: Menge muss größer als 0 sein.", f"items[{item.position}].quantity"
-                ))
-            try:
-                resolve_einheit(item.unit if item.unit is not None else "")
-            except UnknownUnitError:
-                errors.append(Issue(
-                    "UNIT_UNKNOWN", "error",
-                    f"Position {item.position}: unbekannte Einheit {(item.unit or '')!r}.",
-                    f"items[{item.position}].unit",
-                ))
-            if item.unit_price < 0:
-                errors.append(Issue(
-                    "ITEM_PRICE_NEGATIVE", "error",
-                    f"Position {item.position}: Negativer Einzelpreis ist nicht erlaubt.", f"items[{item.position}].unit_price"
-                ))
-            rate = item.tax_rate.quantize(Decimal("0"))
-            if rate not in VALID_TAX_RATES:
-                errors.append(Issue(
-                    "TAX_RATE_INVALID", "error",
-                    f"Position {item.position}: Steuersatz {item.tax_rate}% ist ungültig. Erlaubt: 0%, 7%, 19%.",
-                    f"items[{item.position}].tax_rate"
-                ))
-
-            # Betragsprüfung je Position
-            expected_net = (item.quantity * item.unit_price).quantize(Decimal("0.01"), ROUND_HALF_UP)
-            if abs(item.net_amount - expected_net) > Decimal("0.02"):
-                errors.append(Issue(
-                    "ITEM_AMOUNT_MISMATCH", "error",
-                    f"Position {item.position}: Nettobetrag {item.net_amount} stimmt nicht (erwartet {expected_net}).",
-                    f"items[{item.position}].net_amount"
-                ))
-            expected_tax = (item.net_amount * item.tax_rate / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
-            if abs(item.tax_amount - expected_tax) > Decimal("0.02"):
-                errors.append(Issue(
-                    "ITEM_TAX_MISMATCH", "error",
-                    f"Position {item.position}: Steuerbetrag {item.tax_amount} stimmt nicht (erwartet {expected_tax}).",
-                    f"items[{item.position}].tax_amount"
-                ))
-            if tax_category in {"AE", "K"} and item.tax_amount != Decimal("0"):
-                errors.append(Issue(
-                    "TAX_AMOUNT_MUST_BE_ZERO", "error",
-                    f"Position {item.position}: Bei Reverse Charge / innergemeinschaftlicher "
-                    f"Lieferung muss der Steuerbetrag exakt 0,00 € betragen "
-                    f"(gefunden {item.tax_amount}).",
-                    f"items[{item.position}].tax_amount",
-                ))
-
-    # Abzug auf Belegebene (BG-20). Wie tax_category mit getattr gelesen, damit
-    # Testattrappen ohne die Felder weiter laufen. Betrag und Grund sind ein Paar:
-    # EN 16931 BR-33 verlangt den Grund zum Abzug.
-    abzug_betrag = getattr(invoice, "abzug_betrag", None)
-    abzug_grund = getattr(invoice, "abzug_grund", None)
-    abzug_fehler = False
-    if abzug_betrag is not None or abzug_grund is not None:
-        if (abzug_betrag is None) != (abzug_grund is None):
-            errors.append(Issue(
-                "ABZUG_UNVOLLSTAENDIG", "error",
-                "Abzug unvollständig: Betrag und Grund müssen zusammen gesetzt werden "
-                "(EN 16931 BR-33 verlangt einen Grund zum Abzug).",
-                "abzug_betrag",
-            ))
-            abzug_fehler = True
-        elif abzug_betrag <= Decimal("0"):
-            errors.append(Issue(
-                "ABZUG_NICHT_POSITIV", "error",
-                "Der Abzug muss größer als 0,00 € sein.",
-                "abzug_betrag",
-            ))
-            abzug_fehler = True
-        elif art is not None and art.intern in {"self_billing", "prepayment"}:
-            errors.append(Issue(
-                "ABZUG_BELEGART", "error",
-                "Bei Anzahlungsrechnung (386) und Honorargutschrift (389) ist ein "
-                "Abzug auf Belegebene unzulässig.",
-                "abzug_betrag",
-            ))
-            abzug_fehler = True
-        elif invoice.items:
-            # Summen aus belegsummen, derselben Quelle wie im Router: hier wird
-            # nichts selbst nachgerechnet.
-            positionen_netto = belegsummen(invoice.items, None).positionen_netto
-            if len({i.tax_rate for i in invoice.items}) > 1:
-                errors.append(Issue(
-                    "ABZUG_SATZ_UNEINDEUTIG", "error",
-                    "Abzug setzt voraus, dass alle Positionen denselben Steuersatz "
-                    "tragen; sonst ließe sich die Steuer auf der verminderten Basis "
-                    "nicht eindeutig berechnen.",
-                    "abzug_betrag",
-                ))
-                abzug_fehler = True
-            if abzug_betrag >= positionen_netto:
-                errors.append(Issue(
-                    "ABZUG_ZU_HOCH", "error",
-                    f"Abzug {abzug_betrag} erreicht oder übersteigt die "
-                    f"Positionssumme {positionen_netto}.",
-                    "abzug_betrag",
-                ))
-                abzug_fehler = True
-
-    # Gesamtbeträge prüfen. Erwartungswerte aus belegsummen (BG-20): dieselbe
-    # Quelle wie im Router. Liegt ein ABZUG-Fehler vor, ist unklar, auf welcher
-    # Basis die gespeicherten Summen stehen; der Vergleich entfällt, statt
-    # Meldungen zu einem bereits abgelehnten Abzug zu häufen.
-    if invoice.items:
-        if not abzug_fehler:
-            summen = belegsummen(invoice.items, abzug_betrag)
-            if abs(invoice.net_total - summen.steuerbasis) > Decimal("0.02"):
-                errors.append(Issue("NET_TOTAL_MISMATCH", "error", f"Nettosumme {invoice.net_total} stimmt nicht (erwartet {summen.steuerbasis}).", "net_total"))
-            if abs(invoice.tax_total - summen.steuer) > Decimal("0.02"):
-                errors.append(Issue("TAX_TOTAL_MISMATCH", "error", f"Steuersumme {invoice.tax_total} stimmt nicht (erwartet {summen.steuer}).", "tax_total"))
-            if abs(invoice.gross_total - summen.brutto) > Decimal("0.02"):
-                errors.append(Issue("GROSS_TOTAL_MISMATCH", "error", f"Bruttosumme {invoice.gross_total} stimmt nicht (erwartet {summen.brutto}).", "gross_total"))
-        if tax_category in {"AE", "K"} and invoice.tax_total != Decimal("0"):
-            errors.append(Issue(
-                "TAX_AMOUNT_MUST_BE_ZERO", "error",
-                f"Bei Reverse Charge / innergemeinschaftlicher Lieferung muss die "
-                f"Steuersumme exakt 0,00 € betragen (gefunden {invoice.tax_total}).",
-                "tax_total",
-            ))
-
-    # MwSt.-Kategorie prüfen
-    if tax_category not in VALID_TAX_CATEGORIES:
-        errors.append(Issue(
-            "TAX_CATEGORY_INVALID", "error",
-            "Unbekannte MwSt.-Kategorie.", "tax_category"
-        ))
-    elif tax_category in STEUERFREIE_KATEGORIEN:
-        if invoice.items and any(item.tax_rate > Decimal("0") for item in invoice.items):
-            meldung = (
-                "Als Kleinunternehmer nach § 19 UStG dürfen Sie keine Umsatzsteuer "
-                "ausweisen. Ausgewiesene Steuer schulden Sie nach § 14c Abs. 2 UStG "
-                "trotzdem. Steuersatz auf 0 % setzen."
-                if tax_category == "E" else
-                "Bei Reverse Charge / steuerfreien Lieferungen muss der Steuersatz 0 % betragen."
-            )
-            errors.append(Issue(
-                "TAX_CATEGORY_RATE_MISMATCH", "error", meldung, "tax_category"
-            ))
-        if tax_category in {"AE", "K"} and customer and not customer.vat_id:
-            errors.append(Issue(
-                "BUYER_VAT_ID_REQUIRED", "error",
-                "Für Reverse Charge und innergemeinschaftliche Lieferungen ist die USt-IdNr. des Käufers Pflicht.",
-                "customer.vat_id"
-            ))
-
-    # Konsistenz Rechnungstyp ↔ Originalbezug (ROADMAP Punkt 3).
-    # invoice_type muss bekannt sein; Folgebelege (Gutschrift/Storno/Korrektur/
-    # Gutschriftverfahren) verlangen eine Originalreferenz, eine eigenstaendige
-    # Rechnung (380 und die Anzahlungsrechnung 386) darf keine haben.
-    original_ref = getattr(invoice, "original_invoice_id", None)
-    if art is None:
-        errors.append(Issue(
-            "INVOICE_TYPE_INVALID", "error",
-            f"Unbekannter Rechnungstyp '{invoice_type}'. "
-            f"Erlaubt: {', '.join(str(t) for t in TYPE_CODE_MAP if t)}.",
-            "invoice_type"
-        ))
-    else:
-        requires_reference = art.braucht_original
-        if requires_reference and not original_ref:
-            errors.append(Issue(
-                "ORIGINAL_INVOICE_REQUIRED", "error",
-                "Gutschrift/Storno/Korrektur muss die Originalrechnung referenzieren "
-                "(original_invoice_id fehlt).",
-                "original_invoice_id"
-            ))
-        if not requires_reference and original_ref:
-            errors.append(Issue(
-                "ORIGINAL_INVOICE_NOT_ALLOWED", "error",
-                "Eine Standardrechnung darf keine Originalrechnung referenzieren.",
-                "original_invoice_id"
-            ))
-
-    # Eine Gutschrift spiegelt ihr Original betragsgleich (#8). `build_storno`
-    # kopiert die Summen 1:1, und die Bearbeitungsseite ist für Gutschriften
-    # gesperrt — diese Prüfung ist die zweite Schicht davor, so wie die Wächter in
-    # der Anwendung und die Auslöser in der Datenbank zwei Schichten derselben
-    # Zusage sind. Sie steht hier, weil das Finalisieren fail-closed ist: was den
-    # Validator passiert, wandert unwiderruflich ins Archiv.
-    #
-    # OHNE Toleranz, anders als bei den Positionssummen. Dort wird gerechnet und
-    # gerundet, hier wird kopiert; jede Abweichung ist eine Eingabe, keine
-    # Rundung. Eine Toleranz ließe genau die Tür offen, die diese Regel schließt.
-    #
-    # `original_invoice` fehlt bei Testattrappen und bei einer noch nicht
-    # geladenen Beziehung; dann greift die Regel nicht. Die Referenz als solche
-    # verlangt bereits ORIGINAL_INVOICE_REQUIRED oben.
-    if invoice_type == "credit_note":
-        original = getattr(invoice, "original_invoice", None)
-        if original is not None:
-            for feld, bezeichnung in (("net_total", "Nettobetrag"),
-                                      ("tax_total", "Steuerbetrag"),
-                                      ("gross_total", "Bruttobetrag")):
-                if getattr(invoice, feld, None) != getattr(original, feld, None):
-                    errors.append(Issue(
-                        "STORNO_AMOUNT_MISMATCH", "error",
-                        f"{bezeichnung} der Gutschrift weicht von der Originalrechnung "
-                        f"{original.invoice_number} ab "
-                        f"({getattr(invoice, feld, None)} statt {getattr(original, feld, None)}). "
-                        "Eine Stornierung hebt den Beleg vollständig auf; eine "
-                        "abweichende Summe wäre eine Teilkorrektur und braucht einen "
-                        "eigenen Beleg.",
-                        feld
-                    ))
-
-    # Honorargutschrift (389): Steuerstatus und Kennung des Autors. Eigene
-    # Regeln im Modul steuerstatus; hier nur der Aufruf, damit validator.py
-    # nicht weiter waechst und keine zirkulaeren Imports entstehen.
-    if invoice_type == "self_billing":
-        errors.extend(pruefe_honorargutschrift(invoice))
-
-    # Ersatzrechnung (docs/specs/ersatzrechnung.md): Regeln im eigenen Modul.
-    errors.extend(pruefe_finalisierbar(invoice))
-
-    # Empfehlungen
-    if not invoice.payment_terms:
-        warnings.append(Issue("NO_PAYMENT_TERMS", "warning", "Zahlungsbedingungen fehlen (empfohlen).", "payment_terms"))
-    if company and not company.bank_iban and not _gutschrift_auszahlung(invoice):
-        warnings.append(Issue("NO_BANK_DETAILS", "warning", "Bankverbindung in den Einstellungen nicht hinterlegt (empfohlen für SEPA-Zahlungen).", "company.bank_iban"))
-    if _gutschrift_auszahlung(invoice) and invoice.customer and not invoice.customer.bank_iban:
-        warnings.append(Issue(
-            "CUSTOMER_BANK_MISSING", "warning",
-            "Bankverbindung des Kunden fehlt (IBAN für Gutschrift-Auszahlung und EPC-QR empfohlen).",
-            "customer.bank_iban",
-        ))
-
-    return errors, warnings
-
-
-def _gutschrift_auszahlung(invoice: Invoice) -> bool:
-    return getattr(invoice, "invoice_type", None) in {
-        "credit_note", "credit", "storno", "self_billing",
-    }
+    return Pruefkontext(
+        invoice=invoice,
+        company=company,
+        rechnungstyp=invoice_type,
+        belegart=art,
+        kleinbetrag=invoice.gross_total <= SIMPLIFIED_INVOICE_THRESHOLD,
+        steuerkategorie=getattr(invoice, "tax_category", "S"),
+        # Wie steuerkategorie mit getattr gelesen, damit Testattrappen ohne
+        # die Felder weiter laufen. Betrag und Grund sind ein Paar:
+        # EN 16931 BR-33 verlangt den Grund zum Abzug.
+        abzug_betrag=getattr(invoice, "abzug_betrag", None),
+        abzug_grund=getattr(invoice, "abzug_grund", None),
+    )

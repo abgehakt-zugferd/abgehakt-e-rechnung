@@ -41,11 +41,11 @@ def test_finalize_blocks_and_stays_draft_when_combine_fails(pg_session):
     inv = valid_draft(pg_session)
     number = inv.invoice_number
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
-             patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
-             patch("app.routers.invoices.pdfa.to_pdfa3", return_value=True), \
-             patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-             patch("app.routers.invoices.mustang.combine", return_value=False):
+        with patch("app.services.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
+             patch("app.services.pdfa.gs_available", return_value=True), \
+             patch("app.services.pdfa.to_pdfa3", return_value=True), \
+             patch("app.services.mustang.jar_available", return_value=True), \
+             patch("app.services.mustang.combine", return_value=False):
             r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
         assert r.status_code == 400, r.text
         pg_session.expire_all()
@@ -64,9 +64,9 @@ def test_finalize_blocks_when_jar_unavailable(pg_session):
     inv = valid_draft(pg_session)
     number = inv.invoice_number
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
-             patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
-             patch("app.routers.invoices.mustang.jar_available", return_value=False):
+        with patch("app.services.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
+             patch("app.services.pdfa.gs_available", return_value=True), \
+             patch("app.services.mustang.jar_available", return_value=False):
             r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
         assert r.status_code == 400, r.text
         pg_session.expire_all()
@@ -87,12 +87,12 @@ def test_finalize_succeeds_creates_zugferd_pdf_and_cleans_visual(pg_session):
         return True
 
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
-             patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
-             patch("app.routers.invoices.pdfa.to_pdfa3", return_value=True), \
-             patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-             patch("app.routers.invoices.mustang.combine", side_effect=_fake_combine), \
-             patch("app.routers.invoices.mustang.validate", return_value=valid_mustang()):
+        with patch("app.services.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
+             patch("app.services.pdfa.gs_available", return_value=True), \
+             patch("app.services.pdfa.to_pdfa3", return_value=True), \
+             patch("app.services.mustang.jar_available", return_value=True), \
+             patch("app.services.mustang.combine", side_effect=_fake_combine), \
+             patch("app.services.mustang.validate", return_value=valid_mustang()):
             r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
         assert r.status_code == 303
         pg_session.expire_all()
@@ -123,12 +123,12 @@ def test_finalize_blocks_when_combined_pdf_fails_mustang_validate(pg_session):
                "raw": "Parsed PDF:invalid\n[error] no embedded XML found",
                "errors": ["[error] no embedded XML found"], "warnings": []}
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
-             patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
-             patch("app.routers.invoices.pdfa.to_pdfa3", return_value=True), \
-             patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-             patch("app.routers.invoices.mustang.combine", side_effect=_fake_combine), \
-             patch("app.routers.invoices.mustang.validate", return_value=invalid):
+        with patch("app.services.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
+             patch("app.services.pdfa.gs_available", return_value=True), \
+             patch("app.services.pdfa.to_pdfa3", return_value=True), \
+             patch("app.services.mustang.jar_available", return_value=True), \
+             patch("app.services.mustang.combine", side_effect=_fake_combine), \
+             patch("app.services.mustang.validate", return_value=invalid):
             r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
         assert r.status_code == 400, r.text
         pg_session.expire_all()
@@ -159,12 +159,12 @@ def test_finalize_blocks_when_combined_pdf_valid_pdfa_but_no_xml(pg_session):
                  "raw": "<pdf>isCompliant=true flavour=3b</pdf>\nSummary: 0 errors",
                  "errors": [], "warnings": []}
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
-             patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
-             patch("app.routers.invoices.pdfa.to_pdfa3", return_value=True), \
-             patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-             patch("app.routers.invoices.mustang.combine", side_effect=_fake_combine), \
-             patch("app.routers.invoices.mustang.validate", return_value=bare_pdfa):
+        with patch("app.services.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
+             patch("app.services.pdfa.gs_available", return_value=True), \
+             patch("app.services.pdfa.to_pdfa3", return_value=True), \
+             patch("app.services.mustang.jar_available", return_value=True), \
+             patch("app.services.mustang.combine", side_effect=_fake_combine), \
+             patch("app.services.mustang.validate", return_value=bare_pdfa):
             r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
         assert r.status_code == 400, r.text
         pg_session.expire_all()
@@ -191,12 +191,12 @@ def test_finalize_requires_xml_valid_not_just_is_valid(pg_session):
               "raw": "Parsed PDF:valid\nSummary: 0 errors",   # kein "XML:valid"
               "errors": [], "warnings": []}
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
-             patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
-             patch("app.routers.invoices.pdfa.to_pdfa3", return_value=True), \
-             patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-             patch("app.routers.invoices.mustang.combine", side_effect=_fake_combine), \
-             patch("app.routers.invoices.mustang.validate", return_value=no_xml):
+        with patch("app.services.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
+             patch("app.services.pdfa.gs_available", return_value=True), \
+             patch("app.services.pdfa.to_pdfa3", return_value=True), \
+             patch("app.services.mustang.jar_available", return_value=True), \
+             patch("app.services.mustang.combine", side_effect=_fake_combine), \
+             patch("app.services.mustang.validate", return_value=no_xml):
             r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
         assert r.status_code == 400, r.text
         pg_session.expire_all()
@@ -226,12 +226,12 @@ def test_fehlermeldung_nennt_den_grund_aus_der_pruefung(pg_session):
     invalid = {"is_valid": False, "raw": "Parsed PDF:valid XML:invalid\n" + grund,
                "errors": [grund], "warnings": []}
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
-             patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
-             patch("app.routers.invoices.pdfa.to_pdfa3", return_value=True), \
-             patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-             patch("app.routers.invoices.mustang.combine", side_effect=_fake_combine), \
-             patch("app.routers.invoices.mustang.validate", return_value=invalid):
+        with patch("app.services.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
+             patch("app.services.pdfa.gs_available", return_value=True), \
+             patch("app.services.pdfa.to_pdfa3", return_value=True), \
+             patch("app.services.mustang.jar_available", return_value=True), \
+             patch("app.services.mustang.combine", side_effect=_fake_combine), \
+             patch("app.services.mustang.validate", return_value=invalid):
             r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
         assert r.status_code == 400, r.text
         assert "BR-CO-26" in r.text, r.text
@@ -260,10 +260,10 @@ def test_finalize_bleibt_entwurf_wenn_mustang_in_die_zeitgrenze_laeuft(pg_sessio
         raise subprocess.TimeoutExpired(cmd="java", timeout=60)
 
     try:
-        with patch("app.routers.invoices.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
-             patch("app.routers.invoices.pdfa.gs_available", return_value=True), \
-             patch("app.routers.invoices.pdfa.to_pdfa3", return_value=True), \
-             patch("app.routers.invoices.mustang.jar_available", return_value=True), \
+        with patch("app.services.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
+             patch("app.services.pdfa.gs_available", return_value=True), \
+             patch("app.services.pdfa.to_pdfa3", return_value=True), \
+             patch("app.services.mustang.jar_available", return_value=True), \
              patch("app.services.mustang.subprocess.run", side_effect=_zeitgrenze):
             r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
 

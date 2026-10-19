@@ -53,6 +53,31 @@ class Invoice(Base):
             "OR (abzug_betrag > 0 AND abzug_grund IS NOT NULL)",
             name="ck_invoices_abzug_beide_oder_gueltig",
         ),
+        # BR-CO-25 (Bauschritt 2b): bei offenem Betrag BT-9 oder BT-20. Zweite
+        # Linie hinter Formular und Validator. Identisch zu Migration 026
+        # (alembic check).
+        CheckConstraint(
+            "due_date IS NOT NULL OR (payment_terms IS NOT NULL AND payment_terms <> '')",
+            name="ck_invoices_faelligkeit_oder_bedingungen",
+        ),
+        # Entscheidung 7 / Festlegung 12: Solange zu einem Auftragsschluessel
+        # ein Beleg besteht, der weder storniert noch verworfen ist, darf kein
+        # zweiter entstehen. Der partielle Index sichert diese Zusage gegen zwei
+        # gleichzeitige Anfragen; NULL (freigegeben) sperrt nicht. Identisch
+        # zu Migration 028 (alembic check).
+        Index(
+            "uq_invoices_auftragsschluessel_offen",
+            "auftragsschluessel_offen",
+            unique=True,
+            postgresql_where=text("auftragsschluessel_offen IS NOT NULL"),
+        ),
+        # Die Sperre ist kein zweiter, freier Wert: Sie ist entweder weg oder
+        # deckt sich mit dem Nachweis. Identisch zu Migration 028 (alembic
+        # check).
+        CheckConstraint(
+            "auftragsschluessel_offen IS NULL OR auftragsschluessel_offen = auftragsschluessel",
+            name="ck_invoices_auftragsschluessel_offen_wie_nachweis",
+        ),
     )
 
     id: Mapped[uuid.UUID] = _id_col
@@ -67,7 +92,12 @@ class Invoice(Base):
         UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True
     )
     issue_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    due_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # BT-9, optional seit Bauschritt 2b: ein Kunde, der nach eigenem Takt zahlt,
+    # bekommt kein Fälligkeitsdatum, sondern einen Zahlungshinweis in
+    # payment_terms (BT-20). EN 16931 BR-CO-25 verlangt bei offenem Betrag eines
+    # von beiden; Formular und Validator sind die erste Linie, der CHECK unten
+    # die zweite.
+    due_date: Mapped[Optional[date]] = mapped_column(Date)
     delivery_date: Mapped[Optional[date]] = mapped_column(Date)
     service_period_start: Mapped[Optional[date]] = mapped_column(Date)
     service_period_end: Mapped[Optional[date]] = mapped_column(Date)
@@ -80,6 +110,14 @@ class Invoice(Base):
     # damit Leitweg-ID und Purchase-Order gleichzeitig getragen werden können.
     buyer_order_reference: Mapped[Optional[str]] = mapped_column(String(100))
     notes: Mapped[Optional[str]] = mapped_column(Text)
+    # Kopf- und Fusstext, beim Anlegen aus dem Kunden KOPIERT (Festlegung 15):
+    # Platzhalter {leistungsmonat} schon ersetzt, spaetere Aenderungen am Kunden
+    # erreichen diesen Beleg nicht mehr. Bewusst eigene Spalten und nicht live
+    # gelesen, damit der Beleg auch nach einer Kundenkorrektur noch aussieht wie
+    # gestellt. Nach dem Finalisieren Rechnungsinhalt: nicht in
+    # MUTABLE_AFTER_FINALIZE, der Guard schuetzt sie wie notes.
+    kopftext: Mapped[Optional[str]] = mapped_column(Text)
+    fusstext: Mapped[Optional[str]] = mapped_column(Text)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="EUR", server_default="EUR")
     net_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")
     tax_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")
@@ -104,7 +142,7 @@ class Invoice(Base):
         String(2), nullable=False, default="de", server_default="de"
     )
     # P7: TypeCode für ZUGFeRD (380=Rechnung, 381=Gutschrift/Storno, 384=Korrektur, 389=Gutschriftverfahren)
-    # Wird in zugferd_xml.py verwendet, um den richtigen TypeCode zu setzen
+    # Wird in zugferd_xml/ verwendet, um den richtigen TypeCode zu setzen
     invoice_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
     # Herkunft aus einem signierten Uebergabebeleg (#22). Gesetzt heisst: die
     # Betraege, der Beteiligte und der Leistungszeitraum stammen aus einem Beleg,
@@ -115,7 +153,19 @@ class Invoice(Base):
     uebergabe_beleg_sha256: Mapped[Optional[str]] = mapped_column(String(64))
     zugferd_xml: Mapped[Optional[str]] = mapped_column(Text)
     pdf_filename: Mapped[Optional[str]] = mapped_column(String(255))
+    # Erstversand an die BUCHHALTUNG (Bauschritt 5a, Entscheidung 6): Bis hier
+    # deckte diese Spalte den ganzen Versand ab, weil eine Mail Kunde und
+    # Buchhaltung in einem Schritt belief. Seit beide getrennte Vermerke
+    # haben, zaehlt sie nur noch den Weg an die Buchhaltung; der Kunde hat
+    # kunde_zugestellt_am. Wie dort: einmal setzen, nie aendern (invoice_guard,
+    # GoBD).
     datev_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Erstzustellung an den KUNDEN, auf jedem Weg (Mail oder, ab Teil 5b,
+    # Freitext-Vermerk). Ein Beleg kann der Buchhaltung zugegangen sein, ohne
+    # dass der Kunde ihn hat — dann steht hier NULL, und der Beleg gilt als
+    # nicht versendet. Gleiches Muster wie datev_sent_at: einmal setzen, nie
+    # aendern (invoice_guard, GoBD).
+    kunde_zugestellt_am: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     # Zahlungseingang (Entscheidung 2026-09-30): nur beim Uebergang issued→paid
     # gesetzt, danach unveraenderlich. Umsatz und „Bezahlt diesen Monat“ rechnen danach.
     bezahlt_am: Mapped[Optional[date]] = mapped_column(Date)
@@ -137,6 +187,17 @@ class Invoice(Base):
         nullable=True,
         index=True
     )
+    # Auftragsschluessel des vorgelagerten Systems (Bauschritt 4a,
+    # Entscheidung 7): der Nachweis, aus welchem Auftrag der Beleg entstand.
+    # Nach dem Finalisieren unveraenderlich (nicht in MUTABLE_AFTER_FINALIZE).
+    # Gesetzt und geleert wird er nur ueber services/auftragsschluessel.py.
+    auftragsschluessel: Mapped[Optional[str]] = mapped_column(Text)
+    # Dieselbe Zeichenkette, solange der Beleg den Schluessel sperrt, sonst
+    # NULL. Der Status taugt dafuer nicht: Eine per Stornorechnung aufgehobene
+    # Rechnung bleibt 'issued' oder 'paid' (Festlegung 12), deshalb sperrt eine
+    # eigene Spalte mit partiellem Unique-Index (unten). Nach dem Finalisieren
+    # darf sie nur geleert werden (invoice_guard, Muster datev_sent_at).
+    auftragsschluessel_offen: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -179,6 +240,8 @@ class Invoice(Base):
 class InvoiceItem(Base):
     __tablename__ = "invoice_items"
     __table_args__ = (
+        CheckConstraint("(basis_netto IS NULL) = (satz IS NULL)",
+                        name="ck_invoice_items_herleitung_beide_oder_keine"),
         CheckConstraint(
             "(leistung_von IS NULL) = (leistung_bis IS NULL)",
             name="ck_invoice_items_leistung_beide_oder_keiner",
@@ -204,7 +267,19 @@ class InvoiceItem(Base):
     # Pflichtangabe nach § 14 Abs. 4 Nr. 6 UStG.
     leistung_von: Mapped[Optional[date]] = mapped_column(Date)
     leistung_bis: Mapped[Optional[date]] = mapped_column(Date)
+    # Freier Anzeigetext, der Positionen zu einer (zusammenhaengenden) Gruppe
+    # ordnet (Bauschritt 3, Entscheidung 3). Nur Form, nie Wortlaut: dieselbe
+    # Zeichenkette, zusammenhaengende Positionsnummern. Pruefungen und Grenzen
+    # liegen in services/positionsangaben.py und pruefregeln/positionen.py —
+    # der Zusammenhang reicht ueber Zeilen, ein CHECK koennte ihn nicht ausdruecken.
+    gruppe: Mapped[Optional[str]] = mapped_column(Text)
     unit: Mapped[str] = mapped_column(String(20), nullable=False, default="Stück", server_default="Stück")
+    # basis_netto ist Geld (der Leser erzwingt genau zwei Nachkommastellen),
+    # der satz aber nicht: Das Übergabeformat erlaubt mindestens zwei, beliebig
+    # viele Nachkommastellen ("33.333333"). Eine Skala hier rundete beim Import
+    # auf 33.33, und jedes Bearbeiten des Entwurfs scheiterte an der Nachgerechnung.
+    basis_netto: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    satz: Mapped[Optional[Decimal]] = mapped_column(Numeric())
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     tax_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=19, server_default="19")
@@ -245,27 +320,56 @@ class InvoiceSendLog(Base):
     """Protokoll JEDES Zustellversuchs der Rechnungsmail (#146).
 
     Zweigeteilter Versandnachweis: `invoices.datev_sent_at` bleibt der ERSTversand
-    und ist guardgesichert unveränderlich (#98 P0.3); diese Tabelle hält alle
-    Versuche — auch die gescheiterten. Der Fehlertext (z. B. „550 blocked") ist der
-    eigentliche Wert: ohne ihn steht die Nutzerin bei einer gesperrten Adresse vor
-    einem stummen Fehlschlag.
+    an die Buchhaltung und `invoices.kunde_zugestellt_am` die Erstzustellung an
+    den Kunden (Bauschritt 5a), beide guardgesichert unveränderlich (#98 P0.3);
+    diese Tabelle hält alle Versuche — auch die gescheiterten. Der Fehlertext
+    (z. B. „550 blocked") ist der eigentliche Wert: ohne ihn steht die Nutzerin bei
+    einer gesperrten Adresse vor einem stummen Fehlschlag.
 
     Bewusst OHNE eigenen Guard/DB-Trigger: die Tabelle ist Zusatznachweis, nicht der
     rechtliche Anker (das bleiben `datev_sent_at` + Audit-Log). Sie ist selbst ein
     Protokoll und wird von `audit.py` deshalb nicht zusätzlich auditiert.
     """
     __tablename__ = "invoice_send_log"
+    __table_args__ = (
+        # Entscheidung 6: Drei Wege, die sich im Protokoll unterscheiden muessen —
+        # der kombinierte Standardversand, der Gang nur an die Buchhaltung und
+        # (Teil 5b) der Freitext-Vermerk einer Zustellung ohne Mail. Der CHECK
+        # sichert den Wertevorrat auch ohne Anwendung. Identisch zu Migration
+        # 029 (alembic check).
+        CheckConstraint(
+            "ziel IN ('kunde_und_buchhaltung', 'buchhaltung', 'kunde_vermerk')",
+            name="ck_invoice_send_log_ziel",
+        ),
+        # Nur der Freitext-Vermerk traegt keinen Empfaenger: Ein Mail-Weg ohne
+        # to_email waere ein halber Nachweis. Identisch zu Migration 029
+        # (alembic check).
+        CheckConstraint(
+            "ziel = 'kunde_vermerk' OR to_email IS NOT NULL",
+            name="ck_invoice_send_log_empfaenger_ausser_vermerk",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     invoice_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=False, index=True
     )
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    to_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Nullable seit Bauschritt 5a: Nur ein kunde_vermerk (Zustellung ohne
+    # Mail, Teil 5b) hat keinen Empfaenger — der CHECK oben erzwingt das.
+    to_email: Mapped[Optional[str]] = mapped_column(String(255))
     # Die tatsächlich verwendete Liste, nicht die Voreinstellung (#58): der Nachweis
     # muss sagen, wer den Beleg bekommen hat.
     cc_email: Mapped[Optional[str]] = mapped_column(String(500))
     datev_bcc: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Weg dieses Eintrags (Entscheidung 6): Er beschreibt den gewaehlten Versand-
+    # weg, nicht allein das Ergebnis — die tatsaechlichen Empfaenger stehen in
+    # to_email/cc_email/datev_bcc, Abweichungen des Wegs in weg_notiz.
+    ziel: Mapped[str] = mapped_column(Text, nullable=False)
+    # Notiz zum Weg: heute die Abweichung, wenn der Standardversand ohne
+    # Upload-Adresse nur an den Kunden ging; ab Teil 5b der Freitext des
+    # Nutzers (etwa „Upload in das Kundenportal").
+    weg_notiz: Mapped[Optional[str]] = mapped_column(Text)
     # Drei Ausgaenge, nicht zwei (#10): die Zeile entsteht und wird committet, BEVOR
     # SMTP angesprochen wird. In der Zeit dazwischen ist der Ausgang offen, und NULL
     # ist genau das. Faellt der Commit danach um, bleibt sie offen stehen: die Mail

@@ -1,8 +1,9 @@
-"""Baut eine Storno-/Gutschriftrechnung (EN16931 TypeCode 381) zu einer Originalrechnung.
+"""Baut eine Stornorechnung zur Originalrechnung oder zum Gutschriftverfahren.
 
 Reine Logik ohne DB-Zugriff: erzeugt ein transientes Invoice mit gesetzter items-Collection.
-Beträge bleiben POSITIV; die Stornowirkung trägt invoice_type="credit_note" (→ TypeCode 381
-in zugferd_xml._get_type_code) plus die Referenz original_invoice_id (→ InvoiceReferencedDocument).
+Beträge bleiben POSITIV; die Belegart trägt die Stornowirkung, bei gewöhnlichen
+Rechnungen credit_note (381), bei 389 self_billing_storno (vorläufiger Code aus
+belegart.py), plus original_invoice_id (→ InvoiceReferencedDocument).
 Das Original wird NICHT verändert.
 
 Automatisierte Zahlungsbedingungen und Bemerkung kommen aus Belegdarstellung
@@ -13,6 +14,7 @@ from datetime import date
 
 from app.models.invoice import Invoice, InvoiceItem
 from app.services import positionsangaben
+from app.services.belegart import belegart
 from app.services.archive_frist import berechne_archive_until
 from app.services.belegsprache import darstellung, resolve_belegsprache
 
@@ -21,6 +23,20 @@ def build_storno(original: Invoice, invoice_number: str, today: date) -> Invoice
     sprache = resolve_belegsprache(getattr(original, "document_language", None) or "de")
     d = darstellung(sprache)
     datum_text = d.format_datum(original.issue_date)
+    self_billing = belegart(original.invoice_type).intern == "self_billing"
+    if self_billing:
+        # 389-Storno: Zahlung und Bezug nennen dasselbe, in der Belegsprache.
+        bezug = d.storno_gutschrift_bezug.format(
+            nummer=original.invoice_number, datum=datum_text,
+        )
+        zahlung = bezug
+    else:
+        bezug = d.storno_bemerkung.format(
+            nummer=original.invoice_number, datum=datum_text,
+        )
+        zahlung = d.storno_zahlungsbedingungen.format(
+            nummer=original.invoice_number,
+        )
     storno = Invoice(
         invoice_number=invoice_number,
         customer_id=original.customer_id,
@@ -29,14 +45,12 @@ def build_storno(original: Invoice, invoice_number: str, today: date) -> Invoice
         delivery_date=original.delivery_date,
         service_period_start=original.service_period_start,
         service_period_end=original.service_period_end,
-        payment_terms=d.storno_zahlungsbedingungen.format(nummer=original.invoice_number),
-        notes=d.storno_bemerkung.format(
-            nummer=original.invoice_number, datum=datum_text,
-        ),
+        payment_terms=zahlung,
+        notes=bezug,
         currency=original.currency,
         zugferd_profile="EN16931",
         tax_category=original.tax_category,
-        invoice_type="credit_note",
+        invoice_type="self_billing_storno" if self_billing else "credit_note",
         document_language=sprache,
         original_invoice_id=original.id,
         net_total=original.net_total,
@@ -56,6 +70,8 @@ def build_storno(original: Invoice, invoice_number: str, today: date) -> Invoice
             position=item.position,
             description=item.description,
             **positionsangaben.kopie(item),
+            basis_netto=getattr(item, "basis_netto", None),
+            satz=getattr(item, "satz", None),
             unit=item.unit,
             quantity=item.quantity,
             unit_price=item.unit_price,
@@ -84,8 +100,10 @@ def pruefe_stornierbar(invoice: Invoice) -> None:
     wieder auf, liesse sich aber weder bezahlen noch erneut stornieren (#142). Der
     richtige Weg bei einer falschen Gutschrift ist eine neue Rechnung zum Original.
     """
-    if invoice.invoice_type != "credit_note":
+    if belegart(invoice.invoice_type).intern not in {"credit_note", "self_billing_storno"}:
         return
+    if invoice.invoice_type == "self_billing_storno":
+        raise GutschriftNichtStornierbar("Eine Stornierung der Gutschrift kann nicht erneut storniert werden.")
     original = invoice.original_invoice
     if original is not None:
         weg = (

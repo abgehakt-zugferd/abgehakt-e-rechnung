@@ -11,7 +11,10 @@ from datetime import date
 import pytest
 
 from app.models.company import Company
-from app.services.invoice_number import generate_next_invoice_number
+from app.services.invoice_number import (
+    generate_next_aufstellung_number,
+    generate_next_invoice_number,
+)
 from app.zeit import heute
 
 
@@ -106,3 +109,60 @@ def test_number_year_follows_issue_date_at_assignment(pg_session):
 
     num = generate_next_invoice_number(pg_session, issue_date=date(2027, 1, 2))
     assert num == "RE-2027-001"
+
+
+# ── Aufstellungen: derselbe Mechanismus, eigener Praefix und Zaehler ──────────
+
+def test_aufstellungen_zaehlen_eigen_und_lueckenlos(pg_session):
+    """Eigener Nummernkreis (Entscheidung 8): eigener Praefix, eigener
+    Zaehler, dieselbe lueckenlose Logik. Die Reihenfolge, in der Belege
+    entstehen, mischt die Kreise, ohne dass einer eine Luecke bekommt."""
+    c = _company(pg_session)
+    c.invoice_counter = 0
+    c.aufstellung_counter = 0
+    pg_session.commit()
+
+    year = heute().year
+    assert generate_next_invoice_number(pg_session) == f"RE-{year}-001"
+    assert generate_next_aufstellung_number(pg_session) == f"AA-{year}-001"
+    assert generate_next_aufstellung_number(pg_session) == f"AA-{year}-002"
+    assert generate_next_invoice_number(pg_session) == f"RE-{year}-002"
+
+    pg_session.expire_all()
+    c = _company(pg_session)
+    assert c.invoice_counter == 2
+    assert c.aufstellung_counter == 2
+
+
+def test_aufstellung_nummer_ohne_jahr_wenn_die_firma_kein_jahr_will(pg_session):
+    """Ein Stil je Firma: invoice_year_in_number regelt die Jahreszahl in
+    BEIDEN Nummernkreisen, nicht nur in den Rechnungsnummern."""
+    c = _company(pg_session)
+    c.invoice_counter = 2
+    c.aufstellung_counter = 2
+    c.invoice_year_in_number = False
+    pg_session.commit()
+
+    assert generate_next_invoice_number(pg_session) == "RE-003"
+    assert generate_next_aufstellung_number(pg_session) == "AA-003"
+
+
+def test_aufstellung_nummer_jahr_aus_ausstellungsdatum(pg_session):
+    _company(pg_session).aufstellung_counter = 0
+    pg_session.commit()
+
+    num = generate_next_aufstellung_number(
+        pg_session, ausstellungsdatum=date(2027, 1, 2))
+    assert num == "AA-2027-001"
+
+
+def test_aufstellungspraefix_traegt_die_gleiche_whitelist(pg_session):
+    """Der Aufstellungspraefix wird ebensowohl Teil eines Dateinamens im
+    Archiv wie der Rechnungspraefix — dieselbe Weissliste, eigener Name in
+    der Meldung."""
+    from app.services.invoice_number import pruefe_praefix
+
+    assert pruefe_praefix("AA-", feldname="Aufstellungspräfix") is None
+    meldung = pruefe_praefix("AA/2026", feldname="Aufstellungspräfix")
+    assert "Aufstellungspräfix" in meldung
+    assert any(w in meldung for w in ("Buchstaben", "Ziffern"))

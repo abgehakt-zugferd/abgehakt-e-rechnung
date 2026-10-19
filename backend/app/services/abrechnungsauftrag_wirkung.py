@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -32,19 +32,10 @@ from app.services.steuerstatus import (
     SteuerstatusFehler,
     steuer_fuer as _steuer_aus_status,
 )
-from app.services.uebergabe_befund import Belegurteil
+from app.services.uebergabe_befund import Belegurteil, herleitungsbetrag
 from app.zeit import heute, kalendertag
 from app.services.uebergabe_eingang import merken
-
-# 389 ist die Abrechnung ueber eine fremde Leistung (Gutschriftverfahren,
-# § 14 Abs. 2 UStG), 381 die kaufmaennische Gutschrift. Der Unterschied ist eine
-# Entscheidung des Absenders und steht im Klartext im Auftrag.
-TYPCODE_BELEGART = {
-    "389": "self_billing",
-    "381": "credit_note",
-}
-
-_CENT = Decimal("0.01")
+from app.services.protokoll import TYPCODE_BELEGART
 
 
 class WirkungFehler(ValueError):
@@ -112,6 +103,11 @@ def entwuerfe_anlegen(
     nutzlast = urteil.nutzlast
     quartal = nutzlast.get("abrechnungsquartal", "")
     projekt = (nutzlast.get("projekt") or {}).get("name", "")
+    # Ausstellungsdatum des Entwurfs ist der Kalendertag von erzeugt_am,
+    # gerechnet in der festen Zeitzone Europe/Berlin (app.zeit.kalendertag;
+    # erzeugt_am traegt nach § 2 immer UTC): Derselbe Beleg stellt zu jedem
+    # Lesezeitpunkt am selben Tag aus. Faellig ist er 14 Tage spaeter, wie
+    # die Voreinstellung des Anlegeformulars.
     ausstellung = kalendertag(urteil.erzeugt_am) if urteil.erzeugt_am else heute()
     faellig = ausstellung + timedelta(days=14)
 
@@ -147,12 +143,19 @@ def entwuerfe_anlegen(
         netto_summe = Decimal("0")
         steuer_summe = Decimal("0")
         for lfd, position in enumerate(gutschrift.get("positionen") or [], 1):
-            netto = Decimal(str(position["netto"])).quantize(_CENT)
-            steuer = (netto * satz / 100).quantize(_CENT, rounding=ROUND_HALF_UP)
+            # #163: Der Leser erzwingt die Geldform (genau zwei Nachkommastellen),
+            # deshalb wird hier nicht gerundet - ein quantize ohne Rundungsart
+            # machte aus "0.005" still eine 0.00, stillschweigend halb-gerade.
+            netto = Decimal(str(position["netto"]))
+            # Dieselbe kaufmaennische Herleitung wie im Leser, nicht ein zweites
+            # Runden mit eigenem Tuning: hier wird gerechnet, also HALF_UP.
+            steuer = herleitungsbetrag(netto, satz)
             db.add(InvoiceItem(
                 invoice_id=entwurf.id,
                 position=lfd,
                 description=str(position.get("bezeichnung", "")).strip(),
+                basis_netto=(position.get("herleitung") or {}).get("basis_netto"),
+                satz=(position.get("herleitung") or {}).get("satz"),
                 unit="Pauschal",
                 quantity=Decimal("1"),
                 unit_price=netto,

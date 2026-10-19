@@ -33,7 +33,9 @@
             <select name="art" class="input" style="width:180px;">
                 <option value="" {% if not art %}selected{% endif %}>Alle Arten</option>
                 <option value="rechnung" {% if art == 'rechnung' %}selected{% endif %}>Rechnung</option>
-                <option value="gutschrift" {% if art == 'gutschrift' %}selected{% endif %}>Gutschrift</option>
+                <option value="honorargutschrift" {% if art == 'honorargutschrift' %}selected{% endif %}>Honorargutschrift</option>
+                <option value="honorargutschrift_storno" {% if art == 'honorargutschrift_storno' %}selected{% endif %}>Storno zur Honorargutschrift</option>
+                <option value="gutschrift" {% if art == 'gutschrift' %}selected{% endif %}>Stornorechnung</option>
             </select>
             <select name="faellig" class="input" style="width:180px;">
                 <option value="" {% if not faellig %}selected{% endif %}>Alle Fristen</option>
@@ -92,6 +94,7 @@
                         <td style="padding:10px 14px;">
                             <a href="/invoices/{{ inv.id }}" class="group" style="display:inline-flex; align-items:center; gap:4px; color:var(--cyan); text-decoration:none; font-family:'Share Tech Mono',monospace; font-size:var(--fs-text);">
                                 {{ inv.invoice_number }}
+                                {{ inv.invoice_type|beleg_bezeichnung }}
                                 <svg class="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                                 </svg>
@@ -99,12 +102,15 @@
                         </td>
                         <td style="padding:10px 14px; color:var(--text);">{{ inv.customer.name if inv.customer else '–' }}</td>
                         <td style="padding:10px 14px; color:var(--text-dim); white-space:nowrap;">{{ inv.issue_date.strftime('%d.%m.%Y') }}</td>
-                        <td style="padding:10px 14px; color:var(--text-dim); white-space:nowrap;">{{ inv.due_date.strftime('%d.%m.%Y') }}</td>
+                        {# Ohne Fälligkeit gilt der Zahlungshinweis (BR-CO-25). #}
+                        <td style="padding:10px 14px; color:var(--text-dim); white-space:nowrap;">{{ inv.due_date.strftime('%d.%m.%Y') if inv.due_date else ('laut Zahlungshinweis' if inv.payment_terms else '') }}</td>
                         <td style="padding:10px 14px; text-align:right; color:var(--text-hi); font-family:'Share Tech Mono',monospace;">{{ inv.gross_total|euro }}</td>
                         <td style="padding:10px 14px;">
                             {# .get statt [..]: ein unbekannter Status wirft sonst KeyError
-                               und nimmt die ganze Seite mit, nicht nur das Etikett. #}
-                            <span class="badge badge-{{ inv.status|beleg_badge(inv.datev_sent_at) }}">{{ inv.status|beleg_etikett(inv.datev_sent_at) }}</span>
+                               und nimmt die ganze Seite mit, nicht nur das Etikett.
+                               Der zweite Parameter ist die KUNDENZUSTELLUNG (Bauschritt
+                               5b): „Nicht versendet“ meint den Kunden. #}
+                            <span class="badge badge-{{ inv.status|beleg_badge(inv.kunde_zugestellt_am) }}">{{ inv.status|beleg_etikett(inv.kunde_zugestellt_am) }}</span>
                         </td>
                         <td style="padding:10px 14px;">
                             {% if inv.datev_sent_at %}
@@ -119,7 +125,7 @@
                         <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
                             {# Nur Entwuerfe sind bearbeitbar — finalisierte Rechnungen
                                sind unveraenderlich (Korrektur nur per Storno). #}
-                            {% if inv.status == 'draft' and inv.invoice_type != 'credit_note' %}
+                            {% if inv.status == 'draft' and inv.invoice_type not in ('credit_note', 'self_billing_storno') %}
                             <a href="/invoices/{{ inv.id }}/bearbeiten"
                                style="color:var(--gold); font-family:'VT323',monospace; font-size:var(--fs-gross);">✎ bearbeiten</a>
                             {% endif %}

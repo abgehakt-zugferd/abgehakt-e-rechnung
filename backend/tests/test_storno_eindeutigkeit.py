@@ -21,7 +21,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.models.company import Company
 from app.models.invoice import Invoice, InvoiceItem
-from app.routers.invoices import create_storno
+from app.routers.invoices.storno_entwurf import create_storno
 from tests.test_storno_integration import _original, _zaehler
 
 

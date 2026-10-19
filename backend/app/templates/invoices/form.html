@@ -177,9 +177,22 @@
                                     </div>
 
                                     <div>
+                                        <label class="label">Bemessungsgrundlage netto / Beteiligungssatz (optional)</label>
+                                        <input type="number" x-model="item.basis_netto" step="0.01" placeholder="Bemessungsgrundlage netto" class="input"
+                                               {% if aus_beleg %}readonly{% endif %}>
+                                        <input type="number" x-model="item.satz" step="0.01" placeholder="Beteiligungssatz %" class="input"
+                                               {% if aus_beleg %}readonly{% endif %}>
                                         <label class="label">Artikel-/Leistungsnummer (optional)</label>
                                         <input type="text" x-model="item.artikelnummer" maxlength="50"
                                                class="input font-mono" style="font-size:var(--fs-gross); padding:6px 8px; max-width:220px;">
+                                        {# Gruppe (Bauschritt 3): freier Anzeigetext, der im PDF eine
+                                           Ueberschrift und eine Zwischensumme bekommt und in der E-Rechnung
+                                           als Positionsnotiz (BT-127) steht. Bei Belegen aus einem
+                                           Uebergabebeleg ist die Gliederung wie die Betraege gebunden. #}
+                                        <label class="label">Gruppe (optional)</label>
+                                        <input type="text" x-model="item.gruppe"
+                                               class="input font-mono" style="font-size:var(--fs-gross); padding:6px 8px; max-width:220px;"
+                                               {% if aus_beleg %}readonly title="aus dem Beleg übernommen"{% endif %}>
                                     </div>
 
                                     <div>
@@ -323,6 +336,22 @@
                     </div>
                 </div>
 
+                <!-- Kopf- und Fußtext: aus dem Kundenstamm vorbelegt, im Entwurf frei -->
+                <div class="card">
+                    <label class="label">Kopftext</label>
+                    <textarea name="kopftext" rows="2" class="input" placeholder="Erscheint auf der Rechnung über den Positionen">{{ (belegung.kopftext if belegung and belegung.kopftext else '') or '' }}</textarea>
+                    <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+                        Beim Anlegen aus dem Kundenstamm vorbelegt; Platzhalter {leistungsmonat} wird zu MM/JJJJ des Leistungszeitraums. Nach dem Finalisieren unveränderlich.
+                    </p>
+                </div>
+                <div class="card">
+                    <label class="label">Fußtext</label>
+                    <textarea name="fusstext" rows="2" class="input" placeholder="Erscheint auf der Rechnung unter dem Summenblock">{{ (belegung.fusstext if belegung and belegung.fusstext else '') or '' }}</textarea>
+                    <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+                        Den Reverse-Charge-Vermerk druckt das Programm selbst; hier nicht wiederholen. Nach dem Finalisieren unveränderlich.
+                    </p>
+                </div>
+
                 <!-- Notes -->
                 <div class="card">
                     <label class="label">Notizen / Anmerkungen</label>
@@ -352,8 +381,8 @@
                     </div>
 
                     {% if belegart_waehlbar %}
-                    {# Belegart: nur die manuelle Teilmenge (Standard/Anzahlung).
-                       Systembelege (381/384/389) bekommen kein Feld; die Sperre
+                    {# Belegart: nur die manuelle Teilmenge (Standard/Anzahlung/Honorargutschrift).
+                       Systembelege und importierte 389 bekommen kein Feld; die Sperre
                        steht serverseitig, dieses Feld ist nur ihre Anzeige.
                        Bei Neuanlage aus Vorlage startet die Auswahl immer bei
                        Standard: die Belegart der Vorlage wird nie vererbt. #}
@@ -364,7 +393,7 @@
                         <label class="label">Belegart</label>
                         <select name="invoice_type" class="input">
                             {% for art in manuelle_belegarten() %}
-                            <option value="{{ art.form_wert }}" {% if aktuelle_belegart == art.form_wert %}selected{% endif %}>{{ art.label }}</option>
+                            <option value="{{ art.form_wert }}" {% if aktuelle_belegart == (art.intern or "standard") %}selected{% endif %}>{{ art.label }}</option>
                             {% endfor %}
                         </select>
                         <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
@@ -373,6 +402,7 @@
                             geplantem Leistungszeitraum: Leistungszeitraum von/bis wird
                             dann zur Pflichtangabe, ein Leistungsdatum entfällt.
                             Standard bleibt die Standardrechnung.
+                            Honorargutschrift: Sie stellen die Rechnung über eine Leistung aus, die Sie empfangen haben.
                         </p>
                     </div>
                     {% endif %}
@@ -401,8 +431,10 @@
                         <input type="date" name="issue_date" value="{{ invoice.issue_date.isoformat() if invoice else today }}" required class="input">
                     </div>
                     <div>
-                        <label class="label">Fälligkeitsdatum *</label>
-                        <input type="date" name="due_date" value="{{ invoice.due_date.isoformat() if invoice else due_default }}" required class="input">
+                        {# Ohne Fälligkeitsdatum gilt der Zahlungshinweis (BR-CO-25);
+                           leer ist erlaubt, wenn Zahlungsbedingungen dastehen. #}
+                        <label class="label">Fälligkeitsdatum</label>
+                        <input type="date" name="due_date" value="{{ invoice.due_date.isoformat() if invoice and invoice.due_date else due_default }}" class="input">
                     </div>
                     <div>
                         <label class="label">Leistungsdatum</label>
@@ -530,7 +562,10 @@ function invoiceForm() {
         addItem() {
             this.items.push({
                 description: '',
+                basis_netto: '',
+                satz: '',
                 artikelnummer: '',
+                gruppe: '',
                 leistung_von: '',
                 leistung_bis: '',
                 quantity: 1,

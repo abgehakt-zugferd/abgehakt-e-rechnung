@@ -1,9 +1,8 @@
 """Belegart und Vorabrechnung (docs/specs/vorabrechnung.md, Option B, V1-V10).
 
 386 (Anzahlungsrechnung) ist eine bewusst waehlbare Belegart neben der
-Standardrechnung; Standard bleibt die Vorgabe. 381/384/389 sind allgemein
-gueltige Codes, aber keine manuelle Wahl: sie entstehen auf eigenen Wegen
-(Storno, Integrationsweg). Deshalb genuegt die Mitgliedschaft in der
+Standardrechnung; Standard bleibt die Vorgabe. Honorargutschriften sind seit
+#156 ebenfalls manuell wählbar. 381/384 bleiben Systembelege. Deshalb genuegt die Mitgliedschaft in der
 Typtabelle nicht als Waehlbarkeitspruefung.
 
 Der erste 386-Schnitt deckt nur die noch nicht bezahlte Vorausforderung mit
@@ -34,6 +33,7 @@ from app.services.belegart import (
     belegart_aus_bt3,
     manuelle_belegart,
     manuelle_belegarten,
+    zahlung_an_kunde,
 )
 from app.services.invoice_guard import InvoiceStateError
 from app.services.validator import validate_invoice
@@ -182,6 +182,19 @@ class TestV5Typaufloesung:
         assert belegart("storno").intern == "credit_note"
         assert belegart("self-billing").intern == "self_billing"
 
+    @pytest.mark.parametrize("wert,erwartung", [
+        ("self-billing", True),
+        ("self_billing", True),
+        ("credit", True),
+        ("self_billing_storno", False),
+        ("altwert", False),
+    ])
+    def test_zahlung_an_kunde_loest_aliase_ueber_die_belegart_auf(self, wert, erwartung):
+        """PDF-Bankblock und XML-PaymentMeans fragen den Zahlungsfluss hier ab
+        (nicht mehr per roher Alias-Menge): derselbe Aliasraum wie
+        belegrollen.besetzung; unbekannte Werte zahlen nie an den Kunden."""
+        assert zahlung_an_kunde(wert) is erwartung
+
     @pytest.mark.parametrize("bt3,intern", [
         ("380", None),
         ("386", "prepayment"),
@@ -203,7 +216,7 @@ class TestV5Typaufloesung:
         de = darstellung("de")
         assert de.titel(None) == "RECHNUNG"
         assert de.titel("prepayment") == "ANZAHLUNGSRECHNUNG"
-        assert de.titel("credit_note") == "GUTSCHRIFT"
+        assert de.titel("credit_note") == "STORNORECHNUNG"
         assert de.titel("correction") == "KORREKTURRECHNUNG"
         assert de.titel("self_billing") == "GUTSCHRIFT"
         assert not hasattr(belegart(None), "pdf_titel")
@@ -211,12 +224,13 @@ class TestV5Typaufloesung:
     def test_manuelle_waehlbarkeit(self):
         assert belegart(None).manuell_waehlbar
         assert belegart("prepayment").manuell_waehlbar
-        for wert in ("credit_note", "correction", "self_billing"):
+        assert belegart("self_billing").manuell_waehlbar
+        for wert in ("credit_note", "correction", "self_billing_storno"):
             assert not belegart(wert).manuell_waehlbar
 
-    def test_manuelle_belegarten_genau_standard_und_anzahlung(self):
+    def test_manuelle_belegarten_genau_die_drei_manuellen_arten(self):
         arten = manuelle_belegarten()
-        assert tuple(a.form_wert for a in arten) == ("standard", "prepayment")
+        assert tuple(a.form_wert for a in arten) == ("standard", "prepayment", "honorargutschrift")
         assert all(a.manuell_waehlbar for a in arten)
 
     def test_manuelle_belegart_abbildung(self):
@@ -231,7 +245,7 @@ class TestV5Typaufloesung:
         "self_billing", "self-billing", "schnitzel",
     ])
     def test_manuelle_belegart_verbotene_werte_werfen(self, wert):
-        """381/389 sind allgemein gueltige Codes und trotzdem keine manuelle Wahl;
+        """Interne Typwerte und rohe Codes sind keine Formularwerte;
         die leere Zeichenfolge wird nicht still zu 380."""
         with pytest.raises(InvoiceTypeNotSelectable):
             manuelle_belegart(wert)
@@ -252,19 +266,37 @@ class TestV5Typaufloesung:
         assert TYPE_CODE_MAP["prepayment"] == "386"
 
 
-# ── V1: Formular bietet exakt Standard und Anzahlung ────────────────────────
+# ── Originalbezug: 389 kennt kein Original (Spec #156, Umfang 1) ─────────────
+
+class TestBrauchtOriginal:
+    def test_gutschriftverfahren_braucht_kein_original(self):
+        """Ein 389 weist in dieser Anwendung nie auf ein Original: das Verfahren
+        hat keins, und die Anwendung kennt keines (BG-3 ist bei 389 weder im
+        Standard gefordert noch verboten; die Spec entscheidet: nie)."""
+        assert belegart("self_billing").braucht_original is False
+
+    @pytest.mark.parametrize("wert", [None, "standard", "prepayment"])
+    def test_eigenstaendige_arten_brauchen_kein_original(self, wert):
+        assert belegart(wert).braucht_original is False
+
+    @pytest.mark.parametrize("wert", ["credit_note", "correction"])
+    def test_storno_und_korrektur_brauchen_ein_original(self, wert):
+        assert belegart(wert).braucht_original is True
+
+
+# ── V1: Formular bietet exakt die drei manuellen Belegarten ────────────────────────
 
 class TestV1FormularAuswahl:
-    def test_neuformular_bietet_genau_standard_und_anzahlung(self, client):
+    def test_neuformular_bietet_genau_die_drei_manuellen_arten(self, client):
         r = client.get("/invoices/neu")
         assert r.status_code == 200
-        assert _optionen(r.text, "invoice_type") == ["standard", "prepayment"]
+        assert _optionen(r.text, "invoice_type") == ["standard", "prepayment", "honorargutschrift"]
 
-    def test_entwurfseditor_bietet_genau_standard_und_anzahlung(self, client, pg_session):
+    def test_entwurfseditor_bietet_genau_die_drei_manuellen_arten(self, client, pg_session):
         inv = _entwurf(pg_session, _kunde(pg_session))
         r = client.get(f"/invoices/{inv.id}/bearbeiten")
         assert r.status_code == 200
-        assert _optionen(r.text, "invoice_type") == ["standard", "prepayment"]
+        assert _optionen(r.text, "invoice_type") == ["standard", "prepayment", "honorargutschrift"]
 
     def test_neuformular_vorgabe_ist_standard(self, client):
         r = client.get("/invoices/neu")

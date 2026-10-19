@@ -39,4 +39,15 @@ def protokoll(vektoren):
 
 @pytest.fixture(scope="session")
 def schluesselordner(vektoren):
+    """Die Probeschluessel des Vektorordners, lesend direkt.
+
+    Bis 1.6 trugen die Beiblätter dort noch Felder aus der Zeit vor dem
+    geschlossenen Feldbestand (hinweis, probe, warum_probe); der Leser
+    verwirft solche Schluessel als SCHLUESSEL_UNBEKANNT, und dieser Befund
+    wuerde jede spaetere Ablehnung ueberdecken. Deshalb baute eine Fixture
+    sie zur Laufzeit neu (abgehakt#159). Seit 1.7 tragen die Beiblätter nur
+    die Pflichtfelder plus notizen, wie § 6 es verlangt, und werden direkt
+    gelesen: Der Vektorordner gehoert keinem Empfaenger allein und ist hier
+    nur lesend eingehaengt, nichts davon landet im Repositorium.
+    """
     return vektoren.parent / "schluessel"

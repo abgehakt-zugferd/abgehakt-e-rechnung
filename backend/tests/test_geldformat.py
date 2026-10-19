@@ -119,8 +119,12 @@ def test_pdf_gibt_mengen_nicht_mit_str_normalize_aus():
     `str(x.normalize())` ist die Schreibweise, die die Exponentialform
     erzeugt hat. Sie darf im PDF-Generator nicht wiederkehren.
     """
-    quelle = Path("app/services/pdf_generator.py").read_text(encoding="utf-8")
-    assert "quantity.normalize()" not in quelle, (
+    quellen = [
+        pfad.read_text(encoding="utf-8")
+        for pfad in sorted(Path("app/services/pdf_generator").glob("*.py"))
+    ]
+    assert quellen, "pdf_generator-Paket darf nicht leer sein"
+    assert "quantity.normalize()" not in "\n".join(quellen), (
         "Mengen im PDF wieder über str(.normalize()) — das kippt bei 120 in 1.2E+2"
     )
 

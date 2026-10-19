@@ -1,5 +1,7 @@
 # Auftrag: Ersatzrechnung zu einer stornierten Rechnung
 
+**Status:** umgesetzt.
+
 Stand: 08.10.2026. Spezifikation fuer einen test-first auszufuehrenden Auftrag.
 
 ## Anlass
@@ -59,17 +61,23 @@ ohne Aenderung am Waechter. Ein Test belegt das.
 Eine Frage, eine Antwort:
 
 ```python
-def pruefe_ersetzbar(db, original_id, *, ausser=None) -> Invoice
+def pruefe_ersetzbar(db, kennung) -> Invoice
 ```
 
-Liefert das Original oder wirft `ErsatzNichtMoeglich` mit Code und lesbarem Text:
+`kennung` darf der rohe Formularwert sein; eine unbrauchbare Kennung ist eine Ablehnung wie
+jede andere, kein Serverfehler. Liefert das Original oder wirft `ErsatzNichtMoeglich` mit
+Code und lesbarem Text:
 
 | Code | Lage |
 |---|---|
 | `ERSATZ_ORIGINAL_UNBEKANNT` | Kennung ungueltig oder nicht gefunden |
 | `ERSATZ_ORIGINAL_KEINE_RECHNUNG` | Original ist selbst ein Folgebeleg (381, 384, 389) oder Entwurf/verworfen |
 | `ERSATZ_OHNE_GUTSCHRIFT` | keine nicht verworfene Gutschrift zum Original |
-| `ERSATZ_SCHON_VORHANDEN` | es gibt schon eine nicht verworfene Ersatzrechnung (`ausser` nimmt den eigenen Entwurf aus) |
+| `ERSATZ_SCHON_VORHANDEN` | es gibt schon eine nicht verworfene Ersatzrechnung |
+
+Einen Parameter, um den eigenen Entwurf von der letzten Pruefung auszunehmen, braucht die
+Funktion nicht: Der eigene, verworfene Entwurf faellt schon unter den Filter
+`status != 'discarded'` und zaehlt deshalb nicht als vorhandene Ersatzrechnung.
 
 Dazu fuer den Validator:
 

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ a.nummer }} | {{ PRODUCT_NAME }}{% endblock %}
+{% block content %}
+<div style="max-width:1200px;">
+    <div class="flex items-start justify-between mb-5">
+        <div><a href="/aufstellungen">ZURÜCK</a><h1>{{ a.nummer }}</h1><p>Abrechnungsaufstellung{% if a.storniert_id %}: Storno{% endif %}</p><p>{{ a.customer.name }}</p></div>
+        <span class="badge">{{ statusnamen[a.status] }}</span>
+    </div>
+    <p class="mb-5">Keine Rechnung im Sinne des § 14 UStG</p>
+    <div class="flex flex-wrap gap-3 mb-6">
+        {% if a.status == 'draft' %}
+        <form method="post" action="/aufstellungen/{{ a.id }}/finalisieren"><button class="btn-primary">FINALISIEREN</button></form>
+        <form method="post" action="/aufstellungen/{{ a.id }}/verwerfen"><button class="btn-danger">VERWERFEN</button></form>
+        {% elif a.status == 'discarded' %}
+        <form method="post" action="/aufstellungen/{{ a.id }}/zurueckholen"><button class="btn-secondary">ZURÜCKHOLEN</button></form>
+        {% elif a.status == 'issued' %}
+        <form method="post" action="/aufstellungen/{{ a.id }}/an-buchhaltung"><button class="btn-primary">AN BUCHHALTUNG SENDEN</button></form>
+        <a class="btn-secondary" href="/aufstellungen/{{ a.id }}/pdf">PDF</a>
+        {% if not a.storniert_id and not (stornos|rejectattr('status', 'equalto', 'discarded')|list) %}
+        <form method="post" action="/aufstellungen/{{ a.id }}/stornieren"><button class="btn-danger">STORNIEREN</button></form>
+        {% endif %}
+        {% endif %}
+    </div>
+    {% if a.original %}<p class="mb-5">Original: <a href="/aufstellungen/{{ a.original.id }}">{{ a.original.nummer }}</a></p>{% endif %}
+    {% for s in stornos %}<p class="mb-5">Storno: <a href="/aufstellungen/{{ s.id }}">{{ s.nummer }}</a> ({{ statusnamen[s.status] }})</p>{% endfor %}
+    <div class="card mb-5">
+        <h2>ANGABEN</h2>
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <dt>Kunde</dt><dd><a href="/customers/{{ a.customer_id }}/bearbeiten">{{ a.customer.name }}</a> ({{ a.customer.customer_number }})</dd>
+            <dt>Leistungsmonat</dt><dd>{{ a.leistung_von.strftime('%m.%Y') }} ({{ a.leistung_von }} bis {{ a.leistung_bis }})</dd>
+            <dt>Zahlungsnummer</dt><dd>{{ a.zahlungsnummer }}</dd><dt>Zahlungsdatum</dt><dd>{{ a.zahlungsdatum }}</dd>
+            <dt>Brutto</dt><dd>{{ a.brutto|betrag }} {{ a.waehrung }}</dd>
+            <dt>Quellensteuer</dt><dd>{{ a.quellensteuer|betrag }} {{ a.waehrung }}</dd>
+            <dt>Netto</dt><dd>{{ a.netto|betrag }} {{ a.waehrung }}</dd>
+            <dt>Kurs</dt><dd>{{ a.kurs if a.kurs is not none else 'Keine Umrechnung' }}</dd>
+            <dt>Zahlbetrag EUR</dt><dd>{{ (a.netto if a.waehrung == 'EUR' else a.zahlbetrag_eur)|euro }}</dd>
+            {% for titel, wert in [('Ausstellungsdatum', a.ausstellungsdatum), ('Buchhaltung versendet', a.datev_sent_at), ('Aufbewahrung bis', a.archive_until), ('Bemerkung', a.bemerkung), ('Auftragsschlüssel', a.auftragsschluessel), ('Offener Auftragsschlüssel', a.auftragsschluessel_offen), ('Übergabebeleg', a.uebergabe_beleg_id), ('Übergabe SHA-256', a.uebergabe_beleg_sha256), ('PDF-Dateiname', a.pdf_filename), ('Erstellt', a.created_at), ('Aktualisiert', a.updated_at), ('Datensatz-ID', a.id)] %}
+            <dt>{{ titel }}</dt><dd style="overflow-wrap:anywhere;">{{ wert if wert is not none else '-' }}</dd>
+            {% endfor %}
+        </dl>
+    </div>
+    <div class="card mb-5">
+        <h2>ANLAGEN</h2>
+        {% if a.storniert_id %}<p>Die Anlagen stehen beim <a href="/aufstellungen/{{ a.storniert_id }}">Original</a>.</p>{% endif %}
+        {% for anlage in a.anlagen %}
+        <div class="mb-5"><p>{{ anlage.quelle }}: {{ anlage.dateiname }} ({{ anlage.groesse }} Bytes)</p>
+            <p style="overflow-wrap:anywhere;">SHA-256: {{ anlage.sha256 }}</p><p>{{ anlage.medientyp }}</p></div>
+        {% endfor %}
+    </div>
+    <div class="card"><h2>VERSANDPROTOKOLL</h2>
+        <p>Versand nur an die Buchhaltung, ausschließlich das PDF.</p>
+        {% for log in logs %}<div class="table-row"><p>{{ log.sent_at }}: {{ log.to_email }}</p>
+        <p>{{ 'Angenommen' if log.success == true else ('Gescheitert' if log.success == false else 'Ausgang unbekannt') }}</p>
+        {% if log.error %}<p>{{ log.error }}</p>{% endif %}</div>{% else %}<p>Noch kein Versandversuch.</p>{% endfor %}
+    </div>
+</div>
+{% endblock %}

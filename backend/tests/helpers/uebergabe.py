@@ -5,6 +5,7 @@ Die Formatvektoren liegen ausserhalb des Repositoriums und sind nicht immer da
 eigener Beleg - fuer alles, was mit den Vektoren nichts zu tun hat.
 """
 
+import hashlib
 import json
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -22,6 +23,30 @@ SCHLUESSEL_ID = "tantiemen-2026-09"
 ERZEUGT = "2026-09-03T11:00:00Z"
 
 
+def beiblatt(**aenderungen):
+    """Das Beiblatt des Probeschluessels, wie es das Formatverzeichnis unter
+    `schluessel_beiblatt` fuehrt (§ 6): geschlossener Feldbestand, `notizen`
+    als einziges freies Feld, `gueltig_bis` null heisst ohne Ablauf."""
+    angaben = {
+        "schluessel_id": SCHLUESSEL_ID,
+        "absender": ABSENDER_TANTIEMEN,
+        "verfahren": "Ed25519",
+        "gueltig_von": "2026-09-01T00:00:00Z",
+        "gueltig_bis": None,
+    }
+    angaben.update(aenderungen)
+    return angaben
+
+
+def beiblatt_ablegen(wurzel, angaben):
+    """Legt ein Beiblatt ab, wie es der Empfaenger vorfindet."""
+    ordner = wurzel / ABSENDER_TANTIEMEN
+    ordner.mkdir(parents=True, exist_ok=True)
+    (ordner / f"{SCHLUESSEL_ID}.json").write_text(
+        json.dumps(angaben), encoding="utf-8",
+    )
+
+
 def schluesselpaar(wurzel):
     """Legt einen Probeschluessel unter `wurzel` ab und gibt (signieren, ordner)."""
     privat = Ed25519PrivateKey.generate()
@@ -30,16 +55,7 @@ def schluesselpaar(wurzel):
     (ordner / f"{SCHLUESSEL_ID}.pub").write_bytes(
         privat.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
     )
-    (ordner / f"{SCHLUESSEL_ID}.json").write_text(
-        json.dumps({
-            "schluessel_id": SCHLUESSEL_ID,
-            "absender": ABSENDER_TANTIEMEN,
-            "verfahren": "Ed25519",
-            "gueltig_von": "2026-09-01T00:00:00Z",
-            "gueltig_bis": None,
-        }),
-        encoding="utf-8",
-    )
+    beiblatt_ablegen(wurzel, beiblatt())
     return privat.sign, wurzel
 
 
@@ -75,6 +91,97 @@ def auftrag(**aenderungen):
         }],
         "gutschriften": [gutschrift()],
         "vortraege": [],
+    }
+    nutzlast.update(aenderungen)
+    return nutzlast
+
+
+def rechnungsauftrag(**aenderungen):
+    """§ 8a (Fassung 1.7): Ausgangsrechnung 380 an einen Kunden, nur netto,
+    je Marktplatz und Verkaufsmonat eine. Erfundene Zahlen; die negative
+    Position bleibt, denn negative Positionen sind erlaubt."""
+    nutzlast = {
+        "auftragsschluessel": "plattform:2026-02:kanal-a:x1",
+        "kunde": {"partner_id": PARTNER_A, "anzeigename": "Plattform Beispiel GmbH"},
+        "typcode": "380",
+        "leistungszeitraum": {"von": "2026-02-01", "bis": "2026-02-28"},
+        "waehrung": "EUR",
+        "positionen": [
+            {"nr": 1, "gruppe": "Gruppe A", "bezeichnung": "Nutzungsrechte A", "netto": "174.44"},
+            {"nr": 2, "gruppe": "Gruppe B", "bezeichnung": "Nutzungsrechte B", "netto": "-3.10"},
+        ],
+        "summe": {"netto": "171.34"},
+        "grundlagen": [{
+            "quelle": "abrechnungsbericht",
+            "beleg_sha256": "1a" * 32,
+            "leistungsperiode": "2026-02",
+            "netto": "171.34",
+        }],
+    }
+    nutzlast.update(aenderungen)
+    return nutzlast
+
+
+# § 8b: Die Anlage liegt als Datei neben dem Beleg, ihr Eintrag nennt Hash und
+# Groesse derselben Bytes. Damit Tests ohne Dateisystem auskommen, stehen hier
+# zwei erfundene Anlagen als Bytes; die Empfangslage eines Tests reicht sie
+# nach ihrem Hash her (Empfangslage.anlagen_bytes).
+ANLAGE_ABRECHNUNGSBERICHT = b"Probe-Abrechnungsbericht, erfundene Bytes ohne xlsx."
+ANLAGE_ZAHLUNGSBERICHT = b"Probe-Zahlungsbericht, erfundene Bytes ohne xlsx."
+
+ANLAGE_MEDIENTYP = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def anlage(quelle, dateiname, bytes_):
+    """Ein Anlageneintrag (§ 8b) zu gegebenen Bytes: Hash und Groesse passen,
+    denn beide nannte sonst schon der Lesertest."""
+    return {
+        "quelle": quelle,
+        "dateiname": dateiname,
+        "sha256": hashlib.sha256(bytes_).hexdigest(),
+        "groesse": len(bytes_),
+        "medientyp": ANLAGE_MEDIENTYP,
+    }
+
+
+def probe_anlagen() -> dict:
+    """Die beiden Probeanlagen als {sha256: bytes} - der Bestand, den die
+    Empfangslage eines Tests hinterlegt hat."""
+    return {hashlib.sha256(b).hexdigest(): b
+            for b in (ANLAGE_ABRECHNUNGSBERICHT, ANLAGE_ZAHLUNGSBERICHT)}
+
+
+def anlagen_ablegen(ordner, nutzlast):
+    """Legt die Anlagen eines aufstellungsauftrags als anlagen/<sha256>.xlsx
+    in den Uebergabeordner, wie der Absender sie vor dem Beleg ablegt (§ 8b).
+    Die Bytes kommen aus probe_anlagen - derselbe Bestand, den die
+    Empfangslage eines Tests hinterlegt hat."""
+    bestand = probe_anlagen()
+    anlagen = ordner / "anlagen"
+    anlagen.mkdir(parents=True, exist_ok=True)
+    for eintrag in nutzlast["anlagen"]:
+        (anlagen / f"{eintrag['sha256']}.xlsx").write_bytes(
+            bestand[eintrag["sha256"]]
+        )
+
+
+def aufstellungsauftrag(**aenderungen):
+    """§ 8b (Fassung 1.7): Abrechnungsaufstellung bei Drittlandzahlung - keine
+    Rechnung, kein typcode, keine Steuerfelder, zwei Anlagen neben dem Beleg.
+    Erfundene Zahlen; USD, damit die umrechnung dasteht. netto x kurs muss
+    zahlbetrag NICHT ergeben: Die Plattform rechnet die Umrechnung."""
+    nutzlast = {
+        "auftragsschluessel": "plattform:2026-02:kanal-b:x1",
+        "kunde": {"partner_id": PARTNER_A, "anzeigename": "Beispiel Services LLC"},
+        "leistungszeitraum": {"von": "2026-02-01", "bis": "2026-02-28"},
+        "zahlung": {"zahlungsnummer": "100000000000001", "datum": "2026-04-29"},
+        "waehrung": "USD",
+        "betraege": {"brutto": "6.92", "quellensteuer": "2.08", "netto": "4.84"},
+        "umrechnung": {"kurs": "0.8533", "waehrung": "EUR", "zahlbetrag": "4.13"},
+        "anlagen": [
+            anlage("abrechnungsbericht", "bericht.xlsx", ANLAGE_ABRECHNUNGSBERICHT),
+            anlage("zahlungsbericht", "zahlung.xlsx", ANLAGE_ZAHLUNGSBERICHT),
+        ],
     }
     nutzlast.update(aenderungen)
     return nutzlast

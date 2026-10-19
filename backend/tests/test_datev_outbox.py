@@ -72,8 +72,8 @@ def _logs(session, invoice_id):
 
 
 def _mustang_patches():
-    return (patch("app.routers.invoices.mustang.jar_available", return_value=True),
-            patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()))
+    return (patch("app.services.mustang.jar_available", return_value=True),
+            patch("app.services.mustang.validate", return_value=_valid_mustang()))
 
 
 def test_der_versuch_ist_committet_bevor_smtp_angesprochen_wird(pg_session, pg_engine):
@@ -145,7 +145,8 @@ def test_scheitert_der_commit_nach_dem_versand_bleibt_der_versuch_stehen(pg_sess
 def test_ein_offener_ausgang_wird_als_offen_angezeigt(pg_session):
     """Ein „✗" an dieser Stelle waere die Auskunft, die zum Doppelversand fuehrt."""
     inv = _seed(pg_session)
-    pg_session.add(InvoiceSendLog(invoice_id=inv.id, to_email="kunde@example.de",
+    pg_session.add(InvoiceSendLog(invoice_id=inv.id, ziel="kunde_und_buchhaltung",
+                                  to_email="kunde@example.de",
                                   datev_bcc=True, success=None))
     pg_session.commit()
 

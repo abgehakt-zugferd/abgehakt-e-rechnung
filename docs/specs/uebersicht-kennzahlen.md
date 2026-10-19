@@ -83,13 +83,16 @@ angemahnt. Das entspricht dem heutigen `standard`-Filter in `main.py:280`.
 `cancelled` und `discarded` sind heraus.
 
 **Ueberfaellig** heisst offen **und** `due_date < heute`. Der Faelligkeitstag selbst ist
-nicht ueberfaellig. `aeltester_tage` ist die Differenz in Tagen zwischen heute und dem
+nicht ueberfaellig. Ein Beleg ohne Faelligkeitsdatum zaehlt nie als ueberfaellig: er zahlt
+nach dem Zahlungshinweis, nicht nach einem Termin (EN 16931 BR-CO-25). `aeltester_tage` ist die Differenz in Tagen zwischen heute und dem
 kleinsten `due_date` der ueberfaelligen Menge; ohne ueberfaellige Belege ist der Wert `None`
 und die Kachel zeigt an dieser Stelle nichts, keine Null.
 
-**Nicht versendet** heisst `status == "issued"` und `datev_sent_at IS NULL`. Das ist genau
-die Unterscheidung, die `services/beleg_status.py` bereits trifft; der Hinweisstreifen darf
-sie nicht ein zweites Mal selbst formulieren, sondern nutzt dieselbe Bedingung.
+**Nicht versendet** heisst `status == "issued"` und `kunde_zugestellt_am IS NULL`. Es meint die
+ZUSTELLUNG AN DEN KUNDEN: Ein Beleg, der nur der Buchhaltung vorliegt, zaehlt weiter als nicht
+versendet. Das ist genau die Unterscheidung, die `services/beleg_status.py` trifft; der
+Hinweisstreifen darf sie nicht ein zweites Mal selbst formulieren, sondern nutzt dieselbe
+Bedingung.
 
 **Bezahlt im Monat** bleibt bei `updated_at`, nicht `issue_date`. Das ist eine Naeherung, kein
 Zahldatum: `updated_at` bewegt sich bei jeder Aenderung. Die vorhandene Kachel rechnet schon
@@ -125,7 +128,8 @@ optionale Parameter hinzu:
 - `art`: `rechnung` filtert auf `invoice_type IS NULL`, `gutschrift` auf
   `invoice_type == "credit_note"`. Leer heisst wie bisher: beides.
 - `faellig`: `ueberfaellig` filtert auf `due_date < heute`. Leer heisst: keine Einschraenkung.
-- `versand`: `offen` filtert auf `datev_sent_at IS NULL`. Leer heisst: keine Einschraenkung. Die
+- `versand`: `offen` filtert auf `kunde_zugestellt_am IS NULL` (fehlende ZUSTELLUNG AN DEN
+  KUNDEN). Leer heisst: keine Einschraenkung. Die
   Bedingung ist dieselbe wie in `services/beleg_status.py` und wird nicht zweimal formuliert.
 
 Ein unbekannter Wert in `art` oder `faellig` wird als leer behandelt und nicht als Fehler;
@@ -193,7 +197,7 @@ Mindestens zu belegen:
 - Vorjahresvergleich am 29. Februar wirft keinen Fehler.
 - Vorjahresumsatz null liefert keine Prozentzahl.
 - Quartals-Umsatzsteuer enthaelt eine Rechnung aus dem Vorquartal nicht.
-- Nicht versendet zaehlt nur `issued` ohne `datev_sent_at`.
+- Nicht versendet zaehlt nur `issued` ohne `kunde_zugestellt_am`.
 - Der Hinweisstreifen fehlt im HTML, wenn es keinen solchen Beleg gibt.
 - `?art=rechnung` blendet Gutschriften aus, `?faellig=ueberfaellig` blendet nicht faellige aus,
   und beide zusammen mit `status` wirken gleichzeitig.
@@ -229,3 +233,5 @@ Entscheidung des Betreibers vom 2026-09-30:
    Rechnungsdatum.
 
 Die Kachel „Offene Rechnungen“ heisst in der Oberflaeche „Offene Forderungen“.
+
+Abrechnungsaufstellungen zählen nicht in Umsatz- und Steuerkennzahlen.

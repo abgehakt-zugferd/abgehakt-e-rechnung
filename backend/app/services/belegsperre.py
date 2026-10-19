@@ -25,6 +25,9 @@ GESPERRTE_FELDER = (
     "Beteiligter",
     "Leistungszeitraum",
     "Netto-Beträge der Positionen",
+    "Bemessungsgrundlage netto",
+    "Beteiligungssatz",
+    "Gruppen der Positionen",
 )
 
 
@@ -56,12 +59,19 @@ def positionen_binden(invoice, rohe_positionen: list) -> list:
         neu["quantity"] = str(alt.quantity)
         neu["unit_price"] = str(alt.unit_price)
         neu["unit"] = alt.unit
+        for feld in ("basis_netto", "satz"):
+            wert = getattr(alt, feld, None)
+            neu[feld] = str(wert) if wert is not None else ""
         # Positionszeitraeume gehoeren zum Leistungszeitraum: aus dem Bestand,
         # damit kein Formularwert dem signierten Beleg widerspricht.
         von = getattr(alt, "leistung_von", None)
         bis = getattr(alt, "leistung_bis", None)
         neu["leistung_von"] = von.isoformat() if von else ""
         neu["leistung_bis"] = bis.isoformat() if bis else ""
+        # Die Gliederung in Gruppen stammt aus dem Beleg (Entscheidung 1:
+        # zusammen mit Betraegen und Leistungszeitraum gebunden). Ein anderer
+        # Gruppentext waere dieselbe Faellschung wie ein anderer Betrag.
+        neu["gruppe"] = getattr(alt, "gruppe", None) or ""
         gebunden.append(neu)
     return gebunden
 

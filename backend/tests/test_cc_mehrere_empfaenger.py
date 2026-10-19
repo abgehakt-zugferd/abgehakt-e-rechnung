@@ -72,8 +72,8 @@ def _mustang_gruen():
 
 def _sende(pg_session, invoice, **formulardaten):
     with patch.object(datev_email, "send_invoice") as send, \
-         patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=_mustang_gruen()):
+         patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=_mustang_gruen()):
         antwort = _client(pg_session).post(
             f"/invoices/{invoice.id}/datev-senden", data=formulardaten)
     return antwort, send

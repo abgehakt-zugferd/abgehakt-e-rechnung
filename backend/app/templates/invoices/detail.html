@@ -18,11 +18,13 @@
             </a>
             <div>
                 <h1 style="font-size:var(--fs-gross);">{{ invoice.invoice_number }}</h1>
+                <p>{{ invoice.invoice_type|beleg_bezeichnung }}</p>
                 <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">{{ invoice.customer.name if invoice.customer else '–' }}</p>
             </div>
         </div>
-        <span class="badge badge-{{ invoice.status|beleg_badge(invoice.datev_sent_at) }}" style="font-size:var(--fs-klein); padding:5px 10px;">
-            {{ invoice.status|beleg_etikett(invoice.datev_sent_at) }}
+        <span class="badge badge-{{ invoice.status|beleg_badge(invoice.kunde_zugestellt_am) }}" style="font-size:var(--fs-klein); padding:5px 10px;">
+            {# Bauschritt 5b: „nicht versendet“ meint den KUNDEN, nicht die Buchhaltung. #}
+            {{ invoice.status|beleg_etikett(invoice.kunde_zugestellt_am) }}
         </span>
     </div>
 
@@ -32,7 +34,7 @@
         {# Eine Gutschrift spiegelt ihr Original und ist deshalb nicht bearbeitbar (#8).
            Der Router weist den Aufruf ohnehin ab; hier verschwindet nur der Knopf,
            der ins Leere fuehrte. #}
-        {% if invoice.invoice_type != 'credit_note' %}
+        {% if invoice.invoice_type not in ('credit_note', 'self_billing_storno') %}
         <a href="/invoices/{{ invoice.id }}/bearbeiten" class="btn-secondary">✎ BEARBEITEN</a>
         {% endif %}
         <a href="/invoices/{{ invoice.id }}/vorschau" class="btn-secondary">👁 VORSCHAU</a>
@@ -106,6 +108,18 @@
         </div>
         {% endif %}
 
+        {# Entscheidung 6 (Bauschritt 5a): Die Buchhaltung kann den Beleg
+           bekommen, bevor der Kunde ihn hat — ein eigener Weg nur an die
+           Upload-Adresse, ohne Blindkopie. Nur bei gestellten Belegen und nur
+           mit konfigurierter Upload-Adresse: Ohne sie kann die Route nicht
+           gelingen, und ein Knopf, der nur einen Fehler zeigt, wäre keiner. #}
+        {% if invoice.status in ('issued', 'paid') and datev_configured %}
+        <form method="post" action="/invoices/{{ invoice.id }}/an-buchhaltung"
+              {% if invoice.datev_sent_at %}onsubmit="return confirm('Dieser Beleg ging bereits an die Buchhaltung. Erneut senden?')"{% endif %}>
+            <button type="submit" class="btn-secondary">NUR AN DIE BUCHHALTUNG</button>
+        </form>
+        {% endif %}
+
         {% if invoice.status == 'paid' and invoice.bezahlt_am %}
         <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--green);">
             bezahlt am {{ invoice.bezahlt_am.strftime('%d.%m.%Y') }}
@@ -123,9 +137,9 @@
             </label>
             <button type="submit" class="btn-success">✓ ALS BEZAHLT MARKIEREN</button>
         </form>
-        {% if invoice.invoice_type != 'credit_note' %}
+        {% if invoice.invoice_type not in ('credit_note', 'self_billing_storno') %}
         <form method="post" action="/invoices/{{ invoice.id }}/status"
-              onsubmit="return confirm('Rechnung als storniert markieren? (nur Status, kein Gutschrift-Beleg)')">
+              onsubmit="return confirm('Rechnung als storniert markieren? (nur Status, kein Stornobeleg)')">
             <input type="hidden" name="new_status" value="cancelled">
             <button type="submit" class="btn-danger">✗ ALS STORNIERT MARKIEREN</button>
         </form>
@@ -135,7 +149,7 @@
         {% if invoice.invoice_type == 'credit_note' and invoice.status in ('issued', 'paid') %}
         {# Issue #142: eine gestellte Gutschrift ist endgueltig. Nicht nur sperren, den Weg zeigen. #}
         <div data-hinweis="gutschrift-endgueltig" style="flex-basis:100%; padding:10px 14px; border:2px solid var(--border); font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
-            Diese Gutschrift ist endgültig; sie ist selbst die Korrektur und lässt sich nicht stornieren.
+            Diese Stornorechnung ist endgültig; sie ist selbst die Korrektur und lässt sich nicht stornieren.
             {% if invoice.original_invoice %}
             War sie falsch, stelle zur Rechnung
             <a href="/invoices/{{ invoice.original_invoice.id }}" style="color:var(--gold); text-decoration:underline;">{{ invoice.original_invoice.invoice_number }}</a>
@@ -149,10 +163,10 @@
         </div>
         {% endif %}
 
-        {% if invoice.status in ('issued', 'paid') and invoice.invoice_type != 'credit_note' %}
+        {% if invoice.status in ('issued', 'paid') and invoice.invoice_type not in ('credit_note', 'self_billing_storno') %}
         <form method="post" action="/invoices/{{ invoice.id }}/storno"
-              onsubmit="return confirm('Gutschrift/Storno-Rechnung zu diesem Beleg erzeugen? Die Originalrechnung bleibt erhalten.')">
-            <button type="submit" class="btn-secondary">↩ GUTSCHRIFT ERSTELLEN</button>
+              onsubmit="return confirm('Stornorechnung zu diesem Beleg erzeugen? Die Originalrechnung bleibt erhalten.')">
+            <button type="submit" class="btn-secondary">↩ STORNO ERSTELLEN</button>
         </form>
         {% endif %}
         {% if ersetzbar %}
@@ -181,7 +195,8 @@
                     </div>
                     <div>
                         <p class="label">Fälligkeitsdatum</p>
-                        <p style="color:var(--text-hi);">{{ invoice.due_date.strftime('%d.%m.%Y') }}</p>
+                        {# Ohne Fälligkeit gilt der Zahlungshinweis (BR-CO-25). #}
+                        <p style="color:var(--text-hi);">{{ invoice.due_date.strftime('%d.%m.%Y') if invoice.due_date else ('laut Zahlungshinweis' if invoice.payment_terms else '') }}</p>
                     </div>
                     {% if invoice.delivery_date %}
                     <div>
@@ -236,11 +251,46 @@
                         <p style="color:var(--text-hi);">{{ invoice.archive_until.strftime('%d.%m.%Y') if invoice.archive_until else '–' }}</p>
                     </div>
                     <div>
-                        <p class="label">Versendet am</p>
-                        <p style="color:{% if invoice.datev_sent_at %}var(--green){% else %}var(--text-dim){% endif %};">{{ invoice.datev_sent_at.strftime('%d.%m.%Y %H:%M') if invoice.datev_sent_at else '–' }}</p>
+                        {# Zwei getrennte Nachweise (Bauschritt 5a/5b): Die Buchhaltung
+                           hat datev_sent_at, der Kunde kunde_zugestellt_am. Eine Zeile,
+                           die beides vermengt, wuerde einen Beleg, der nur der
+                           Buchhaltung vorliegt, als erledigt zeigen. #}
+                        <p class="label">Buchhaltung</p>
+                        <p style="color:{% if invoice.datev_sent_at %}var(--green){% else %}var(--text-dim){% endif %};">
+                            {% if invoice.datev_sent_at %}Buchhaltung: versendet am {{ invoice.datev_sent_at.strftime('%d.%m.%Y') }}{% else %}Buchhaltung: nicht versendet{% endif %}
+                        </p>
+                        <p class="label" style="margin-top:10px;">Kunde</p>
+                        <p style="color:{% if kunde_zustellung_am %}var(--green){% else %}var(--text-dim){% endif %};">
+                            {# Datum und Weg kommen aus dem Router: die JUENGSTE Zustellung,
+                               damit ein korrigierender Vermerk hier ankommt. #}
+                            {% if kunde_zustellung_am %}Kunde: zugestellt am {{ kunde_zustellung_am.strftime('%d.%m.%Y') }}{% if kunde_weg %} ({{ kunde_weg }}){% endif %}{% else %}Kunde: nicht versendet{% endif %}
+                        </p>
                     </div>
                 </div>
             </div>
+
+            {# Zustellung von Hand vermerken (Bauschritt 5b): Nur bei gestellten
+               Belegen — ein Entwurf wurde nie zugesellt. #}
+            {% if invoice.status in ('issued', 'paid') %}
+            <div class="card">
+                <h2 style="margin-bottom:12px;">ZUSTELLUNG AN DEN KUNDEN VERMERKEN</h2>
+                <form method="post" action="/invoices/{{ invoice.id }}/zustellung-vermerken"
+                      style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; font-family:'VT323',monospace; font-size:var(--fs-text);">
+                    <label style="display:flex; flex-direction:column; gap:4px; color:var(--text-dim);">
+                        DATUM DER ZUSTELLUNG
+                        <input type="date" name="datum" value="{{ heute.isoformat() }}"
+                               min="{{ invoice.issue_date.isoformat() }}" max="{{ heute.isoformat() }}" required
+                               style="font-family:'VT323',monospace; font-size:var(--fs-text); background:var(--bg); color:var(--text-hi); border:1px solid var(--border); padding:4px 6px;">
+                    </label>
+                    <label style="display:flex; flex-direction:column; gap:4px; color:var(--text-dim); flex:1; min-width:240px;">
+                        WEG (z. B. Upload in das Kundenportal)
+                        <input type="text" name="weg" required
+                               style="font-family:'VT323',monospace; font-size:var(--fs-text); background:var(--bg); color:var(--text-hi); border:1px solid var(--border); padding:4px 6px;">
+                    </label>
+                    <button type="submit" class="btn-secondary">VERMERKEN</button>
+                </form>
+            </div>
+            {% endif %}
 
             <!-- Line items -->
             <div class="card">
@@ -437,7 +487,23 @@
                             {% endif %}
                             <span style="color:var(--text-hi);">{{ log.sent_at.strftime('%d.%m.%Y %H:%M') }}</span>
                         </div>
+                        {# Das Ziel jeder Zeile (Bauschritt 5a/5b): Ein Beleg kann der
+                           Buchhaltung vorliegen, ohne dass der Kunde ihn hat — ohne
+                           diese Angabe waere „an <Adresse>" die einzige, irreführende
+                           Auskunft. .get statt [..]: ein unbekannter ziel-Wert darf die
+                           Seite nicht sprengen, er wird roh gezeigt. #}
+                        {% set ziel_text = {
+                            'kunde_und_buchhaltung': 'Kunde und Buchhaltung',
+                            'buchhaltung': 'Buchhaltung',
+                            'kunde_vermerk': 'Kunde (Vermerk)',
+                        }.get(log.ziel, log.ziel) %}
+                        <p style="color:var(--text-dim);">Ziel: {{ ziel_text }}</p>
+                        {% if log.to_email %}
                         <p style="color:var(--text-dim);">an {{ log.to_email }}{% if log.cc_email %}, CC {{ log.cc_email }}{% endif %}{% if log.datev_bcc %}, BCC DATEV{% endif %}</p>
+                        {% endif %}
+                        {% if log.weg_notiz %}
+                        <p style="color:var(--text-dim);">{{ log.weg_notiz }}</p>
+                        {% endif %}
                         {% if log.success is none %}
                         <p style="color:var(--text-dim);">AUSGANG UNBEKANNT: der Versand wurde begonnen, das Ergebnis kam nicht mehr an. Bitte im Postausgang nachsehen, bevor erneut gesendet wird.</p>
                         {% endif %}

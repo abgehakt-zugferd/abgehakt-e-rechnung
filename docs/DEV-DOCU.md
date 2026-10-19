@@ -9,8 +9,9 @@
 > nicht hier, sondern in [`ARCHITEKTUR.md`](ARCHITEKTUR.md). Faustregel: *warum die Software
 > etwas nicht tun darf* → ARCHITEKTUR; *warum ein Werkzeug sich unerwartet verhält* → hier.
 >
-> **Zu den Nummern im Text:** Kommentare und Tests verweisen an vierzehn Stellen auf
-> Nummern zwischen #98 und #154. Die gehören nicht in dieses Repository, dessen
+> **Zu den Nummern im Text:** Kommentare und Tests verweisen auf
+> Nummern zwischen #98 und #154. Vierzehn Stellen waren es, als dieser
+> Abschnitt entstand; heute sind es rund 200 (Stand 2026-10-17). Die gehören nicht in dieses Repository, dessen
 > Zählung bei 85 endet, sondern in das Vorgängerrepository, aus dem der Code
 > extrahiert wurde. Sie laufen hier ins Leere und werden trotzdem nicht ersetzt:
 > Der Inhalt daneben stimmt, und eine erfundene Zuordnung wäre schlechter als ein
@@ -43,7 +44,7 @@
 | `aiofiles` | 24.1.0 | 25.1.0 | **Major-Jahr** | API meist kompatibel; kurz prüfen |
 | `reportlab` | 4.2.5 | **5.0.0** | **Major** | PDF-Pipeline + Font-/Table-Quirks; **nicht leichtfertig**, Branding-Tests |
 | `pypdf` | 5.1.0 | **6.14.2** | **Major** | Font-Embedding-Asserts in Tests können brechen |
-| `aiosmtplib` | 3.0.2 | **5.1.2** | **Major (2 Sprünge)** | DATEV-Mail-Pfad; Breaking Changes wahrscheinlich |
+| `aiosmtplib` | 3.0.2 | **5.1.2** | **Major (2 Sprünge)** | gepinnt, derzeit ungenutzt: der Mailversand nutzt `smtplib` aus der Standardbibliothek (`services/datev_email.py`); kein Import im Code (Stand 2026-10-17) |
 | `httpx` | 0.28.1 | 0.28.1 | aktuell | Update-Pruefung (`services/update_check.py`) |
 | `python-dotenv` | 1.0.1 | 1.2.2 | minor | |
 | `cryptography` | 44.0.0 | **49.0.0** | **Major** | Fernet/`SECRET_KEY` (Settings); OpenSSL-Bindings, vorsichtig |
@@ -67,7 +68,7 @@ Unverträglichkeit mit der funktions-scoped `pg_session`-Fixture).
 
 | Komponente | Gepinnt / Bezug | Neueste bekannt | Delta | Hinweis |
 |---|---|---|---|---|
-| **Mustang CLI** | `Dockerfile` → `ARG MUSTANG_VERSION` + `MUSTANG_SHA256` (aktuell 2.24.0) | 2.24.0 | aktuell | Upgrade = Nummer **und** SHA-256 im Dockerfile, Rebuild, volle Mustang-E2E (`test_finalize_e2e`, Schema, Storno). CLI-Flags (`--format zf`, `--no-additional-attachments`) vorab gegen die Release notes prüfen. Rezept + Fallstricke: unten. |
+| **Mustang CLI** | `Dockerfile` → `ARG MUSTANG_VERSION` + `MUSTANG_SHA256` (aktuell 2.24.0) | 2.24.0 | aktuell | Upgrade = Nummer **und** SHA-256 im Dockerfile, Rebuild, volle Mustang-E2E (`test_finalize_e2e`, Schema, Storno). CLI-Flags (`--format zf`, `--version 2`, `--profile`, `--no-additional-attachments`, JVM-Start mit `-Xmx512m` und `-Dfile.encoding=UTF-8`) vorab gegen die Release notes prüfen. Rezept + Fallstricke: unten. |
 | Python-Basis | `python:3.11-slim` mit Digest-Pin | 3.11 weiterhin; 3.12/3.13 verfügbar | Digest hält das Basisabbild fest | Major-Python-Sprung separat entscheiden |
 | PostgreSQL | `postgres:16-alpine` | 16.x (Tag floatet) | Patch via Image-Pull | Major 17 = eigene Migration |
 | Ghostscript | apt `ghostscript=10.05.1~dfsg-1+deb13u3` | n/a | Pin | PDF/A-3-Pfad; beim nächsten Debian-Point-Release laut brechen (zusammen mit Base-Digest anheben). Am 2026-10-15 so gebrochen: `deb13u2` war aus `trixie-security` verschwunden, jeder frische Bau scheiterte mit apt-Exit 100; lokal verdeckt durch den Schichten-Cache |
@@ -185,13 +186,14 @@ wörtlich nicht erfüllbar und wird so umgedeutet.
 
 **Fallstrick 2: der Signaturschlüssel wurde zwischen 2.23.0 und 2.23.1 gewechselt.**
 Alt: `68F4 2269 … B596 66A3` (DSA-1024, 2009, abgelaufen). Neu ab 2.23.1:
-`C513 CD93 … 4DB7 4319` (RSA-3072, erstellt 2026-05-13), gleiche Kennung
-`Jochen Stärk <jstaerk@usegroup.de>`. **Der neue Schlüssel trägt nur Selbstsignaturen**, der
+`C513 CD93 … 4DB7 4319` (RSA-3072, erstellt 2026-05-13), gleiche Kennung des
+Projektbetreuers (siehe Mustang-Projektseite). **Der neue Schlüssel trägt nur Selbstsignaturen**, der
 alte hat ihn NICHT beglaubigt, es gibt also keine kryptografische Brücke. Die Rotation ist
 trotzdem belegt: Die Release-Notes zu 2.23.0 kündigen sie wörtlich an („I will try to renew my
 expired GPG key in the next maven central release"), und der neue Schlüssel taucht genau in der
 angekündigten Folgeversion auf. Wer künftig bumpt und einen erneuten Schlüsselwechsel sieht:
-**nicht durchwinken**, Release-Notes gegenlesen, UID vergleichen, und im Zweifel fragen. Der
+**nicht durchwinken**, Release-Notes gegenlesen, Kennung gegen die Projektseite vergleichen, und im
+Zweifel fragen. Der
 praktische Vertrauensanker ist ohnehin nicht die Signatur, sondern die Kontrolle über den
 Maven-Central-Namensraum `org.mustangproject` (von Sonatype verifiziert) plus unser Hash-Pin.
 
@@ -204,6 +206,10 @@ es: `curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x<FPR>" 
   Base-Image + JRE-Layer ab, die eigentliche Quelle der „tausenden CVEs".
 - **pip-audit** (App-Ebene): Python-Deps gegen Advisory-DB.
 - Beide zunächst **nicht-blockierend** (Sichtbarkeit), erst in Phase 3 als Gate ab Severity HIGH.
+
+Stand 2026-10-17: Keiner der beiden Scanner ist eingerichtet. Unter `.github/workflows/` liegen
+`issue-wache.yml`, `kritikalitaet.yml`, `release.yml` und `tdd.yml`; kein Workflow führt Trivy
+oder pip-audit aus. Der Absatz beschreibt den Plan, nicht einen bestehenden Zustand.
 
 ### Update-Politik (Doku, noch kein Bot in Phase 1)
 
@@ -287,7 +293,7 @@ das ein
 Empfänger-/Prüfer-System ablehnen würde. Deshalb reicht `combine==True` NICHT:
 
 - **Finalize (E1):** nach erfolgreichem `combine` validiert der Router
-  (`routers/invoices.py`) das kombinierte PDF via `mustang.validate(zugferd_pdf)` und macht
+  (`services/rechnung/finalisieren.py`) das kombinierte PDF via `mustang.validate(zugferd_pdf)` und macht
   `issued` **nur bei `result["is_valid"] and "XML:valid" in result["raw"]`**, sonst
   fail-closed (bleibt `draft`, 400, Zwischen-PDFs entfernt, `db.rollback()`). `is_valid`
   ALLEIN genügt nicht: ein bares PDF/A ohne eingebettete XML kann fehlerfrei sein, trägt
@@ -400,7 +406,7 @@ Rechnung und stellt sicher, dass die XML-Summen (Netto/Steuer/Brutto) auch im PD
 
 ### Struktur/Reihenfolge gehört in den Mustang-Schema-Test, nicht in Substring/XPath (#98 E5)
 
-`test_zugferd_xml.py` (61 Tests, Stand 2026-09-24) prüft fachliche **WERTE** per XPath, aber XPath-`find()` ist
+`test_zugferd_xml.py` (61 Tests, Stand 2026-09-24; am 2026-10-17 zählt die Datei 70 Testfunktionen) prüft fachliche **WERTE** per XPath, aber XPath-`find()` ist
 **ordnungsblind** und ein Substring-Match sieht keine Sequenzfehler. Der reale
 PostcodeCode-vor-LineOne-Bug (Mustang type 18) blieb dort unsichtbar. Die einzige harte
 Strukturprüfung ist `test_zugferd_xml_schema.py` (Mustang/XSD, `is_valid`).
@@ -411,11 +417,11 @@ Strukturprüfung ist `test_zugferd_xml_schema.py` (Mustang/XSD, `is_valid`).
   XPath-Datei** (falsche Sicherheit), Modul-Docstring dort warnt explizit.
 - **Getan:** `test_xml_is_valid_and_parseable` (nur `root.tag.endswith(...)`) entfernt:
   reiner Parse-Check = falsche „gültig"-Sicherheit, vom Schema-Test real abgedeckt. NICHT
-  mass-gelöscht: die 57 verbleibenden sind Wert-Asserts (echte Coverage, die das Schema nicht
+  mass-gelöscht: die 57 verbleibenden (Stand 2026-09-24) sind Wert-Asserts (echte Coverage, die das Schema nicht
   leistet). `test_postcode_precedes_lineone_in_all_addresses` BLEIBT, reine-Python-Ordnungs-
   prüfung, läuft auch **ohne** Mustang-JAR (der Schema-Test `skipif`t dann).
 - **Zähne (Break-and-Revert):** PostcodeCode/LineOne im Seller-Block getauscht ⇒ **15
-  Schema-Tests + der Ordnungstest ROT**, während alle 57 XPath-Wert-Tests GRÜN blieben, der
+  Schema-Tests + der Ordnungstest ROT**, während alle 57 XPath-Wert-Tests des damaligen Standes GRÜN blieben, der
   Beweis, dass der Schema-Test die Strukturprüfung ist, nicht die Substring/XPath-Tests.
 
 ---
@@ -428,7 +434,9 @@ Drei nicht offensichtliche Voraussetzungen, alle empirisch geklärt, vorher schl
 1. **`mustang combine` ist ohne Flags interaktiv und meldet falschen Erfolg.** Es fragt auf
    stdin nach Anhängen und Format; ohne stdin wirft es eine `NullPointerException`, schreibt
    **keine** Ausgabedatei, und beendet sich mit **rc=0**. Deshalb übergibt `combine()`
-   `--format zf --no-additional-attachments` und prüft den Erfolg an
+   `--format zf --version 2 --profile <Profilkürzel> --no-additional-attachments`
+   (`--profile` laut Zuordnungstabelle in `services/mustang.py`, Standard `E` für EN16931),
+   startet die JVM mit `-Xmx512m -Dfile.encoding=UTF-8` und prüft den Erfolg an
    `rc == 0 and out_path.exists() and out_path.stat().st_size > 0`, nie am Rückgabewert allein.
 2. **`combine` verlangt ein PDF/A als Eingabe.** Der Exporter liest `pdfaid:part` aus dem XMP;
    ein normales ReportLab-PDF, auch mit eingebetteten Schriften, endet mit
@@ -597,12 +605,18 @@ Die Trigger sind Single Source of Truth für **beide**:
 **Rollen-Topologie:**
 
 ```
-abgehakt_root        (Superuser, break-glass only)
-  ↓ (grant)
+abgehakt_db          (Bootstrap-Superuser aus POSTGRES_USER, OID 10, nicht demotierbar;
+                     bleibt im Betrieb ungenutzt, Break-Glass + Volume-Init)
+  ↓ (legt an)
 abgehakt_admin       (NOSUPERUSER, Owner, CREATEROLE; läuft Alembic + Bootstrap)
   ↓ (grant)
 abgehakt_app         (Runtime-Rolle, least-privilege, kein DELETE/TRUNCATE auf Schutz-Tabellen)
 ```
+
+Stand 2026-10-17: Eine Rolle `abgehakt_root` existiert weder im Code noch in der
+`docker-compose.yml`; die konfigurierte Bootstrap-Rolle ist `abgehakt_db` (`POSTGRES_USER`).
+Eine optionale, von Hand angelegte Break-Glass-Superuser-Rolle bleibt möglich, aber sie ist
+nicht Teil der ausgelieferten Topologie (s. den Abschnitt Rollen-Topologie unten).
 
 - **Alembic:** läuft als `abgehakt_admin` (`DATABASE_URL` wird in Compose aus
   `DB_USER`/`DB_PASSWORD` in `.env` gebildet).
@@ -812,11 +826,11 @@ automatisch.
 ```mermaid
 flowchart LR
   subgraph ordner["UEBERGABEN_ORDNER"]
-    E["feiyr-konto-nach-tantiemen-app/"]
+    E["<absender>-nach-tantiemen-app/"]
     A["tantiemen-app-nach-abgehakt/"]
     Q["abgehakt-nach-tantiemen-app/"]
   end
-  feiyr["feiyr-konto"] -->|"erloesmeldung"| E
+  vorgelagerter["vorgelagerter Absender"] -->|"erloesmeldung"| E
   E --> tantiemen["tantiemen-app"]
   tantiemen -->|"abrechnungsauftrag"| A
   A --> abgehakt["abgehakt (dieses Repo)"]
@@ -853,10 +867,20 @@ Tabellendarstellung: er ist später der Inhalt der Quittung (Stufe 7), und ob di
 Lesen oder beim Knopfdruck geschrieben wird, ist damit noch offen. In den Belegordner
 schreibt diese Anwendung **nie** (§ 12: der Ordner ist Archiv nach § 147 AO).
 
+**Zwei Stufen: annehmbar und gewirkt.** Der Befund des Lesers sagt *annehmbar*; *gewirkt*
+hat ein Beleg erst, wenn der Knopf ALS RECHNUNG ANLEGEN ihn über
+`abrechnungsauftrag_wirkung.entwuerfe_anlegen()` und `uebergabe_eingang.merken()` in
+`uebergabe_eingaenge` festgehalten hat. Die Kettenprüfung fragt genau diese Tabelle: Ein
+Folgebeleg, der einen Beleg als `vorgaenger_hash` nennt, der noch nicht gewirkt hat, erhält
+`KETTE_SPRINGT`. Das ist kein Fehler, sondern die Abbildung von § 5: die Kette bildet ab,
+was **gewirkt** hat, nicht was gelesen wurde.
+
 #### Prüfhaken und Befundcodes
 
-Die Reihenfolge geht von der Datei nach innen: Bytes, Umschlag, Fassung, Art, Nutzlast-Hash,
-Schlüssel und Signatur, Kennung, Kette, Adressat, dann die Nutzlast. Gemeldet wird der
+Die Reihenfolge geht von der Datei nach innen: Bytes, Umschlag, Fassung, Art, erzeugte Zeit
+(Wertprüfung von `erzeugt_am`, Befundcode `WERT_UNBRAUCHBAR`, ab Fassung 1.6),
+Nutzlast-Hash, Schlüssel und Signatur, Kennung, Kette, Adressat, noch einmal die Art gegen
+die für diesen Empfänger lesbaren Arten, dann die Nutzlast. Gemeldet wird der
 erste Grund, mit `pfad` auf das Feld (`$` für das ganze Dokument).
 
 ```
@@ -899,6 +923,11 @@ Ist ein Netto-Betrag falsch, ist der **Beleg** falsch: dann wird er abgelehnt un
 Gegenseite erzeugt einen neuen. Im Formular sind die gesperrten Felder als „aus dem Beleg
 übernommen" gekennzeichnet, nicht bloß grau.
 
+**Ausstellungsdatum und Fälligkeit:** Der Entwurf stellt am **Kalendertag von
+`erzeugt_am`** aus, gerechnet in der festen Zeitzone **Europe/Berlin** (`app/zeit.py`;
+`erzeugt_am` trägt nach § 2 immer UTC), und ist **14 Tage später** fällig, wie die
+Voreinstellung des Anlegeformulars.
+
 #### Protokollfassung (#72)
 
 `app/services/protokoll.py` führt `PROTOKOLL_VERSION`, die akzeptierten Fassungen, die
@@ -907,6 +936,16 @@ Befundcodes und das Feldverzeichnis. Maßgeblich ist `protokoll.json` im Ordner 
 major heißt annehmen, auch bei höherem minor; höherer major heißt
 `FASSUNG_UNVERTRAEGLICH`. Es gibt **keine** Aushandlung zur Laufzeit.
 
+Stand ist **1.7** (seit dem 2026-10-17): zwei neue Nutzlastarten (`rechnungsauftrag` und
+`aufstellungsauftrag`, §§ 8a und 8b) und drei neue Befundcodes (`AUFTRAG_SCHON_GERECHNET`,
+`ANLAGE_FEHLT`, `ANLAGE_HASH_FALSCH`). Dieses Repositorium kennt die neuen Arten und Codes,
+LIEST die Arten aber noch nicht: der Bau wartet auf eine Freigabe. Was dieser Empfänger
+liest, steht in `uebergabe_befund.LESBARE_ARTEN`, und das bleibt `abrechnungsauftrag`; ein
+gültig signierter Beleg der neuen Arten wird mit `NUTZLASTART_UNBEKANNT` abgelehnt, und es
+entsteht kein Entwurf. Die Beiblätter im Vektorordner tragen seit 1.7 nur die Pflichtfelder
+plus `notizen`; die Fixture, die sie zur Laufzeit in den geschlossenen Feldbestand umbaute
+(#159), ist entfernt, die Tests lesen die Beiblätter direkt.
+
 Die Vektoren liegen außerhalb dieses Repositoriums und werden nicht mitgeliefert. Pfad aus
 `UEBERGABE_VEKTOREN`, **ohne Vorgabe**: Name und Vorgabepfad, die das Papier dafür nennt,
 tragen den Namen des Betreibers, und dieses Repositorium ist öffentlich. Ist die Variable
@@ -914,6 +953,12 @@ nicht gesetzt, sammelt `tests/vektoren/` nichts ein (kein Skip, der wäre hier e
 Fehlschlag), und pytest schreibt am Ende jedes Laufs eine rote Zeile
 `formatvektoren: NICHT GEMESSEN`. `backend/run-tests.sh` reicht den Ordner read-only in den
 Container.
+
+Behoben (#159): Die Formatvektoren messen `uebergabe_befund.beleg_beurteilen` und dessen
+Befundcodes, also denselben Leser, über den die Anwendung urteilt. Der zweite Leser
+`uebergabebeleg.beleg_pruefen` ist entfernt; ein falscher Nutzlast-Hash heißt seither
+überall `NUTZLAST_HASH_FALSCH`. Was der einzige Prüfpfad weiter braucht (Kanonisierung,
+Hash, Umschlag), steht weiter in `services/uebergabebeleg.py`.
 
 #### Ketten-Testinstanz (nicht Live)
 
@@ -950,8 +995,12 @@ Das Skript **liest nur** und meldet je Beleg den Befund; es legt nichts an. Entw
 entstehen ausschließlich über den Knopf ALS RECHNUNG ANLEGEN in der Oberfläche (Port 3001),
 und finalisiert wird nur dort, nie in der Live-Installation.
 
-**Sichtbarkeit ohne Broker:** Kettenstand optional mit einem Belegmonitor-Werkzeug
-(liest denselben Belegordner, keine Signaturpruefung).
+**Sichtbarkeit ohne Broker:** Ein Belegmonitor-Werkzeug, das denselben Belegordner ohne
+Signaturprüfung liest, ist **nicht ausgeliefert**; der dafür vorbereitete Zweitleser
+`kette_pruefen` ist mit #159 entfernt, weil ihn niemand aufrief. Jedes Lesen läuft über
+`services/uebergabe_befund.py` (`beleg_beurteilen`), auch die Kettenprüfung: Der Leser
+verlangt je Absender den Hash des zuletzt angenommenen Belegs als `vorgaenger_hash` und
+meldet Sprünge und Neuanfänge als Befund.
 
 **Tests:** `tests/test_abrechnungsauftrag_wirkung.py`, `tests/test_uebergabe_befund.py`,
 `tests/test_testinstanz.py`. Suite
@@ -1579,6 +1628,13 @@ konfiguriert` oder `404 Rechnung nicht gefunden`, denn die echte Datenbank hat d
 Datensatz eben nicht. Der Test ist **allein gruen** (dort lief der Reload noch
 nicht) und nur im vollen Lauf rot, also genau dann, wenn niemand mehr hinsieht.
 Aufgefallen am 09.08.2026 bei #153.
+
+Nachtrag (Stand 2026-10-17): `test_app_database_url_failclosed.py` ruft kein
+`importlib.reload(app.database)` mehr auf. Die Importprüfungen laufen heute in einem
+Subprozess mit überschriebenen Umgebungsvariablen (siehe Modul-Docstring der Datei):
+`reload` erzeugte eine neue `Base`-Klasse, während die Modelle an der alten hängen
+blieben, und machte den vollen Suite-Lauf fragil. Die Regel oben gilt unverändert für
+jeden Test, der `app.dependency_overrides[get_db]` benutzt.
 
 Nachweis, falls es wieder auftritt (im Test, direkt vor der Anfrage):
 

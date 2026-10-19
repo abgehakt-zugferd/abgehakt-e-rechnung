@@ -2,7 +2,7 @@ import http
 import mimetypes
 import warnings
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from app.zeit import heute as kalender_heute
 from fastapi import FastAPI, Request, Depends
@@ -20,7 +20,7 @@ from app.services.customer_guard import CustomerDeleteError
 from app.services.invoice_guard import InvoiceStateError
 from app.routers import (
     customers, invoices, settings as settings_router, export, setup,
-    updates, archive, uebergaben,
+    updates, archive, uebergaben, aufstellungen,
 )
 from app.dependencies.herkunft import pruefe_herkunft
 from app.dependencies.beleg_integration_dep import lade_beleg_integration
@@ -28,6 +28,7 @@ from app.dependencies.update_banner_dep import load_update_banner
 from app.config import get_settings
 from app.installation import is_testinstanz, testinstanz_mail_to
 from app.services.audit import register_audit_listeners
+from app.services.aufstellung_guard import register_aufstellung_guard
 from app.services.customer_guard import register_customer_guard
 from app.services.invoice_guard import register_invoice_guard
 from app.branding import PRODUCT_NAME, register_branding_globals
@@ -56,6 +57,7 @@ from app.services.steuer_ruecklage import steuerruecklage_anteil_prozent
 # Guards ZUERST: sie müssen werfen, bevor der Audit-Listener Pending-Einträge sammelt
 # (sonst Geister-Audit-Zeilen beim nächsten Flush nach einem Rollback).
 register_invoice_guard()
+register_aufstellung_guard()
 register_customer_guard()
 register_audit_listeners()
 
@@ -140,6 +142,7 @@ app.include_router(archive.router, tags=["Archiv"])
 app.include_router(updates.router, prefix="/updates", tags=["Updates"])
 app.include_router(setup.router, prefix="/setup", tags=["Ersteinrichtung"])
 app.include_router(uebergaben.router, prefix="/uebergaben", tags=["Beleg-Integration"])
+app.include_router(aufstellungen.router, prefix="/aufstellungen", tags=["Abrechnungsaufstellungen"])
 
 
 # Überschrift und Ersatztext je Statuscode. Starlette setzt ohne eigenen Text die
@@ -291,12 +294,16 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     quarter_number = (today.month - 1) // 3 + 1
 
     zaehlung = belegzaehlung(db)
+    from app.services.dashboard_kennzahlen import offene_auszahlungen
+    auszahlungen = offene_auszahlungen(db)
     offen = offene_forderungen(db)
     ueberfaellig = ueberfaellige_forderungen(db, today)
     paid_this_month = bezahlt_im_zeitraum(db, month_start, None)
     paid_previous_month = bezahlt_im_zeitraum(db, previous_month_start, month_start)
     revenue_ytd = umsatz_im_zeitraum(db, year_start, None)
-    revenue_prev_ytd = umsatz_im_zeitraum(db, prev_year_start, prev_year_end)
+    # Halboffen [Vorjahresbeginn, Stichtag + 1 Tag): der Stichtag selbst zaehlt
+    # zum Vorjahresfenster, so wie es die inklusive Fassung vor #160 tat.
+    revenue_prev_ytd = umsatz_im_zeitraum(db, prev_year_start, prev_year_end + timedelta(days=1))
     revenue_yoy_pct = umsatz_abweichung_prozent(revenue_ytd, revenue_prev_ytd)
 
     vat_liability_ytd = schuldige_umsatzsteuer_ytd(db, year_start)
@@ -321,6 +328,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         "request": request,
         "company": company,
         "total_invoices": zaehlung.gesamt,
+        "offene_auszahlungen": auszahlungen,
         "open_invoices": offen.anzahl,
         "open_amount": offen.betrag,
         "draft_count": zaehlung.entwurf,

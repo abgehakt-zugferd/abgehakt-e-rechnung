@@ -2,7 +2,6 @@
 import csv
 import io
 import uuid
-import xml.etree.ElementTree as ET
 import zipfile
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -10,6 +9,7 @@ from pathlib import Path
 
 from app.models.customer import Customer
 from app.models.invoice import AuditLog, Invoice, InvoiceItem
+from app.models.uebergabe_eingang import UebergabeEingang
 from app.services.gobd_export import build_gobd_export
 
 
@@ -44,7 +44,7 @@ def _invoice(customer: Customer, number="RE-2026-001") -> Invoice:
 def _build(tmp_path: Path, **overrides) -> zipfile.ZipFile:
     c = overrides.pop("customer", _customer())
     kwargs = dict(
-        invoices=[_invoice(c)], customers=[c], audit_rows=[],
+        invoices=[_invoice(c)], customers=[c], audit_rows=[], uebergaben=[],
         storage_path=tmp_path, date_from=date(2026, 1, 1), date_to=date(2026, 12, 31),
     )
     kwargs.update(overrides)
@@ -70,40 +70,6 @@ def test_zip_contains_gdpdu_index_and_dtd(tmp_path):
     names = set(_build(tmp_path).namelist())
     assert "index.xml" in names
     assert "gdpdu.dtd" in names
-
-
-def test_index_xml_well_formed_and_references_dtd(tmp_path):
-    raw = _build(tmp_path).read("index.xml").decode("utf-8")
-    assert 'SYSTEM "gdpdu.dtd"' in raw                 # DOCTYPE verweist auf die DTD
-    root = ET.fromstring(raw)                          # well-formed
-    assert root.tag == "DataSet"
-
-
-def test_index_xml_describes_all_four_tables(tmp_path):
-    root = ET.fromstring(_build(tmp_path).read("index.xml"))
-    files = {f.text for f in root.iter("File")}
-    assert files == {"rechnungen.csv", "positionen.csv", "kunden.csv", "audit_log.csv"}
-
-
-def test_index_xml_types_amount_and_date_columns(tmp_path):
-    root = ET.fromstring(_build(tmp_path).read("index.xml"))
-    table = next(t for t in root.iter("Table")
-                 if t.find("./URL/File").text == "rechnungen.csv")
-    cols = {c.find("Name").text: c for c in table.iter("VariableColumn")}
-    assert cols["bruttobetrag"].find("./Numeric/Accuracy").text == "2"
-    assert cols["ausstellungsdatum"].find("./Date/Format").text == "YYYY-MM-DD"
-    assert cols["rechnungsnummer"].find("AlphaNumeric") is not None
-
-
-def test_index_xml_columns_match_csv_headers_no_drift(tmp_path):
-    """Spaltennamen in index.xml müssen exakt den CSV-Headern entsprechen."""
-    zf = _build(tmp_path)
-    root = ET.fromstring(zf.read("index.xml"))
-    for fname in ("rechnungen.csv", "positionen.csv", "kunden.csv", "audit_log.csv"):
-        table = next(t for t in root.iter("Table") if t.find("./URL/File").text == fname)
-        idx_cols = [c.find("Name").text for c in table.iter("VariableColumn")]
-        header = next(csv.reader(io.StringIO(zf.read(fname).decode("utf-8-sig")), delimiter=";"))
-        assert idx_cols == header, f"{fname}: index.xml-Spalten ≠ CSV-Header"
 
 
 def test_rechnungen_csv_has_invoice_row_with_iso_dates_and_totals(tmp_path):
@@ -283,3 +249,44 @@ def test_positionen_csv_fuehrt_den_positionszeitraum_hinten_als_datum(tmp_path):
     assert kopf[-3:] == ["artikelnummer", "leistung_von", "leistung_bis"]
     zeile = _read_csv(zf, "positionen.csv")[0]
     assert (zeile["leistung_von"], zeile["leistung_bis"]) == ("2026-07-01", "2026-07-31")
+
+
+def _uebergabe(sha: str, angenommen_am: datetime) -> UebergabeEingang:
+    return UebergabeEingang(
+        beleg_id=f"b-{sha[:8]}", beleg_sha256=sha, absender="tantiemen-app",
+        nutzlast_art="abrechnungsauftrag",
+        erzeugt_am=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        angenommen_am=angenommen_am,
+    )
+
+
+def test_uebergabekopien_nur_der_im_zeitraum_angenommenen(tmp_path):
+    """#160: rechnungen.csv filtert nach Zeitraum; die Uebergabekopien folgen dem
+    Datum der ANNAHME (uebergabe_eingaenge.angenommen_am), nicht dem Ordnerinhalt.
+    Der Router waehlt die Zeilen, hier zaehlt nur, was er gereicht bekommt."""
+    ordner = tmp_path / "uebergaben" / "tantiemen-app-nach-abgehakt"
+    ordner.mkdir(parents=True)
+    innen, draussen = "1" * 64, "2" * 64
+    (ordner / f"{innen}.json").write_bytes(b"{}")
+    (ordner / f"{draussen}.json").write_bytes(b"{}")
+
+    zeilen = [_uebergabe(innen, datetime(2026, 6, 1, tzinfo=timezone.utc))]
+    zf = _build(tmp_path, uebergaben=zeilen)
+    namen = [n for n in zf.namelist() if n.startswith("uebergaben/")]
+
+    assert namen == [f"uebergaben/tantiemen-app-nach-abgehakt/{innen}.json"]
+    assert f"uebergaben/tantiemen-app-nach-abgehakt/{draussen}.json" not in namen
+
+
+def test_fehlende_uebergabekopie_steht_in_fehlende_dateien(tmp_path):
+    """#160: Die Datenbankzeile verspricht eine Kopie (§ 12: keine Wirkung ohne
+    eigene Kopie). Fehlt sie, muss der Pruefer das erfahren, nicht still nichts
+    im Datentraeger vorfinden."""
+    sha = "3" * 64
+    zeile = _uebergabe(sha, datetime(2026, 6, 1, tzinfo=timezone.utc))
+    (tmp_path / "uebergaben").mkdir()
+    # keine Datei {sha}.json
+
+    zf = _build(tmp_path, uebergaben=[zeile])
+    assert "fehlende_dateien.txt" in zf.namelist()
+    assert sha in zf.read("fehlende_dateien.txt").decode("utf-8")

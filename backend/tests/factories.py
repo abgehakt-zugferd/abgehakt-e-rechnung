@@ -6,9 +6,13 @@ AttributeError in einer Datei und fachliche Assertion in einer anderen enden.
 """
 from __future__ import annotations
 
+import uuid
+
 from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from types import SimpleNamespace
+
+from app.services.auftragsschluessel import belegen
 
 from app.models.company import Company
 from app.models.customer import Customer
@@ -257,6 +261,28 @@ def orm_invoice(items, *, net=None, tax=None, gross=None, tax_category="S", **ov
     inv = Invoice(**kw)
     inv.customer = kw.get("customer") or orm_customer()
     inv.items = items
+    return inv
+
+
+def orm_invoice_aus_auftrag(items, schluessel, *, status="draft", **over):
+    """Beleg, der aus dem Auftrag eines vorgelagerten Systems entstand
+    (Bauschritt 4a, Entscheidung 7). Noch legt kein Auftrag einen Beleg an
+    (das kommt in 4b) — die Tests bauen ihn hier nach.
+
+    Nachweis und Sperre setzt die Fabrik ueber auftragsschluessel.belegen,
+    dieselbe Stelle wie die Anwendung: Eine Fabrik, die die Spalten selbst
+    schriebe, wuerde still abweichen, sobald die Regeln am Belegen sich
+    aendern. Eigene Nummer je Aufruf, weil mehrere solcher Belege in einem
+    Test nebeneinander bestehen muessen und invoice_number unique ist.
+    """
+    kw = dict(invoice_number=f"RE-4A-{uuid.uuid4().hex[:6]}", status=status)
+    kw.update(over)
+    inv = orm_invoice(items, **kw)
+    # orm_customer setzt keine customer_number, die Spalte ist aber NOT NULL:
+    # Wer die Fabrik in eine echte Session haengt, brauch eine eigene Nummer.
+    if inv.customer is not None and inv.customer.customer_number is None:
+        inv.customer.customer_number = f"K-4A-{uuid.uuid4().hex[:8]}"
+    belegen(inv, schluessel)
     return inv
 
 

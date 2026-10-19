@@ -171,8 +171,8 @@ def test_versand_mit_zeilenumbruch_im_betreff_schliesst_protokoll(pg_session):
     smtp_cm = MagicMock()
     smtp_cm.__enter__.return_value = server
 
-    with patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()), \
+    with patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=_valid_mustang()), \
          patch.object(datev_email.smtplib, "SMTP", return_value=smtp_cm):
         r = _client(pg_session, raise_server_exceptions=False).post(
             f"/invoices/{inv.id}/datev-senden"
@@ -194,8 +194,8 @@ def test_versand_mit_zeilenumbruch_im_betreff_schliesst_protokoll(pg_session):
 def test_unerwartete_ausnahme_beim_versand_schliesst_protokoll(pg_session):
     _config(pg_session, smtp_host="smtp.test")
     inv = _rechnung_mit_pdf(pg_session)
-    with patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=_valid_mustang()), \
+    with patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=_valid_mustang()), \
          patch.object(datev_email, "send_invoice", side_effect=RuntimeError("unvorhergesehen")):
         try:
             _client(pg_session).post(f"/invoices/{inv.id}/datev-senden")

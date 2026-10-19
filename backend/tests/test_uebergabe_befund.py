@@ -8,6 +8,7 @@ nicht in der Ansicht steckt.
 """
 
 import base64
+import copy
 import hashlib
 import json
 from dataclasses import dataclass
@@ -64,13 +65,14 @@ def schluessel(tmp_path):
             privat.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
         )
         (ordner / f"{kennung}.json").write_text(
+            # Ohne "probe": Ein Probeschluessel ist am Namen erkennbar, nicht
+            # an einer Angabe im Beiblatt (§ 6, geschlossener Feldbestand).
             json.dumps({
                 "schluessel_id": kennung,
                 "absender": ABSENDER_TANTIEMEN,
                 "verfahren": "Ed25519",
                 "gueltig_von": "2026-09-01T00:00:00Z",
                 "gueltig_bis": None,
-                "probe": kennung == PROBE_SCHLUESSEL_ID,
             }),
             encoding="utf-8",
         )
@@ -463,6 +465,459 @@ def test_ein_probeschluessel_gilt_in_der_testinstanz(schluessel, monkeypatch):
 
     monkeypatch.setattr(get_settings(), "installation_mode", "testinstanz")
     roh = _beleg(schluessel, _auftrag(), schluessel_id=PROBE_SCHLUESSEL_ID)
+
+    urteil = _urteil(schluessel, roh)
+
+    assert urteil.angenommen, _codes(urteil)
+
+
+def test_eine_gleitkommazahl_in_der_nutzlast_ist_ein_befund(schluessel):
+    """RFC 8785 ohne Gleitkommazahlen: kanonisch() wirft UebergabeFehler, und
+    vorher war das eine Ausnahme, die die ganze Belegliste lahmlegte (500).
+
+    WERT_UNBRAUCHBAR, nicht BELEG_UNLESBAR: Die Datei ist lesbar, das Feld ist
+    bekannt, nur der Wert kanonisiert nicht (protokoll.py zu WERT_UNBRAUCHBAR).
+    Die Bytes werden direkt geschrieben: signieren laesst sich eine Nutzlast
+    mit Gleitkommazahl ohnehin nicht, der Befund entsteht vor der Signatur."""
+    beleg = json.loads(_beleg(schluessel, _auftrag()))
+    beleg["nutzlast"]["bemessung"]["erloes_netto"] = 797.30
+    roh = json.dumps(beleg).encode("utf-8")
+
+    urteil = _urteil(schluessel, roh)
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.bemessung.erloes_netto"
+
+
+@pytest.mark.parametrize("angabe", ["2026-09-03T11:00:00", "2026-09-03"])
+def test_ein_erzeugt_am_ohne_zone_ist_ein_befund(schluessel, angabe):
+    """Ohne Zeitzone parst fromisoformat eine naive datetime, und erst der
+    Vergleich mit dem zeitzonenbewussten Beiblatt des Schluessels warf einen
+    TypeError - vor jeder Signaturpruefung, also genuegte jede Datei. RFC 3339
+    verlangt die Zone; ohne sie ist der Wert unbrauchbar, nicht der Beleg."""
+    roh = _beleg(schluessel, _auftrag(), erzeugt_am=angabe)
+
+    urteil = _urteil(schluessel, roh)
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.erzeugt_am"
+
+
+def test_nan_als_positionsbetrag_ist_ein_befund(schluessel):
+    """Decimal parst "NaN" anstandslos: Der Gleichheitsvergleich mit NaN ist
+    still False, der Ordnungsvergleich (erloes, Grundlagen) wirft. So wurde
+    aus "NaN" ein SUMME_STIMMT_NICHT oder ein Crash - nie aber der Befund,
+    der dorthin gehoert. Ein Wert, der mit nichts vergleichbar ist, ist
+    keine Zahl. Seit #163 prueft der Leser die Form am Feld selbst: Beide
+    NaN-Angaben sind je ein Befund, nicht mehr nur die zuerst gelesene."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["positionen"][0]["netto"] = "NaN"
+    nutzlast["gutschriften"][0]["summe"]["netto"] = "NaN"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR", "WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].positionen[0].netto"
+
+
+def test_nan_als_erloes_ist_ein_befund(schluessel):
+    """NaN im Erloes wirft heute decimal.InvalidOperation im Vergleich mit
+    den Grundlagen - eine Ausnahme, kein Befund. Ein Wert, der mit nichts
+    vergleichbar ist, ist keine Zahl."""
+    nutzlast = _auftrag()
+    nutzlast["bemessung"]["erloes_netto"] = "NaN"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.bemessung.erloes_netto"
+
+
+def test_ein_objekt_statt_der_gutschriften_liste_ist_ein_befund(schluessel):
+    """Vorher stillschweigend angenommen; erst die Wirkung lief in einen
+    TypeError (string indices). Die Formprobe gehoert in den Leser, vor die
+    Annahme - das Feld ist bekannt und da, nur seine Form ist unbrauchbar."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"] = nutzlast["gutschriften"][0]
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften"
+
+
+def test_eine_zeichenkette_statt_der_positionen_liste_ist_ein_befund(schluessel):
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["positionen"] = "eine Position als Text"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].positionen"
+
+
+def test_ein_leistungszeitraum_der_kein_datum_ist_ein_befund(schluessel):
+    """Vorher angenommen; erst das Anlegen der Rechnung warf beim Lesen des
+    Zeitraums einen ValueError. Die Wertprobe gehoert vor die Annahme, und
+    sie verlangt dasselbe Datum, das die Wirkung spaeter liest."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["leistungszeitraum"]["von"] = "irgendwann"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].leistungszeitraum.von"
+    )
+
+
+def test_ein_leistungszeitraum_der_rueckwaerts_laeuft_ist_ein_befund(schluessel):
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["leistungszeitraum"]["von"] = "2026-06-30"
+    nutzlast["gutschriften"][0]["leistungszeitraum"]["bis"] = "2026-04-01"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].leistungszeitraum"
+
+
+# ── § 2 und § 4: die Formen des Formats (#163). Eine Abweichung ist kein
+# Rechenproblem, sondern ein unbrauchbarer WERT an einem bekannten Feld; der
+# Befund nennt den Pfad, damit der Absender die Stelle reparieren kann.
+
+@pytest.mark.parametrize("form", [
+    "174.335",    # drei Nachkommastellen statt genau zwei
+    "1.7433E2",   # Exponentialschreibweise
+    " 174.33",    # fuehrendes Leerzeichen
+    "174.3300",   # wertgleich, aber falsch geschrieben
+    "Infinity",   # keine endliche Zahl
+    "NaN",        # mit nichts vergleichbar
+    174,          # JSON-Zahl statt Zeichenkette
+])
+def test_ein_betrag_der_nicht_der_geldform_entspricht_ist_ein_befund(schluessel, form):
+    """§ 4: Geld ist eine JSON-Zeichenkette mit Dezimalpunkt und GENAU zwei
+    Nachkommastellen. Decimal hat alle diese Formen still geschluckt - " 174.33"
+    und "174.3300" sogar als wertgleich - und die Wirkung rundete dann heimlich.
+    Deshalb prueft der Leser die Form, bevor irgendwer rechnet."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["positionen"][0]["netto"] = form
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].positionen[0].netto"
+    )
+
+
+def test_auch_die_bemessung_traegt_die_geldform(schluessel):
+    """direktkosten_netto wurde vor #163 auf keinen Wert geprueft. Die
+    Formprobe gilt fuer ALLE Geldfelder des Verzeichnisses, nicht nur fuer
+    die, die vorher in eine Rechnung flossen."""
+    nutzlast = _auftrag()
+    nutzlast["bemessung"]["direktkosten_netto"] = "100.0"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.bemessung.direktkosten_netto"
+
+
+def test_ein_satz_mit_einer_nachkommastelle_ist_ein_befund(schluessel):
+    """§ 4, Klarstellung 2026-10-17: Der Satz ist vom Geld getrennt und traegt
+    MINDESTENS zwei Nachkommastellen. "33.3" ist keine Satzform. Die Gegenprobe
+    steht oben: "33.333333" bleibt gueltig
+    (test_ein_satz_mit_sechs_nachkommastellen_wird_nicht_vorher_gerundet)."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["positionen"][0]["herleitung"]["satz"] = "33.3"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].positionen[0].herleitung.satz"
+    )
+
+
+@pytest.mark.parametrize("angabe", [
+    "2026-09-03T11:00:00.123Z",   # Bruchteile einer Sekunde
+    "2026-09-03T13:00:00+02:00",  # Offset statt UTC
+])
+def test_ein_erzeugt_am_in_anderer_schreibweise_ist_ein_befund(schluessel, angabe):
+    """§ 2: UTC, sekundengenau, ohne Bruchteile - die Form
+    YYYY-MM-DDTHH:MM:SSZ. Beide Schreibweisen nennen denselben Augenblick,
+    und der Leser parste beide anstandslos; erlaubt ist nur die eine."""
+    roh = _beleg(schluessel, _auftrag(), erzeugt_am=angabe)
+
+    urteil = _urteil(schluessel, roh)
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.erzeugt_am"
+
+
+# ── § 3: Die Datei IST die kanonische Form (#165). Die Signatur gilt ueber
+# die gelesenen Bytes, nicht ueber ein neu kanonisiertes Objekt - wer die
+# Pruefung ueber das Objekt macht, nimmt jede Schreibweise desselben Belegs an,
+# und beleg_sha256 entsteht trotzdem ueber die abweichende Datei: Die Kette
+# reisst beim naechsten Beleg, der diesen Hash als vorgaenger nennt.
+
+def test_eine_eingerueckte_ansicht_desselben_belegs_wird_abgelehnt(schluessel):
+    """§ 3, Gegenstueck zur Annahme oben: derselbe Beleg, mit Einrueckung neu
+    geschrieben, ist eine ANDERE Datei. Vor #165 pruefte der Leser die
+    Signatur ueber das neu kanonisierte Objekt und nahm sie an."""
+    roh = _beleg(schluessel, _auftrag())
+    eingerueckt = json.dumps(json.loads(roh), indent=2).encode("utf-8")
+
+    urteil = _urteil(schluessel, eingerueckt)
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["SIGNATUR_UNGUELTIG"]
+    assert urteil.beleg_sha256 == hashlib.sha256(eingerueckt).hexdigest()
+
+
+def test_eine_datei_mit_doppeltem_namen_wird_abgelehnt(schluessel):
+    """json.loads laesst bei einem doppelten Namen still den letzten gewinnen.
+    Die Datei ist damit nie die kanonische Form; der Befund entsteht schon beim
+    Parsen, damit "der letzte gewinnt" gar nicht erst passiert."""
+    roh = _beleg(schluessel, _auftrag())
+    text = roh.decode("utf-8")
+    doppelt = text.replace(
+        '"empfaenger":"abgehakt"',
+        '"empfaenger":"abgehakt","empfaenger":"abgehakt"',
+        1,
+    ).encode("utf-8")
+
+    urteil = _urteil(schluessel, doppelt)
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["SIGNATUR_UNGUELTIG"]
+
+
+def test_der_unveraenderte_gueltige_beleg_wird_weiter_angenommen(schluessel):
+    """Die Gegenprobe zu den beiden oben: der Beleg, wie ihn der Absender
+    kanonisch geschrieben hat, bleibt angenommen - die Datei IST die Form."""
+    roh = _beleg(schluessel, _auftrag())
+
+    urteil = _urteil(schluessel, roh)
+
+    assert urteil.angenommen, _codes(urteil)
+
+
+def test_ein_typcode_als_zahl_ist_ein_befund(schluessel):
+    """§ 4: typcode ist eine JSON-Zeichenkette ("389"), keine Zahl. str()
+    machte aus der Zahl 389 still einen gueltigen Code, und der Absender
+    erfaehrt nie, dass sein Beleg falsch gebaut ist."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["typcode"] = 389
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].typcode"
+
+
+# ── § 10: je Grund ein Befund (#169). Die Quittung nennt jeden Grund mit
+# Pfad; der Leser prueft deshalb alle Wertproben, nicht bloss bis zur ersten.
+
+def test_je_grund_ein_befund_ueber_alle_gutschriften(schluessel):
+    """Ein typcode ausserhalb des Vorrats in Gutschrift 0 UND eine Summe, die
+    nicht aufgeht, in Gutschrift 1: zwei Gruende, zwei Befunde, je mit eigenem
+    Pfad. Der Leser meldete bisher nur den ersten - der Absender reparierte die
+    eine Stelle, reichte wieder ein, und erst dann kam der zweite Befund."""
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["typcode"] = "999"
+    zweite = copy.deepcopy(nutzlast["gutschriften"][0])
+    zweite["typcode"] = "389"
+    zweite["summe"]["netto"] = "999.99"
+    nutzlast["gutschriften"].append(zweite)
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR", "SUMME_STIMMT_NICHT"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.gutschriften[0].typcode"
+    assert urteil.feststellungen[1].pfad == "$.nutzlast.gutschriften[1].summe.netto"
+
+
+# ── § 1: Der Abrechnungsauftrag ist eine RICHTUNG, nicht nur eine Nutzlast
+# (#169). Ein Schluessel, der fuer einen anderen Absender liegt, macht seinen
+# Inhaber nicht zum Absender von Auftraegen an diesen Empfaenger.
+
+FREMDER_ABSENDER = "probe-konto"
+FREMDER_SCHLUESSEL_ID = "fremd-2026-09"
+
+
+def _fremder_schluessel(wurzel):
+    """Ein gueltiger Schluessel fuer einen anderen Absender, im selben Ordner.
+
+    Dass er liegt und die Signatur prueft, ist der Punkt: Der Leser soll am
+    FELD absender abgelehnt werden und nicht daran, dass der Schluessel fehlt.
+    """
+    privat = Ed25519PrivateKey.generate()
+    ordner = wurzel / FREMDER_ABSENDER
+    ordner.mkdir(parents=True, exist_ok=True)
+    (ordner / f"{FREMDER_SCHLUESSEL_ID}.pub").write_bytes(
+        privat.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+    )
+    (ordner / f"{FREMDER_SCHLUESSEL_ID}.json").write_text(
+        json.dumps({
+            "schluessel_id": FREMDER_SCHLUESSEL_ID,
+            "absender": FREMDER_ABSENDER,
+            "verfahren": "Ed25519",
+            "gueltig_von": "2026-09-01T00:00:00Z",
+            "gueltig_bis": None,
+        }),
+        encoding="utf-8",
+    )
+    return privat.sign
+
+
+def test_ein_auftrag_von_einem_fremden_absender_wird_abgelehnt(schluessel):
+    """Der Schluessel liegt, das Beiblatt passt, die Signatur stimmt - und der
+    Absender ist trotzdem nicht der, dessen Auftraege dieser Empfaenger liest.
+    Bisher genuegte der Schluesselordner, und jeder Absender mit einem dort
+    liegenden Schluessel haette Auftraege annehmen lassen."""
+    _, wurzel = schluessel
+    roh = _beleg(
+        schluessel, _auftrag(),
+        absender=FREMDER_ABSENDER,
+        schluessel_id=FREMDER_SCHLUESSEL_ID,
+        signierer=_fremder_schluessel(wurzel),
+    )
+
+    urteil = _urteil(schluessel, roh)
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.absender"
+    assert urteil.feststellungen[0].erwartet == ABSENDER_TANTIEMEN
+    assert urteil.feststellungen[0].erhalten == FREMDER_ABSENDER
+
+
+def test_eine_389_ohne_positive_summe_ist_unbrauchbar(schluessel):
+    """§ 8a: Eine Gutschrift des Verfahrens (389) zahlt an den Beteiligten;
+    ueber null oder weniger ist sie keine, und der Sender erzeugt dann keinen
+    Auftrag. WERT_UNBRAUCHBAR am Feld, nicht SUMME_STIMMT_NICHT: Die Summe
+    kann aufgehen (und geht hier auf) - unbrauchbar ist der Wert. Der Probe
+    fehlt der typcode, deshalb steht sie am Feld summe. Seit der Probe je
+    Position meldet der Leser auch die negative Position selbst: zwei
+    Gruende, zwei Befunde (§ 10)."""
+    nutzlast = _auftrag()
+    gutschrift = nutzlast["gutschriften"][0]
+    gutschrift["positionen"][0]["herleitung"]["basis_netto"] = "-697.30"
+    gutschrift["positionen"][0]["netto"] = "-174.33"
+    gutschrift["summe"]["netto"] = "-174.33"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR", "WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].positionen[0].netto"
+    )
+    assert urteil.feststellungen[1].pfad == "$.nutzlast.gutschriften[0].summe.netto"
+    assert urteil.feststellungen[1].erwartet == "groesser als 0.00"
+    assert urteil.feststellungen[1].erhalten == "-174.33"
+
+
+def test_eine_389_position_ohne_positiven_betrag_ist_unbrauchbar(schluessel):
+    """Der Validator weist bei 389 einen Einzelpreis 0 und einen negativen ab;
+    der Leser nahm beide an, und der Entwurf war gebunden und nie
+    finalisierbar. Leser und Validator muessen dieselbe Menge annehmen."""
+    nutzlast = _auftrag()
+    gutschrift = nutzlast["gutschriften"][0]
+    gutschrift["positionen"].append(dict(nr=2, bezeichnung="Nullbeteiligung",
+        netto="0.00"))
+    gutschrift["summe"]["netto"] = "174.33"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].positionen[1].netto"
+    )
+    assert urteil.feststellungen[0].erwartet == "groesser als 0.00"
+    assert urteil.feststellungen[0].erhalten == "0.00"
+
+
+def test_eine_389_position_mit_negativem_betrag_ist_unbrauchbar(schluessel):
+    """Die negative Schwester: die Summe geht auf, die Position zahlt aber
+    zurueck, und der Validator lehnt sie beim Finalisieren ab."""
+    nutzlast = _auftrag()
+    gutschrift = nutzlast["gutschriften"][0]
+    gutschrift["positionen"].append(dict(nr=2, bezeichnung="Rueckzahlung",
+        netto="-50.00"))
+    gutschrift["summe"]["netto"] = "124.33"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].positionen[1].netto"
+    )
+
+
+# ── Optionale Unterobjekte: null heisst nicht da, nicht unbrauchbar. Seit #164
+# meldete _pruefe_objekt jeden Wert, der nicht dict/list ist, auch null - die
+# Wirkung aber liest "herleitung": null als fehlend (position.get(...) or {}).
+
+def test_herleitung_null_gilt_als_nicht_vorhanden(schluessel):
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["positionen"][0]["herleitung"] = None
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert urteil.angenommen, _codes(urteil)
+
+
+def test_vortraege_null_gilt_als_nicht_vorhanden(schluessel):
+    nutzlast = _auftrag()
+    nutzlast["vortraege"] = None
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert urteil.angenommen, _codes(urteil)
+
+
+def test_herleitung_als_zeichenkette_bleibt_unbrauchbar(schluessel):
+    nutzlast = _auftrag()
+    nutzlast["gutschriften"][0]["positionen"][0]["herleitung"] = "x"
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == (
+        "$.nutzlast.gutschriften[0].positionen[0].herleitung"
+    )
+
+
+def test_ein_pflicht_unterobjekt_null_bleibt_unbrauchbar(schluessel):
+    """Nur die OPTIONALEN Unterobjekte ertragen null: bemessung ist Pflicht,
+    und null ist hier ein unbrauchbarer Wert, nicht ein fehlendes Feld."""
+    nutzlast = _auftrag()
+    nutzlast["bemessung"] = None
+
+    urteil = _urteil(schluessel, _beleg(schluessel, nutzlast))
+
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.nutzlast.bemessung"
+
+
+def test_eine_niedrigere_hauptfassung_ist_kein_ablehnungsgrund(schluessel):
+    """§ 2 nennt als einzigen Fassungsgrund den HOEHEREN major: abgelehnt,
+    nicht interpretiert. Eine NIEDRIGERE Hauptfassung (hier 0.9 gegen die 1.x
+    hier) ist keiner von beiden - der Beleg sagt nur, nach welchen Regeln ER
+    gebaut ist, und was ihm fehlt, fallen Feldprobe und Wertproben, nicht die
+    Fassung. Der Leser lehnte hier bisher mit FASSUNG_UNVERTRAEGLICH ab."""
+    roh = _beleg(schluessel, _auftrag(), format_version="0.9")
 
     urteil = _urteil(schluessel, roh)
 

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Übersicht – {{ PRODUCT_NAME }}{% endblock %}
 {% block content %}
+
 <div>
     <!-- Header -->
     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
@@ -27,11 +28,18 @@
     {% if nicht_versendet_anzahl %}
     <div class="card mb-5" style="border-color:var(--amber);">
         <a data-kpi="hinweis-versand" href="/invoices?status=issued&art=rechnung&versand=offen" style="display:block; font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--amber); text-decoration:none;">
-            {{ nicht_versendet_anzahl }} gestellte Rechnung{{ '' if nicht_versendet_anzahl == 1 else 'en' }} ohne Versand
+            {# Bauschritt 5b: Der Streifen meint den KUNDEN — ein Beleg nur an die
+               Buchhaltung steht hier mit drin. #}
+            {{ nicht_versendet_anzahl }} gestellte Rechnung{{ '' if nicht_versendet_anzahl == 1 else 'en' }} ohne Zustellung an den Kunden
         </a>
     </div>
     {% endif %}
 
+<a href="/invoices?art=honorargutschrift&amp;status=issued&amp;storno=ohne" class="card" style="display:block; padding:20px; margin-bottom:16px;">
+    <div>Offene Auszahlungen</div>
+    <strong>{{ offene_auszahlungen.betrag|betrag }} EUR</strong>
+    <div>{{ offene_auszahlungen.anzahl }} Honorargutschriften</div>
+</a>
     <!-- Kennzahlen -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
 
@@ -160,7 +168,7 @@
                     <p class="kpi__wert">{{ estimated_tax_ytd|betrag(0) }}<span class="kpi__einheit">€</span></p>
                     <div style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:6px; line-height:1.5;">
                         <div>USt {{ vat_liability_ytd|betrag(0) }}&nbsp;€</div>
-                        {% if vorsteuer_honorargutschriften_ytd %}<div>− Vorsteuer Honorargutschriften {{ vorsteuer_honorargutschriften_ytd|betrag(0) }}&nbsp;€</div>{% endif %}
+                        {% if vorsteuer_honorargutschriften_ytd %}<div><a href="/invoices?art=honorargutschrift">− Vorsteuer Honorargutschriften {{ vorsteuer_honorargutschriften_ytd|betrag(0) }}&nbsp;€</a></div>{% endif %}
                         <div>+ KSt/GewSt {{ steuer_ruecklage_ytd|betrag(0) }}&nbsp;€ ({{ steuer_ruecklage_anteil_prozent|betrag(1) }}&nbsp;% Netto)</div>
                     </div>
                 </div>

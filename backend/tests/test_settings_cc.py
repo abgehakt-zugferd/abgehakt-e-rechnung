@@ -95,8 +95,8 @@ def test_send_router_reicht_abgeschickte_cc_adresse_durch(pg_session):
     _config(pg_session, invoice_cc_email="ablage@example.de")
     valid = {"is_valid": True, "raw": "Parsed PDF:valid\nXML:valid", "errors": [], "warnings": []}
     with patch.object(datev_email, "send_invoice") as send, \
-         patch("app.routers.invoices.mustang.jar_available", return_value=True), \
-         patch("app.routers.invoices.mustang.validate", return_value=valid):
+         patch("app.services.mustang.jar_available", return_value=True), \
+         patch("app.services.mustang.validate", return_value=valid):
         r = _client(pg_session).post(f"/invoices/{inv.id}/datev-senden",
                                      data={"cc_email": "anders@example.de"})
     assert r.status_code == 303

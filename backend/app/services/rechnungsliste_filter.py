@@ -8,7 +8,7 @@ from sqlalchemy.orm import Query
 
 from app.models.customer import Customer
 from app.models.invoice import Invoice
-from app.services.beleg_status import ohne_erstversand_bedingung
+from app.services.beleg_status import ohne_zustellung_bedingung
 from app.services.storno_wirkung import WIRKSAM_STORNIERT
 from app.zeit import heute as kalender_heute
 
@@ -44,20 +44,33 @@ def filtere_rechnungsliste(
         )
 
     if art == "rechnung":
-        query = query.filter(Invoice.invoice_type.is_(None))
+        from app.services.dashboard_kennzahlen import UMSATZ_BELEGARTEN_FILTER
+        query = query.filter(UMSATZ_BELEGARTEN_FILTER)
+    elif art == "honorargutschrift":
+        query = query.filter(Invoice.invoice_type == "self_billing")
+    elif art == "honorargutschrift_storno":
+        # Eigene Auswahl: der reine 389-Filter bleibt auch fuer die Kachel eindeutig.
+        query = query.filter(Invoice.invoice_type == "self_billing_storno")
     elif art == "gutschrift":
         query = query.filter(Invoice.invoice_type == "credit_note")
     else:
         art = ""
 
     if faellig == "ueberfaellig":
-        query = query.filter(Invoice.due_date < (heute or kalender_heute()))
+        # Ein Beleg ohne Fälligkeit ist nie überfällig (BR-CO-25, Bauschritt 2b):
+        # dieselbe Bedingung wie die Kennzahl der Uebersicht.
+        query = query.filter(
+            Invoice.due_date.isnot(None),
+            Invoice.due_date < (heute or kalender_heute()),
+        )
     else:
         faellig = ""
 
     if versand == "offen":
-        # dieselbe Bedingung wie beleg_status.ist_nicht_versendet (bei status=issued)
-        query = query.filter(ohne_erstversand_bedingung(Invoice.datev_sent_at))
+        # dieselbe Bedingung wie beleg_status.ist_nicht_versendet (bei status=issued):
+        # die fehlende ZUSTELLUNG AN DEN KUNDEN (Bauschritt 5b). Ein Beleg nur an
+        # die Buchhaltung bleibt in der Menge.
+        query = query.filter(ohne_zustellung_bedingung(Invoice.kunde_zugestellt_am))
     else:
         versand = ""
 

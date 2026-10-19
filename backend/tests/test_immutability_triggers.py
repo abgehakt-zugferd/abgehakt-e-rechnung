@@ -46,6 +46,29 @@ def _seed_customer(pg_engine):
     return cid
 
 
+def _seed_aufstellung(pg_engine):
+    """Kunde + Aufstellung + eine Anlage via RAW SQL — die Aufstellung ist
+    kein Beleg der Rechnung, hat aber dieselben GoBD-Trigger (Bauschritt 7a)."""
+    cid, aid, anid = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    with pg_engine.begin() as c:
+        c.execute(text(
+            "INSERT INTO customers (id, customer_number, name, address_line1, zip_code, city, country, is_active) "
+            "VALUES (:id,:cnum,'Test','Str 1','12345','Stadt','DE',true)"),
+            {"id": cid, "cnum": f"K-{uuid.uuid4().hex[:6]}"})
+        c.execute(text(
+            "INSERT INTO aufstellungen (id, nummer, customer_id, leistung_von, leistung_bis, "
+            "zahlungsnummer, zahlungsdatum, waehrung, brutto, quellensteuer, netto) "
+            "VALUES (:id,:nummer,:cid,'2026-09-01','2026-09-30','4711','2026-09-30','EUR',100,0,100)"),
+            {"id": aid, "nummer": f"AA-{uuid.uuid4().hex[:6]}", "cid": cid})
+        c.execute(text(
+            "INSERT INTO aufstellung_anlagen (id, aufstellung_id, quelle, dateiname, sha256, "
+            "groesse, medientyp) VALUES (:id,:aid,'abrechnungsbericht','b.xlsx',"
+            "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',2048,"
+            "'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')"),
+            {"id": anid, "aid": aid})
+    return aid, anid
+
+
 # ---- Trigger-Schicht (Admin/Superuser-Verbindung = pg_engine) -----------------
 
 def test_admin_delete_invoices_blocked(pg_engine):
@@ -65,7 +88,28 @@ def test_admin_delete_customers_blocked(pg_engine):
     assert "GoBD" in str(exc.value)
 
 
-@pytest.mark.parametrize("tbl", ["invoices", "invoice_items", "customers"])
+def test_admin_delete_aufstellungen_blocked(pg_engine):
+    aid, _anid = _seed_aufstellung(pg_engine)
+    with pytest.raises(InternalError) as exc:
+        with pg_engine.begin() as c:
+            c.execute(text("DELETE FROM aufstellungen WHERE id = :id"), {"id": aid})
+    assert "GoBD" in str(exc.value)
+
+
+def test_admin_delete_anlagen_blocked(pg_engine):
+    """Anlagen sind der gepruefte Dateinachweis (Hash, Groesse): Auch im
+    Entwurf ist keine Zeile je loeschbar — Korrektur heisst UPDATE, und das
+    DELETE-Verbot ist deshalb hier genauso unbedingt wie auf invoices."""
+    _aid, anid = _seed_aufstellung(pg_engine)
+    with pytest.raises(InternalError) as exc:
+        with pg_engine.begin() as c:
+            c.execute(text("DELETE FROM aufstellung_anlagen WHERE id = :id"), {"id": anid})
+    assert "GoBD" in str(exc.value)
+
+
+@pytest.mark.parametrize("tbl", [
+    "invoices", "invoice_items", "customers", "aufstellungen", "aufstellung_anlagen",
+])
 def test_admin_truncate_blocked(pg_engine, tbl):
     with pytest.raises(InternalError) as exc:
         with pg_engine.begin() as c:
@@ -107,17 +151,23 @@ def test_admin_update_status_still_passes_documented_gap(pg_engine):
     assert status == "paid"
 
 
-def test_all_five_triggers_installed(pg_engine):
+def test_alle_gobd_trigger_installiert(pg_engine):
+    """DELETE-Trigger auf den nie loeschbaren Tabellen, TRUNCATE-Trigger
+    auch auf invoice_items (deren DELETE im Entwurf legal ist) und den
+    Anlagen (deren DELETE nie legal ist, siehe oben)."""
     with pg_engine.connect() as c:
         names = {r[0] for r in c.execute(text(
             "SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'gobd_%'"
         ))}
     expected = (
-        {f"gobd_no_delete_{t}" for t in ("invoices", "customers")}
-        | {f"gobd_no_truncate_{t}" for t in ("invoices", "invoice_items", "customers")}
+        {f"gobd_no_delete_{t}" for t in (
+            "invoices", "customers", "aufstellungen", "aufstellung_anlagen")}
+        | {f"gobd_no_truncate_{t}" for t in (
+            "invoices", "invoice_items", "customers",
+            "aufstellungen", "aufstellung_anlagen")}
     )
     assert names == expected
-    assert len(expected) == 5
+    assert len(expected) == 9
 
 
 # ---- Least-Privilege-Schicht (Verbindung als abgehakt_app) ------------------------
@@ -125,22 +175,46 @@ def test_all_five_triggers_installed(pg_engine):
 from sqlalchemy.exc import ProgrammingError
 
 
-@pytest.mark.parametrize("tbl", ["invoices", "customers"])
+@pytest.mark.parametrize("tbl", ["invoices", "customers", "aufstellungen",
+                                 "aufstellung_anlagen"])
 def test_app_role_delete_denied(pg_app_engine, tbl):
     """Rechte greifen VOR dem Trigger → 42501 (permission denied), erreicht den
-    Trigger gar nicht erst."""
+    Trigger gar nicht erst. Die Default-Privilegien raeumen DELETE auf KEINE
+    der Tabellen ein — REVOKE in PROTECTED_NO_DELETE haelt den Zustand."""
     with pytest.raises(ProgrammingError) as exc:
         with pg_app_engine.begin() as c:
             c.execute(text(f"DELETE FROM {tbl}"))
     assert "42501" in str(exc.value) or "permission denied" in str(exc.value)
 
 
-@pytest.mark.parametrize("tbl", ["invoices", "invoice_items", "customers"])
+@pytest.mark.parametrize("tbl", [
+    "invoices", "invoice_items", "customers", "aufstellungen", "aufstellung_anlagen",
+])
 def test_app_role_truncate_denied(pg_app_engine, tbl):
     with pytest.raises(ProgrammingError) as exc:
         with pg_app_engine.begin() as c:
             c.execute(text(f"TRUNCATE {tbl}"))
     assert "42501" in str(exc.value) or "permission denied" in str(exc.value)
+
+
+def test_app_role_crud_aufstellung_erlaubt(pg_app_engine, pg_engine):
+    """CRUD ohne DELETE heisst SELECT, INSERT, UPDATE — auch an den neuen
+    Tabellen. Der Weg dorthin ist derselbe wie bei invoices: Default-
+    Privilegen raeumen alles ein, der REVOKE zieht DELETE zurueck."""
+    _aid, anid = _seed_aufstellung(pg_engine)
+    with pg_app_engine.begin() as c:
+        cnt = c.execute(text(
+            "SELECT count(*) FROM aufstellungen WHERE id = :id"),
+            {"id": _aid}).scalar()
+        assert cnt == 1
+        c.execute(text("UPDATE aufstellungen SET bemerkung='ok' WHERE id = :id"),
+                  {"id": _aid})
+        c.execute(text("UPDATE aufstellung_anlagen SET groesse=4096 WHERE id = :id"),
+                  {"id": anid})
+        bemerkung = c.execute(text(
+            "SELECT bemerkung FROM aufstellungen WHERE id = :id"),
+            {"id": _aid}).scalar()
+    assert bemerkung == "ok"
 
 
 def test_app_role_delete_draft_item_allowed(pg_app_engine, pg_engine):

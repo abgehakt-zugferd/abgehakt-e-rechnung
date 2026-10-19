@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from types import SimpleNamespace
 from xml.etree import ElementTree as ET
 
 from sqlalchemy.orm import Session
@@ -24,7 +25,9 @@ from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services.archive_frist import berechne_archive_until
 from app.services.belegart import UnknownInvoiceTypeError, belegart_aus_bt3
+from app.services.belegrollen import besetzung
 from app.services.steuerstatus import pruefe_honorargutschrift
+from app.services.zugferd_xml import systemnotizen
 
 RAM = "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"
 UDT = "urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100"
@@ -57,11 +60,21 @@ def _date102(raw: str | None) -> date | None:
     return date(int(raw[:4]), int(raw[4:6]), int(raw[6:8]))
 
 
-def _find_buyer_vat(root: ET.Element) -> str | None:
-    buyer = root.find(f".//{_q(RAM, 'BuyerTradeParty')}")
-    if buyer is None:
+def _kunde_ist_verkaeufer(invoice_type: str | None) -> bool:
+    # Die Rollenfrage beantwortet belegrollen (eine Quelle, auch für 261): Bei
+    # 389 und seinem Storno trägt der externe Kunde die Verkäuferrolle im Beleg.
+    return not besetzung(
+        SimpleNamespace(invoice_type=invoice_type), SimpleNamespace(), SimpleNamespace(),
+    ).verkaeufer_ist_firma
+
+
+def _find_customer_vat(root: ET.Element, invoice_type: str | None) -> str | None:
+    # Beim Rückimport ist der externe Kunde im Gutschriftverfahren der Verkäufer.
+    party_name = "SellerTradeParty" if _kunde_ist_verkaeufer(invoice_type) else "BuyerTradeParty"
+    party = root.find(f".//{_q(RAM, 'ApplicableHeaderTradeAgreement')}/{_q(RAM, party_name)}")
+    if party is None:
         return None
-    for reg in buyer.iter(_q(RAM, "SpecifiedTaxRegistration")):
+    for reg in party.iter(_q(RAM, "SpecifiedTaxRegistration")):
         id_el = reg.find(_q(RAM, "ID"))
         if id_el is not None and id_el.get("schemeID") == "VA":
             return _text(id_el).replace(" ", "").upper()
@@ -153,10 +166,8 @@ def _parse(xml_path: Path) -> dict:
     ))
     if not issue_date:
         raise ValueError(f"{xml_path}: Rechnungsdatum fehlt")
-    notes_el = doc.find(_q(RAM, "IncludedNote"))
-    notes = _text(notes_el.find(_q(RAM, "Content"))) if notes_el is not None else None
-    if notes in ("None", ""):
-        notes = None
+    invoice_type = _invoice_type_aus_doc(doc, xml_path)
+    notes = _nutzernotizen(root, doc, invoice_type)
     delivery_date = _date102(_text(
         root.find(
             f".//{_q(RAM, 'ActualDeliverySupplyChainEvent')}"
@@ -165,16 +176,41 @@ def _parse(xml_path: Path) -> dict:
     ))
     data = {
         "number": _text(doc.find(_q(RAM, "ID"))),
-        "invoice_type": _invoice_type_aus_doc(doc, xml_path),
+        "invoice_type": invoice_type,
         "issue_date": issue_date,
         "delivery_date": delivery_date,
         "notes": notes,
-        "buyer_vat": _find_buyer_vat(root),
+        "customer_vat": _find_customer_vat(root, invoice_type),
         "items": _parse_items(root),
         "xml_text": xml_path.read_text(encoding="utf-8"),
     }
     data.update(_parse_settlement(root, xml_path))
     return data
+
+
+def _nutzernotizen(root: ET.Element, doc: ET.Element, invoice_type: str | None) -> str | None:
+    """Alle IncludedNote-Inhalte außer den Systemnotizen, als Bemerkung.
+
+    Der Generator schreibt die Systemnotizen (BT-22-Pflicht) vor der
+    Nutzernotiz; ihr Wortlaut kommt aus zugferd_xml.systemnotizen — derselben
+    Quelle wie beim Erzeugen, keine zweite Liste. Ohne das Überspringen würde
+    die Systemnotiz zur Nutzernotiz und bei jeder Neuausgabe verdoppelt.
+    """
+    original_el = root.find(
+        f".//{_q(RAM, 'InvoiceReferencedDocument')}/{_q(RAM, 'IssuerAssignedID')}"
+    )
+    pflicht = set(systemnotizen(invoice_type, _text(original_el) or None))
+    texte = [
+        inhalt for inhalt in (
+            _text(note.find(_q(RAM, "Content")))
+            for note in doc.findall(_q(RAM, "IncludedNote"))
+        )
+        if inhalt and inhalt not in pflicht
+    ]
+    notes = "\n".join(texte)
+    if notes in ("None", ""):
+        return None
+    return notes
 
 
 def _pruefe_vor_anlage(num: str, inv: Invoice) -> bool:
@@ -230,10 +266,10 @@ def _ein_beleg(db: Session, num: str, xml_dir: Path, pdf_dir: Path, *, aus_altem
         print(f"FEHLER: {num} — {exc}")
         return
     customer = None
-    if data["buyer_vat"]:
-        customer = db.query(Customer).filter(Customer.vat_id == data["buyer_vat"]).first()
+    if data["customer_vat"]:
+        customer = db.query(Customer).filter(Customer.vat_id == data["customer_vat"]).first()
     if customer is None:
-        print(f"FEHLER: {num} — kein Kunde mit USt-IdNr. {data['buyer_vat']}")
+        print(f"FEHLER: {num} — kein Kunde mit USt-IdNr. {data['customer_vat']}")
         return
     inv = _baue_invoice(data, customer, num)
     # Positionen VOR der Pruefung anhaengen: sonst sieht pruefe_honorargutschrift

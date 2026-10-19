@@ -50,8 +50,12 @@ def nachziehen(
             sent = versendet_am or _utc_mittag(inv.issue_date)
             paid = bezahlt_am or _utc_mittag(inv.due_date)
 
+            # Historischer Versand war der kombinierte Standardweg (Mail an den
+            # Kunden, Blindkopie an die Buchhaltung): Beide Vermerke gehoeren
+            # zusammen, wie Migration 029 es fuer den Bestand festhaelt.
             if inv.datev_sent_at is None:
                 inv.datev_sent_at = sent
+                inv.kunde_zugestellt_am = sent
                 print(f"{num}: Versand {sent.strftime('%d.%m.%Y')}")
             else:
                 print(f"{num}: Versand bereits {inv.datev_sent_at.strftime('%d.%m.%Y')}")
@@ -67,6 +71,7 @@ def nachziehen(
                 to_email = inv.customer.email if inv.customer and inv.customer.email else "unbekannt@import"
                 db.add(InvoiceSendLog(
                     invoice_id=inv.id,
+                    ziel="kunde_und_buchhaltung",
                     sent_at=sent,
                     to_email=to_email,
                     datev_bcc=True,
