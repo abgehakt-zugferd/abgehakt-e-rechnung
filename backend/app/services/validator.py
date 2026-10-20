@@ -49,7 +49,7 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
     # Honorargutschrift (389): Steuerstatus und Kennung des Autors. Eigene
     # Regeln im Modul steuerstatus; hier nur der Aufruf, damit validator.py
     # nicht weiter waechst und keine zirkulaeren Imports entstehen.
-    if kontext.rechnungstyp == "self_billing":
+    if kontext.belegart is not None and kontext.belegart.intern == "self_billing":
         befunde.extend(pruefe_honorargutschrift(invoice))
 
     # Ersatzrechnung (docs/specs/ersatzrechnung.md): Regeln im eigenen Modul.

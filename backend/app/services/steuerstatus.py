@@ -10,6 +10,7 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from app.services.belegart import UnknownInvoiceTypeError, belegart
 from app.zeit import heute as kalender_heute
 
 if TYPE_CHECKING:
@@ -120,7 +121,10 @@ def _issue(code: str, message: str, field: str | None):
 
 def pruefe_honorargutschrift(invoice: Invoice) -> list:
     """Pflichtpruefungen fuer self_billing. Liefert Issue-Liste (kann leer sein)."""
-    if getattr(invoice, "invoice_type", None) != "self_billing":
+    try:
+        if belegart(getattr(invoice, "invoice_type", None)).intern != "self_billing":
+            return []
+    except UnknownInvoiceTypeError:
         return []
     kunde = getattr(invoice, "customer", None)
     if kunde is None:

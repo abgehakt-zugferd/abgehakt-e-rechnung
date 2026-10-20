@@ -60,7 +60,9 @@ def _pruefe_gutschrift_spiegel(kontext: Pruefkontext) -> list[Issue]:
     # `original_invoice` fehlt bei Testattrappen und bei einer noch nicht
     # geladenen Beziehung; dann greift die Regel nicht. Die Referenz als solche
     # verlangt bereits ORIGINAL_INVOICE_REQUIRED in _pruefe_originalbezug oben.
-    if kontext.rechnungstyp not in {"credit_note", "self_billing_storno"}:
+    if kontext.belegart is None or kontext.belegart.intern not in {
+        "credit_note", "self_billing_storno",
+    }:
         return []
     original = getattr(invoice, "original_invoice", None)
     fehler: list[Issue] = []

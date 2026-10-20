@@ -6,6 +6,7 @@ from app.services.einheiten import UnknownUnitError, resolve_einheit
 from app.services.invoice_number import generate_next_invoice_number
 from app.services.rechnung.fehler import RechnungFehler
 from app.services.rechnung.firma import get_company
+from app.services.belegart import ist_storno
 from app.services.storno import build_storno
 from app.zeit import heute
 
@@ -16,7 +17,7 @@ def _original_laden(db: Session, original_id) -> Invoice:
         raise RechnungFehler(404, "Rechnung nicht gefunden")
     if original.status not in ("issued", "paid"):
         raise RechnungFehler(400, "Nur finalisierte Rechnungen (issued/paid) können storniert werden.")
-    if original.invoice_type in {"credit_note", "self_billing_storno"}:
+    if ist_storno(original.invoice_type):
         raise RechnungFehler(400, "Eine Stornorechnung kann nicht erneut storniert werden.")
     return original
 

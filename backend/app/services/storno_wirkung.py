@@ -15,13 +15,17 @@ from sqlalchemy import and_, exists, func, or_
 from sqlalchemy.orm import Session, aliased
 
 from app.models.invoice import Invoice
+from app.services.belegart import rohwerte
 
 # "Gestellt" im Sinne der Kennzahlen: finalisiert (issued) oder bezahlt (paid).
 # Einzige Quelle dieser Menge — dashboard_kennzahlen importiert sie (Issue #160),
 # sonst formulieren beide Module die Wirksamkeit einer Gutschrift neu und die
 # beiden Fassungen laufen auseinander, sobald ein Status dazukommt.
 GESTELLT = ("issued", "paid")
-STORNO_BELEGARTEN = ("credit_note", "self_billing_storno")
+# Rohwerte inkl. Aliase aus belegart._ALIASES — keine zweite handgepflegte Liste (#172).
+STORNO_BELEGARTEN = tuple(sorted(
+    k for k in rohwerte("credit_note", "self_billing_storno") if k is not None
+))
 
 _Gutschrift = aliased(Invoice)
 
@@ -61,22 +65,25 @@ def summe_gutschriften(
     """
     original = aliased(Invoice)
     if isinstance(topf, tuple):
-        topf_filter = or_(
-            original.invoice_type.is_(None) if None in topf else False,
-            original.invoice_type.in_([art for art in topf if art is not None]),
-        )
+        teile = []
+        if None in topf:
+            teile.append(original.invoice_type.is_(None))
+        roh = frozenset().union(*(rohwerte(a) for a in topf if a is not None))
+        if roh:
+            teile.append(original.invoice_type.in_(roh))
+        topf_filter = or_(*teile) if teile else False
     elif topf is None:
         # Ohne Original ist der Alias im LEFT JOIN NULL; die eine Bedingung deckt
         # die Standardrechnung und den Altbestand zugleich ab.
         topf_filter = original.invoice_type.is_(None)
     else:
-        topf_filter = original.invoice_type == topf
+        topf_filter = original.invoice_type.in_(rohwerte(topf))
     if isinstance(topf, tuple) and "prepayment" in topf:
         # Ohne vereinnahmte Anzahlung entstand keine Umsatzsteuer. Ihr Storno
         # darf deshalb auch keinen Steuerabzug erzeugen (#157).
         topf_filter = and_(topf_filter, or_(
             original.invoice_type.is_(None),
-            original.invoice_type != "prepayment",
+            ~original.invoice_type.in_(rohwerte("prepayment")),
             original.bezahlt_am.is_not(None),
         ))
     if ausgezahlt:

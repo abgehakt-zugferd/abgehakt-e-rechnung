@@ -9,6 +9,7 @@ from sqlalchemy.orm import Query
 from app.models.customer import Customer
 from app.models.invoice import Invoice
 from app.services.beleg_status import ohne_zustellung_bedingung
+from app.services.belegart import rohwerte
 from app.services.storno_wirkung import WIRKSAM_STORNIERT
 from app.zeit import heute as kalender_heute
 
@@ -47,12 +48,12 @@ def filtere_rechnungsliste(
         from app.services.dashboard_kennzahlen import UMSATZ_BELEGARTEN_FILTER
         query = query.filter(UMSATZ_BELEGARTEN_FILTER)
     elif art == "honorargutschrift":
-        query = query.filter(Invoice.invoice_type == "self_billing")
+        query = query.filter(Invoice.invoice_type.in_(rohwerte("self_billing")))
     elif art == "honorargutschrift_storno":
         # Eigene Auswahl: der reine 389-Filter bleibt auch fuer die Kachel eindeutig.
-        query = query.filter(Invoice.invoice_type == "self_billing_storno")
+        query = query.filter(Invoice.invoice_type.in_(rohwerte("self_billing_storno")))
     elif art == "gutschrift":
-        query = query.filter(Invoice.invoice_type == "credit_note")
+        query = query.filter(Invoice.invoice_type.in_(rohwerte("credit_note")))
     else:
         art = ""
 

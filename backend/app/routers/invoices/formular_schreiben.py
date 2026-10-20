@@ -23,7 +23,7 @@ from app.routers.invoices.formular_lesen import (
 )
 from app.services import kundenvorgaben
 from app.services.archive_frist import berechne_archive_until
-from app.services.belegart import InvoiceTypeNotSelectable, manuelle_belegart
+from app.services.belegart import InvoiceTypeNotSelectable, ist_storno, manuelle_belegart
 from app.services.belegsummen import Belegsummen, belegsummen
 from app.services.ersatzrechnung import ErsatzNichtMoeglich, pruefe_ersetzbar
 from app.services.kunde_zuordenbar import (
@@ -58,7 +58,7 @@ def entwurf_laden(db: Session, invoice_id: uuid.UUID) -> Invoice:
     #
     # Die Tür geht hier zu und nicht erst beim Finalisieren: wer erst zehn Minuten
     # Positionen ändert und dann abgewiesen wird, hat zehn Minuten verloren.
-    if invoice.invoice_type in {"credit_note", "self_billing_storno"}:
+    if ist_storno(invoice.invoice_type):
         raise HTTPException(
             400,
             "Eine Stornorechnung lässt sich nicht bearbeiten. Sie übernimmt die Beträge "

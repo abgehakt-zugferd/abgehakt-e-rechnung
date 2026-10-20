@@ -120,16 +120,32 @@ TYPE_CODE_MAP: dict[str | None, str] = {
     wert: art.bt3 for wert, art in _ALIASES.items()
 }
 
-# Gutschriften im Geldfluss samt den Alias-Schreibweisen, die aeltere
-# Versionen gespeichert haben. Bewusst NICHT dabei: das 389-Storno (261)
-# hebt die Honorargutschrift auf, der Geldfluss kehrt sich um und der Kunde
-# zahlt der Firma; und die Korrektur (384) ist eine normale Zahlung des
-# Kunden. Genau einmal hier (Issue #160). PDF-Bankblock und
-# XML-PaymentMeans fragen seit dem Alias-Fund den Zahlungsfluss ueber
-# zahlung_an_kunde() ab (aufgeloeste Belegart statt roher Menge); einzige
-# verbleibende Leserin dieser Menge ist die Validator-Empfehlung
-# (pruefregeln/empfehlungen.py: Warnung zur fehlenden Kunden-IBAN).
-GUTSCHRIFT_TYPEN = frozenset({"credit_note", "credit", "storno", "self_billing"})
+# Interne Formen, die ein Original aufheben (381 bzw. 389-Storno). Eine Quelle
+# fuer Python-Praedikat und SQL-Rohwertmenge (Issue #172).
+_STORNO_INTERN = frozenset({"credit_note", "self_billing_storno"})
+
+
+def rohwerte(*interne: str | None) -> frozenset[str | None]:
+    """Alle Rohwerte aus _ALIASES, die auf eine der genannten internen Formen zeigen.
+
+    Fuer SQL-Filter (.in_(...)): Aliase aus Altbestand oder Schnittstellen
+    treffen dieselbe Belegart. Keine zweite handgepflegte Liste.
+    """
+    ziel = frozenset(interne)
+    return frozenset(roh for roh, art in _ALIASES.items() if art.intern in ziel)
+
+
+# Gutschriften im Geldfluss samt Alias-Schreibweisen. Abgeleitet aus _ALIASES
+# (Issue #172), bewusst ohne 389-Storno und ohne Korrektur — siehe zahlung_an_kunde.
+# Einzige verbleibende Leserin: pruefregeln/empfehlungen.py (Kunden-IBAN-Warnung).
+GUTSCHRIFT_TYPEN = frozenset(
+    k for k in rohwerte("credit_note", "self_billing") if k is not None
+)
+
+
+def ist_storno(invoice_type: str | None) -> bool:
+    """True, wenn die Belegart ein Original aufhebt (Gutschrift oder 389-Storno)."""
+    return belegart(invoice_type).intern in _STORNO_INTERN
 
 
 def zahlung_an_kunde(invoice_type: str | None) -> bool:

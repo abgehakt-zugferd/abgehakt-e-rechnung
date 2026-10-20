@@ -15,7 +15,7 @@ from app.models.invoice import Invoice, ValidationResult
 from app.routers.invoices.abbildung import firma_laden
 from app.routers.invoices.vorlagen import templates
 from app.services import aenderungsprotokoll, datev_email, pdf_generator, zugferd_xml
-from app.services.belegart import UnknownInvoiceTypeError
+from app.services.belegart import UnknownInvoiceTypeError, belegart
 from app.services.einheiten import UnknownUnitError
 from app.services.ersatzrechnung import ErsatzNichtMoeglich, pruefe_ersetzbar
 from app.services.rechnung.pruefung import run_validation
@@ -82,7 +82,11 @@ def _ersetzbarkeit(db: Session, invoice: Invoice) -> tuple[bool, bool]:
     # Gutschrift (#142): statt "stornieren" den Weg zur Ersatzrechnung zeigen,
     # wenn sie fuer das Original angelegt werden kann.
     original_ersetzbar = False
-    if invoice.invoice_type == "credit_note" and invoice.original_invoice_id:
+    try:
+        ist_gutschrift = belegart(invoice.invoice_type).intern == "credit_note"
+    except UnknownInvoiceTypeError:
+        ist_gutschrift = False
+    if ist_gutschrift and invoice.original_invoice_id:
         try:
             pruefe_ersetzbar(db, invoice.original_invoice_id)
             original_ersetzbar = True
