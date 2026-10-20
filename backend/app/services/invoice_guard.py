@@ -25,6 +25,12 @@ from sqlalchemy.orm.attributes import get_history
 
 from app.models.invoice import Invoice, InvoiceItem
 from app.services.belegart import ist_storno
+from app.services.bezahlt_am import (
+    BezahltAmFehler,
+    BezahltTrotzGutschrift,
+    absichern_bezahlt,
+)
+from app.zeit import heute
 
 FINALIZED: set[str] = {"issued", "paid", "cancelled"}
 
@@ -205,12 +211,13 @@ def _before_flush(session: Session, flush_context, instances) -> None:
                     "Eine gestellte Gutschrift ist endgueltig und laesst sich nicht "
                     "stornieren (#142). Korrektur ueber eine neue Rechnung zum Original."
                 )
-            # Bezahlt heisst: mit Zahlungsdatum. Ohne fiele der Beleg still aus Umsatz
-            # und Geldeingang, und nachtragen liesse es sich nicht mehr.
-            if new_status == "paid" and obj.bezahlt_am is None:
-                raise InvoiceStateError(
-                    "Bezahlt ohne Zahlungsdatum (bezahlt_am) ist nicht erlaubt."
-                )
+            # Bezahlt: Zahlungsdatum Pflicht; Gutschrift- und Datumsregel
+            # aus bezahlt_am.absichern_bezahlt (eine Quelle mit der Route, #174).
+            if new_status == "paid":
+                try:
+                    absichern_bezahlt(session, obj, heute=heute())
+                except (BezahltTrotzGutschrift, BezahltAmFehler) as exc:
+                    raise InvoiceStateError(str(exc)) from exc
 
         # Versand- und Zustellvermerke sind forward-only (#98 P0.3): None →
         # Zeitpunkt ist erlaubt (der Versand selbst), aber ein einmal
