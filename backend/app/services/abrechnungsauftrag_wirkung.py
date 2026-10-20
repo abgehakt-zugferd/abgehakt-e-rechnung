@@ -29,6 +29,7 @@ from app.models.invoice import Invoice, InvoiceItem
 from app.services.archive_frist import berechne_archive_until
 from app.services.invoice_number import generate_next_invoice_number
 from app.services.kunde_zuordenbar import Zuordnung, kennung_aufloesen, meldung_fuer
+from app.services.rechnung.firma import eingerichtete_firma
 from app.services.steuerstatus import (
     SteuerstatusFehler,
     steuer_fuer as _steuer_aus_status,
@@ -93,7 +94,7 @@ def entwuerfe_anlegen(
         raise WirkungFehler("Der Beleg traegt keine Nutzlast.")
 
     if company is None:
-        company = db.query(Company).filter(Company.id == 1).first()
+        company = eingerichtete_firma(db)
         if company is None:
             raise WirkungFehler("Firmendaten sind nicht eingerichtet.")
 
