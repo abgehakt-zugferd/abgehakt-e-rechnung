@@ -45,16 +45,16 @@ def pruefe_versandgrundlage(invoice: Invoice) -> Path:
         )
     # E3 (#98 Hardness): der Dateiname (`_visual`-Suffix) ist nur eine Vorabprüfung
     # und beweist nichts über den Inhalt — ein bares ReportLab-PDF ohne eingebettete
-    # ZUGFeRD-XML hätte den Suffix-Check passiert. Verbindlich ist Mustang: nur ein
-    # PDF mit gültig eingebetteter XML (XML:valid) darf raus. Ohne Mustang lässt sich
-    # die Einbettung nicht beweisen → nicht senden (fail-closed).
+    # ZUGFeRD-XML hätte den Suffix-Check passiert. Verbindlich ist Mustang
+    # (mustang.ist_gueltige_e_rechnung). Ohne Mustang lässt sich die Einbettung
+    # nicht beweisen → nicht senden (fail-closed).
     if not mustang.jar_available():
         raise RechnungFehler(
             400, "E-Rechnungs-Validierung nicht möglich (Mustang nicht verfügbar) — "
             "Versand abgebrochen.")
     pdf_path = get_settings().storage_path / "pdfs" / invoice.pdf_filename
     validation = mustang.validate(pdf_path)
-    if not (validation["is_valid"] and "XML:valid" in validation["raw"]):
+    if not mustang.ist_gueltige_e_rechnung(validation):
         raise RechnungFehler(
             400, "PDF enthält keine gültig eingebettete E-Rechnung (Mustang-"
             "Validierung fehlgeschlagen). Bitte die Rechnung erneut finalisieren.")

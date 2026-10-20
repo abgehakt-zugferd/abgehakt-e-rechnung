@@ -31,7 +31,9 @@ def run_validation(db: Session, invoice: Invoice, company: Company) -> Validatio
 
     vr = ValidationResult(
         invoice_id=invoice.id,
-        is_valid=len(errors) == 0 and (mustang_result is None or mustang_result["is_valid"]),
+        is_valid=len(errors) == 0 and (
+            mustang_result is None or mustang.ist_gueltige_e_rechnung(mustang_result)
+        ),
         errors=[{"code": e.code, "severity": e.severity, "message": e.message, "field": e.field} for e in errors],
         warnings=[{"code": w.code, "severity": w.severity, "message": w.message, "field": w.field} for w in warnings],
         mustang_output=mustang_result["raw"] if mustang_result else None,

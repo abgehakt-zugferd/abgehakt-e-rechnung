@@ -190,15 +190,17 @@ werden konnte. Das Gate ist mehrstufig und fail-closed:
 1. `validator.validate_invoice`: harte §-14-Fehler führen sofort zu `400`.
 2. Pipeline im Arbeitsverzeichnis: sichtbares PDF, dann PDF/A-3, dann `mustang.combine`.
 3. Danach Pflichtprüfung des **kombinierten** PDFs mit `mustang.validate(zugferd_pdf)`.
-4. `issued` nur bei `result["is_valid"]` **und** `XML:valid` im Mustang-Rohbericht.
+4. `issued` nur wenn `mustang.ist_gueltige_e_rechnung(result)` (is_valid und
+   `XML:valid` im Rohbericht). Dieselbe Funktion nutzt die Prüfseite für reine XML
+   und `POST /datev-senden` für das fertige PDF.
 
 Melden PDF/A-Konvertierung, Einbettung oder Pflichtprüfung einen Fehlschlag, bleibt die
 Rechnung `draft`, es gibt `400`,
 `db.rollback()` läuft, und das Arbeitsverzeichnis samt Zwischenartefakten wird gelöscht.
 Im Archiv landet nichts, und es gibt keinen Rückfall auf ein reines Sicht-PDF. Das würde
 eine unvollständige E-Rechnung zementieren. Als zusätzliche Absicherung verweigert
-`POST /datev-senden` jedes `*_visual.pdf` und jedes PDF ohne positives Mustang-Ergebnis
-(`is_valid` plus `XML:valid`).
+`POST /datev-senden` jedes `*_visual.pdf` und jedes PDF ohne
+`ist_gueltige_e_rechnung`.
 
 ### ZUGFeRD
 
