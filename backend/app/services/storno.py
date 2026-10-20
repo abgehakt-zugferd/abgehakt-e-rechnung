@@ -100,9 +100,10 @@ def pruefe_stornierbar(invoice: Invoice) -> None:
     wieder auf, liesse sich aber weder bezahlen noch erneut stornieren (#142). Der
     richtige Weg bei einer falschen Gutschrift ist eine neue Rechnung zum Original.
     """
-    if belegart(invoice.invoice_type).intern not in {"credit_note", "self_billing_storno"}:
+    art = belegart(invoice.invoice_type).intern
+    if art not in {"credit_note", "self_billing_storno"}:
         return
-    if invoice.invoice_type == "self_billing_storno":
+    if art == "self_billing_storno":
         raise GutschriftNichtStornierbar("Eine Stornierung der Gutschrift kann nicht erneut storniert werden.")
     original = invoice.original_invoice
     if original is not None:

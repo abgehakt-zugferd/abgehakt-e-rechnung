@@ -5,7 +5,7 @@ from decimal import Decimal
 from app.models.company import Company
 from app.models.invoice import Invoice
 from app.services.bankverbindung import iban_fuer_ausgabe
-from app.services.belegart import zahlung_an_kunde
+from app.services.belegart import belegart, zahlung_an_kunde
 from app.services.belegsummen import Belegsummen
 from app.services.iban import IbanProfil
 
@@ -121,7 +121,7 @@ def payment_terms_xml(invoice: Invoice) -> str:
     BT-20 (Description) trägt die Zahlungsregel allein (BR-CO-25).
     """
     text = invoice.payment_terms or "Zahlbar ohne Abzug."
-    if invoice.invoice_type == "credit_note" or invoice.due_date is None:
+    if belegart(invoice.invoice_type).intern == "credit_note" or invoice.due_date is None:
         return f"""
             <ram:SpecifiedTradePaymentTerms>
                 <ram:Description>{esc(text)}</ram:Description>

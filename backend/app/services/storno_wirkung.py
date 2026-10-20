@@ -15,13 +15,13 @@ from sqlalchemy import and_, exists, func, or_
 from sqlalchemy.orm import Session, aliased
 
 from app.models.invoice import Invoice
+from app.services.belegart import belegart_filter
 
 # "Gestellt" im Sinne der Kennzahlen: finalisiert (issued) oder bezahlt (paid).
 # Einzige Quelle dieser Menge — dashboard_kennzahlen importiert sie (Issue #160),
 # sonst formulieren beide Module die Wirksamkeit einer Gutschrift neu und die
 # beiden Fassungen laufen auseinander, sobald ein Status dazukommt.
 GESTELLT = ("issued", "paid")
-STORNO_BELEGARTEN = ("credit_note", "self_billing_storno")
 
 _Gutschrift = aliased(Invoice)
 
@@ -31,9 +31,20 @@ _Gutschrift = aliased(Invoice)
 # sobald irgendeine Gutschrift existiert); dort die Bedingung neu bilden.
 WIRKSAM_STORNIERT = exists().where(
     _Gutschrift.original_invoice_id == Invoice.id,
-    _Gutschrift.invoice_type.in_(STORNO_BELEGARTEN),
+    belegart_filter(_Gutschrift.invoice_type, "credit_note", "self_billing_storno"),
     _Gutschrift.status.in_(GESTELLT),
 )
+
+
+def _topf_filter(original, topf: str | tuple | None):
+    """Original-Belegart im Topf, inkl. Aliase der Standardrechnung (#172)."""
+    if isinstance(topf, tuple):
+        return belegart_filter(original.invoice_type, *topf)
+    if topf is None:
+        # Ohne Original ist der Alias im LEFT JOIN NULL; belegart_filter(None)
+        # deckt Standard, Aliase und fehlendes Original zugleich ab.
+        return belegart_filter(original.invoice_type, None)
+    return belegart_filter(original.invoice_type, topf)
 
 
 def summe_gutschriften(
@@ -60,23 +71,13 @@ def summe_gutschriften(
     Kennzahlen (Issue #160): angrenzende Zeitraeume greifen nicht ineinander.
     """
     original = aliased(Invoice)
-    if isinstance(topf, tuple):
-        topf_filter = or_(
-            original.invoice_type.is_(None) if None in topf else False,
-            original.invoice_type.in_([art for art in topf if art is not None]),
-        )
-    elif topf is None:
-        # Ohne Original ist der Alias im LEFT JOIN NULL; die eine Bedingung deckt
-        # die Standardrechnung und den Altbestand zugleich ab.
-        topf_filter = original.invoice_type.is_(None)
-    else:
-        topf_filter = original.invoice_type == topf
+    topf_filter = _topf_filter(original, topf)
     if isinstance(topf, tuple) and "prepayment" in topf:
         # Ohne vereinnahmte Anzahlung entstand keine Umsatzsteuer. Ihr Storno
         # darf deshalb auch keinen Steuerabzug erzeugen (#157).
         topf_filter = and_(topf_filter, or_(
-            original.invoice_type.is_(None),
-            original.invoice_type != "prepayment",
+            belegart_filter(original.invoice_type, None),
+            ~belegart_filter(original.invoice_type, "prepayment"),
             original.bezahlt_am.is_not(None),
         ))
     if ausgezahlt:
@@ -85,7 +86,7 @@ def summe_gutschriften(
     status = ("paid",) if ausgezahlt else GESTELLT
     bedingungen = [
         Invoice.status.in_(status),
-        Invoice.invoice_type.in_(STORNO_BELEGARTEN),
+        belegart_filter(Invoice.invoice_type, "credit_note", "self_billing_storno"),
         topf_filter,
         datum >= seit,
     ]

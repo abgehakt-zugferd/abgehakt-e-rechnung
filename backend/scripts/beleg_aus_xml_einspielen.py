@@ -24,7 +24,7 @@ from app.database import SessionLocal
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services.archive_frist import berechne_archive_until
-from app.services.belegart import UnknownInvoiceTypeError, belegart_aus_bt3
+from app.services.belegart import UnknownInvoiceTypeError, belegart, belegart_aus_bt3
 from app.services.belegrollen import besetzung
 from app.services.steuerstatus import pruefe_honorargutschrift
 from app.services.zugferd_xml import systemnotizen
@@ -215,7 +215,10 @@ def _nutzernotizen(root: ET.Element, doc: ET.Element, invoice_type: str | None) 
 
 def _pruefe_vor_anlage(num: str, inv: Invoice) -> bool:
     """True = anlegen erlaubt. Bei Honorargutschrift dieselben Sperren wie Finalisieren."""
-    if inv.invoice_type != "self_billing":
+    try:
+        if belegart(inv.invoice_type).intern != "self_billing":
+            return True
+    except UnknownInvoiceTypeError:
         return True
     for issue in pruefe_honorargutschrift(inv):
         print(f"FEHLER: {num} — {issue.code}: {issue.message}")

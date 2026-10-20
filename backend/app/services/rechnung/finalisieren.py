@@ -10,6 +10,7 @@ from app.models.company import Company
 from app.models.invoice import Invoice
 from app.services import auftragsschluessel, mustang, pdf_generator, pdfa, validator, zugferd_xml
 from app.services.archive_frist import berechne_archive_until
+from app.services.belegart import ist_storno
 from app.services.rechnung.fehler import RechnungFehler
 from app.services.rechnung.firma import get_company
 from app.zeit import heute
@@ -228,8 +229,7 @@ def als_gestellt_markieren(invoice: Invoice, zugferd_pdf: Path) -> None:
     # auf — nicht ihr Entwurf, denn ein verworfener Storno bleibt
     # folgenlos. Das Original behaelt seinen Status ('issued'/'paid'),
     # nur seine Sperre weicht; der Nachweis bleibt fuer die Akte.
-    if invoice.invoice_type in {"credit_note", "self_billing_storno"} \
-            and invoice.original_invoice_id is not None:
+    if ist_storno(invoice.invoice_type) and invoice.original_invoice_id is not None:
         original = invoice.original_invoice
         if original is not None:
             auftragsschluessel.freigeben(original)
