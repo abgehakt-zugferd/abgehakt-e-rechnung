@@ -77,9 +77,9 @@ class EmailError(Exception):
 def upload_adresse(db: Session | None = None) -> str | None:
     """Effektive Upload-Adresse der Buchhaltung (DB vor .env) oder None.
 
-    Warum hier und nicht an der Route: `EffectiveSettings` entscheidet, welche
-    Konfigurationsquelle gilt — eine zweite Entscheidung im Router liefe
-    mit der in `send_invoice` auseinander.
+    Einzige Quelle fuer alle Leser: Leerzeichen zaehlen als nicht gesetzt.
+    Aufrufer reichen den Rueckgabewert an `send_invoice(..., bcc=...)` durch,
+    statt die Rohkonfiguration erneut zu lesen.
     """
     cfg = _get_effective_smtp_config(db)
     return (getattr(cfg, "datev_bcc_email", "") or "").strip() or None
@@ -130,60 +130,16 @@ def build_test_mail(company) -> tuple[str, str]:
     return "\n".join(zeilen) + "\n", "SMTP-Test erfolgreich"
 
 
-def send_invoice(
-    to_email: str,
-    mailinhalt,
-    pdf_path: Path,
-    bcc_datev: bool = True,
-    db: Session = None,
-    cc_email: str | None = "",
-) -> None:
-    """Versendet die Rechnungsmail. `mailinhalt` kommt aus `mailtext.rechnungsmail`."""
-    cfg = _get_effective_smtp_config(db)
-    if not cfg.smtp_host:
-        raise EmailError("SMTP nicht konfiguriert. Bitte Einstellungen ausfüllen.")
+def _pruefe_pdf_anhang(pdf_path: Path) -> None:
     if not pdf_path.exists():
         raise EmailError(f"PDF nicht gefunden: {pdf_path}")
     if pdf_path.stat().st_size > 20 * 1024 * 1024:
-        raise EmailError("PDF größer als 20 MB – DATEV Upload Mail würde die Datei ablehnen.")
-
-    msg = EmailMessage()
-    msg["From"] = cfg.smtp_from
-
-    geplant_cc = (cc_email or "").strip()
-    bcc_addresses = []
-    if bcc_datev and cfg.datev_bcc_email:
-        bcc_addresses.append(cfg.datev_bcc_email)
-
-    if is_testinstanz():
-        an, cc, bcc_addresses, hinweis = _testinstanz_empfaenger(
-            to_email, geplant_cc, bcc_addresses,
-        )
-        msg["To"] = an
-        body_prefix = hinweis
-    else:
-        msg["To"] = to_email
-        cc = geplant_cc
-        body_prefix = []
-        if cc:
-            msg["Cc"] = cc
-
-    msg["Subject"] = _betreff(mailinhalt.betreff)
-
-    if bcc_addresses and not is_testinstanz():
-        msg["Bcc"] = ", ".join(bcc_addresses)
-
-    text = "\n".join(body_prefix) + mailinhalt.rumpf
-    msg.set_content(text)
-
-    with open(pdf_path, "rb") as f:
-        msg.add_attachment(
-            f.read(),
-            maintype="application",
-            subtype="pdf",
-            filename=pdf_path.name,
+        raise EmailError(
+            "PDF größer als 20 MB – DATEV Upload Mail würde die Datei ablehnen."
         )
 
+
+def _smtp_absetzen(cfg, msg: EmailMessage) -> None:
     context = ssl.create_default_context()
     try:
         with smtplib.SMTP(cfg.smtp_host, cfg.smtp_port, timeout=SMTP_TIMEOUT) as server:
@@ -196,6 +152,55 @@ def send_invoice(
         raise EmailError(f"SMTP-Fehler: {e}") from e
 
 
+def _rechnungsnachricht(cfg, to_email, mailinhalt, pdf_path, cc_email, bcc):
+    """Baut die Rechnungs-EmailMessage inkl. PDF-Anhang."""
+    msg = EmailMessage()
+    msg["From"] = cfg.smtp_from
+    geplant_cc = (cc_email or "").strip()
+    bcc_addresses = [bcc] if bcc else []
+    if is_testinstanz():
+        an, cc, bcc_addresses, hinweis = _testinstanz_empfaenger(
+            to_email, geplant_cc, bcc_addresses,
+        )
+        msg["To"] = an
+        body_prefix = hinweis
+    else:
+        msg["To"] = to_email
+        body_prefix = []
+        if geplant_cc:
+            msg["Cc"] = geplant_cc
+        if bcc_addresses:
+            msg["Bcc"] = ", ".join(bcc_addresses)
+    msg["Subject"] = _betreff(mailinhalt.betreff)
+    msg.set_content("\n".join(body_prefix) + mailinhalt.rumpf)
+    with open(pdf_path, "rb") as f:
+        msg.add_attachment(
+            f.read(), maintype="application", subtype="pdf", filename=pdf_path.name,
+        )
+    return msg
+
+
+def send_invoice(
+    to_email: str,
+    mailinhalt,
+    pdf_path: Path,
+    db: Session = None,
+    cc_email: str | None = "",
+    bcc: str | None = None,
+) -> None:
+    """Versendet die Rechnungsmail. `mailinhalt` kommt aus `mailtext.rechnungsmail`.
+
+    `bcc` kommt vom Aufrufer (typisch `upload_adresse`); diese Funktion liest
+    die Upload-Adresse nicht selbst aus der Konfiguration.
+    """
+    cfg = _get_effective_smtp_config(db)
+    if not cfg.smtp_host:
+        raise EmailError("SMTP nicht konfiguriert. Bitte Einstellungen ausfüllen.")
+    _pruefe_pdf_anhang(pdf_path)
+    msg = _rechnungsnachricht(cfg, to_email, mailinhalt, pdf_path, cc_email, bcc)
+    _smtp_absetzen(cfg, msg)
+
+
 def send_test_email(to_email: str, db: Session = None) -> None:
     cfg = _get_effective_smtp_config(db)
     if not cfg.smtp_host:
@@ -203,7 +208,6 @@ def send_test_email(to_email: str, db: Session = None) -> None:
 
     msg = EmailMessage()
     msg["From"] = cfg.smtp_from
-
     if is_testinstanz():
         an, _, _, hinweis = _testinstanz_empfaenger(to_email, None, [])
         msg["To"] = an
@@ -215,14 +219,4 @@ def send_test_email(to_email: str, db: Session = None) -> None:
         body, betreff = build_test_mail(_company(db))
         msg["Subject"] = betreff
         msg.set_content(body)
-
-    context = ssl.create_default_context()
-    try:
-        with smtplib.SMTP(cfg.smtp_host, cfg.smtp_port, timeout=SMTP_TIMEOUT) as server:
-            if cfg.smtp_use_tls:
-                server.starttls(context=context)
-            if cfg.smtp_user and cfg.smtp_password:
-                server.login(cfg.smtp_user, cfg.smtp_password)
-            server.send_message(msg)
-    except (smtplib.SMTPException, OSError) as e:
-        raise EmailError(f"SMTP-Fehler: {e}") from e
+    _smtp_absetzen(cfg, msg)

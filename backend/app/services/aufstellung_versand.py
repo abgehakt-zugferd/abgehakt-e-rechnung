@@ -31,7 +31,7 @@ def senden(db, aufstellung, settings):
     db.commit()
     try:
         datev_email.send_invoice(to_email=upload, mailinhalt=inhalt, pdf_path=pfad,
-                                 bcc_datev=False, cc_email="", db=db)
+                                 cc_email="", db=db)
     except datev_email.EmailError as fehler:
         log.success, log.error = False, str(fehler)
         db.commit()

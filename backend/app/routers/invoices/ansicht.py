@@ -115,7 +115,7 @@ def _detail_kontext(db: Session, invoice: Invoice) -> dict:
         "invoice": invoice,
         "company": company,
         "validation": latest_validation,
-        "datev_configured": bool(cfg.datev_bcc_email),
+        "datev_configured": bool(datev_email.upload_adresse(db)),
         "smtp_configured": bool(cfg.smtp_host),
         "cc_default": cc_default,
         "cc_herkunft": cc_herkunft,

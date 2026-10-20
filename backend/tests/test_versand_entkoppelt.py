@@ -143,7 +143,7 @@ def test_an_buchhaltung_mailt_nur_die_upload_adresse(pg_session):
     assert r.status_code == 303, r.text
     kwargs = send.call_args.kwargs
     assert kwargs["to_email"] == "upload@example.de"
-    assert kwargs["bcc_datev"] is False  # An IST die Upload-Adresse, keine Blindkopie nötig
+    assert kwargs.get("bcc") is None  # An IST die Upload-Adresse, keine Blindkopie nötig
     inhalt = kwargs["mailinhalt"]
     assert inhalt.betreff == f"Beleg {inv.invoice_number} für die Buchhaltung"
     assert "Kunde GmbH" not in inhalt.rumpf  # neutrale Schablone, keine Kundenanrede

@@ -64,7 +64,7 @@ def test_rechnungsmail_nur_an_testpostbox(testinstanz_settings, tmp_path):
                 rumpf="Body RE-2026-001\n",
             ),
             pdf_path=pdf,
-            bcc_datev=True,
+            bcc="datev@example.de",
             cc_email="cc@example.de",
         )
 
