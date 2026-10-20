@@ -68,6 +68,17 @@ def validate(xml_or_pdf_path: Path) -> dict:
     }
 
 
+def ist_gueltige_e_rechnung(result: dict) -> bool:
+    """Ob ein Mustang-validate-Ergebnis eine gültige E-Rechnung belegt.
+
+    Eine Stelle für Prüfseite, Finalisieren und Versand. Die Prüfseite übergibt
+    reine XML, Finalisieren/Versand das kombinierte PDF; Mustang schreibt
+    „XML:valid“ in beiden Fällen nur bei bestandener XML-Prüfung. Bare PDF/A
+    ohne XML kann PDF/A-konform wirken, liefert aber kein „XML:valid“.
+    """
+    return bool(result.get("is_valid")) and "XML:valid" in (result.get("raw") or "")
+
+
 def extract_xml(pdf_path: Path, out_xml: Path) -> bool:
     _, _, rc = _run([
         "--action", "extract",

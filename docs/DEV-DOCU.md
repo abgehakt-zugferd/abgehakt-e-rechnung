@@ -292,14 +292,18 @@ derselben Regel.
 das ein
 Empfänger-/Prüfer-System ablehnen würde. Deshalb reicht `combine==True` NICHT:
 
-- **Finalize (E1):** nach erfolgreichem `combine` validiert der Router
-  (`services/rechnung/finalisieren.py`) das kombinierte PDF via `mustang.validate(zugferd_pdf)` und macht
-  `issued` **nur bei `result["is_valid"] and "XML:valid" in result["raw"]`**, sonst
-  fail-closed (bleibt `draft`, 400, Zwischen-PDFs entfernt, `db.rollback()`). `is_valid`
-  ALLEIN genügt nicht: ein bares PDF/A ohne eingebettete XML kann fehlerfrei sein, trägt
-  aber kein `XML:valid` → die String-Klausel ist der eigentliche E-Rechnungs-Beweis.
-- **DATEV-Send (E3):** vor dem SMTP-Versand `mustang.validate(pdf_path)` (gleiche
-  Bedingung); der `_visual`-Suffix-Check bleibt nur billige Vorabprüfung. Ohne Mustang
+- **Eine Stelle:** `mustang.ist_gueltige_e_rechnung(result)` (is_valid und
+  `XML:valid` im Rohbericht). Prüfseite (reine XML), Finalisieren und Versand rufen
+  nur sie auf. `is_valid` allein genügt nicht: ein bares PDF/A ohne eingebettete XML
+  kann fehlerfrei wirken, trägt aber kein `XML:valid`. Reine XML liefert bei Mustang
+  ebenfalls `XML:valid` (oft mit `Parsed PDF:absent`), deshalb dieselbe Schwelle.
+- **Finalize (E1):** nach erfolgreichem `combine` validiert
+  `app/services/rechnung/finalisieren.py` das kombinierte PDF via
+  `mustang.validate(zugferd_pdf)` und setzt `issued` nur bei
+  `ist_gueltige_e_rechnung`, sonst fail-closed (bleibt `draft`, 400, Zwischen-PDFs
+  entfernt, `db.rollback()`).
+- **DATEV-Send (E3):** vor dem SMTP-Versand `mustang.validate(pdf_path)` und dieselbe
+  Funktion; der `_visual`-Suffix-Check bleibt nur billige Vorabprüfung. Ohne Mustang
   (`jar_available()` False) wird NICHT gesendet (fail-closed), da die Einbettung nicht
   beweisbar ist.
 - ⚠️ **Testfolge:** JEDER Finalize/Send-Test, der die Pipeline auf Erfolg mockt, muss

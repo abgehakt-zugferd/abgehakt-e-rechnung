@@ -155,11 +155,10 @@ def mustang_einbettung_pruefen(zugferd_pdf: Path) -> tuple[bool, str]:
     """Mustang-Gegenprobe des kombinierten PDFs: (gültig, erster Prüffehler)."""
     # E1 (#98 Hardness): `combine` liefert True (rc=0 + Datei existiert) auch
     # für ein PDF, das ein Empfänger-/Prüfer-System ablehnen würde. Mustang
-    # ist die Wahrheit — nur ein Ergebnis mit is_valid UND XML:valid (PDF/A +
-    # Schema + Schematron griffen) gilt als gültige E-Rechnung. Sonst
+    # ist die Wahrheit — siehe mustang.ist_gueltige_e_rechnung. Sonst
     # fail-closed: die Rechnung bleibt draft (unten), kein Commit.
     result = mustang.validate(zugferd_pdf)
-    if result["is_valid"] and "XML:valid" in result["raw"]:
+    if mustang.ist_gueltige_e_rechnung(result):
         return True, ""
     fehler = result.get("errors") or []
     return False, str(fehler[0]).strip() if fehler else ""
