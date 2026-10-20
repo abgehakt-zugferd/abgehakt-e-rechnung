@@ -318,16 +318,16 @@ Das Skript setzt:
 
 - `datev_sent_at`, sofern noch leer, auf das **Rechnungsdatum** (Erstversand),
 - den Status **bezahlt** (bei jedem anderen Status) und `bezahlt_am` auf das
-  **Faelligkeitsdatum** (bzw. den uebergebenen historischen Zahlungskalendertag),
+  **Fälligkeitsdatum** (bzw. den übergebenen historischen Zahlungskalendertag),
 - einen Eintrag im **Versandprotokoll**, sofern noch keiner existiert (Hinweis: historischer
   Versand, kein erneuter Mailversand).
 
-`updated_at` bleibt der echte Aenderungszeitpunkt des Nachziehens und wird nicht
-zurueckdatiert. Der historische Zahlungszeitpunkt steht fachlich in `bezahlt_am`.
+`updated_at` bleibt der echte Änderungszeitpunkt des Nachziehens und wird nicht
+zurückdatiert. Der historische Zahlungszeitpunkt steht fachlich in `bezahlt_am`.
 
-Exakte Versand- oder Zahlungsdaten aus dem alten System koennen ueber die Funktionsparameter
-`versendet_am` und `bezahlt_am` von `nachziehen` gesetzt werden; die Standard-Schaetzung ist
-bewusst aus Rechnungs- und Faelligkeitsdatum.
+Exakte Versand- oder Zahlungsdaten aus dem alten System können über die Funktionsparameter
+`versendet_am` und `bezahlt_am` von `nachziehen` gesetzt werden; die Standard-Schätzung ist
+bewusst aus Rechnungs- und Fälligkeitsdatum.
 
 ---
 
