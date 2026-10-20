@@ -478,7 +478,7 @@ Unter `backend/scripts/` liegen Werkzeuge für den Umzug aus einer früheren Ins
 | Skript | Zweck |
 |---|---|
 | `beleg_aus_xml_einspielen.py` | Liest `storage/xml/{nummer}.xml` und `storage/pdfs/{nummer}.pdf`, legt finalisierte Belege in der DB an (Kunde per USt-IdNr.). Option `--alt-system` ruft danach `beleg_migration_nachziehen` auf. |
-| `beleg_migration_nachziehen.py` | Setzt für bereits eingespielte Belege Versandnachweis (`datev_sent_at`), Status **bezahlt**, Versandprotokoll und historischen Bezahlt-Zeitpunkt, ohne erneuten E-Mail-Versand. |
+| `beleg_migration_nachziehen.py` | Setzt fuer bereits eingespielte Belege Versandnachweis (`datev_sent_at`), Status **bezahlt**, Versandprotokoll und historischen Zahlungskalendertag (`bezahlt_am`), ohne erneuten E-Mail-Versand. `updated_at` bleibt der Aenderungszeitpunkt. |
 
 Ablauf und Grenzen: [ANWENDUNG.md § Migration](ANWENDUNG.md#migration-aus-altem-abgehakt).
 Im Entwicklungsstack sind die Skripte über `docker-compose.dev.yml` gemountet; im

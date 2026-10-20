@@ -52,7 +52,9 @@ def test_nachziehen_setzt_versand_und_bezahlt(pg_session):
     row = pg_session.query(Invoice).filter(Invoice.invoice_number == "MIG-001").one()
     assert row.status == "paid"
     assert row.datev_sent_at == datetime(2026, 7, 8, 12, 0, tzinfo=timezone.utc)
-    assert row.updated_at == datetime(2026, 7, 22, 12, 0, tzinfo=timezone.utc)
+    assert row.bezahlt_am == date(2026, 7, 22)
+    # updated_at ist Aenderungszeitpunkt, nicht historischer Zahlungszeitpunkt.
+    assert row.updated_at != datetime(2026, 7, 22, 12, 0, tzinfo=timezone.utc)
     log = pg_session.query(InvoiceSendLog).filter(InvoiceSendLog.invoice_id == row.id).one()
     assert log.success is True
     assert log.ziel == "kunde_und_buchhaltung"
@@ -89,3 +91,19 @@ def test_nachziehen_bricht_ohne_faelligkeitsdatum_ab(pg_session):
 
     pg_session.expire_all()
     assert pg_session.get(Invoice, inv.id).status == "issued"
+
+
+def test_nachziehen_laesst_updated_at_beim_echten_aenderungszeitpunkt(pg_session):
+    """Historischer Zahlertag steht in bezahlt_am; updated_at bleibt Nachzieh-Zeit."""
+    vor = datetime.now(timezone.utc)
+    historisch = datetime(2026, 4, 30, 12, 0, tzinfo=timezone.utc)
+    _inv(pg_session, "MIG-UA1", date(2026, 3, 2), date(2026, 3, 16))
+
+    nachziehen(["MIG-UA1"], db=pg_session, bezahlt_am=historisch)
+
+    pg_session.expire_all()
+    row = pg_session.query(Invoice).filter(Invoice.invoice_number == "MIG-UA1").one()
+    assert row.status == "paid"
+    assert row.bezahlt_am == date(2026, 4, 30)
+    assert row.updated_at != historisch
+    assert row.updated_at >= vor

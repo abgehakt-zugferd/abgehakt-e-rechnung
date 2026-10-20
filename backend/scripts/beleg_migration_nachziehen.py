@@ -1,8 +1,9 @@
 """Versand- und Zahlungsstatus fuer aus altem Abgehakt importierte Belege nachziehen.
 
 Im alten System waren die Belege laengst versendet und bezahlt; der XML-Import
-kennt nur issued. Dieses Skript setzt datev_sent_at, optional den Bezahlt-
-Zeitpunkt (bezahlt_am und updated_at) und ein Versandprotokoll — ohne erneuten Mailversand.
+kennt nur issued. Dieses Skript setzt datev_sent_at, optional bezahlt_am
+(historischer Zahlungskalendertag) und ein Versandprotokoll, ohne erneuten
+Mailversand. updated_at bleibt der echte Aenderungszeitpunkt des Nachziehens.
 """
 from __future__ import annotations
 
@@ -14,8 +15,6 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
-from sqlalchemy import text
 
 from sqlalchemy.orm import Session
 
@@ -59,7 +58,7 @@ def _als_bezahlt_setzen(db: Session, inv: Invoice, paid: datetime, *, nummer: st
     except (BezahltTrotzGutschrift, BezahltAmFehler) as exc:
         raise ValueError(f"{nummer}: {exc}") from exc
     inv.status = "paid"
-    print(f"{nummer}: Status → bezahlt")
+    print(f"{nummer}: Status → bezahlt (bezahlt_am {roh})")
 
 
 def _versand_setzen(inv: Invoice, sent: datetime, *, nummer: str) -> None:
@@ -88,17 +87,6 @@ def _protokoll_anlegen(db: Session, inv: Invoice, sent: datetime, *, nummer: str
     print(f"{nummer}: Versandprotokoll angelegt")
 
 
-def _updated_at_zurueckdatieren(db: Session, inv: Invoice, paid: datetime, *, nummer: str) -> None:
-    # updated_at hat onupdate=now() — nur per SQL zurueckdatieren.
-    # Roh-UPDATE umgeht Guard/Audit fuer dieses eine Metadatum; Status und
-    # bezahlt_am laufen ueber ORM. Ob Zurueckdatieren so bleiben darf: offen.
-    db.execute(
-        text("UPDATE invoices SET updated_at = :paid WHERE id = :id"),
-        {"paid": paid, "id": inv.id},
-    )
-    print(f"{nummer}: Bezahlt-Zeitpunkt {paid.strftime('%d.%m.%Y')}")
-
-
 def _eine_nummer(
     db: Session,
     num: str,
@@ -117,9 +105,6 @@ def _eine_nummer(
     if als_bezahlt and inv.status != "paid":
         _als_bezahlt_setzen(db, inv, paid, nummer=num)
     _protokoll_anlegen(db, inv, sent, nummer=num)
-    db.flush()
-    if als_bezahlt and inv.status == "paid" and paid is not None:
-        _updated_at_zurueckdatieren(db, inv, paid, nummer=num)
     db.commit()
     print(f"ok: {num}")
 

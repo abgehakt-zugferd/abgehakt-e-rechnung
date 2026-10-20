@@ -317,17 +317,17 @@ docker exec abgehakt_app python scripts/beleg_migration_nachziehen.py Z-2026-002
 Das Skript setzt:
 
 - `datev_sent_at`, sofern noch leer, auf das **Rechnungsdatum** (Erstversand),
-- den Status **bezahlt** (bei jedem anderen Status),
+- den Status **bezahlt** (bei jedem anderen Status) und `bezahlt_am` auf das
+  **Faelligkeitsdatum** (bzw. den uebergebenen historischen Zahlungskalendertag),
 - einen Eintrag im **Versandprotokoll**, sofern noch keiner existiert (Hinweis: historischer
-  Versand, kein erneuter Mailversand),
-- bei jedem Aufruf den Bezahlt-Zeitpunkt (`updated_at`) auf das **Fälligkeitsdatum**, damit
-  „Bezahlt diesen Monat“
-  nicht fälschlich den Umzugmonat zeigt.
+  Versand, kein erneuter Mailversand).
 
-Exakte Versand- oder Zahlungsdaten aus dem alten System können über die Funktionsparameter
-`versendet_am` und `bezahlt_am` von `nachziehen` gesetzt werden; die Standard-Schätzung ist
-bewusst aus
-Rechnungs- und Fälligkeitsdatum.
+`updated_at` bleibt der echte Aenderungszeitpunkt des Nachziehens und wird nicht
+zurueckdatiert. Der historische Zahlungszeitpunkt steht fachlich in `bezahlt_am`.
+
+Exakte Versand- oder Zahlungsdaten aus dem alten System koennen ueber die Funktionsparameter
+`versendet_am` und `bezahlt_am` von `nachziehen` gesetzt werden; die Standard-Schaetzung ist
+bewusst aus Rechnungs- und Faelligkeitsdatum.
 
 ---
 
