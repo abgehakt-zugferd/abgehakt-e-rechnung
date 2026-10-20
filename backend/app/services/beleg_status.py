@@ -51,6 +51,31 @@ def ohne_zustellung_bedingung(spalte):
     return spalte.is_(None)
 
 
+def ueberfaellig_bedingung(heute):
+    """Gestellte Umsatz-Belege mit Faelligkeit vor heute, ohne wirksames Storno.
+
+    Eine SQL-Bedingung fuer Kennzahl und Listenfilter (Issue #177). Beide
+    Stellen fragen hier, statt Status, Belegart und Storno je fuer sich neu
+    zu formulieren. Ein Beleg ohne Faelligkeitsdatum ist nie ueberfaellig
+    (BR-CO-25, Bauschritt 2b).
+
+    Imports liegen in der Funktion: `WIRKSAM_STORNIERT` kommt aus
+    `storno_wirkung` und bindet fest an `Invoice`; ein Modul-Import oben
+    wuerde `beleg_status` und die Kennzahlen zyklisch koppeln.
+    """
+    from app.models.invoice import Invoice
+    from app.services.belegart import belegart_filter
+    from app.services.storno_wirkung import WIRKSAM_STORNIERT
+
+    return and_(
+        Invoice.status == "issued",
+        belegart_filter(Invoice.invoice_type, None, "prepayment"),
+        ~WIRKSAM_STORNIERT,
+        Invoice.due_date.isnot(None),
+        Invoice.due_date < heute,
+    )
+
+
 def etikett(status: str, kunde_zugestellt_am: datetime | None = None) -> str:
     if status == "issued":
         return "Nicht versendet" if ist_nicht_versendet(status, kunde_zugestellt_am) else "Versendet"

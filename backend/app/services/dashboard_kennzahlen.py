@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.models.company import Company
 from app.models.invoice import Invoice
-from app.services.beleg_status import nicht_versendet_bedingung
+from app.services.beleg_status import nicht_versendet_bedingung, ueberfaellig_bedingung
 from app.services.belegart import belegart_filter
 from app.services.steuer_ruecklage import steuerruecklage_anteil
 from app.services.storno_wirkung import GESTELLT, WIRKSAM_STORNIERT, summe_gutschriften
@@ -209,15 +209,8 @@ def _offene_posten(db: Session, typ_filter) -> OffenePosten:
 
 def ueberfaellige_forderungen(db: Session, heute: date) -> Ueberfaellig:
     """Offene Rechnungen der Umsatz-Belegarten mit Faelligkeit vor heute."""
-    filter_ = (
-        Invoice.status == "issued",
-        UMSATZ_BELEGARTEN_FILTER,
-        ~WIRKSAM_STORNIERT,
-        # Ein Beleg ohne Fälligkeit ist nie überfällig: er zahlt nach dem
-        # Zahlungshinweis, nicht nach einem Termin (BR-CO-25, Bauschritt 2b).
-        Invoice.due_date.isnot(None),
-        Invoice.due_date < heute,
-    )
+    # Eine Bedingung mit dem Listenfilter (Issue #177); Inhalt in beleg_status.
+    filter_ = (ueberfaellig_bedingung(heute),)
     anzahl = db.query(func.count(Invoice.id)).filter(*filter_).scalar() or 0
     betrag = (
         db.query(func.coalesce(func.sum(Invoice.gross_total), 0))
