@@ -8,7 +8,7 @@ from sqlalchemy.orm import Query
 
 from app.models.customer import Customer
 from app.models.invoice import Invoice
-from app.services.beleg_status import ohne_zustellung_bedingung
+from app.services.beleg_status import ohne_zustellung_bedingung, ueberfaellig_bedingung
 from app.services.belegart import belegart_filter
 from app.services.storno_wirkung import WIRKSAM_STORNIERT
 from app.zeit import heute as kalender_heute
@@ -60,12 +60,8 @@ def filtere_rechnungsliste(
         art = ""
 
     if faellig == "ueberfaellig":
-        # Ein Beleg ohne Fälligkeit ist nie überfällig (BR-CO-25, Bauschritt 2b):
-        # dieselbe Bedingung wie die Kennzahl der Uebersicht.
-        query = query.filter(
-            Invoice.due_date.isnot(None),
-            Invoice.due_date < (heute or kalender_heute()),
-        )
+        # dieselbe Bedingung wie die Kennzahl der Uebersicht (Issue #177)
+        query = query.filter(ueberfaellig_bedingung(heute or kalender_heute()))
     else:
         faellig = ""
 

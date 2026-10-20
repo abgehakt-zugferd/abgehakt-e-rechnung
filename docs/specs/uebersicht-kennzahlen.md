@@ -127,7 +127,9 @@ optionale Parameter hinzu:
 
 - `art`: `rechnung` filtert auf `invoice_type IS NULL`, `gutschrift` auf
   `invoice_type == "credit_note"`. Leer heisst wie bisher: beides.
-- `faellig`: `ueberfaellig` filtert auf `due_date < heute`. Leer heisst: keine Einschraenkung.
+- `faellig`: `ueberfaellig` filtert mit derselben Bedingung wie die Kennzahl
+  (`ueberfaellig_bedingung` in `services/beleg_status.py`): gestellt, Umsatz-Belegart,
+  nicht wirksam storniert, Fälligkeit vor heute. Leer heißt: keine Einschränkung.
 - `versand`: `offen` filtert auf `kunde_zugestellt_am IS NULL` (fehlende ZUSTELLUNG AN DEN
   KUNDEN). Leer heisst: keine Einschraenkung. Die
   Bedingung ist dieselbe wie in `services/beleg_status.py` und wird nicht zweimal formuliert.

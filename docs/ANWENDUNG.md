@@ -266,7 +266,7 @@ In der Rechnungsliste und auf der Detailseite unterscheidet der Status **Versend
 | Suche | Rechnungsnummer oder Kundenname, als Teiltreffer |
 | Status | Entwurf, Gestellt, Bezahlt, Storniert, Verworfen |
 | Art | Rechnung (Standard und Anzahlung), Stornorechnung, Honorargutschrift (`honorargutschrift`, nur 389), Storno zur Honorargutschrift (`honorargutschrift_storno`) |
-| Frist | **Überfällig**: Fälligkeitsdatum liegt vor heute |
+| Frist | **Überfällig**: gestellte Umsatz-Belege ohne wirksames Storno, deren Fälligkeitsdatum vor heute liegt (dieselbe Bedingung `ueberfaellig_bedingung` wie die Kennzahl) |
 | Versand | **Ohne Versand**: ohne Zustellung an den Kunden (`kunde_zugestellt_am`), unabhängig vom Status |
 | Stornostand | **Ohne Stornierte**: blendet Belege aus, zu denen eine gestellte oder bezahlte Gutschrift existiert (Parameter `storno=ohne`, dieselbe Bedingung wie die Kacheln der Übersicht) |
 
