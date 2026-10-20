@@ -86,7 +86,7 @@ def test_send_success_sets_datev_sent_at(pg_session):
          patch("app.services.mustang.validate", return_value=_valid_mustang()):
         r = TestClient(app, follow_redirects=False).post(f"/invoices/{inv.id}/datev-senden")
     assert r.status_code == 303
-    assert send.call_args.kwargs["bcc_datev"] is True
+    assert send.call_args.kwargs["bcc"] == "datev-bcc@datev.de"
     pg_session.expire_all()
     row = pg_session.query(Invoice).filter(Invoice.id == inv.id).first()
     assert row.datev_sent_at is not None      # invoice_guard lässt dieses Metadatum zu
@@ -315,7 +315,8 @@ def test_send_attaches_pdf_and_bccs_datev(tmp_path):
     smtp_cm.__enter__.return_value = server
     with patch.object(datev_email, "_get_effective_smtp_config", return_value=_cfg()), \
          patch.object(datev_email.smtplib, "SMTP", return_value=smtp_cm):
-        datev_email.send_invoice("k@example.de", _mail(), pdf, bcc_datev=True)
+        datev_email.send_invoice(
+            "k@example.de", _mail(), pdf, bcc="datev-bcc@datev.de")
 
     msg = server.send_message.call_args.args[0]
     assert msg["To"] == "k@example.de"
@@ -331,7 +332,7 @@ def test_send_without_bcc_omits_datev(tmp_path):
     smtp_cm = MagicMock(); smtp_cm.__enter__.return_value = server
     with patch.object(datev_email, "_get_effective_smtp_config", return_value=_cfg()), \
          patch.object(datev_email.smtplib, "SMTP", return_value=smtp_cm):
-        datev_email.send_invoice("k@example.de", _mail(), pdf, bcc_datev=False)
+        datev_email.send_invoice("k@example.de", _mail(), pdf, bcc=None)
     msg = server.send_message.call_args.args[0]
     assert msg["Bcc"] is None
 

@@ -42,7 +42,7 @@ def test_send_invoice_uebergibt_smtp_timeout(tmp_path):
             to_email="kunde@example.com",
             mailinhalt=_mail(),
             pdf_path=pdf,
-            bcc_datev=False,
+            bcc=None,
             db=None,
         )
     _, kwargs = mock_smtp.call_args
@@ -75,6 +75,6 @@ def test_send_invoice_bricht_bei_stiller_verbindung_ab(tmp_path):
                 to_email="kunde@example.com",
                 mailinhalt=_mail(),
                 pdf_path=pdf,
-                bcc_datev=False,
+                bcc=None,
                 db=None,
             )

@@ -117,7 +117,10 @@ def _standard_protokoll(invoice: Invoice, to_email: str, cc: str, upload: str | 
     )
 
 
-def _standardmail_senden(db: Session, invoice: Invoice, to_email: str, cc: str, pdf_path: Path) -> None:
+def _standardmail_senden(
+    db: Session, invoice: Invoice, to_email: str, cc: str, pdf_path: Path,
+    upload: str | None,
+) -> None:
     company = db.query(Company).filter(Company.id == 1).first()
     config = db.query(AppConfig).filter(AppConfig.id == 1).first()
     inhalt = mailtext.rechnungsmail(invoice, company, config)
@@ -125,9 +128,9 @@ def _standardmail_senden(db: Session, invoice: Invoice, to_email: str, cc: str, 
         to_email=to_email,
         mailinhalt=inhalt,
         pdf_path=pdf_path,
-        bcc_datev=True,
         db=db,
         cc_email=cc,
+        bcc=upload,
     )
 
 
@@ -150,9 +153,7 @@ def _standard_vermerke(db: Session, invoice: Invoice, protokoll: InvoiceSendLog,
 def an_kunde_und_buchhaltung(db: Session, invoice: Invoice, to_email: str, cc_email: str) -> None:
     """Standardversand: Kunde, CC und (mit Upload-Adresse) Blindkopie an die Buchhaltung."""
     pdf_path = pruefe_versandgrundlage(invoice)
-    # Entscheidet beides: ob die Mail eine Blindkopie an die Upload-Adresse
-    # bekommt (`send_invoice` lässt sie still weg, wenn keine konfiguriert
-    # ist — so läuft es heute) und welcher Vermerk am Ende gesetzt wird.
+    # Entscheidet beides: Blindkopie (als `bcc` an send_invoice) und Vermerk.
     upload = datev_email.upload_adresse(db)
 
     # Ab hier findet ein echter Zustellversuch statt — erst ab hier wird
@@ -174,7 +175,7 @@ def an_kunde_und_buchhaltung(db: Session, invoice: Invoice, to_email: str, cc_em
     db.add(protokoll)
     db.commit()
     _zustellversuch(db, protokoll,
-                    partial(_standardmail_senden, db, invoice, to_email, cc, pdf_path))
+                    partial(_standardmail_senden, db, invoice, to_email, cc, pdf_path, upload))
     _standard_vermerke(db, invoice, protokoll, upload)
 
 
@@ -185,7 +186,6 @@ def _buchhaltungsmail_senden(db: Session, invoice: Invoice, upload: str, pdf_pat
         to_email=upload,
         mailinhalt=inhalt,
         pdf_path=pdf_path,
-        bcc_datev=False,
         db=db,
     )
 

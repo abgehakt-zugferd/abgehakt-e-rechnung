@@ -61,7 +61,7 @@ def test_umlaute_und_eszett_ueberleben_speichern_lesen_versand(pg_session, tmp_p
         ),
     ), patch("smtplib.SMTP", smtp_cls):
         datev_email.send_invoice(
-            "kunde@example.de", inhalt, pdf, bcc_datev=False, db=pg_session
+            "kunde@example.de", inhalt, pdf, db=pg_session
         )
     assert "Grüße aus München für die Größe RE-Ü-1" in gesendet["body"]
     assert "Größe" in gesendet["subject"]
@@ -97,7 +97,7 @@ def test_umlaute_ueberleben_mime_roundtrip(pg_session, tmp_path):
         ),
     ), patch("smtplib.SMTP", smtp_cls):
         datev_email.send_invoice(
-            "kunde@example.de", inhalt, pdf, bcc_datev=False, db=pg_session
+            "kunde@example.de", inhalt, pdf, db=pg_session
         )
 
     roh = gesendet["msg"].as_bytes()
@@ -141,7 +141,7 @@ def test_testinstanz_vorsatz_bleibt_bei_hinterlegtem_betreff(pg_session, tmp_pat
         ),
     ), patch.object(datev_email.smtplib, "SMTP", return_value=smtp_cm):
         datev_email.send_invoice(
-            "kunde@example.de", inhalt, pdf, bcc_datev=False, db=pg_session
+            "kunde@example.de", inhalt, pdf, db=pg_session
         )
     msg = server.send_message.call_args.args[0]
     assert msg["Subject"] == "[TESTINSTANZ] Eigener RE-TI-1"
