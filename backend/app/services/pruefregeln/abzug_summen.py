@@ -9,6 +9,7 @@ from decimal import Decimal
 from app.services.belegsummen import belegsummen
 from app.services.pruefregeln.befund import Issue
 from app.services.pruefregeln.kontext import Pruefkontext
+from app.services.pruefregeln.steuerkategorie import KEIN_STEUERAUSWEIS
 
 
 def pruefe_abzug_summen(kontext: Pruefkontext) -> list[Issue]:
@@ -98,11 +99,11 @@ def _pruefe_gesamtsummen(kontext: Pruefkontext, abzug_fehler: bool) -> list[Issu
                 fehler.append(Issue("TAX_TOTAL_MISMATCH", "error", f"Steuersumme {invoice.tax_total} stimmt nicht (erwartet {summen.steuer}).", "tax_total"))
             if abs(invoice.gross_total - summen.brutto) > Decimal("0.02"):
                 fehler.append(Issue("GROSS_TOTAL_MISMATCH", "error", f"Bruttosumme {invoice.gross_total} stimmt nicht (erwartet {summen.brutto}).", "gross_total"))
-        if kontext.steuerkategorie in {"AE", "K"} and invoice.tax_total != Decimal("0"):
+        if kontext.steuerkategorie in KEIN_STEUERAUSWEIS and invoice.tax_total != Decimal("0"):
             fehler.append(Issue(
                 "TAX_AMOUNT_MUST_BE_ZERO", "error",
-                f"Bei Reverse Charge / innergemeinschaftlicher Lieferung muss die "
-                f"Steuersumme exakt 0,00 € betragen (gefunden {invoice.tax_total}).",
+                f"Bei dieser Steuerkategorie muss die Steuersumme exakt 0,00 € "
+                f"betragen (gefunden {invoice.tax_total}).",
                 "tax_total",
             ))
     return fehler

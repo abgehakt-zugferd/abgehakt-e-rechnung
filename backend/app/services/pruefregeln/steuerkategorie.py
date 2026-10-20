@@ -13,10 +13,12 @@ from app.services.pruefregeln.kontext import Pruefkontext
 # Weiterhin NICHT gültig: "G" (Ausfuhr Drittland). Inländische 0 %-Umsätze bleiben
 # "Z" (steuerpflichtig zum Satz null), das ist etwas anderes als steuerbefreit.
 VALID_TAX_CATEGORIES = {"S", "AE", "K", "O", "E"}
-# Kategorien, in denen keine Steuer ausgewiesen werden darf. Bei "E" ist das keine
-# Formalie: ein Kleinunternehmer, der Umsatzsteuer ausweist, schuldet sie nach
-# § 14c Abs. 2 UStG, obwohl er sie gar nicht erheben durfte.
-STEUERFREIE_KATEGORIEN = {"AE", "K", "O", "E"}
+# Kategorien ohne Steuerausweis: Satz und Betrag muessen exakt 0 sein.
+# Frueher STEUERFREIE_KATEGORIEN: gleiche Bedeutung, ein Name. Bei "E" ist das
+# keine Formalie: wer Umsatzsteuer ausweist, schuldet sie nach § 14c Abs. 2 UStG.
+KEIN_STEUERAUSWEIS = {"AE", "K", "O", "E"}
+# Andere Bedeutung als KEIN_STEUERAUSWEIS: USt-IdNr. des Kaeufers ist Pflicht.
+KAUEFER_UST_ID_PFLICHT = frozenset({"AE", "K"})
 
 
 def pruefe_steuerkategorie(kontext: Pruefkontext) -> list[Issue]:
@@ -29,7 +31,7 @@ def pruefe_steuerkategorie(kontext: Pruefkontext) -> list[Issue]:
             "TAX_CATEGORY_INVALID", "error",
             "Unbekannte MwSt.-Kategorie.", "tax_category"
         )]
-    if tax_category not in STEUERFREIE_KATEGORIEN:
+    if tax_category not in KEIN_STEUERAUSWEIS:
         return []
     fehler: list[Issue] = []
     if invoice.items and any(item.tax_rate > Decimal("0") for item in invoice.items):
@@ -43,7 +45,7 @@ def pruefe_steuerkategorie(kontext: Pruefkontext) -> list[Issue]:
         fehler.append(Issue(
             "TAX_CATEGORY_RATE_MISMATCH", "error", meldung, "tax_category"
         ))
-    if tax_category in {"AE", "K"} and customer and not customer.vat_id:
+    if tax_category in KAUEFER_UST_ID_PFLICHT and customer and not customer.vat_id:
         fehler.append(Issue(
             "BUYER_VAT_ID_REQUIRED", "error",
             "Für Reverse Charge und innergemeinschaftliche Lieferungen ist die USt-IdNr. des Käufers Pflicht.",
