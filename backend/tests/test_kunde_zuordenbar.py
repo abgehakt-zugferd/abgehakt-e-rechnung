@@ -19,6 +19,7 @@ from app.services.abrechnungsauftrag_wirkung import WirkungFehler, entwuerfe_anl
 from app.services.invoice_guard import register_invoice_guard
 from app.services.rechnungsauftrag_wirkung import entwurf_anlegen
 from app.services.uebergabe_befund import Belegurteil
+from app.services.uebergabebeleg import ABSENDER_TANTIEMEN
 from app.services.validator import validate_invoice
 from tests.helpers.uebergabe import PARTNER_A, rechnungsauftrag
 
@@ -97,7 +98,7 @@ def _abrechnungs_urteil(partner_id=PARTNER_A):
     return Belegurteil(
         beleg_sha256="1" * 64,
         beleg_id="c0c0c0c0-0000-4000-8000-000000000001",
-        angenommen=True, absender="tantiemen-app",
+        angenommen=True, absender=ABSENDER_TANTIEMEN,
         nutzlast_art="abrechnungsauftrag", erzeugt_am=ERZEUGT,
         nutzlast={
             "abrechnungsquartal": "2026-Q2",
@@ -130,7 +131,7 @@ def _rechnungs_urteil():
     return Belegurteil(
         beleg_sha256="2" * 64,
         beleg_id="11111111-2222-4333-8444-555555555556",
-        angenommen=True, absender="tantiemen-app",
+        angenommen=True, absender=ABSENDER_TANTIEMEN,
         nutzlast_art="rechnungsauftrag", erzeugt_am=ERZEUGT,
         nutzlast=rechnungsauftrag(),
     )
