@@ -118,6 +118,8 @@ def test_ueberfaellig_filter_wie_kennzahl_ohne_bezahlt_und_storno(pg_session):
     )
     listen_ids = {row.id for row in query.all()}
 
+    # Gleichheit allein reicht nicht als Status-Gegenprobe: Kennzahl und Filter
+    # teilen eine Bedingung, beide wuerden denselben Fehler mitzaehlen.
     assert kennzahl.anzahl == len(listen_ids)
     assert kennzahl.anzahl == 2
     assert listen_ids == {offen.id, anzahlung.id}
