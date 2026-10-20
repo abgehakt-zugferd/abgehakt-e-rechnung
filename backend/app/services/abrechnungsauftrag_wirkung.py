@@ -28,6 +28,7 @@ from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services.archive_frist import berechne_archive_until
 from app.services.invoice_number import generate_next_invoice_number
+from app.services.kunde_zuordenbar import Zuordnung, kennung_aufloesen, meldung_fuer
 from app.services.steuerstatus import (
     SteuerstatusFehler,
     steuer_fuer as _steuer_aus_status,
@@ -56,20 +57,16 @@ def steuer_fuer(kunde: Customer) -> tuple:
 
 def _kunde(db: Session, partner_id) -> Customer:
     try:
-        kennung = uuid.UUID(str(partner_id))
+        uuid.UUID(str(partner_id))
     except (ValueError, AttributeError, TypeError) as fehler:
         raise WirkungFehler(f"Keine Kundenkennung: {partner_id}") from fehler
-    kunde = (
-        db.query(Customer)
-        .filter(Customer.id == kennung, Customer.deleted_at.is_(None))
-        .first()
-    )
-    if kunde is None:
-        # Ein Kunde entsteht nur von Hand. Zuordnung ueber den Namen ist keine
-        # Option: Namensgleichheit ist selten, aber wenn sie eintritt, landet
-        # Geld beim Falschen.
-        raise WirkungFehler(f"Kein Kunde zu partner_id {partner_id}")
-    return kunde
+    # Ein Kunde entsteht nur von Hand. Zuordnung ueber den Namen ist keine
+    # Option: Namensgleichheit ist selten, aber wenn sie eintritt, landet
+    # Geld beim Falschen. Deaktiviert und unbekannt bleiben getrennt (#173).
+    lage, kunde = kennung_aufloesen(db, partner_id)
+    if lage is Zuordnung.ZUORDENBAR:
+        return kunde
+    raise WirkungFehler(meldung_fuer(lage, partner_id=partner_id))
 
 
 def _datum(wert) -> Optional[date]:

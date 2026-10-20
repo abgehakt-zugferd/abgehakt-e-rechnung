@@ -19,7 +19,6 @@ import hashlib
 import os
 import tempfile
 import time
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -27,9 +26,9 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.models.customer import Customer
 from app.models.uebergabe_eingang import UebergabeEingang
 from app.services import auftragsschluessel
+from app.services.kunde_zuordenbar import Zuordnung, kennung_aufloesen
 from app.services.uebergabe_befund import Belegurteil, Empfangslage
 
 # Die Richtung, aus der Belege kommen. Nur diese eine: was in der
@@ -72,17 +71,14 @@ class DatenbankLage(Empfangslage):
 
     def partner_bekannt(self, partner_id: str) -> bool:
         """Die partner_id IST die Kennung des Kunden. Kein Anlegen: ein Kunde
-        entsteht nur von Hand, und Zuordnung ueber den Namen ist keine Option."""
-        try:
-            kennung = uuid.UUID(str(partner_id))
-        except (ValueError, AttributeError, TypeError):
-            return False
-        return (
-            self._db.query(Customer.id)
-            .filter(Customer.id == kennung, Customer.deleted_at.is_(None))
-            .first()
-            is not None
-        )
+        entsteht nur von Hand, und Zuordnung ueber den Namen ist keine Option.
+
+        Deaktiviert zaehlt hier als bekannt (#173): der Beleg bleibt annehmbar,
+        erst das Anwenden scheitert mit klarer Meldung. Unbekannt/geloescht
+        bleibt False (PARTNER_ID_UNBEKANNT beim Lesen).
+        """
+        lage, _kunde = kennung_aufloesen(self._db, partner_id)
+        return lage in (Zuordnung.ZUORDENBAR, Zuordnung.DEAKTIVIERT)
 
     def dokument_zu_auftragsschluessel(self, schluessel: str) -> Optional[str]:
         # Die Frage geht an die eine Stelle fuer die Sperre

@@ -1,6 +1,7 @@
 """§ 14 Abs. 4 Nr. 1 UStG – Leistungsempfänger."""
 from decimal import Decimal
 
+from app.services.kunde_zuordenbar import Zuordnung, meldung_fuer, zuordnung_von
 from app.services.pruefregeln.befund import Issue
 from app.services.pruefregeln.kontext import Pruefkontext
 from app.services.pruefregeln.ust_id import ust_id_befunde
@@ -14,6 +15,16 @@ def pruefe_leistungsempfaenger(kontext: Pruefkontext) -> list[Issue]:
     customer = invoice.customer
     if not customer:
         return [Issue("BUYER_MISSING", "error", "Kein Kunde zugeordnet.", "customer_id")]
+    # Zuordnung nur am Entwurf (#173): /pruefen laeuft fuer jeden Status und
+    # wuerde sonst gestellte Belege nach Spaet-Deaktivierung ungueltig speichern.
+    # Status steht am Beleg (Pruefkontext.invoice); Finalisieren allein reicht
+    # nicht, weil Entwuerfe auch ueber /pruefen und speichern geprueft werden.
+    if getattr(invoice, "status", None) == "draft":
+        lage = zuordnung_von(customer)
+        if lage is not Zuordnung.ZUORDENBAR:
+            return [Issue(
+                "BUYER_NOT_ASSIGNABLE", "error", meldung_fuer(lage), "customer_id",
+            )]
     befunde: list[Issue] = []
     if not customer.name or not customer.name.strip():
         befunde.append(Issue("BUYER_NAME_MISSING", "error", "Name des Kunden fehlt.", "customer.name"))

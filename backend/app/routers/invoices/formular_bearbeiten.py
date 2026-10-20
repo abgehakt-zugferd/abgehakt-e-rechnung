@@ -21,6 +21,7 @@ from app.routers.invoices.formular_lesen import (
 )
 from app.routers.invoices.formular_schreiben import (
     FRIST_ODER_BEDINGUNGEN_FEHLT,
+    kunde_zuordnung_pruefen,
     zahlungsfrist_pruefen,
 )
 from app.services import belegsperre, kundenvorgaben
@@ -69,7 +70,9 @@ def belegart_aendern(invoice: Invoice, form) -> None:
         raise FormularFehler(str(fehler)) from fehler
 
 
-def beleg_binden(invoice: Invoice, form, service_period_start, service_period_end) -> tuple[list, bool, object]:
+def beleg_binden(
+    db: Session, invoice: Invoice, form, service_period_start, service_period_end,
+) -> tuple[list, bool, object]:
     """Positionen und Kunde übernehmen; Beleg-Herkunft bindet sie an den Bestand.
 
     Rückgabe: (rohe Positionen, aus_beleg, Kunde vor dem Speichern).
@@ -90,7 +93,12 @@ def beleg_binden(invoice: Invoice, form, service_period_start, service_period_en
         except belegsperre.BelegsperreVerletzt as fehler:
             raise FormularFehler(str(fehler)) from fehler
     else:
-        invoice.customer_id = kunde_id(form)
+        neue_kunde_id = kunde_id(form)
+        try:
+            kunde_zuordnung_pruefen(db, neue_kunde_id)
+        except HTTPException as fehler:
+            raise FormularFehler(fehler.detail) from fehler
+        invoice.customer_id = neue_kunde_id
         invoice.service_period_start = service_period_start
         invoice.service_period_end = service_period_end
     return rohe_positionen, aus_beleg, kunde_vorher

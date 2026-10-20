@@ -30,7 +30,7 @@ CUSTOMER_STUB_FIELDS = (
     "vat_id", "vat_id_checked_at", "vat_id_check_valid", "vat_id_vies_name", "vat_id_name_match",
     "email", "bank_iban", "bank_bic", "bank_name",
     "tax_number", "ust_status", "gutschriftempfaenger", "ust_status_bestaetigt_am",
-    "customer_number",
+    "customer_number", "is_active", "deleted_at",
 )
 ITEM_STUB_FIELDS = (
     "position", "description", "unit", "quantity", "unit_price", "tax_rate",
@@ -115,6 +115,8 @@ def customer_stub(**kwargs):
         gutschriftempfaenger=False,
         ust_status_bestaetigt_am=None,
         customer_number="K-STUB",
+        is_active=True,
+        deleted_at=None,
     ), **kwargs)
 
 

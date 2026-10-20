@@ -176,7 +176,7 @@ def _eingaben_uebernehmen(db: Session, invoice: Invoice, company: Company, form)
     ersatzbezug_sperren(form)
     belegart_aendern(invoice, form)
     rohe_positionen, aus_beleg, kunde_vorher = beleg_binden(
-        invoice, form, service_period_start, service_period_end)
+        db, invoice, form, service_period_start, service_period_end)
     positionsangaben_pruefen(rohe_positionen)
     kopf_uebernehmen(invoice, form, company, delivery_date, aus_beleg)
     kundenvorgabe_nachtragen(db, invoice, kunde_vorher)
