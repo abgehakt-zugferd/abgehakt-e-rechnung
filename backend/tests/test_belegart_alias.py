@@ -15,8 +15,7 @@ from fastapi.testclient import TestClient
 
 from app.database import get_db
 from app.main import app
-from app.models.customer import Customer
-from app.models.invoice import Invoice, InvoiceItem
+from app.models.invoice import Invoice
 from app.routers.invoices.ansicht import _ersetzbarkeit
 from app.services import validator
 from app.services.dashboard_kennzahlen import (
@@ -28,7 +27,9 @@ from app.services.invoice_guard import InvoiceStateError, register_invoice_guard
 from app.services.rechnung.finalisieren import als_gestellt_markieren
 from app.services.rechnungsliste_filter import filtere_rechnungsliste
 from app.services.storno_wirkung import summe_gutschriften
+from app.services.steuerstatus import pruefe_honorargutschrift
 from app.services.zugferd_xml.zahlung_summen import payment_terms_xml
+from tests.factories import company_stub, customer_stub, validator_invoice_stub
 from tests.helpers import belegart_alias as _ba
 
 register_invoice_guard()
@@ -45,61 +46,17 @@ def _client(pg_session):
     return TestClient(app, follow_redirects=False)
 
 
-def _kunde_a(pg_session):
-    c = Customer(
-        customer_number=f"K-{uuid.uuid4().hex[:8]}",
-        name="Beispiel GmbH",
-        address_line1="Beispielweg 1",
-        zip_code="80331",
-        city="Muenchen",
-        country="DE",
-    )
-    pg_session.add(c)
-    pg_session.flush()
-    return c
-
-
-def _positionen():
-    return [InvoiceItem(
-        position=1, description="Beratung", unit="Stunde",
-        quantity=Decimal("1"), unit_price=Decimal("100.00"),
-        tax_rate=Decimal("19"), net_amount=Decimal("100.00"),
-        tax_amount=Decimal("19.00"), gross_amount=Decimal("119.00"),
-    )]
-
-
-def _beleg_a(pg_session, kunde, *, status="issued", invoice_type=None, original=None):
-    inv = Invoice(
-        invoice_number=f"RE-BA-{uuid.uuid4().hex[:6]}",
-        customer_id=kunde.id,
-        issue_date=date(2026, 6, 1),
-        due_date=date(2026, 6, 15),
-        delivery_date=date(2026, 6, 1),
-        currency="EUR",
-        tax_category="S",
-        status=status,
-        invoice_type=invoice_type,
-        original_invoice_id=original.id if original else None,
-        net_total=Decimal("100.00"),
-        tax_total=Decimal("19.00"),
-        gross_total=Decimal("119.00"),
-        payment_terms="Zahlbar in 14 Tagen.",
-    )
-    inv.items = _positionen()
-    pg_session.add(inv)
-    pg_session.commit()
-    return inv
-
-
 # --- a: Alias-Loch im Storno-Schutz ------------------------------------------
 
 
 @pytest.mark.parametrize("alias", ["credit", "storno"])
 def test_a_storno_weg_lehnt_gestellte_alias_gutschrift_ab(pg_session, alias):
     """Gewuenscht: POST /storno auf Alias-Gutschrift scheitert (wie credit_note)."""
-    kunde = _kunde_a(pg_session)
-    original = _beleg_a(pg_session, kunde)
-    gs = _beleg_a(pg_session, kunde, invoice_type=alias, original=original)
+    kunde = _ba.kunde_mit_positionen(pg_session)
+    original = _ba.beleg_mit_position(pg_session, kunde)
+    gs = _ba.beleg_mit_position(
+        pg_session, kunde, invoice_type=alias, original=original,
+    )
 
     r = _client(pg_session).post(f"/invoices/{gs.id}/storno")
 
@@ -119,9 +76,11 @@ def test_a_storno_weg_lehnt_gestellte_alias_gutschrift_ab(pg_session, alias):
 @pytest.mark.parametrize("alias", ["credit", "storno"])
 def test_a_waechter_sperrt_cancelled_bei_alias_gutschrift(pg_session, alias):
     """Gewuenscht: invoice_guard sperrt issued→cancelled auch fuer Aliase."""
-    kunde = _kunde_a(pg_session)
-    original = _beleg_a(pg_session, kunde)
-    gs = _beleg_a(pg_session, kunde, invoice_type=alias, original=original)
+    kunde = _ba.kunde_mit_positionen(pg_session)
+    original = _ba.beleg_mit_position(pg_session, kunde)
+    gs = _ba.beleg_mit_position(
+        pg_session, kunde, invoice_type=alias, original=original,
+    )
 
     gs.status = "cancelled"
     with pytest.raises(InvoiceStateError, match="Gutschrift"):
@@ -132,9 +91,11 @@ def test_a_waechter_sperrt_cancelled_bei_alias_gutschrift(pg_session, alias):
 @pytest.mark.parametrize("alias", ["credit", "storno"])
 def test_a_status_route_lehnt_cancelled_bei_alias_gutschrift_ab(pg_session, alias):
     """Gewuenscht: Route cancelled bei Alias-Gutschrift → 400 (pruefe_stornierbar)."""
-    kunde = _kunde_a(pg_session)
-    original = _beleg_a(pg_session, kunde)
-    gs = _beleg_a(pg_session, kunde, invoice_type=alias, original=original)
+    kunde = _ba.kunde_mit_positionen(pg_session)
+    original = _ba.beleg_mit_position(pg_session, kunde)
+    gs = _ba.beleg_mit_position(
+        pg_session, kunde, invoice_type=alias, original=original,
+    )
 
     r = _client(pg_session).post(
         f"/invoices/{gs.id}/status", data={"new_status": "cancelled"},
@@ -271,3 +232,40 @@ def test_gutschrift_zu_standard_alias_zaehlt_im_standard_topf(pg_session, alias)
         f"Gutschrift zu {alias!r}-Original nicht im Standard-Topf (abzug={abzug})"
     )
     assert nettoumsatz_ytd(pg_session, JAHRESBEGINN) == Decimal("0.00")
+
+
+# --- Honorargutschrift-Alias "self-billing" (Issue #181 / #172) ---------------
+
+
+def _hg_ohne_empfaenger(art: str):
+    """Entwurf Honorargutschrift an Kunde ohne Gutschriftempfaenger-Kennzeichen."""
+    return validator_invoice_stub(
+        invoice_type=art,
+        status="draft",
+        customer=customer_stub(gutschriftempfaenger=False),
+    )
+
+
+def test_validator_self_billing_alias_liefert_gutschriftempfaenger_fehler():
+    """validate_invoice: Alias 'self-billing' wie 'self_billing' (#181)."""
+    firma = company_stub()
+    codes_kanon = {
+        e.code for e in validator.validate_invoice(
+            _hg_ohne_empfaenger("self_billing"), firma,
+        )[0]
+    }
+    codes_alias = {
+        e.code for e in validator.validate_invoice(
+            _hg_ohne_empfaenger("self-billing"), firma,
+        )[0]
+    }
+    assert "GUTSCHRIFTEMPFAENGER_ERFORDERLICH" in codes_kanon
+    assert codes_alias == codes_kanon
+
+
+def test_pruefe_honorargutschrift_self_billing_alias_wie_kanonisch():
+    """pruefe_honorargutschrift: Alias 'self-billing' wie 'self_billing' (#181)."""
+    codes_kanon = {i.code for i in pruefe_honorargutschrift(_hg_ohne_empfaenger("self_billing"))}
+    codes_alias = {i.code for i in pruefe_honorargutschrift(_hg_ohne_empfaenger("self-billing"))}
+    assert codes_kanon == {"GUTSCHRIFTEMPFAENGER_ERFORDERLICH"}
+    assert codes_alias == codes_kanon

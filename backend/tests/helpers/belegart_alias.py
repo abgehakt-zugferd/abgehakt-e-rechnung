@@ -85,3 +85,40 @@ def leere_firma(pg_session):
     firma.vat_id = None
     pg_session.commit()
     return firma
+
+
+def kunde_mit_positionen(pg_session):
+    """Kunde fuer Storno-/Guard-Pfade (Beleg mit Position separat anlegen)."""
+    return kunde(pg_session)
+
+
+def beleg_mit_position(
+    pg_session, kunde_obj, *, status="issued", invoice_type=None, original=None,
+):
+    from app.models.invoice import InvoiceItem
+
+    inv = Invoice(
+        invoice_number=f"RE-BA-{uuid.uuid4().hex[:6]}",
+        customer_id=kunde_obj.id,
+        issue_date=date(2026, 6, 1),
+        due_date=date(2026, 6, 15),
+        delivery_date=date(2026, 6, 1),
+        currency="EUR",
+        tax_category="S",
+        status=status,
+        invoice_type=invoice_type,
+        original_invoice_id=original.id if original else None,
+        net_total=Decimal("100.00"),
+        tax_total=Decimal("19.00"),
+        gross_total=Decimal("119.00"),
+        payment_terms="Zahlbar in 14 Tagen.",
+    )
+    inv.items = [InvoiceItem(
+        position=1, description="Beratung", unit="Stunde",
+        quantity=Decimal("1"), unit_price=Decimal("100.00"),
+        tax_rate=Decimal("19"), net_amount=Decimal("100.00"),
+        tax_amount=Decimal("19.00"), gross_amount=Decimal("119.00"),
+    )]
+    pg_session.add(inv)
+    pg_session.commit()
+    return inv
