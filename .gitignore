@@ -17,6 +17,9 @@ schluessel-integration/*
 storage/*
 !storage/.gitkeep
 storage-integration/
+# Startet die App aus backend/ heraus (lokaler Lauf, Testlauf), legt sie ihr
+# storage/ dort an, samt `secret.key`. Die Regel oben greift nur in der Wurzel.
+backend/storage/
 
 # DSGVO – Beispiel-Rechnungen mit echten Kundendaten
 knowledge/Beispiel-Rechnungen/

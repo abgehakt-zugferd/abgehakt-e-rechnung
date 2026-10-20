@@ -1,6 +1,10 @@
 # Baukontext ist `backend/` (docker-compose: `context: ./backend`) — eine
 # .dockerignore im Repo-Wurzelverzeichnis wäre wirkungslos, und `docs/`,
-# `knowledge/`, `storage/`, `backups/` liegen ohnehin außerhalb des Kontexts.
+# `knowledge/`, `backups/` liegen ohnehin außerhalb des Kontexts.
+#
+# `storage/` liegt in der Regel auch außerhalb, entsteht aber hier, sobald die
+# App aus backend/ heraus läuft, samt `secret.key`. Es gehört nie ins Abbild:
+# der Container bekommt sein storage/ als Volume.
 #
 # `tests/` bleibt draußen und wird zur Laufzeit gemountet (run-tests.sh,
 # docker-compose.yml). Wer das ändert, prüft beide Aufrufe mit.
@@ -11,6 +15,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 tests/
+storage/
 .env
 *.egg-info/
 .git/
