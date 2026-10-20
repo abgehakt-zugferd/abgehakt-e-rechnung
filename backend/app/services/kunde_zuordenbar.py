@@ -1,9 +1,12 @@
 """Welche Kunden einem Beleg zugeordnet werden duerfen (#173).
 
-Eine Stelle fuer Formular, Uebergabe-Wirkung und Eingangslage. Zuordenbar ist ein
+Eine Stelle fuer Formular, Uebergabe-Wirkung und Validator. Zuordenbar ist ein
 Kunde nur, wenn er aktiv und nicht soft-geloescht ist. Deaktiviert und unbekannt
 (fehlt oder geloescht) bleiben unterscheidbar: Anwenden und Formular melden das
 getrennt, damit der Beleg dem richtigen Kunden zugeordnet wird.
+
+Die Zuordnungsregel gilt nur beim Zuordnen (Entwurf). Gestellte Belege behalten
+den Empfaenger, der bei der Ausstellung zulaessig war.
 """
 from __future__ import annotations
 
@@ -25,6 +28,19 @@ class Zuordnung(Enum):
     UNBEKANNT = "unbekannt"
 
 
+def zuordnung_von(kunde) -> Zuordnung:
+    """Lage eines Kundenobjekts: unbekannt (fehlt/geloescht), deaktiviert, sonst ok.
+
+    Eine Funktion fuer Kennungsaufloesung, Validator und Meldungstext - sonst
+    driftet is_active/deleted_at auseinander (Nullprobe #173).
+    """
+    if kunde is None or kunde.deleted_at is not None:
+        return Zuordnung.UNBEKANNT
+    if not kunde.is_active:
+        return Zuordnung.DEAKTIVIERT
+    return Zuordnung.ZUORDENBAR
+
+
 def zuordenbare_kunden(db: Session) -> list[Customer]:
     """Kunden, die Formulare und Listen zur Auswahl anbieten."""
     return (
@@ -42,22 +58,10 @@ def kennung_aufloesen(db: Session, kennung) -> tuple[Zuordnung, Optional[Custome
     except (ValueError, AttributeError, TypeError):
         return Zuordnung.UNBEKANNT, None
     kunde = db.query(Customer).filter(Customer.id == kunde_id).first()
-    if kunde is None or kunde.deleted_at is not None:
-        return Zuordnung.UNBEKANNT, None
-    if not kunde.is_active:
-        return Zuordnung.DEAKTIVIERT, kunde
-    return Zuordnung.ZUORDENBAR, kunde
-
-
-def ist_zuordenbar(kunde: Customer) -> bool:
-    """Objektpruefung ohne erneute Abfrage (Validator, geladene Beziehungen).
-
-    Fehlende Attribute (Testattrappen) gelten als zuordenbar: nur gesetztes
-    deleted_at bzw. is_active=False sperrt.
-    """
-    if getattr(kunde, "deleted_at", None) is not None:
-        return False
-    return bool(getattr(kunde, "is_active", True))
+    lage = zuordnung_von(kunde)
+    if lage is Zuordnung.UNBEKANNT:
+        return lage, None
+    return lage, kunde
 
 
 def meldung_fuer(lage: Zuordnung, *, partner_id=None) -> str:

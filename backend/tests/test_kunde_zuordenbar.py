@@ -255,3 +255,28 @@ def test_gestellter_beleg_bleibt_nach_deaktivierung_sichtbar(pg_session):
 
     assert r.status_code == 200
     assert beleg.invoice_number in r.text
+
+
+def test_gestellter_beleg_pruefen_ohne_buyer_not_assignable(pg_session):
+    """POST /pruefen speichert kein BUYER_NOT_ASSIGNABLE nach Spaet-Deaktivierung."""
+    from app.models.invoice import ValidationResult
+
+    kunde = _kunde(pg_session)
+    beleg = _beleg(pg_session, kunde, status="issued")
+    kunde.is_active = False
+    pg_session.commit()
+
+    r = _client(pg_session).post(f"/invoices/{beleg.id}/pruefen")
+
+    assert r.status_code == 303, r.text
+    pg_session.expire_all()
+    ergebnis = (
+        pg_session.query(ValidationResult)
+        .filter(ValidationResult.invoice_id == beleg.id)
+        .order_by(ValidationResult.validated_at.desc())
+        .first()
+    )
+    assert ergebnis is not None
+    codes = {e.get("code") for e in (ergebnis.errors or [])}
+    assert "BUYER_NOT_ASSIGNABLE" not in codes, codes
+    assert ergebnis.is_valid is True, codes
