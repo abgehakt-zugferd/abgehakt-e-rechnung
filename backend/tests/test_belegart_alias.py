@@ -27,6 +27,7 @@ from app.services.dashboard_kennzahlen import (
 from app.services.invoice_guard import InvoiceStateError, register_invoice_guard
 from app.services.rechnung.finalisieren import als_gestellt_markieren
 from app.services.rechnungsliste_filter import filtere_rechnungsliste
+from app.services.storno_wirkung import summe_gutschriften
 from app.services.zugferd_xml.zahlung_summen import payment_terms_xml
 from tests.helpers import belegart_alias as _ba
 
@@ -224,3 +225,49 @@ def test_alias_gutschrift_hebt_offene_forderung_auf(pg_session):
     _ba.gutschrift(pg_session, original, art="storno", status="issued")
     offen = offene_forderungen(pg_session)
     assert (offen.anzahl, offen.betrag) == (0, Decimal("0"))
+
+
+# --- Standardrechnung-Aliase "standard" / "invoice" (intern=None) -------------
+
+
+@pytest.mark.parametrize("alias", ["standard", "invoice"])
+def test_standard_alias_zaehlt_in_umsatz_und_ust(pg_session, alias):
+    """Kennzahlen: gespeichertes 'standard'/'invoice' wie invoice_type None."""
+    _ba.beleg(pg_session, art=alias, status="issued")
+    assert nettoumsatz_ytd(pg_session, JAHRESBEGINN) == Decimal("100.00")
+    assert schuldige_umsatzsteuer(pg_session, JAHRESBEGINN) == Decimal("19.00")
+
+
+@pytest.mark.parametrize("alias", ["standard", "invoice"])
+def test_standard_alias_ist_offene_forderung(pg_session, alias):
+    """offene_forderungen: Alias der Standardrechnung erscheint in der Menge."""
+    beleg = _ba.beleg(pg_session, art=alias, status="issued")
+    offen = offene_forderungen(pg_session)
+    assert offen.anzahl == 1
+    assert offen.betrag == beleg.gross_total
+
+
+@pytest.mark.parametrize("alias", ["standard", "invoice"])
+def test_listenfilter_rechnung_findet_standard_alias(pg_session, alias):
+    """rechnungsliste_filter art=rechnung: Alias wie None in der Umsatzmenge."""
+    beleg = _ba.beleg(pg_session, art=alias, status="issued")
+    query, _ = filtere_rechnungsliste(pg_session.query(Invoice), art="rechnung")
+    assert beleg.id in {row.id for row in query.all()}
+
+
+@pytest.mark.parametrize("alias", ["standard", "invoice"])
+def test_gutschrift_zu_standard_alias_zaehlt_im_standard_topf(pg_session, alias):
+    """summe_gutschriften(topf=None): Alias-Original gehoert zum Standard-Topf.
+
+    Bewusst nicht nur nettoumsatz_ytd: ohne Alias-Filter sind Original und
+    Abzug beide 0 (0-0), das wuerde den Topf-Pfad maskieren (L34).
+    """
+    original = _ba.beleg(pg_session, art=alias, status="issued")
+    _ba.gutschrift(pg_session, original, art="credit_note", status="issued")
+    abzug = summe_gutschriften(
+        pg_session, Invoice.net_total, JAHRESBEGINN, topf=None,
+    )
+    assert abzug == Decimal("100.00"), (
+        f"Gutschrift zu {alias!r}-Original nicht im Standard-Topf (abzug={abzug})"
+    )
+    assert nettoumsatz_ytd(pg_session, JAHRESBEGINN) == Decimal("0.00")

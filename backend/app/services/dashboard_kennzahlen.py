@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.models.company import Company
 from app.models.invoice import Invoice
 from app.services.beleg_status import nicht_versendet_bedingung
-from app.services.belegart import rohwerte
+from app.services.belegart import belegart_filter
 from app.services.steuer_ruecklage import steuerruecklage_anteil
 from app.services.storno_wirkung import GESTELLT, WIRKSAM_STORNIERT, summe_gutschriften
 
@@ -28,17 +28,13 @@ from app.services.storno_wirkung import GESTELLT, WIRKSAM_STORNIERT, summe_gutsc
 # dieser Menge. storno_wirkung definiert sie nicht neu, sondern bekommt sie als
 # `topf` gereicht (Issue #160); auch die Rechnungsliste filtert darueber
 # (rechnungsliste_filter importiert UMSATZ_BELEGARTEN_FILTER).
-# Rohwerte inkl. Aliase aus belegart (#172); None = Standard bleibt is_(None).
+# Filter inkl. Aliase der Standardrechnung ueber belegart_filter (#172).
 UMSATZ_BELEGARTEN = (None, "prepayment")
-_UMSATZ_ROH = tuple(sorted(k for k in rohwerte("prepayment") if k is not None))
-UMSATZ_BELEGARTEN_FILTER = or_(
-    Invoice.invoice_type.is_(None),
-    Invoice.invoice_type.in_(_UMSATZ_ROH),
-)
+UMSATZ_BELEGARTEN_FILTER = belegart_filter(Invoice.invoice_type, None, "prepayment")
 # Anzahlungen loesen Steuer erst bei Zahlung aus; Rechnungen der Umsatz-Belegarten behalten
 # ihre bisherige Besteuerung nach Ausstellung. NULL bezahlt_am zaehlt nie.
 _UMSATZ_STEUERDATUM = case(
-    (Invoice.invoice_type.in_(rohwerte("prepayment")), Invoice.bezahlt_am),
+    (belegart_filter(Invoice.invoice_type, "prepayment"), Invoice.bezahlt_am),
     else_=Invoice.issue_date,
 )
 
@@ -85,16 +81,17 @@ def _summe_feld(
     """
     datum = Invoice.issue_date
     if art == UMSATZ_BELEGARTEN:
+        # Unbezahlte Anzahlung zaehlt nicht; Standard (inkl. Aliase) immer.
         typ_filter = and_(UMSATZ_BELEGARTEN_FILTER, or_(
-            Invoice.invoice_type.is_(None), Invoice.status == "paid",
+            belegart_filter(Invoice.invoice_type, None), Invoice.status == "paid",
             and_(Invoice.status == "cancelled", WIRKSAM_STORNIERT,
                  Invoice.bezahlt_am.is_not(None)),
         ))
         datum = _UMSATZ_STEUERDATUM
     elif art is None:
-        typ_filter = Invoice.invoice_type.is_(None)
+        typ_filter = belegart_filter(Invoice.invoice_type, None)
     else:
-        typ_filter = Invoice.invoice_type.in_(rohwerte(art))
+        typ_filter = belegart_filter(Invoice.invoice_type, art)
     # Von Hand auf cancelled gesetzt, aber schon per Gutschrift aufgehoben: das
     # Original zaehlt, die Gutschrift zieht ab. Sonst wirkte die Stornierung
     # doppelt (Issue #141).
@@ -200,7 +197,7 @@ def offene_forderungen(db: Session) -> OffenePosten:
 
 def offene_auszahlungen(db: Session) -> OffenePosten:
     """Unbezahlte 389 ohne wirksames Storno, Anzahl und Bruttosumme."""
-    return _offene_posten(db, Invoice.invoice_type.in_(rohwerte("self_billing")))
+    return _offene_posten(db, belegart_filter(Invoice.invoice_type, "self_billing"))
 
 
 def _offene_posten(db: Session, typ_filter) -> OffenePosten:

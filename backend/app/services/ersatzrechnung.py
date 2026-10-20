@@ -12,7 +12,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.models.invoice import Invoice
-from app.services.belegart import belegart, rohwerte
+from app.services.belegart import belegart, belegart_filter
 from app.services.invoice_guard import FINALIZED
 
 
@@ -59,7 +59,7 @@ def pruefe_ersetzbar(db: Session, kennung: str | uuid.UUID) -> Invoice:
     gutschrift = (
         db.query(Invoice.id)
         .filter(Invoice.original_invoice_id == original.id,
-                Invoice.invoice_type.in_(rohwerte("credit_note")),
+                belegart_filter(Invoice.invoice_type, "credit_note"),
                 Invoice.status != "discarded")
         .first()
     )

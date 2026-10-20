@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from sqlalchemy import or_
+
 
 class UnknownInvoiceTypeError(ValueError):
     """invoice_type ist weder None noch ein bekannter Typ — fail-closed statt stillem
@@ -128,11 +130,33 @@ _STORNO_INTERN = frozenset({"credit_note", "self_billing_storno"})
 def rohwerte(*interne: str | None) -> frozenset[str | None]:
     """Alle Rohwerte aus _ALIASES, die auf eine der genannten internen Formen zeigen.
 
-    Fuer SQL-Filter (.in_(...)): Aliase aus Altbestand oder Schnittstellen
-    treffen dieselbe Belegart. Keine zweite handgepflegte Liste.
+    Fuer SQL-Filter: ueber belegart_filter(spalte, ...), nicht handgebaut.
+    Keine zweite handgepflegte Liste.
     """
     ziel = frozenset(interne)
     return frozenset(roh for roh, art in _ALIASES.items() if art.intern in ziel)
+
+
+def belegart_filter(spalte, *interne: str | None):
+    """SQL-Bedingung: Spalte trifft eine der internen Belegarten inkl. Aliase.
+
+    Baut aus rohwerte das passende or_(spalte.is_(None), spalte.in_(...)):
+    is_(None) nur, wenn None zu den Rohwerten gehoert (Standardrechnung und
+    ihre Aliase "standard"/"invoice"). Einzige erlaubte SQL-Naht fuer
+    invoice_type-Filter ausserhalb dieses Moduls (Issue #172).
+    """
+    roh = rohwerte(*interne)
+    teile: list = []
+    if None in roh:
+        teile.append(spalte.is_(None))
+    nicht_none = frozenset(r for r in roh if r is not None)
+    if nicht_none:
+        teile.append(spalte.in_(nicht_none))
+    if not teile:
+        return spalte.in_([])  # nie wahr, leere Zielmenge
+    if len(teile) == 1:
+        return teile[0]
+    return or_(*teile)
 
 
 # Gutschriften im Geldfluss samt Alias-Schreibweisen. Abgeleitet aus _ALIASES

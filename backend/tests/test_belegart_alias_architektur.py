@@ -1,7 +1,11 @@
-"""Architekturregel #172: kein Rohvergleich von invoice_type mit Belegart-Literalen.
+"""Architekturregel #172: kein Rohzugriff auf invoice_type fuer Belegart-Filter.
 
-Ausserhalb von services/belegart.py loest jeder Vergleich ueber belegart(...).intern
-oder rohwerte(...). Kommentarzeilen zaehlen nicht; jede Fundstelle wird einzeln gemeldet.
+Ausserhalb von services/belegart.py:
+- kein Vergleich mit Belegart-Literal (==, !=, in)
+- kein invoice_type.is_(...) und kein invoice_type.in_(...)
+  (nur belegart_filter / belegart(...).intern / ist_storno)
+
+Kommentarzeilen zaehlen nicht; jede Fundstelle wird einzeln gemeldet.
 """
 from __future__ import annotations
 
@@ -54,21 +58,16 @@ def _vergleicht_mit_belegart(knoten: ast.Compare) -> bool:
     return bool(literale & _BELEGART_LITERALE)
 
 
-def _in_aufruf_mit_belegart_literal(knoten: ast.Call) -> bool:
-    """Invoice.invoice_type.in_(...) mit Belegart-Stringliteralen im Argument."""
+def _invoice_type_spaltenaufruf(knoten: ast.Call, methoden: frozenset[str]) -> bool:
+    """True bei invoice_type.is_(...) oder invoice_type.in_(...), egal welches Argument."""
     func = knoten.func
-    if not isinstance(func, ast.Attribute) or func.attr != "in_":
+    if not isinstance(func, ast.Attribute) or func.attr not in methoden:
         return False
-    if not _ist_invoice_type_zugriff(func.value):
-        return False
-    literale: set[str] = set()
-    for arg in knoten.args:
-        literale |= _konstante_literale(arg)
-    return bool(literale & _BELEGART_LITERALE)
+    return _ist_invoice_type_zugriff(func.value)
 
 
 def funde_in_quelle(quelle: str, rel: str = "probe.py") -> list[str]:
-    """Rohvergleiche; Kommentarzeilen werden uebersprungen. Treffer: rel:zeile: ausschnitt."""
+    """Verbotene Stellen; Kommentarzeilen uebersprungen. Treffer: rel:zeile: ausschnitt."""
     try:
         baum = ast.parse(quelle)
     except SyntaxError:
@@ -88,7 +87,7 @@ def funde_in_quelle(quelle: str, rel: str = "probe.py") -> list[str]:
         if isinstance(knoten, ast.Compare):
             verboten = _vergleicht_mit_belegart(knoten)
         elif isinstance(knoten, ast.Call):
-            verboten = _in_aufruf_mit_belegart_literal(knoten)
+            verboten = _invoice_type_spaltenaufruf(knoten, frozenset({"in_", "is_"}))
         if not verboten:
             continue
         gesehen.add(zeile)
@@ -109,7 +108,7 @@ def test_kein_rohvergleich_von_invoice_type_ausserhalb_belegart():
 
     treffer = [t for p in dateien for t in _treffer_in(p)]
     assert not treffer, (
-        "Rohvergleich invoice_type mit Belegart-Literal "
+        "Rohzugriff auf invoice_type (Literalvergleich oder .is_/.in_) "
         "(nur services/belegart.py darf die Rohformen kennen):\n"
         + "\n".join(treffer)
     )
@@ -124,24 +123,28 @@ def test_kein_rohvergleich_von_invoice_type_ausserhalb_belegart():
         'if "credit_note" == invoice.invoice_type:\n    pass\n',
         'q.filter(Invoice.invoice_type.in_(["credit_note", "storno"]))\n',
         'q.filter(Invoice.invoice_type.in_(("credit",)))\n',
+        'q.filter(Invoice.invoice_type.in_(rohwerte("credit_note")))\n',
+        'q.filter(Invoice.invoice_type.is_(None))\n',
+        'q.filter(Invoice.invoice_type.in_(STORNO_BELEGARTEN))\n',
         'if invoice_type == "prepayment":\n    pass\n',
         'if obj.invoice_type in {"storno"}:\n    pass\n',
     ],
 )
 def test_architektur_erkennt_rohvergleiche(quelle):
     funde = funde_in_quelle(quelle)
-    assert funde, f"Rohvergleich nicht erkannt:\n{quelle}"
+    assert funde, f"Rohzugriff nicht erkannt:\n{quelle}"
 
 
 @pytest.mark.parametrize(
     "quelle",
     [
         '# invoice.invoice_type == "credit_note"\n',
+        '# Invoice.invoice_type.is_(None)\n',
         'hinweis = "invoice_type == credit_note"\n',
         'if belegart(invoice.invoice_type).intern == "credit_note":\n    pass\n',
         'if belegart(invoice.invoice_type).intern in {"credit_note"}:\n    pass\n',
-        'q.filter(Invoice.invoice_type.in_(rohwerte("credit_note")))\n',
-        'q.filter(Invoice.invoice_type.in_(STORNO_BELEGARTEN))\n',
+        'q.filter(belegart_filter(Invoice.invoice_type, "credit_note"))\n',
+        'q.filter(belegart_filter(Invoice.invoice_type, None, "prepayment"))\n',
         'Invoice(invoice_type="credit_note")\n',
         'invoice.invoice_type = "credit_note"\n',
         'if status == "issued":\n    pass\n',
@@ -166,11 +169,10 @@ def test_architektur_meldet_jede_fundstelle_einzeln():
 
 
 def test_architektur_mutation_neue_rohvergleichszeile_wird_rot():
-    """Nachbar und Mutation (L30): eingefuegte Rohvergleichszeile muss auffallen."""
+    """Nachbar und Mutation (L30): eingefuegte Literalzeile muss auffallen."""
     opfer = APP / "services" / "storno_wirkung.py"
     original = opfer.read_text(encoding="utf-8")
     assert 'invoice_type == "credit_note"' not in original
-    # Nachbar: bestehender aufgeloester .in_(STORNO_BELEGARTEN) bleibt gruen.
     nachbar = funde_in_quelle(original, rel="storno_wirkung.py")
     assert not nachbar, f"Nachbar schon rot: {nachbar}"
 
@@ -178,5 +180,18 @@ def test_architektur_mutation_neue_rohvergleichszeile_wird_rot():
     funde = funde_in_quelle(mutiert, rel="storno_wirkung.py")
     assert funde, "Mutation ohne Treffer — Waechter greift die neue Zeile nicht"
     assert any("credit_note" in f for f in funde)
-    # Sicherstellung: Datei unveraendert (Gegenprobe nur im Speicher).
+    assert opfer.read_text(encoding="utf-8") == original
+
+
+def test_architektur_mutation_neue_is_none_zeile_wird_rot():
+    """is_(None) auf invoice_type ausserhalb belegart.py muss auffallen."""
+    opfer = APP / "services" / "dashboard_kennzahlen.py"
+    original = opfer.read_text(encoding="utf-8")
+    nachbar = funde_in_quelle(original, rel="dashboard_kennzahlen.py")
+    assert not nachbar, f"Nachbar schon rot: {nachbar}"
+
+    mutiert = original + "\n_PROBE = Invoice.invoice_type.is_(None)\n"
+    funde = funde_in_quelle(mutiert, rel="dashboard_kennzahlen.py")
+    assert funde, "Mutation is_(None) ohne Treffer"
+    assert any("is_(None)" in f for f in funde)
     assert opfer.read_text(encoding="utf-8") == original
