@@ -55,8 +55,8 @@ CII-Sequenz auf Belegebene (bestehender Schema-Test): `ExemptionReason` vor
 BT-121. Er erzwingt unter anderem:
 
 - gueltige Kategorie aus `VALID_TAX_CATEGORIES`;
-- Steuersatz 0 und Steuerbetrag 0 bei AE/K (und rate 0 bei O/E in
-  `STEUERFREIE_KATEGORIEN`);
+- Steuersatz 0 und Steuerbetrag 0 bei AE/K/O/E
+  (`KEIN_STEUERAUSWEIS`);
 - Verkaeufer- und Kaeufer-USt-IdNr. bei AE und K;
 - Lieferdatum bei K unabhaengig vom Kleinbetrag (BR-IC-11 als
   Anwendungsbegruendung im Kommentar).
