@@ -22,14 +22,17 @@ def _original_laden(db: Session, original_id) -> Invoice:
     return original
 
 
-def _vorhandene_gutschrift(db: Session, original_id) -> Invoice | None:
-    return (
+def _vorhandene_gutschrift(
+    db: Session, original_id, *, ausgenommen_id=None,
+) -> Invoice | None:
+    q = (
         db.query(Invoice)
         .filter(Invoice.original_invoice_id == original_id,
                 Invoice.status != "discarded")
-        .order_by(Invoice.invoice_number)
-        .first()
     )
+    if ausgenommen_id is not None:
+        q = q.filter(Invoice.id != ausgenommen_id)
+    return q.order_by(Invoice.invoice_number).first()
 
 
 def _gutschrift_existiert(nummer: str) -> RechnungFehler:
@@ -43,7 +46,9 @@ def _gutschrift_existiert(nummer: str) -> RechnungFehler:
     )
 
 
-def _einzige_gutschrift_sichern(db: Session, original: Invoice) -> None:
+def _einzige_gutschrift_sichern(
+    db: Session, original: Invoice, *, ausgenommen_id=None,
+) -> None:
     # Pro Original höchstens EINE Gutschrift (#7). Zwei Gutschriften zum selben
     # Beleg mindern die Forderung doppelt: in der OPOS-Liste, in der DATEV-Buchung
     # und in der Umsatzsteuervoranmeldung.
@@ -60,7 +65,12 @@ def _einzige_gutschrift_sichern(db: Session, original: Invoice) -> None:
     # `Company` wird beim Ziehen der Nummer erhöht, eine Ablehnung danach ließe
     # eine Nummernlücke ohne jeden Datensatz zurück — genau die Lücke, die #145
     # mit dem Status `discarded` vermeiden wollte.
-    vorhandene = _vorhandene_gutschrift(db, original.id)
+    #
+    # `ausgenommen_id` (#178): beim Zurueckholen darf die eigene Zeile nicht als
+    # Konkurrenz zaehlen, sobald ihr Status schon wieder auf draft steht.
+    vorhandene = _vorhandene_gutschrift(
+        db, original.id, ausgenommen_id=ausgenommen_id,
+    )
     if vorhandene:
         raise _gutschrift_existiert(vorhandene.invoice_number)
 
@@ -115,3 +125,26 @@ def entwurf_anlegen(db: Session, original_id) -> Invoice:
     storno = build_storno(original, number, storno_datum)
     _speichern(db, storno, original_id)
     return storno
+
+
+def pruefe_zurueckholbar(db: Session, storno: Invoice) -> None:
+    """Ob ein verworfener Storno-Entwurf wieder aktiv werden darf (#178).
+
+    Wiederverwendet `_original_laden` und `_einzige_gutschrift_sichern`. Die
+    zurueckzuholende Gutschrift selbst zaehlt nicht als vorhandene Konkurrenz.
+    """
+    if storno.original_invoice_id is None:
+        return
+    original = _original_laden(db, storno.original_invoice_id)
+    _einzige_gutschrift_sichern(db, original, ausgenommen_id=storno.id)
+
+
+def gutschrift_konflikt_nach_integrity(db: Session, storno: Invoice) -> None:
+    """Zweite Schicht am Gutschrift-Index: IntegrityError → fachlicher Fehler."""
+    if storno.original_invoice_id is None:
+        return
+    vorhandene = _vorhandene_gutschrift(
+        db, storno.original_invoice_id, ausgenommen_id=storno.id,
+    )
+    if vorhandene is not None:
+        raise _gutschrift_existiert(vorhandene.invoice_number)

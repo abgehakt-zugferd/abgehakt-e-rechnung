@@ -10,7 +10,11 @@ from app.models.invoice import Invoice
 from app.services import auftragsschluessel
 from app.services.ersatzrechnung import ErsatzNichtMoeglich, pruefe_ersetzbar
 from app.services.rechnung.fehler import RechnungFehler
-from app.services.rechnung.storno import entwurf_anlegen
+from app.services.rechnung.storno import (
+    entwurf_anlegen,
+    gutschrift_konflikt_nach_integrity,
+    pruefe_zurueckholbar,
+)
 
 router = APIRouter()
 
@@ -76,11 +80,12 @@ def _zurueckholen_committen(db: Session, invoice: Invoice) -> None:
     try:
         db.commit()
     except IntegrityError:
-        # Zweite Schicht (Festlegung 19): Der Index sieht, was die Pruefung
-        # oben ohne Sperre verpasst hat. Rollback nimmt die Sperre zurueck;
-        # die Meldung entspricht der Vorabpruefung, kein HTTP 500 (Muster:
-        # der Gutschrift-Index in create_storno).
+        # Zweite Schicht (Festlegung 19 / #178): Der Index sieht, was die
+        # Pruefung oben ohne Sperre verpasst hat. Rollback nimmt die Sperre
+        # zurueck; die Meldung entspricht der Vorabpruefung, kein HTTP 500
+        # (Muster: der Gutschrift-Index in create_storno / `_speichern`).
         db.rollback()
+        gutschrift_konflikt_nach_integrity(db, invoice)
         if invoice.auftragsschluessel is not None:
             _belegt_durch_anderen(db, invoice)
         raise
@@ -93,10 +98,15 @@ def restore_draft(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(404, "Rechnung nicht gefunden")
     if invoice.status != "discarded":
         raise HTTPException(400, "Nur verworfene Entwürfe können zurückgeholt werden.")
-    _ersatzbezug_pruefen(db, invoice)
-    _auftragssperre_zurueckholen(db, invoice)
-    invoice.status = "draft"
-    _zurueckholen_committen(db, invoice)
+    try:
+        if invoice.original_invoice_id is not None:
+            pruefe_zurueckholbar(db, invoice)
+        _ersatzbezug_pruefen(db, invoice)
+        _auftragssperre_zurueckholen(db, invoice)
+        invoice.status = "draft"
+        _zurueckholen_committen(db, invoice)
+    except RechnungFehler as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail) from e
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
 
 
