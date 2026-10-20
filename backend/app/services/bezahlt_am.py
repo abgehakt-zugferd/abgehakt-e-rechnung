@@ -62,6 +62,38 @@ def aktive_gutschrift(db: Session, invoice: Invoice) -> Invoice | None:
     )
 
 
+def _sperre_bei_gutschrift(db: Session, invoice: Invoice) -> None:
+    """Wirft BezahltTrotzGutschrift, wenn eine aktive Gutschrift existiert."""
+    # no_autoflush: Aufruf aus before_flush darf keinen verschachtelten Flush starten.
+    with db.no_autoflush:
+        gutschrift = aktive_gutschrift(db, invoice)
+    if gutschrift is not None:
+        raise BezahltTrotzGutschrift(
+            f"Zu dieser Rechnung existiert die Gutschrift "
+            f"{gutschrift.invoice_number}. Ein stornierter Beleg kann nicht als "
+            "bezahlt geführt werden. Setze ihn auf „storniert“, oder verwirf "
+            "die Gutschrift, falls sie versehentlich entstanden ist."
+        )
+
+
+def absichern_bezahlt(db: Session, invoice: Invoice, *, heute: date) -> None:
+    """Zweite Schicht (Guard): Gutschrift und Datumsfenster bei Wechsel nach paid.
+
+    Erwartet bezahlt_am bereits gesetzt. Nutzt dieselbe Abfrage und dieselbe
+    Datumsregel wie vorbereiten_bezahlt / parse_bezahlt_am (#174).
+    """
+    _sperre_bei_gutschrift(db, invoice)
+    if invoice.bezahlt_am is None:
+        raise BezahltAmFehler(
+            "Bezahlt ohne Zahlungsdatum (bezahlt_am) ist nicht erlaubt."
+        )
+    parse_bezahlt_am(
+        invoice.bezahlt_am.isoformat(),
+        heute=heute,
+        issue_date=invoice.issue_date,
+    )
+
+
 def vorbereiten_bezahlt(
     db: Session,
     invoice: Invoice,
@@ -70,14 +102,7 @@ def vorbereiten_bezahlt(
     heute: date,
 ) -> None:
     """Prueft Gutschrift-Sperre und setzt bezahlt_am am Beleg."""
-    gutschrift = aktive_gutschrift(db, invoice)
-    if gutschrift is not None:
-        raise BezahltTrotzGutschrift(
-            f"Zu dieser Rechnung existiert die Gutschrift "
-            f"{gutschrift.invoice_number}. Ein stornierter Beleg kann nicht als "
-            "bezahlt geführt werden. Setze ihn auf „storniert“, oder verwirf "
-            "die Gutschrift, falls sie versehentlich entstanden ist."
-        )
+    _sperre_bei_gutschrift(db, invoice)
     invoice.bezahlt_am = parse_bezahlt_am(
         roh_bezahlt_am, heute=heute, issue_date=invoice.issue_date,
     )
