@@ -9,6 +9,7 @@ from app.services import belegsperre
 from app.services.einheiten import UnknownUnitError, resolve_einheit
 from app.services.pruefregeln.befund import Issue
 from app.services.pruefregeln.kontext import Pruefkontext
+from app.services.pruefregeln.steuerkategorie import KEIN_STEUERAUSWEIS
 
 VALID_TAX_RATES = {Decimal("0"), Decimal("7"), Decimal("19")}
 
@@ -98,12 +99,11 @@ def _pruefe_betraege(kontext: Pruefkontext, item) -> list[Issue]:
             f"Position {item.position}: Steuerbetrag {item.tax_amount} stimmt nicht (erwartet {expected_tax}).",
             f"items[{item.position}].tax_amount"
         ))
-    if kontext.steuerkategorie in {"AE", "K"} and item.tax_amount != Decimal("0"):
+    if kontext.steuerkategorie in KEIN_STEUERAUSWEIS and item.tax_amount != Decimal("0"):
         befunde.append(Issue(
             "TAX_AMOUNT_MUST_BE_ZERO", "error",
-            f"Position {item.position}: Bei Reverse Charge / innergemeinschaftlicher "
-            f"Lieferung muss der Steuerbetrag exakt 0,00 € betragen "
-            f"(gefunden {item.tax_amount}).",
+            f"Position {item.position}: Bei dieser Steuerkategorie muss der "
+            f"Steuerbetrag exakt 0,00 € betragen (gefunden {item.tax_amount}).",
             f"items[{item.position}].tax_amount",
         ))
     return befunde
