@@ -35,6 +35,7 @@ from app.services.abrechnungsauftrag_wirkung import (
 from app.services.archive_frist import berechne_archive_until
 from app.services.invoice_number import generate_next_invoice_number
 from app.services.kundenvorgaben import entwurfs_vorbelegung
+from app.services.rechnung.firma import eingerichtete_firma
 from app.services.uebergabe_befund import Belegurteil
 from app.services.uebergabe_eingang import merken
 from app.zeit import heute, kalendertag
@@ -60,7 +61,7 @@ def entwurf_anlegen(
         raise WirkungFehler("Der Beleg traegt keine Nutzlast.")
 
     if company is None:
-        company = db.query(Company).filter(Company.id == 1).first()
+        company = eingerichtete_firma(db)
         if company is None:
             raise WirkungFehler("Firmendaten sind nicht eingerichtet.")
 

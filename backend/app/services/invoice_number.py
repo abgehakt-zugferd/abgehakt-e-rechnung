@@ -1,7 +1,7 @@
 import re
 from datetime import date
 from sqlalchemy.orm import Session
-from app.models.company import Company
+from app.services.rechnung.firma import eingerichtete_firma
 from app.zeit import heute
 
 # Der Präfix wird Teil der Belegnummer, und die Belegnummer wird Teil
@@ -61,8 +61,8 @@ def _naechste_nummer(
     Aufstellung teilen sich den Mechanismus (Bauschritt 7a, Entscheidung 8),
     nicht aber Praefix und Zaehler — jeder Kreis bleibt fuer sich lueckenlos.
     """
-    company = db.query(Company).filter(Company.id == 1).with_for_update().first()
-    if not company:
+    company = eingerichtete_firma(db, for_update=True)
+    if company is None:
         raise RuntimeError("Firmendaten nicht konfiguriert. Bitte zuerst Einstellungen ausfüllen.")
 
     zaehler = getattr(company, zaehler_feld) + 1

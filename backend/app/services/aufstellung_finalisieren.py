@@ -26,6 +26,7 @@ from app.models.company import Company
 from app.services import aufstellung_pdf, pdfa
 from app.services.aufstellung_storno import original_aufheben
 from app.services.archive_frist import berechne_archive_until
+from app.services.rechnung.firma import eingerichtete_firma
 from app.zeit import heute
 
 
@@ -105,11 +106,11 @@ def _archivieren(aufstellung, company, arbeitsverzeichnis: Path, settings) -> Pa
 
 def _firma(db: Session) -> Company:
     """Die ausstellende Firma. Ohne eingerichtete Firma gibt es keinen
-    Aussteller — derselbe Torhuter wie bei der Rechnung (_get_company),
+    Aussteller - derselbe Torhueter wie bei der Rechnung (get_company),
     nur als FinalisierenFehler statt HTTPException, weil hier kein HTTP
     im Spiel ist."""
-    company = db.query(Company).filter(Company.id == 1).first()
-    if not company or company.setup_completed_at is None:
+    company = eingerichtete_firma(db)
+    if company is None:
         raise FinalisierenFehler(
             "Firmendaten nicht konfiguriert. Bitte zuerst die Ersteinrichtung "
             "abschließen."
