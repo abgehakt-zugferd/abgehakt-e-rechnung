@@ -9,7 +9,13 @@
 # dann das Signal.
 #
 # Zusatzmuster (Klarnamen, eigene Nummernkreise) NIE hier eintragen. Sie kommen
-# aus dem Actions-Secret ECHTDATEN_MUSTER (eine Regex je Zeile, '#' als Kommentar).
+# aus dem Actions-Secret ECHTDATEN_MUSTER (eine Regex je Zeile, '#' als
+# Kommentar). Das Secret wird aus der gemeinsamen und der repo-eigenen
+# Musterdatei zusammengesetzt, z. B.:
+#   cat ~/.zemp/echtdaten-muster.txt ~/.zemp/echtdaten-muster.abgehakt.txt \
+#     | gh secret set ECHTDATEN_MUSTER -R <repo>
+# Die Muster sind als grep -E geschrieben; POSIX-Klassen wie [:space:] werden
+# fuer die JS-Pruefung in datenwache-texte.js (posixNachJs) uebersetzt.
 #
 # Bei Fund: Label 'echtdaten-verdacht' + Hinweiskommentar. Der Kommentar nennt
 # nur die Musterklasse, nie den Treffertext.

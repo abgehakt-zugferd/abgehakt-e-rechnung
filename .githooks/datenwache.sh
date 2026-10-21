@@ -11,10 +11,13 @@
 #   - USt-IdNr-Format (DE + 9 Ziffern)
 #   - Steuernummer-Format (NNN/NNN/NNNNN)
 #   - neu hinzukommende .env-Dateien (ausser .env.example)
-# Dazu optionale Zusatzmuster aus einer Datei AUSSERHALB des Repos:
-#   ZEMP_ECHTDATEN_MUSTER (Vorgabe: ~/.zemp/echtdaten-muster.txt),
-#   eine erweiterte Regex je Zeile, '#' beginnt einen Kommentar.
-#   Fehlt die Datei, laufen nur die eingebauten Muster.
+# Dazu optionale Zusatzmuster aus Dateien AUSSERHALB des Repos:
+#   ZEMP_ECHTDATEN_MUSTER (Vorgabe: ~/.zemp/echtdaten-muster.txt) - gemeinsame
+#     Muster fuer alle Repos,
+#   ZEMP_ECHTDATEN_MUSTER_REPO (Vorgabe: ~/.zemp/echtdaten-muster.abgehakt.txt)
+#     - repo-eigene Muster, die nur hier verboten sind (#202).
+#   Je eine erweiterte Regex je Zeile, '#' beginnt einen Kommentar.
+#   Fehlt eine Datei, laeuft sie leer; die andere wirkt weiter.
 #
 # Fund => Push bricht ab, mit Commit, Musterklasse und Zeile.
 # Fehlalarm einmalig ueberstimmen: DATENWACHE_UEBERSTIMMT=1 git push
@@ -48,6 +51,10 @@ if [ "${DATENWACHE_UEBERSTIMMT:-0}" = "1" ]; then
 fi
 
 muster_datei="${ZEMP_ECHTDATEN_MUSTER:-$HOME/.zemp/echtdaten-muster.txt}"
+# Repo-eigene Musterdatei (#202 Teil 2): Begriffe, die nur in diesem Repo
+# verboten sind, waehrend sie in anderen Repos normale Kennungen sind. Fehlt
+# sie, ist das kein Fehler. Gleiche Klasse "Zusatzmuster", gleiche Ausgabe.
+muster_datei_repo="${ZEMP_ECHTDATEN_MUSTER_REPO:-$HOME/.zemp/echtdaten-muster.abgehakt.txt}"
 # Fail closed: Ohne Ablage fuer Befunde schreibt `>> ""` ins Leere, und die Wache
 # meldet am Ende "nichts gefunden" - ein Push mit IBAN oder privatem Schluessel
 # ginge durch (test_werkstatt.sh). Die Vorlage steht in $TMPDIR, weil `mktemp`
@@ -258,9 +265,12 @@ pruefe_text() {
     printf '%s\n' "$text" | pruefe_ausser_konstruiert "Steuernummer-Format$herkunft" \
         '(^|[^0-9])[0-9]{2,3}/[0-9]{3}/[0-9]{4,5}([^0-9/]|$)' "$commit" \
         '[0-9]{2,3}/[0-9]{3}/[0-9]{4,5}' 's/\///g'
-    if [ -f "$muster_datei" ]; then
-        grep -vE '^[[:space:]]*(#|$)' "$muster_datei" | while IFS= read -r m; do
-            printf '%s\n' "$text" | pruefe "Zusatzmuster$herkunft" "$m" "$commit"
+    if [ -f "$muster_datei" ] || [ -f "$muster_datei_repo" ]; then
+        for md in "$muster_datei" "$muster_datei_repo"; do
+            [ -f "$md" ] || continue
+            grep -vE '^[[:space:]]*(#|$)' "$md" | while IFS= read -r m; do
+                printf '%s\n' "$text" | pruefe "Zusatzmuster$herkunft" "$m" "$commit"
+            done
         done
     fi
 }

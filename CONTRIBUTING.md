@@ -83,7 +83,11 @@ Reihe nach laufen die Datenwache, die Gedankenstrich-Wache und die fünf Wachen 
 - **Datenwache** (`.githooks/datenwache.sh`): prüft je gepuschtem Commit nur die neu
   hinzukommenden Zeilen und zusätzlich die Commit-Nachricht auf Muster echter Daten, nämlich
   private Schlüssel, die Formate von IBAN, USt-IdNr. und Steuernummer, neu hinzukommende
-  `.env`-Dateien und Zusatzmuster aus einer privaten Musterdatei außerhalb des Repos. Bei
+  `.env`-Dateien und Zusatzmuster aus einer privaten Musterdatei außerhalb des Repos. Neben
+  der gemeinsamen Musterdatei (`~/.zemp/echtdaten-muster.txt`, Pfad über `ZEMP_ECHTDATEN_MUSTER`)
+  liest die Wache eine repo-eigene Datei (`~/.zemp/echtdaten-muster.abgehakt.txt`, Pfad über
+  `ZEMP_ECHTDATEN_MUSTER_REPO`) für Begriffe, die nur in diesem Repo verboten sind; fehlt sie,
+  ist das kein Fehler. Bei
   einem Fund bricht der Push ab; einen bewussten Fehlalarm überstimmt man einmalig mit
   `DATENWACHE_UEBERSTIMMT=1`. Issues und Pull Requests auf GitHub prüft dieselbe Regel
   (`.github/workflows/issue-wache.yml`): bei einem Fund erhalten sie ein Label und einen

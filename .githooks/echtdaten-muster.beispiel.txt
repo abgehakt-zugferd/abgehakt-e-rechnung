@@ -6,6 +6,13 @@
 # In einem Repo liegend waere die Musterliste selbst das Leck.
 #
 # Eine erweiterte Regex je Zeile. Alle Werte hier sind erfunden (probe):
+#
+# Zusaetzlich gibt es eine repo-eigene Musterdatei
+# (Vorgabe: ~/.zemp/echtdaten-muster.abgehakt.txt, Pfad ueber
+# ZEMP_ECHTDATEN_MUSTER_REPO) fuer Begriffe, die nur in diesem Repo verboten
+# sind, in anderen aber normale Kennungen. Sie wird genauso behandelt wie diese
+# Datei (gleiche Klasse "Zusatzmuster"). Fehlt sie, ist das kein Fehler. Auch
+# hier gilt: nur erfundene Werte (probe).
 
 # Klarnamen von Beteiligten:
 Probe-Autorin
