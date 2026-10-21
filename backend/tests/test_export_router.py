@@ -7,18 +7,24 @@ nachbaute und bei unpassender Struktur per `except: pass` still durchwinkte
 Hier gegen pg_session: die Query-Filter (status != draft, Datumsbereich) laufen echt.
 Die reine Listen→ZIP-Funktion ist in test_gobd_export.py abgedeckt.
 """
+import hashlib
 import io
+import json
 import uuid
 import zipfile
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.config import get_settings
 from app.database import get_db
 from app.main import app
 from app.models.customer import Customer
-from app.models.invoice import Invoice, InvoiceItem
+from app.models.invoice import AuditLog, Invoice, InvoiceItem
+from app.models.uebergabe_eingang import UebergabeEingang
+from app.zeit import ZEITZONE
 
 
 def teardown_function():
@@ -124,3 +130,78 @@ def test_gobd_download_filtert_uebergabekopien_nach_annahmezeitpunkt(pg_session)
         if n.startswith("uebergaben/")
     ]
     assert namen == [f"uebergaben/{richtung}/{hashlib.sha256(innen).hexdigest()}.json"]
+
+
+def _berlin(tag: date, stunde: int, minute: int) -> datetime:
+    """Berliner Uhrzeit eines Kalendertags als aware Zeitstempel — so steht der
+    Wert in einer timestamptz-Spalte; Postgres rechnet beim Speichern selbst um."""
+    return datetime(tag.year, tag.month, tag.day, stunde, minute, tzinfo=ZEITZONE)
+
+
+def _audit_eintrag(pg_session, schluessel: str, changed_at: datetime):
+    pg_session.add(AuditLog(
+        table_name="invoices", record_id=f"PROBE-{schluessel}", action="update",
+        changed_at=changed_at,
+        old_values={"status": "entwurf"}, new_values={"status": "ausgestellt"},
+    ))
+
+
+def _uebergabe_eintrag(pg_session, wurzel, schluessel: str, angenommen_am: datetime) -> str:
+    """Annahme-Zeile plus ihre Aufbewahrungskopie im Speicher; gibt den Hash
+    zurueck, unter dem die Kopie im ZIP zu finden sein muss."""
+    roh = json.dumps({"beleg": schluessel}).encode()
+    sha = hashlib.sha256(roh).hexdigest()
+    (wurzel / f"{sha}.json").write_bytes(roh)
+    pg_session.add(UebergabeEingang(
+        beleg_id=f"probe-{schluessel}", beleg_sha256=sha,
+        absender="beispiel-app", nutzlast_art="abrechnungsauftrag",
+        erzeugt_am=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        angenommen_am=angenommen_am,
+    ))
+    return sha
+
+
+@pytest.mark.parametrize("von,bis", [
+    (date(2026, 1, 10), date(2026, 1, 20)),   # Winter: Berlin = UTC+1
+    (date(2026, 6, 10), date(2026, 6, 20)),   # Sommer: Berlin = UTC+2
+], ids=["winter", "sommer"])
+def test_gobd_zeitstempelfilter_folgen_berlin_statt_sitzungszone(pg_session, von, bis):
+    """#179: Protokoll- und Uebergabezeilen zaehlen zum Kalendertag in
+    Europe/Berlin. Die Test-DB laeuft mit Sitzungszone UTC: ein Vergleich des
+    date-Parameters mit timestamptz setzte die Grenze auf UTC-Mitternacht und
+    verschoebe den Berliner Tagesrand um eine Stunde (Winter) bzw. zwei
+    (Sommer). Zugesichert wird auf den ZIP-Inhalt, nicht auf Zaehler."""
+    randzeiten = {
+        "vortag":    _berlin(von - timedelta(days=1), 23, 30),  # draussen
+        "anfang":    _berlin(von, 0, 30),                       # drin
+        "ende":      _berlin(bis, 23, 30),                      # drin
+        "folgetag":  _berlin(bis + timedelta(days=1), 0, 30),   # draussen
+    }
+    wurzel = get_settings().storage_path / "uebergaben" / "beispiel-app-nach-abgehakt"
+    # exist_ok wie oben: der Wegwerf-Speicher der Sitzung ist gemeinsam; die
+    # Zusicherung unten fragt gezielt die Hashes DIESER Zeilen ab.
+    wurzel.mkdir(parents=True, exist_ok=True)
+    hashes = {}
+    for schluessel, zeitpunkt in randzeiten.items():
+        _audit_eintrag(pg_session, schluessel, zeitpunkt)
+        hashes[schluessel] = _uebergabe_eintrag(pg_session, wurzel, schluessel, zeitpunkt)
+    pg_session.commit()
+
+    r = _client(pg_session).get(f"/export/gobd?von={von.isoformat()}&bis={bis.isoformat()}")
+
+    assert r.status_code == 200
+    zf = zipfile.ZipFile(io.BytesIO(r.content))
+    protokoll = zf.read("audit_log.csv").decode("utf-8")
+    for schluessel in ("anfang", "ende"):
+        assert f"PROBE-{schluessel}" in protokoll, (
+            f"{schluessel}-Eintrag fehlt im Pruefprotokoll")
+    for schluessel in ("vortag", "folgetag"):
+        assert f"PROBE-{schluessel}" not in protokoll, (
+            f"{schluessel}-Eintrag gehoert nicht in den Zeitraum")
+    namen = [n for n in zf.namelist() if n.startswith("uebergaben/")]
+    for schluessel in ("anfang", "ende"):
+        assert any(hashes[schluessel] in n for n in namen), (
+            f"{schluessel}-Uebergabekopie fehlt im ZIP")
+    for schluessel in ("vortag", "folgetag"):
+        assert not any(hashes[schluessel] in n for n in namen), (
+            f"{schluessel}-Uebergabekopie gehoert nicht in den Zeitraum")

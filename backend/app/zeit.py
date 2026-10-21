@@ -6,7 +6,7 @@ nicht aus einer einstellbaren Zeitzone. Tests ersetzen `_utc_jetzt`.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 ZEITZONE = ZoneInfo("Europe/Berlin")
@@ -36,3 +36,19 @@ def kalendertag(ts: datetime) -> date:
     if ts.tzinfo is None:
         raise ValueError("kalendertag verlangt einen aware Zeitstempel.")
     return ts.astimezone(ZEITZONE).date()
+
+
+def zeitraumgrenzen(von: date, bis: date) -> tuple[datetime, datetime]:
+    """Kalenderzeitraum [von, bis] (beide einschliesslich) als halboffene
+    Zeitstempelgrenzen [anfang, ende): Mitternacht des ersten Tags bis
+    Mitternacht des Tags nach dem letzten, jeweils in Europe/Berlin.
+
+    Fuer Filter auf timestamptz-Spalten: ein nacktes date wuerde Postgres
+    in Mitternacht der Sitzungszone umwandeln, ein fester Offset scheitert
+    am Sommer-/Winterzeitwechsel. Mitternacht wird deshalb ueber die Zone
+    gebildet, nie ueber ein gerechnetes Offset. Beide Rueckgaben sind aware.
+    """
+    anfang = datetime(von.year, von.month, von.day, tzinfo=ZEITZONE)
+    ende_tag = bis + timedelta(days=1)
+    ende = datetime(ende_tag.year, ende_tag.month, ende_tag.day, tzinfo=ZEITZONE)
+    return anfang, ende

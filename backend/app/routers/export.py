@@ -1,5 +1,5 @@
 """GoBD-Datenexport (Z3): Formular-Seite + ZIP-Download pro Zeitraum."""
-from datetime import date, timedelta
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
@@ -16,7 +16,7 @@ from app.services.gobd_export_aufstellungen import auswahl
 from app.services.gobd_export import build_gobd_export
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
-from app.zeit import heute
+from app.zeit import heute, zeitraumgrenzen
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -53,10 +53,14 @@ def download_gobd(von: date, bis: date, db: Session = Depends(get_db)):
         db.query(Customer).filter(Customer.id.in_(customer_ids)).order_by(Customer.customer_number).all()
         if customer_ids else []
     )
+    # Zeitstempel-Filter (#179): Kalendertage zählen in Europe/Berlin, nicht in
+    # der Sitzungszone der DB (UTC) — ein nacktes date als Grenze würde Postgres
+    # auf UTC-Mitternacht legen und den Berliner Tagesrand verschieben.
+    grenze_anfang, grenze_ende = zeitraumgrenzen(von, bis)
     audit_rows = (
         db.query(AuditLog)
-        .filter(AuditLog.changed_at >= von,
-                AuditLog.changed_at < bis + timedelta(days=1))
+        .filter(AuditLog.changed_at >= grenze_anfang,
+                AuditLog.changed_at < grenze_ende)
         .order_by(AuditLog.changed_at)
         .all()
     )
@@ -66,8 +70,8 @@ def download_gobd(von: date, bis: date, db: Session = Depends(get_db)):
     # auch die fremder Prüfzeiträume.
     uebergaben = (
         db.query(UebergabeEingang)
-        .filter(UebergabeEingang.angenommen_am >= von,
-                UebergabeEingang.angenommen_am < bis + timedelta(days=1))
+        .filter(UebergabeEingang.angenommen_am >= grenze_anfang,
+                UebergabeEingang.angenommen_am < grenze_ende)
         .order_by(UebergabeEingang.angenommen_am)
         .all()
     )
