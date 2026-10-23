@@ -1,16 +1,16 @@
-"""Der Leser gegen die Formatvektoren (abgehakt#22).
+"""Der Leser gegen die Formatvektoren (abgehakt#22, Parametrisierung #217).
 
 Die Vektoren sind Dateien, kein Modul. Gemessen wird gegen die Bytes und gegen
 die Sollwerte in `erwartung.json`; in diesem Test steht kein abgeschriebener
-Befundcode.
+Befundcode. Die Falllisten kommen aus erwartung.json.
 
 Zwei Dinge, die man beim Lesen sonst fuer Nachlaessigkeit haelt:
 
-* Die Umschlagvektoren sind fuer einen ANDEREN Empfaenger gebaut (feiyr-konto
-  an tantiemen-app). Die Umschlagregeln sind aber dieselben, egal wer liest -
-  deshalb bekommt der Leser dort den Namen des gemeinten Empfaengers gereicht.
-  Mit dem eigenen Namen faende jeder dieser Faelle EMPFAENGER_FREMD, und der
-  Lauf haette nur gemessen, dass die Post nicht an uns ging.
+* Die Umschlagvektoren sind fuer einen anderen Empfaenger gebaut. Die
+  Umschlagregeln sind dieselben, egal wer liest - deshalb bekommt der Leser
+  dort den Namen des gemeinten Empfaengers gereicht. Mit dem eigenen Namen
+  faende jeder dieser Faelle EMPFAENGER_FREMD, und der Lauf haette nur
+  gemessen, dass die Post nicht an uns ging.
 * Drei Vektoren pruefen Regeln der `erloesmeldung` (ein unbekanntes Feld in
   ihrer Nutzlast, ein fehlendes Pflichtfeld, die Stueckzahlprobe). Diese
   Anwendung liest die Nutzlastart gar nicht; sie lehnt frueher ab. Sie werden
@@ -25,23 +25,52 @@ import json
 import pytest
 
 from app.services.uebergabe_befund import Empfangslage, beleg_beurteilen
+from tests.helpers.formatvektoren import vektorordner
+from tests.vektoren.erwartung_lesen import (
+    eintraege,
+    erwarteter_code,
+    lagebedarf,
+    namen_beim_sammeln,
+    pruefe_vollstaendigkeit,
+)
 
 # Die drei Vektoren, deren Regel in der Nutzlast der Erloesmeldung sitzt.
-NUR_FUER_DEN_ERLOESLESER = {"unbekanntes_feld", "pflichtfeld_fehlt", "stueckzahlprobe"}
-
-# Die Auftragsfaelle, die abgelehnt werden. `01_gueltig` steht daneben, nicht hier.
-ABGELEHNTE_AUFTRAEGE = (
-    "summe_stimmt_nicht",
-    "partner_id_unbekannt",
-    "unbekanntes_feld",
-    "pflichtfeld_fehlt",
-    "wert_unbrauchbar",
-)
+NUR_FUER_DEN_ERLOESLESER = frozenset({
+    "unbekanntes_feld", "pflichtfeld_fehlt", "stueckzahlprobe",
+})
 
 PARTNER_DES_PROBEBESTANDS = (
     "3f5b1c80-0000-4000-8000-00000000000a",
     "3f5b1c80-0000-4000-8000-00000000000b",
 )
+
+# Empfaengername der Umschlagvektoren: Parameter, nicht der Fall (vektoren/README).
+_UMSCHLAG_EMPFAENGER = "tantiemen-app"
+
+
+def _namen_ablehnung_mit_befund() -> list[str]:
+    ordner = vektorordner()
+    if ordner is None:
+        return []
+    namen = []
+    for name, eintrag in eintraege(ordner / "vektoren", "ablehnung").items():
+        if name in NUR_FUER_DEN_ERLOESLESER:
+            continue
+        if eintrag.get("erwarteter_code") == "KEINE_ABLEHNUNG":
+            continue
+        namen.append(name)
+    return sorted(namen)
+
+
+def _namen_auftraege_abgelehnt() -> list[str]:
+    ordner = vektorordner()
+    if ordner is None:
+        return []
+    return sorted(
+        name
+        for name, eintrag in eintraege(ordner / "vektoren", "auftraege").items()
+        if eintrag.get("erwarteter_code") not in (None, "KEINE_ABLEHNUNG")
+    )
 
 
 class Lage(Empfangslage):
@@ -60,12 +89,6 @@ class Lage(Empfangslage):
         return partner_id in self._partner
 
 
-def _erwartung(vektoren) -> dict:
-    roh = json.loads((vektoren / "erwartung.json").read_text(encoding="utf-8"))
-    return {gruppe: {e["name"]: e for e in eintraege}
-            for gruppe, eintraege in roh.items() if isinstance(eintraege, list)}
-
-
 def _kettenanfang(vektoren):
     """Die Lage, in der `umschlaege/01_kettenanfang` bereits angenommen wurde."""
     roh = (vektoren / "umschlaege" / "01_kettenanfang.json").read_bytes()
@@ -80,30 +103,29 @@ def _kettenanfang(vektoren):
     )
 
 
-def _namen(vektoren, gruppe):
-    return sorted(_erwartung(vektoren)[gruppe])
+def test_alle_voraussetzungen_der_auftragsgruppen_sind_unterstuetzt(vektoren):
+    """Neue Voraussetzungswortlaute muessen hier angebunden werden, nicht still."""
+    for gruppe in ("auftraege", "rechnungsauftraege", "aufstellungen"):
+        for eintrag in eintraege(vektoren, gruppe).values():
+            lagebedarf(eintrag.get("voraussetzung"))
 
 
 def test_jeder_ablehnungsvektor_ist_gemessen_oder_begruendet_ausgenommen(vektoren):
     """Kein stilles Weglassen: was nicht gemessen wird, steht in der Liste oben."""
+    pruefe_vollstaendigkeit(vektoren, "ablehnung")
     dateien = {p.stem for p in (vektoren / "ablehnung").glob("*.json")}
-    assert dateien == set(_namen(vektoren, "ablehnung"))
     assert NUR_FUER_DEN_ERLOESLESER < dateien
 
 
-@pytest.mark.parametrize("name", [
-    "beleg_unlesbar", "nutzlast_hash_falsch", "signatur_ungueltig", "empfaenger_fremd",
-    "major_hoeher", "kette_springt", "kette_beginnt_neu", "erzeugt_am_rueckwaerts",
-    "schluessel_unbekannt", "nutzlastart_unbekannt", "beleg_id_widerspruch",
-])
+@pytest.mark.parametrize("name", _namen_ablehnung_mit_befund())
 def test_ablehnungsvektor_trifft_seinen_befundcode(vektoren, schluesselordner, name):
-    erwartet = _erwartung(vektoren)["ablehnung"][name]["erwarteter_code"]
+    erwartet = erwarteter_code(eintraege(vektoren, "ablehnung")[name])
     roh = (vektoren / "ablehnung" / f"{name}.json").read_bytes()
 
     urteil = beleg_beurteilen(
         roh, _kettenanfang(vektoren),
         schluessel_wurzel=schluesselordner,
-        eigener_name="tantiemen-app",
+        eigener_name=_UMSCHLAG_EMPFAENGER,
     )
 
     assert not urteil.angenommen
@@ -118,7 +140,7 @@ def test_erloesmeldungen_werden_hier_gar_nicht_erst_gelesen(vektoren, schluessel
     urteil = beleg_beurteilen(
         roh, _kettenanfang(vektoren),
         schluessel_wurzel=schluesselordner,
-        eigener_name="tantiemen-app",
+        eigener_name=_UMSCHLAG_EMPFAENGER,
     )
 
     assert not urteil.angenommen
@@ -128,14 +150,14 @@ def test_erloesmeldungen_werden_hier_gar_nicht_erst_gelesen(vektoren, schluessel
 def test_derselbe_beleg_noch_einmal_ist_keine_ablehnung(vektoren, schluesselordner):
     """`beleg_id_doppelt` ist byteweise `01_kettenanfang` - der Fall, der am
     haeufigsten falsch gebaut wird."""
-    erwartet = _erwartung(vektoren)["ablehnung"]["beleg_id_doppelt"]["erwarteter_code"]
+    erwartet = erwarteter_code(eintraege(vektoren, "ablehnung")["beleg_id_doppelt"])
     assert erwartet == "KEINE_ABLEHNUNG"
     roh = (vektoren / "ablehnung" / "beleg_id_doppelt.json").read_bytes()
 
     urteil = beleg_beurteilen(
         roh, _kettenanfang(vektoren),
         schluessel_wurzel=schluesselordner,
-        eigener_name="tantiemen-app",
+        eigener_name=_UMSCHLAG_EMPFAENGER,
     )
 
     assert urteil.angenommen
@@ -143,18 +165,12 @@ def test_derselbe_beleg_noch_einmal_ist_keine_ablehnung(vektoren, schluesselordn
     assert urteil.feststellungen == ()
 
 
-# Die Umschlaege sind Erloesmeldungen feiyr-konto an tantiemen-app; ihre
-# Sollwerte in erwartung.json sind die Hashes, kein erwarteter Code.
-UMSCHLAEGE = ("01_kettenanfang", "02_nachfolger", "03_hoeherer_minor")
-
-
 class _Zweitlesung(Empfangslage):
     """Die Lage, in der dieser Beleg bereits angenommen und gewirkt hat."""
 
     def __init__(self, roh):
         beleg = json.loads(roh)
-        # Mit derselben Zeitregel wie der Leser selbst (protokoll.zeit, abgehakt#166):
-        # wer hier anders parsed, konstruiert eine Lage, die der Leser nie erzeugt.
+        # Mit derselben Zeitregel wie der Leser selbst (protokoll.zeit, abgehakt#166).
         from app.services.protokoll import zeit
 
         self._sha = hashlib.sha256(roh).hexdigest()
@@ -170,12 +186,10 @@ class _Zweitlesung(Empfangslage):
 
 def test_jeder_umschlagsvektor_ist_gemessen(vektoren):
     """Kein stilles Weglassen: jede Datei im Ordner kommt in einem Test vor."""
-    dateien = {p.stem for p in (vektoren / "umschlaege").glob("*.json")}
-    assert dateien == set(_namen(vektoren, "umschlaege"))
-    assert dateien == set(UMSCHLAEGE)
+    pruefe_vollstaendigkeit(vektoren, "umschlaege")
 
 
-@pytest.mark.parametrize("name", UMSCHLAEGE)
+@pytest.mark.parametrize("name", namen_beim_sammeln("umschlaege"))
 def test_umschlagsvektor_wird_angenommen(vektoren, schluesselordner, name):
     """erwartung.json zu `umschlaege`: muss angenommen werden, Hashes wie erwartet.
 
@@ -188,27 +202,26 @@ def test_umschlagsvektor_wird_angenommen(vektoren, schluesselordner, name):
     jede dieser Proben zuvor gruen war. Die Kette misst der frische Lauf von
     `03_hoeherer_minor` mit Vorgaengerlage (test_protokoll_vektoren.py).
     """
-    eintrag = _erwartung(vektoren)["umschlaege"][name]
+    eintrag = eintraege(vektoren, "umschlaege")[name]
     roh = (vektoren / "umschlaege" / f"{name}.json").read_bytes()
 
     urteil = beleg_beurteilen(
         roh, _Zweitlesung(roh), schluessel_wurzel=schluesselordner,
-        eigener_name="tantiemen-app",
+        eigener_name=_UMSCHLAG_EMPFAENGER,
     )
 
     assert urteil.angenommen
     assert urteil.bereits_verarbeitet
     assert urteil.feststellungen == ()
     assert urteil.beleg_sha256 == eintrag["beleg_sha256"]
-    # Der Hash der Nutzlast steht im Beleg und in erwartung.json. Dass er zur
-    # Nutzlast stimmt, hat der Leser eben geprueft: NUTZLAST_HASH_FALSCH
-    # waere vor dem Riegel gekommen.
     assert json.loads(roh)["nutzlast_sha256"] == eintrag["nutzlast_sha256"]
 
 
 def test_der_gueltige_auftrag_wird_angenommen(vektoren, schluesselordner):
     """Die Zahlen stammen aus der von Hand hergeleiteten Solltabelle des
     Probebestands, nicht aus einer zweiten Rechnung dieses Programms."""
+    eintrag = eintraege(vektoren, "auftraege")["01_gueltig"]
+    lagebedarf(eintrag.get("voraussetzung"))
     roh = (vektoren / "auftraege" / "01_gueltig.json").read_bytes()
 
     urteil = beleg_beurteilen(
@@ -218,6 +231,8 @@ def test_der_gueltige_auftrag_wird_angenommen(vektoren, schluesselordner):
     assert urteil.angenommen, [f"{f.code} {f.pfad}" for f in urteil.feststellungen]
     assert urteil.zeitraum == "2026-Q2"
     assert urteil.summe == "440,10"
+    assert erwarteter_code(eintrag) == "KEINE_ABLEHNUNG"
+    assert urteil.beleg_sha256 == eintrag["beleg_sha256"]
 
 
 def _lage_nach_dem_gueltigen(vektoren, partner=PARTNER_DES_PROBEBESTANDS):
@@ -234,14 +249,14 @@ def _lage_nach_dem_gueltigen(vektoren, partner=PARTNER_DES_PROBEBESTANDS):
 
 def test_jeder_auftragsvektor_ist_gemessen(vektoren):
     """Kein stilles Weglassen: jede Datei im Ordner kommt in einem Test vor."""
-    dateien = {p.stem for p in (vektoren / "auftraege").glob("*.json")}
-    assert dateien == set(_namen(vektoren, "auftraege"))
-    assert dateien == {"01_gueltig"} | set(ABGELEHNTE_AUFTRAEGE)
+    pruefe_vollstaendigkeit(vektoren, "auftraege")
 
 
-@pytest.mark.parametrize("name", ABGELEHNTE_AUFTRAEGE)
+@pytest.mark.parametrize("name", _namen_auftraege_abgelehnt())
 def test_auftragsvektor_trifft_seinen_befundcode(vektoren, schluesselordner, name):
-    erwartet = _erwartung(vektoren)["auftraege"][name]["erwarteter_code"]
+    eintrag = eintraege(vektoren, "auftraege")[name]
+    lagebedarf(eintrag.get("voraussetzung"))
+    erwartet = erwarteter_code(eintrag)
     roh = (vektoren / "auftraege" / f"{name}.json").read_bytes()
 
     urteil = beleg_beurteilen(
