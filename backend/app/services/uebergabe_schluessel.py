@@ -5,7 +5,6 @@ Signaturprüfung hier nicht die des Absenders importiert.
 """
 
 import json
-import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -14,6 +13,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
 from app.installation import is_testinstanz
 from app.services.protokoll import zeit
+from app.services.uebergabe_form import KENNUNG_FORM, ganz_passt
 
 _WURZEL = Path(__file__).resolve().parents[2] / "schluessel"
 
@@ -23,8 +23,8 @@ _WURZEL = Path(__file__).resolve().parents[2] / "schluessel"
 # wuerde aus dem Schluesselordner hinausfuehren, und ein Wert, der keine
 # Zeichenkette ist, liefe ohnehin auf einen TypeError, der den ganzen Beleg
 # lahmlegte statt eines Befunds. Kleinbuchstaben genuegen: alle echten
-# Kennungen (Ordner wie Schluessel) bestehen aus ihnen.
-_KENNUNG = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+# Kennungen (Ordner wie Schluessel) bestehen aus ihnen. Dieselbe Form prueft
+# der Belegleser am Umschlag (KENNUNG_FORM); hier bleibt der Schutz am Pfad.
 
 # Ein Probeschluessel ist am NAMEN erkennbar und gilt nur in einer Testinstanz.
 # Am Namen und nicht an einer Angabe im Beiblatt: das Beiblatt liegt beim
@@ -33,12 +33,21 @@ PROBE_KENNZEICHEN = "-probe-"
 
 # § 6: Das Beiblatt eines oeffentlichen Schluessels hat einen geschlossenen
 # Feldbestand (Formatverzeichnis, `schluessel_beiblatt`); `notizen` ist das
-# einzige freie Feld, `gueltig_bis` null heisst ohne Ablauf. Unbekannte Felder,
-# fehlende Pflichtfelder oder eine falsche Zeitform machen den Schluessel
-# unbrauchbar: Der Tippfehler `gueltigbis` statt `gueltig_bis` galt sonst als
-# Schluessel ohne Ablauf, denn get() las das Feld einfach nicht.
-_BEIBLATT_PFLICHT = ("schluessel_id", "absender", "verfahren", "gueltig_von")
-_BEIBLATT_ERLAUBT = _BEIBLATT_PFLICHT + ("gueltig_bis", "notizen")
+# einzige freie Feld und ein Objekt, `gueltig_bis` ist Pflicht und null heisst
+# ohne Ablauf. Unbekannte Felder, fehlende Pflichtfelder oder eine falsche
+# Zeitform machen den Schluessel unbrauchbar: Der Tippfehler `gueltigbis`
+# statt `gueltig_bis` galt sonst als Schluessel ohne Ablauf, denn get() las
+# das Feld einfach nicht. Bestehende Beiblaetter ohne `gueltig_bis` brauchen
+# das Feld (auch als null).
+_BEIBLATT_PFLICHT = (
+    "schluessel_id", "absender", "verfahren", "gueltig_von", "gueltig_bis",
+)
+_BEIBLATT_ERLAUBT = _BEIBLATT_PFLICHT + ("notizen",)
+# Schluessel in notizen duerfen weder wie Beiblattfelder heissen noch wie die
+# bis 1.6 erlaubten Freifelder (ENTSCHEIDUNGEN 2026-10-23 zu § 6).
+_NOTIZEN_VERBOTEN = frozenset(_BEIBLATT_ERLAUBT) | frozenset(
+    ("probe", "warum_probe", "hinweis"),
+)
 
 
 class SchluesselUnbekannt(LookupError):
@@ -73,8 +82,7 @@ def schluessel_laden(
     # Erst die Form der Kennung, dann irgendein Dateizugriff: Ein Wert, der
     # nicht wie eine Kennung aussieht, hat keinen Schluessel, bevor ueberhaupt
     # ein Pfad aufgeloest wird.
-    if (not isinstance(absender, str) or _KENNUNG.match(absender) is None
-            or not isinstance(schluessel_id, str) or _KENNUNG.match(schluessel_id) is None):
+    if not ganz_passt(KENNUNG_FORM, absender) or not ganz_passt(KENNUNG_FORM, schluessel_id):
         raise SchluesselUnbekannt(f"{absender}/{schluessel_id}: keine Schluesselkennung")
 
     if PROBE_KENNZEICHEN in schluessel_id and not is_testinstanz():
@@ -110,7 +118,17 @@ def schluessel_laden(
     fehlt = [name for name in _BEIBLATT_PFLICHT if name not in angaben]
     if fehlt:
         raise SchluesselUnbekannt(f"{absender}/{schluessel_id}: Pflichtfeld {fehlt[0]} fehlt")
-
+    if "notizen" in angaben:
+        notizen = angaben["notizen"]
+        if not isinstance(notizen, dict):
+            raise SchluesselUnbekannt(
+                f"{absender}/{schluessel_id}: notizen muss ein Objekt sein"
+            )
+        verboten = sorted(set(notizen) & _NOTIZEN_VERBOTEN)
+        if verboten:
+            raise SchluesselUnbekannt(
+                f"{absender}/{schluessel_id}: notizen darf nicht {verboten[0]} heissen"
+            )
     # Die Zeitform des § 2 gilt auch hier (protokoll.zeit, seit #163 die eine
     # Formprobe): fromisoformat haette eine naive gueltig_von anstandslos
     # geparsst, und der Vergleich mit erzeugt_am waere TypeError geworden.

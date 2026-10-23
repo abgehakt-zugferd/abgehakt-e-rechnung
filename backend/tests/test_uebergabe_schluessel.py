@@ -113,14 +113,43 @@ def test_ein_fehlendes_pflichtfeld_macht_den_schluessel_unbrauchbar(schluessel):
 
 
 def test_notizen_duerfen_im_beiblatt_stehen(schluessel):
-    """Das einzige freie Feld: Notizen des Empfaengers am eigenen Bestand
-    gehen den Feldbestand des Formats nichts an."""
+    """Das einzige freie Feld: Notizen sind ein Objekt; Schluessel darin
+    heissen nicht wie Beiblattfelder und nicht probe/warum_probe/hinweis."""
     signieren, wurzel = schluessel
-    beiblatt_ablegen(wurzel, beiblatt(notizen="Probeschluessel der Testinstanz"))
+    beiblatt_ablegen(wurzel, beiblatt(notizen={
+        "erlaeuterung": "Probeschluessel der Testinstanz",
+    }))
 
     urteil = _urteil(schluessel)
 
     assert urteil.angenommen, _codes(urteil)
+
+
+def test_notizen_als_zeichenkette_machen_den_schluessel_unbrauchbar(schluessel):
+    signieren, wurzel = schluessel
+    beiblatt_ablegen(wurzel, beiblatt(notizen="nur Text"))
+
+    urteil = _urteil(schluessel)
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["SCHLUESSEL_UNBEKANNT"]
+    with pytest.raises(SchluesselUnbekannt, match="notizen muss ein Objekt"):
+        schluessel_laden(ABSENDER_TANTIEMEN, SCHLUESSEL_ID, ERZEUGT_AM, wurzel=wurzel)
+
+
+@pytest.mark.parametrize("schluesselname", [
+    "gueltig_bis", "probe", "warum_probe", "hinweis", "notizen",
+])
+def test_notizen_schluessel_wie_feldnamen_machen_unbrauchbar(schluessel, schluesselname):
+    signieren, wurzel = schluessel
+    beiblatt_ablegen(wurzel, beiblatt(notizen={schluesselname: True}))
+
+    urteil = _urteil(schluessel)
+
+    assert not urteil.angenommen
+    assert _codes(urteil) == ["SCHLUESSEL_UNBEKANNT"]
+    with pytest.raises(SchluesselUnbekannt, match=schluesselname):
+        schluessel_laden(ABSENDER_TANTIEMEN, SCHLUESSEL_ID, ERZEUGT_AM, wurzel=wurzel)
 
 
 def test_ein_gueltiges_beiblatt_nimmt_den_beleg_an(schluessel):
@@ -177,9 +206,8 @@ def test_eine_angabe_die_keine_kennung_ist_hat_keinen_schluessel(schluessel, ang
 
 def test_ein_beleg_der_den_schluesselordner_verlaesst_wird_nicht_gelesen(tmp_path):
     """Der Angriff geht ueber das Feld absender: "../angreifer" zeigt aus dem
-    Schluesselordner hinaus. Der Schluessel liegt dort sogar, das Beiblatt
-    passt und die Signatur stimmt - der Beleg waere angenommen. Der Leser
-    greift auf eine solche Kennung gar nicht erst zu."""
+    Schluesselordner hinaus. Seit der Kennungsform am Umschlag ist das schon
+    WERT_UNBRAUCHBAR am Feld, bevor ein Pfad entsteht."""
     privat = Ed25519PrivateKey.generate()
     _kennung_ablegen(tmp_path, "angreifer", "angriff-2026-09", privat)
     (tmp_path / "ordner").mkdir()  # der Pfad "../angreifer" laesst sich nur
@@ -195,7 +223,8 @@ def test_ein_beleg_der_den_schluesselordner_verlaesst_wird_nicht_gelesen(tmp_pat
     )
 
     assert not urteil.angenommen
-    assert _codes(urteil) == ["SCHLUESSEL_UNBEKANNT"]
+    assert _codes(urteil) == ["WERT_UNBRAUCHBAR"]
+    assert urteil.feststellungen[0].pfad == "$.absender"
 
 
 def test_ein_verweis_aus_dem_schluesselordner_hinaus_wird_nicht_gefolgt(schluessel, tmp_path):

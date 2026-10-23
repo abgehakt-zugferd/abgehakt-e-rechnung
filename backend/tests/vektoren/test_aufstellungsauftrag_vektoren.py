@@ -44,6 +44,7 @@ ABGELEHNT = (
     "anlage_fehlt",
     "anlage_groesse_falsch",
     "anlage_inhalt_falsch",
+    "auftragsschluessel_zeilenende",
 )
 
 

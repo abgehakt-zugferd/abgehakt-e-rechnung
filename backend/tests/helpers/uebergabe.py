@@ -26,7 +26,8 @@ ERZEUGT = "2026-09-03T11:00:00Z"
 def beiblatt(**aenderungen):
     """Das Beiblatt des Probeschluessels, wie es das Formatverzeichnis unter
     `schluessel_beiblatt` fuehrt (§ 6): geschlossener Feldbestand, `notizen`
-    als einziges freies Feld, `gueltig_bis` null heisst ohne Ablauf."""
+    als Objekt und einziges freies Feld, `gueltig_bis` Pflicht und null heisst
+    ohne Ablauf."""
     angaben = {
         "schluessel_id": SCHLUESSEL_ID,
         "absender": ABSENDER_TANTIEMEN,

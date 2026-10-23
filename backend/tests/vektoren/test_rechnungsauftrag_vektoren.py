@@ -41,6 +41,8 @@ ABGELEHNT = (
     "gruppe_unterbrochen",
     "bezeichnung_doppelt",
     "quelle_mit_plattformname",
+    "auftragsschluessel_zeilenende",
+    "netto_zeilenende",
 )
 
 

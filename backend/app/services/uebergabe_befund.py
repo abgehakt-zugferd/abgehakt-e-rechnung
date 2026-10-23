@@ -27,7 +27,6 @@ import base64
 import calendar
 import hashlib
 import json
-import re
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -45,6 +44,19 @@ from app.services.protokoll import (
     fassung_annehmbar,
     zeit,
 )
+from app.services.uebergabe_form import (
+    AUFTRAGSSCHLUESSEL_FORM,
+    DATUM_FORM,
+    GELDFORM,
+    KURS_FORM,
+    MONAT_FORM,
+    SATZFORM,
+    SHA256_FORM,
+    WAEHRUNG_FORM,
+    ZAHLUNGSNUMMER_FORM,
+    ganz_passt,
+    umschlag_wertfehler,
+)
 from app.services.uebergabe_schluessel import (
     SchluesselNichtGueltig,
     SchluesselUnbekannt,
@@ -53,6 +65,7 @@ from app.services.uebergabe_schluessel import (
 from app.services.uebergabebeleg import (
     ABSENDER_TANTIEMEN,
     EMPFAENGER_ABGEHAKT,
+    VERFAHREN,
     UebergabeFehler,
     kanonisch,
     kanonisierungsfehler,
@@ -183,55 +196,13 @@ def _zahl(wert) -> Optional[Decimal]:
     return zahl
 
 
-# § 4, je Form EINE Pruefung und an EINER Stelle angewandt (protokoll.FELDFORMEN
-# nennt die Felder). Geld ist eine JSON-Zeichenkette mit Dezimalpunkt und GENAU
-# zwei Nachkommastellen - Decimal haette "174.3300", " 174.33" und "1.7433E2"
-# still geschluckt, und die Wirkung rundete dann heimlich. Das optionale
-# fuehrende Minus bleibt: kein Feld des Auftrags hat dem Leser bisher ein
-# Vorzeichen verboten, und die Formprobe aendert am Vorzeichen nichts.
-_GELDFORM = re.compile(r"^-?[0-9]+\.[0-9]{2}$")
-
-# Der Satz ist vom Geld getrennt (Klarstellung 2026-10-17): MINDESTENS zwei
-# Nachkommastellen, denn ein Satz, der vorher gerundet wird, lehnt den
-# gueltigen Auftrag ab (siehe _zahl).
-_SATZFORM = re.compile(r"^-?[0-9]+\.[0-9]{2,}$")
-
-
 def _hat_geldform(wert) -> bool:
-    return isinstance(wert, str) and _GELDFORM.match(wert) is not None
+    return ganz_passt(GELDFORM, wert)
 
 
 def _hat_satzform(wert) -> bool:
-    return isinstance(wert, str) and _SATZFORM.match(wert) is not None
+    return ganz_passt(SATZFORM, wert)
 
-
-# § 8a, Teil 1b: die Formen der grundlagen[]. beleg_sha256 ist der Hash des
-# Abrechnungsberichts, klein wie hashlib.hexdigest() ihn bildet - Grossbuchstaben
-# sind eine andere Form, kein anderer Wert. leistungsperiode ist ein Monat
-# JJJJ-MM, kein Quartal und kein Zeitraum.
-_SHA256_FORM = re.compile(r"^[0-9a-f]{64}$")
-_MONAT_FORM = re.compile(r"^[0-9]{4}-(0[1-9]|1[0-2])$")
-
-# § 8a, Teil 1c: die Form des auftragsschluessels - kleine Buchstaben,
-# Ziffern, Doppelpunkt und Bindestrich, 1 bis 128 Zeichen. Grossbuchstaben
-# und Leerzeichen sind eine andere Form: Der Schluessel wird gezeichnet und
-# verglichen, nicht gelesen, und ein anderer Zeichenvorrat machte den
-# Vergleich zweier Umsetzungen vom Zufall der Gross- und Kleinschreibung
-# abhaengig. Die Form steht hier und nicht in FELDFORMEN, denn dort stehen
-# die Geld- und Satzformen des § 4, die JEDE Art betreffen.
-_AUFTRAGSSCHLUESSEL_FORM = re.compile(r"^[a-z0-9:-]{1,128}$")
-
-
-# § 8b: die Formen, die nur der aufstellungsauftrag liest. Die waehrung ist
-# ISO 4217 als Form, aber ohne Wertevorrat - ein Vorrat stuende im
-# oeffentlichen Code dieses Empfaengers. Der kurs ist weder Geld (genau zwei
-# Nachkommastellen) noch Satz (mindestens zwei): Er steht drauf, wie ihn die
-# Plattform nennt. Die zahlungsnummer ist eine Kennung aus Ziffern, keine
-# Zahl - die xlsx speichert sie als Gleitkommazahl, und
-# '100000000000001.0' ist ein anderer Wert.
-_WAEHRUNG_FORM = re.compile(r"^[A-Z]{3}$")
-_KURS_FORM = re.compile(r"^[0-9]+\.[0-9]+$")
-_ZAHLUNGSNUMMER_FORM = re.compile(r"^[0-9]+$")
 
 # § 8b: der geschlossene Bestand der Anlagen - GENAU zwei, je eine quelle,
 # hinter jedem anderen Namen steht ein anderer Bericht. groesse ist eine
@@ -270,7 +241,7 @@ def _datum(wert) -> Optional[date]:
     importiert diesen Leser; die gemeinsame Quelle ist date.fromisoformat
     selbst und keine zweite Regel.
     """
-    if not isinstance(wert, str):
+    if not ganz_passt(DATUM_FORM, wert):
         return None
     try:
         return date.fromisoformat(wert)
@@ -392,8 +363,7 @@ def _auftragsschluessel_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
     """
     funde: list = []
     schluessel = nutzlast["auftragsschluessel"]
-    if not isinstance(schluessel, str) \
-            or not _AUFTRAGSSCHLUESSEL_FORM.match(schluessel):
+    if not ganz_passt(AUFTRAGSSCHLUESSEL_FORM, schluessel):
         funde.append(Feststellung(
             "WERT_UNBRAUCHBAR", "$.nutzlast.auftragsschluessel",
             erwartet="1 bis 128 Zeichen aus a-z, 0-9, : und -",
@@ -641,15 +611,13 @@ def _rechnungsauftrag_grundlagen_pruefen(nutzlast: dict) -> list:
                 "WERT_UNBRAUCHBAR", f"{pfad}.quelle",
                 erwartet="abrechnungsbericht", erhalten=str(grundlage["quelle"]),
             ))
-        if not isinstance(grundlage["beleg_sha256"], str) \
-                or not _SHA256_FORM.match(grundlage["beleg_sha256"]):
+        if not ganz_passt(SHA256_FORM, grundlage["beleg_sha256"]):
             funde.append(Feststellung(
                 "WERT_UNBRAUCHBAR", f"{pfad}.beleg_sha256",
                 erwartet="64 Kleinbuchstaben-Hex",
                 erhalten=str(grundlage["beleg_sha256"]),
             ))
-        if not isinstance(grundlage["leistungsperiode"], str) \
-                or not _MONAT_FORM.match(grundlage["leistungsperiode"]):
+        if not ganz_passt(MONAT_FORM, grundlage["leistungsperiode"]):
             funde.append(Feststellung(
                 "WERT_UNBRAUCHBAR", f"{pfad}.leistungsperiode",
                 erwartet="JJJJ-MM", erhalten=str(grundlage["leistungsperiode"]),
@@ -688,7 +656,7 @@ def _aufstellungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
     # die genau-dann-Regel der umrechnung nicht - nach ihr wird nicht
     # entschieden, der Befund steht schon.
     waehrung = nutzlast["waehrung"]
-    waehrung_formig = isinstance(waehrung, str) and _WAEHRUNG_FORM.match(waehrung)
+    waehrung_formig = ganz_passt(WAEHRUNG_FORM, waehrung)
     if not waehrung_formig:
         funde.append(Feststellung(
             "WERT_UNBRAUCHBAR", "$.nutzlast.waehrung",
@@ -739,7 +707,7 @@ def _aufstellungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
         # Der kurs steht drauf, wie ihn die Plattform nennt: Dezimalpunkt,
         # so viele Nachkommastellen wie gedruckt - weder Geld- noch Satzform.
         kurs = umrechnung["kurs"]
-        if not isinstance(kurs, str) or not _KURS_FORM.match(kurs):
+        if not ganz_passt(KURS_FORM, kurs):
             funde.append(Feststellung(
                 "WERT_UNBRAUCHBAR", "$.nutzlast.umrechnung.kurs",
                 erwartet="Dezimalbruch als Zeichenkette", erhalten=str(kurs),
@@ -758,7 +726,7 @@ def _aufstellungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
     # Zahlungen; die xlsx speichert sie als Gleitkommazahl, und
     # '100000000000001.0' ist ein anderer Wert.
     nummer = nutzlast["zahlung"]["zahlungsnummer"]
-    if not isinstance(nummer, str) or not _ZAHLUNGSNUMMER_FORM.match(nummer):
+    if not ganz_passt(ZAHLUNGSNUMMER_FORM, nummer):
         funde.append(Feststellung(
             "WERT_UNBRAUCHBAR", "$.nutzlast.zahlung.zahlungsnummer",
             erwartet="Ziffernfolge als Zeichenkette", erhalten=str(nummer),
@@ -789,8 +757,7 @@ def _aufstellungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
         ))
     for nummer, anlage in enumerate(anlagen):
         pfad = f"$.nutzlast.anlagen[{nummer}]"
-        if not isinstance(anlage["sha256"], str) \
-                or not _SHA256_FORM.match(anlage["sha256"]):
+        if not ganz_passt(SHA256_FORM, anlage["sha256"]):
             funde.append(Feststellung(
                 "WERT_UNBRAUCHBAR", f"{pfad}.sha256",
                 erwartet="64 Kleinbuchstaben-Hex",
@@ -1056,6 +1023,11 @@ def beleg_beurteilen(
         ), **rest)
 
     signatur = beleg["signatur"]
+    # Verfahren und Kennungen vor der Schluesselsuche (§ 6 / VERFAHREN).
+    wertfehler = umschlag_wertfehler(beleg, VERFAHREN)
+    if wertfehler is not None:
+        code, pfad, erwartet, erhalten = wertfehler
+        return abgelehnt(Feststellung(code, pfad, erwartet=erwartet, erhalten=erhalten), **rest)
     try:
         schluessel = schluessel_laden(
             beleg["absender"], signatur["schluessel_id"], erzeugt_am, wurzel=schluessel_wurzel,
