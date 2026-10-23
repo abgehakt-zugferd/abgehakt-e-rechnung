@@ -55,6 +55,11 @@ ZAHLUNGSNUMMER_FORM = re.compile(r"^[0-9]+$")
 # auch 20261001 an; die Formprobe steht davor.
 DATUM_FORM = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 
+# Umschlag-Kennungen (§ 6): absender, empfaenger, signatur.schluessel_id.
+# Klein, weil Gross/Klein auf macOS-Dateisystemen ein Ordner waere; erster
+# Buchstabe nie Punkt oder Strich, damit kein versteckter Pfad entsteht.
+KENNUNG_FORM = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+
 
 def ganz_passt(muster: Union[Pattern[str], str], wert) -> bool:
     """True nur wenn `wert` eine Zeichenkette ist und `muster` sie ganz trifft."""
@@ -63,3 +68,34 @@ def ganz_passt(muster: Union[Pattern[str], str], wert) -> bool:
     if isinstance(muster, str):
         return re.fullmatch(muster, wert) is not None
     return muster.fullmatch(wert) is not None
+
+
+def erste_unbrauchbare_kennung(beleg: dict):
+    """(pfad, wert) der ersten Umschlag-Kennung ausserhalb der Form, oder None.
+
+    Reihenfolge absender, empfaenger, schluessel_id - vor jedem Schluesselpfad.
+    """
+    for pfad, wert in (
+        ("$.absender", beleg["absender"]),
+        ("$.empfaenger", beleg["empfaenger"]),
+        ("$.signatur.schluessel_id", beleg["signatur"]["schluessel_id"]),
+    ):
+        if not ganz_passt(KENNUNG_FORM, wert):
+            return pfad, wert
+    return None
+
+
+def umschlag_wertfehler(beleg: dict, verfahren: str):
+    """Erster WERT_UNBRAUCHBAR am Umschlag vor der Schluesselsuche, oder None.
+
+    Reihenfolge: signatur.verfahren, dann die drei Kennungen. Rueckgabe
+    (code, pfad, erwartet, erhalten) fuer den Befund im Leser.
+    """
+    genannt = beleg["signatur"]["verfahren"]
+    if genannt != verfahren:
+        return "WERT_UNBRAUCHBAR", "$.signatur.verfahren", verfahren, str(genannt)
+    fund = erste_unbrauchbare_kennung(beleg)
+    if fund is not None:
+        pfad, wert = fund
+        return "WERT_UNBRAUCHBAR", pfad, "[a-z0-9][a-z0-9._-]*", str(wert)
+    return None

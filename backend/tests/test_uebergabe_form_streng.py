@@ -226,3 +226,33 @@ def test_beiblatt_ohne_gueltig_bis_macht_den_schluessel_unbrauchbar(schluessel):
     assert _befunde(urteil) == [("SCHLUESSEL_UNBEKANNT", "$.signatur.schluessel_id")]
     with pytest.raises(SchluesselUnbekannt, match="gueltig_bis"):
         schluessel_laden(ABSENDER_TANTIEMEN, SCHLUESSEL_ID, ERZEUGT_AM, wurzel=wurzel)
+
+
+@pytest.mark.parametrize("pfad,aenderung", [
+    ("$.absender", {"absender": "tantiemen-app\n"}),
+    ("$.absender", {"absender": "Tantiemen-app"}),
+    ("$.absender", {"absender": 4711}),
+    ("$.empfaenger", {"empfaenger": "abgehakt\n"}),
+    ("$.empfaenger", {"empfaenger": "Abgehakt"}),
+    ("$.empfaenger", {"empfaenger": 42}),
+    ("$.signatur.schluessel_id", {"schluessel_id": "tantiemen-2026-09\n"}),
+    ("$.signatur.schluessel_id", {"schluessel_id": "Tantiemen-2026-09"}),
+    ("$.signatur.schluessel_id", {"schluessel_id": 2026}),
+])
+def test_umschlag_kennung_muss_ganz_passen(schluessel, pfad, aenderung):
+    """absender, empfaenger und signatur.schluessel_id: Form vor jedem Schluesselpfad.
+
+    absender und empfaenger stehen in den signierten Bytes - der Umschlag
+    wird deshalb mit dem unbrauchbaren Wert gebaut und neu signiert.
+    schluessel_id liegt nur in der Signatur und wird nach dem Signieren gesetzt.
+    """
+    if pfad == "$.signatur.schluessel_id":
+        inhalt = json.loads(beleg(schluessel[0], auftrag()))
+        inhalt["signatur"]["schluessel_id"] = aenderung["schluessel_id"]
+        roh = kanonisch(inhalt)
+    else:
+        roh = beleg(schluessel[0], auftrag(), **aenderung)
+
+    urteil = beleg_beurteilen(roh, _Lage(), schluessel_wurzel=schluessel[1])
+
+    assert _befunde(urteil) == [("WERT_UNBRAUCHBAR", pfad)]

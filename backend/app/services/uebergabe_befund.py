@@ -55,6 +55,7 @@ from app.services.uebergabe_form import (
     WAEHRUNG_FORM,
     ZAHLUNGSNUMMER_FORM,
     ganz_passt,
+    umschlag_wertfehler,
 )
 from app.services.uebergabe_schluessel import (
     SchluesselNichtGueltig,
@@ -1022,12 +1023,11 @@ def beleg_beurteilen(
         ), **rest)
 
     signatur = beleg["signatur"]
-    # Verfahren vor der Verifikation; erwartet ist uebergabebeleg.VERFAHREN.
-    if signatur["verfahren"] != VERFAHREN:
-        return abgelehnt(Feststellung(
-            "WERT_UNBRAUCHBAR", "$.signatur.verfahren",
-            erwartet=VERFAHREN, erhalten=str(signatur["verfahren"]),
-        ), **rest)
+    # Verfahren und Kennungen vor der Schluesselsuche (§ 6 / VERFAHREN).
+    wertfehler = umschlag_wertfehler(beleg, VERFAHREN)
+    if wertfehler is not None:
+        code, pfad, erwartet, erhalten = wertfehler
+        return abgelehnt(Feststellung(code, pfad, erwartet=erwartet, erhalten=erhalten), **rest)
     try:
         schluessel = schluessel_laden(
             beleg["absender"], signatur["schluessel_id"], erzeugt_am, wurzel=schluessel_wurzel,
