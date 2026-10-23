@@ -122,8 +122,7 @@ def _abrechnungs_urteil(partner_id=PARTNER_A):
                 "summe": {"netto": "174.33"},
             }],
         },
-        abrechnungsquartal="2026-Q2", projekt="Probeverlag",
-        zahl_gutschriften=1, summe_netto=Decimal("174.33"),
+        gegenstand="Probeverlag", zeitraum="2026-Q2", summe="174,33",
     )
 
 

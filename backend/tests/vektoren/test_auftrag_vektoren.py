@@ -216,9 +216,8 @@ def test_der_gueltige_auftrag_wird_angenommen(vektoren, schluesselordner):
     )
 
     assert urteil.angenommen, [f"{f.code} {f.pfad}" for f in urteil.feststellungen]
-    assert urteil.zahl_gutschriften == 2
-    assert str(urteil.summe_netto) == "440.10"
-    assert urteil.abrechnungsquartal == "2026-Q2"
+    assert urteil.zeitraum == "2026-Q2"
+    assert urteil.summe == "440,10"
 
 
 def _lage_nach_dem_gueltigen(vektoren, partner=PARTNER_DES_PROBEBESTANDS):

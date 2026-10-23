@@ -1,14 +1,12 @@
-"""Neutrale Spaltenwerte der Belegliste aus dem Belegurteil (#207).
+"""Neutrale Anzeigefelder je Nutzlastart (#207).
 
-Das Template verzweigt nicht nach Nutzlastart: hier entsteht je Beleg
-Gegenstand (Kunde oder Projekt), Zeitraum und Summe, oder leer wenn die
-Nutzlast nicht lesbar ist.
+Eine Quelle fuer Belegurteil, Belegliste und Einlese-Skript: Gegenstand
+(Kunde oder Projekt), Zeitraum und Summe. Ertraegt auch abgelehnte,
+beliebig geformte Nutzlasten; fehlende oder unbrauchbare Teile bleiben leer.
 """
 
 from decimal import Decimal, InvalidOperation
 from typing import Optional
-
-from app.services.uebergabe_befund import Belegurteil
 
 
 def _geld(wert: Optional[Decimal]) -> str:
@@ -112,14 +110,12 @@ _ZUORDNUNG = {
 }
 
 
-def listenfelder(urteil: Belegurteil) -> dict:
-    """Gegenstand, Zeitraum und Summe fuer eine Tabellenzeile."""
+def anzeigefelder(nutzlast, nutzlast_art: Optional[str] = None) -> dict:
+    """Gegenstand, Zeitraum und Summe aus einer Nutzlast (auch abgelehnt)."""
     leer = {"gegenstand": "", "zeitraum": "", "summe": ""}
-    nutzlast = urteil.nutzlast
-    art = urteil.nutzlast_art
-    if not isinstance(nutzlast, dict) or art not in _ZUORDNUNG:
+    if not isinstance(nutzlast, dict) or nutzlast_art not in _ZUORDNUNG:
         return leer
-    gegenstand, zeitraum, summe = _ZUORDNUNG[art](nutzlast)
+    gegenstand, zeitraum, summe = _ZUORDNUNG[nutzlast_art](nutzlast)
     return {
         "gegenstand": gegenstand or "",
         "zeitraum": zeitraum or "",
@@ -127,9 +123,8 @@ def listenfelder(urteil: Belegurteil) -> dict:
     }
 
 
-def zeile_aus_urteil(dateiname: str, urteil: Belegurteil) -> dict:
-    """Eine Zeile der Belegliste: Datei, Urteil und neutrale Anzeigefelder."""
-    felder = listenfelder(urteil)
+def zeile_aus_urteil(dateiname: str, urteil) -> dict:
+    """Eine Zeile der Belegliste: Datei, Urteil; Anzeige kommt aus dem Urteil."""
     return {
         "dateiname": dateiname,
         "urteil": urteil,
@@ -137,7 +132,17 @@ def zeile_aus_urteil(dateiname: str, urteil: Belegurteil) -> dict:
             urteil.erzeugt_am.strftime("%d.%m.%Y %H:%M")
             if urteil.erzeugt_am else ""
         ),
-        "gegenstand": felder["gegenstand"],
-        "zeitraum": felder["zeitraum"],
-        "summe": felder["summe"],
+        "gegenstand": urteil.gegenstand or "",
+        "zeitraum": urteil.zeitraum or "",
+        "summe": urteil.summe or "",
     }
+
+
+def annahme_stand(urteil) -> str:
+    """Textzeile des Einlese-Skripts fuer einen angenommenen Beleg."""
+    teile = [
+        t for t in (urteil.gegenstand, urteil.zeitraum, urteil.summe) if t
+    ]
+    if not teile:
+        return "angenommen"
+    return "angenommen, " + ", ".join(teile)

@@ -100,10 +100,9 @@ class Belegurteil:
     erzeugt_am: Optional[datetime] = None
     vorgaenger_hash: Optional[str] = None
     nutzlast: Optional[dict] = None
-    abrechnungsquartal: Optional[str] = None
-    projekt: Optional[str] = None
-    zahl_gutschriften: Optional[int] = None
-    summe_netto: Optional[Decimal] = None
+    gegenstand: Optional[str] = None
+    zeitraum: Optional[str] = None
+    summe: Optional[str] = None
 
     @property
     def befund(self) -> str:
@@ -959,31 +958,16 @@ def _abrechnungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
     return funde
 
 
-def _anzeige(nutzlast: dict) -> dict:
+def _anzeige(nutzlast: dict, nutzlast_art: Optional[str] = None) -> dict:
     """Was die Tabelle zeigt. Nur Lesen, keine Wirkung.
 
     Laeuft auch fuer eine abgelehnte Nutzlast, denn die Zeile muss erscheinen,
     damit der Befund erscheint - deshalb ertraegt sie jede Form, die der
-    Leser gerade abgelehnt hat.
+    Leser gerade abgelehnt hat. Eine Quelle: uebergabe_listenzeile.anzeigefelder.
     """
-    gutschriften = nutzlast.get("gutschriften") if isinstance(
-        nutzlast.get("gutschriften"), list
-    ) else []
-    summe = Decimal("0")
-    for gutschrift in gutschriften:
-        if not isinstance(gutschrift, dict):
-            continue
-        summe_feld = gutschrift.get("summe")
-        betrag = _zahl(summe_feld.get("netto") if isinstance(summe_feld, dict) else None)
-        if betrag is not None:
-            summe += betrag
-    projekt = nutzlast.get("projekt") or {}
-    return {
-        "abrechnungsquartal": nutzlast.get("abrechnungsquartal"),
-        "projekt": projekt.get("name") if isinstance(projekt, dict) else None,
-        "zahl_gutschriften": len(gutschriften),
-        "summe_netto": summe,
-    }
+    # Spaeter Import: listenzeile darf befund nicht beim Modulladen ziehen.
+    from app.services.uebergabe_listenzeile import anzeigefelder
+    return anzeigefelder(nutzlast, nutzlast_art)
 
 
 def beleg_beurteilen(
@@ -1122,7 +1106,8 @@ def beleg_beurteilen(
             # einmal, keine Ablehnung.
             return Belegurteil(
                 beleg_sha256=sha, angenommen=True, bereits_verarbeitet=True,
-                nutzlast=nutzlast, **rest, **_anzeige(nutzlast),
+                nutzlast=nutzlast, **rest,
+                **_anzeige(nutzlast, rest.get("nutzlast_art")),
             )
         if schon is not None:
             return abgelehnt(Feststellung("BELEG_ID_WIDERSPRUCH", "$.beleg_id",
@@ -1188,10 +1173,14 @@ def beleg_beurteilen(
 
     funde = _auftrag_pruefen(nutzlast, lage, beleg["nutzlast_art"])
     if funde:
-        return abgelehnt(*funde, nutzlast=nutzlast, **rest, **_anzeige(nutzlast))
+        return abgelehnt(
+            *funde, nutzlast=nutzlast, **rest,
+            **_anzeige(nutzlast, beleg["nutzlast_art"]),
+        )
 
     return Belegurteil(
-        beleg_sha256=sha, angenommen=True, nutzlast=nutzlast, **rest, **_anzeige(nutzlast),
+        beleg_sha256=sha, angenommen=True, nutzlast=nutzlast, **rest,
+        **_anzeige(nutzlast, beleg["nutzlast_art"]),
     )
 
 

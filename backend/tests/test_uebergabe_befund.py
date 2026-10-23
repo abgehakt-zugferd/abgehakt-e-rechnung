@@ -143,10 +143,9 @@ def test_ein_gueltiger_auftrag_wird_angenommen(schluessel):
     assert urteil.angenommen, _codes(urteil)
     assert urteil.feststellungen == ()
     assert urteil.beleg_id == "11111111-2222-4333-8444-555555555555"
-    assert urteil.abrechnungsquartal == "2026-Q2"
-    assert urteil.projekt == "Probeverlag"
-    assert urteil.zahl_gutschriften == 1
-    assert str(urteil.summe_netto) == "174.33"
+    assert urteil.gegenstand == "Probeverlag"
+    assert urteil.zeitraum == "2026-Q2"
+    assert urteil.summe == "174,33"
 
 
 def test_der_befund_nennt_immer_die_bytes_die_er_beurteilt(schluessel):
