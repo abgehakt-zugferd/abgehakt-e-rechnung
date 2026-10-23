@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
 from app.installation import is_testinstanz
 from app.services.protokoll import zeit
+from app.services.uebergabe_form import ganz_passt
 
 _WURZEL = Path(__file__).resolve().parents[2] / "schluessel"
 
@@ -33,12 +34,15 @@ PROBE_KENNZEICHEN = "-probe-"
 
 # § 6: Das Beiblatt eines oeffentlichen Schluessels hat einen geschlossenen
 # Feldbestand (Formatverzeichnis, `schluessel_beiblatt`); `notizen` ist das
-# einzige freie Feld, `gueltig_bis` null heisst ohne Ablauf. Unbekannte Felder,
-# fehlende Pflichtfelder oder eine falsche Zeitform machen den Schluessel
-# unbrauchbar: Der Tippfehler `gueltigbis` statt `gueltig_bis` galt sonst als
-# Schluessel ohne Ablauf, denn get() las das Feld einfach nicht.
-_BEIBLATT_PFLICHT = ("schluessel_id", "absender", "verfahren", "gueltig_von")
-_BEIBLATT_ERLAUBT = _BEIBLATT_PFLICHT + ("gueltig_bis", "notizen")
+# einzige freie Feld, `gueltig_bis` ist Pflicht und null heisst ohne Ablauf.
+# Unbekannte Felder, fehlende Pflichtfelder oder eine falsche Zeitform machen
+# den Schluessel unbrauchbar: Der Tippfehler `gueltigbis` statt `gueltig_bis`
+# galt sonst als Schluessel ohne Ablauf, denn get() las das Feld einfach nicht.
+# Bestehende Beiblaetter ohne `gueltig_bis` brauchen das Feld (auch als null).
+_BEIBLATT_PFLICHT = (
+    "schluessel_id", "absender", "verfahren", "gueltig_von", "gueltig_bis",
+)
+_BEIBLATT_ERLAUBT = _BEIBLATT_PFLICHT + ("notizen",)
 
 
 class SchluesselUnbekannt(LookupError):
@@ -73,8 +77,7 @@ def schluessel_laden(
     # Erst die Form der Kennung, dann irgendein Dateizugriff: Ein Wert, der
     # nicht wie eine Kennung aussieht, hat keinen Schluessel, bevor ueberhaupt
     # ein Pfad aufgeloest wird.
-    if (not isinstance(absender, str) or _KENNUNG.match(absender) is None
-            or not isinstance(schluessel_id, str) or _KENNUNG.match(schluessel_id) is None):
+    if not ganz_passt(_KENNUNG, absender) or not ganz_passt(_KENNUNG, schluessel_id):
         raise SchluesselUnbekannt(f"{absender}/{schluessel_id}: keine Schluesselkennung")
 
     if PROBE_KENNZEICHEN in schluessel_id and not is_testinstanz():

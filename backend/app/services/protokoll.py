@@ -19,6 +19,8 @@ import re
 from datetime import datetime
 from typing import Optional
 
+from app.services.uebergabe_form import ganz_passt
+
 PROTOKOLL_VERSION = "1.7"
 
 AKZEPTIERTE_FASSUNGEN = ("1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7")
@@ -97,8 +99,10 @@ def hauptteil(fassung) -> Optional[int]:
     """Die Hauptfassung, oder None, wenn das keine Fassungsangabe ist."""
     if not isinstance(fassung, str):
         return None
-    treffer = _FASSUNG.match(fassung.strip())
-    return int(treffer.group(1)) if treffer else None
+    bereinigt = fassung.strip()
+    if not ganz_passt(_FASSUNG, bereinigt):
+        return None
+    return int(bereinigt.split(".", 1)[0])
 
 
 def fassung_annehmbar(fassung) -> bool:
@@ -141,7 +145,7 @@ def zeit(wert) -> Optional[datetime]:
     Ein Wert, der nicht der Form ist, ist unbrauchbar, egal ob die
     Schreibweise oder der Zeitpunkt nicht stimmt.
     """
-    if not isinstance(wert, str) or not ZEITFORM.match(wert):
+    if not ganz_passt(ZEITFORM, wert):
         return None
     try:
         return datetime.fromisoformat(wert.replace("Z", "+00:00"))

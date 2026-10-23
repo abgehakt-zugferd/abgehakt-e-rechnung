@@ -40,9 +40,10 @@ docker compose -p abgehakt-test \
 
 Das Beiblatt (`<schluessel_id>.json`) hat seit #166 einen geschlossenen Feldbestand
 (`services/uebergabe_schluessel.py`): Pflicht sind `schluessel_id`, `absender`,
-`verfahren` und `gueltig_von`; dazu sind `gueltig_bis` und `notizen` erlaubt. Die
+`verfahren`, `gueltig_von` und `gueltig_bis`; dazu ist `notizen` erlaubt. Die
 Zeitform ist genau `YYYY-MM-DDTHH:MM:SSZ` (UTC, sekundengenau, ohne Bruchteile).
-`gueltig_bis: null` heißt ohne Ablauf.
+`gueltig_bis: null` heißt ohne Ablauf. Ein Beiblatt ohne das Feld `gueltig_bis`
+gilt seit #210 nicht mehr als unbegrenzt, sondern als unbrauchbar.
 
 `docker-compose.integration.yml` bindet `./schluessel-integration` nur lesend als
 `/app/schluessel` ein, nicht `./backend/schluessel`: Probeschlüssel liegen bewusst
