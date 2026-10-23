@@ -5,11 +5,11 @@ name: tests
 # Integrationstests NICHT, der rechtlich kritische E-Rechnungs-Pfad wird in CI geprüft.
 # Single Source of Truth: backend/run-tests.sh (identisch zum lokalen kanonischen Lauf).
 #
-# Dazu zwei Wachen aus `.githooks/wachen.sh`, dieselbe Datei, die auch der Pre-Push-Hook
-# aufruft. Sie stehen hier, weil der Hook nur greift, wer ihn aktiviert hat, und das tut
-# beim ersten Beitrag fast niemand: ein Pull Request mit "3000:3000" oder mit einem
-# Quellcode-Mount in `docker-compose.yml` kaeme sonst durch. Eigener Job, weil er in
-# Sekunden faellt und nicht hinter dem Abbild-Bau warten soll.
+# Dazu die sechs Wachen aus `.githooks/wachen.sh`, dieselbe Datei, die auch der
+# Pre-Push-Hook aufruft. Sie stehen hier, weil der Hook nur greift, wer ihn aktiviert
+# hat, und das tut beim ersten Beitrag fast niemand: ein Pull Request mit "3000:3000"
+# oder mit einem Quellcode-Mount in `docker-compose.yml` kaeme sonst durch. Eigener
+# Job, weil er in Sekunden faellt und nicht hinter dem Abbild-Bau warten soll.
 
 on:
   push:

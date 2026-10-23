@@ -28,9 +28,10 @@ mkdir -p ~/uebergaben-test/abgehakt-nach-tantiemen-app
 # UEBERGABEN_ORDNER in integration.env auf diesen Pfad setzen
 
 # Öffentliche Schlüssel der Übergabe-Absender bereitstellen, je Absender ein
-# Unterordner mit je Schlüssel zwei Dateien:
-#   backend/schluessel/<absender>/<schluessel_id>.pub    (PEM)
-#   backend/schluessel/<absender>/<schluessel_id>.json   (Beiblatt, siehe unten)
+# Unterordner mit je Schlüssel zwei Dateien (schluessel-integration/, nicht
+# unter backend/: Probeschlüssel sollen nicht ins Auslieferungsabbild geraten):
+#   schluessel-integration/<absender>/<schluessel_id>.pub    (PEM)
+#   schluessel-integration/<absender>/<schluessel_id>.json   (Beiblatt, siehe unten)
 
 docker compose -p abgehakt-test \
   -f docker-compose.yml -f docker-compose.integration.yml \
@@ -43,10 +44,12 @@ Das Beiblatt (`<schluessel_id>.json`) hat seit #166 einen geschlossenen Feldbest
 Zeitform ist genau `YYYY-MM-DDTHH:MM:SSZ` (UTC, sekundengenau, ohne Bruchteile).
 `gueltig_bis: null` heißt ohne Ablauf.
 
-`docker-compose.integration.yml` bindet `./backend/schluessel` nur lesend in den
-Container ein. Ein Beleg ist nur mit dem öffentlichen Schlüssel seines Absenders
-annehmbar: fehlt er, scheitert der Befund am Code `SCHLUESSEL_UNBEKANNT`
-(`services/uebergabe_schluessel.py`), und **ALS RECHNUNG ANLEGEN** bleibt gesperrt.
+`docker-compose.integration.yml` bindet `./schluessel-integration` nur lesend als
+`/app/schluessel` ein, nicht `./backend/schluessel`: Probeschlüssel liegen bewusst
+neben `backend/`, damit sie nicht ins Auslieferungsabbild geraten. Ein Beleg ist
+nur mit dem öffentlichen Schlüssel seines Absenders annehmbar: fehlt er, scheitert
+der Befund am Code `SCHLUESSEL_UNBEKANNT` (`services/uebergabe_schluessel.py`), und
+**ALS RECHNUNG ANLEGEN** bleibt gesperrt.
 Ein Probeschlüssel ist am Namen erkennbar (Kennzeichen `-probe-`) und gilt nur in
 einer Testinstanz, nie im Echtlauf.
 

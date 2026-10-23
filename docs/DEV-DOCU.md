@@ -984,7 +984,8 @@ docker compose -p abgehakt-test \
 | Daten | `storage/`, Postgres `:5432` | `storage-integration/`, `:5433` |
 
 Compose-Mounts in der Testinstanz: Wegwerf-`storage-integration`, `${UEBERGABEN_ORDNER}` nach
-`/uebergaben`, `backend/schluessel` nach `/app/schluessel` (nur oeffentliche Schluessel).
+`/uebergaben`, `./schluessel-integration` nach `/app/schluessel` (nur oeffentliche Schluessel;
+nicht unter `backend/`, sonst wandern Probeschluessel ins Auslieferungsabbild).
 
 #### Belege in der Testinstanz ansehen
 
