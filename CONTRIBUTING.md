@@ -77,7 +77,7 @@ git config core.hooksPath .githooks
 Vor der Suite brechen Wachen den Push ab. Sie stehen im Hook und nicht in der Suite, weil
 sie Dateien im Wurzelverzeichnis lesen und der Testcontainer nur `backend/` sieht: ein Test
 dafür würde still übersprungen, und ein übersprungener Test gilt hier als Fehlschlag. Der
-Reihe nach laufen die Datenwache, die Gedankenstrich-Wache und die fünf Wachen aus
+Reihe nach laufen die Datenwache, die Gedankenstrich-Wache und die sechs Wachen aus
 `.githooks/wachen.sh`; auf die Suite folgt der Skip-Guard.
 
 - **Datenwache** (`.githooks/datenwache.sh`): prüft je gepuschtem Commit nur die neu
@@ -88,7 +88,7 @@ Reihe nach laufen die Datenwache, die Gedankenstrich-Wache und die fünf Wachen 
   `DATENWACHE_UEBERSTIMMT=1`. Issues und Pull Requests auf GitHub prüft dieselbe Regel
   (`.github/workflows/issue-wache.yml`): bei einem Fund erhalten sie ein Label und einen
   Hinweiskommentar, der nur die Musterklasse nennt.
-- **Fünf Wachen aus `.githooks/wachen.sh`:**
+- **Sechs Wachen aus `.githooks/wachen.sh`:**
   - **Kein veröffentlichter Port ohne `127.0.0.1:`** in einer Compose-Datei. `"3000:3000"`
     hängt an allen Schnittstellen, und die Anwendung bringt keine Anmeldung mit: wer im
     selben Netz sitzt, sähe damit alle Rechnungen und lüde den GoBD-Export samt
@@ -102,13 +102,17 @@ Reihe nach laufen die Datenwache, die Gedankenstrich-Wache und die fünf Wachen 
     Dockerfile stehen, damit alle Stacks dieselbe Gruppenkennung tragen.
   - **Keine Postgres-Passwörter mit stiller Vorgabe** in `docker-compose.yml`: fehlende
     Werte müssen den Start abbrechen, nicht unbemerkt einen Zufallswert annehmen.
+  - **Ketten-Testinstanz hängt `./schluessel-integration` als `/app/schluessel` ein**, nicht
+    `./backend/schluessel`. Probeschlüssel liegen bewusst neben `backend/`, damit sie nicht
+    ins Auslieferungsabbild geraten; fehlt der Mount oder zeigt er woanders hin, endet jede
+    Kettenprobe mit `SCHLUESSEL_UNBEKANNT`.
 - **Keine Gedankenstriche in Markdown** (U+2013, U+2014). Komma, Doppelpunkt, Strichpunkt
   oder zwei Sätze sagen dasselbe und überstehen jede Schrift und jedes Terminal. Zwischen
   zwei Ziffern, also in einer Jahres- oder Paragraphenspanne, bleibt der Strich erlaubt.
 - **Skip-Guard:** übersprungene Tests brechen den Push ab, genau wie in der CI; ein
   fehlendes Werkzeug im Container darf den E-Rechnungs-Pfad nicht unbemerkt verbergen.
 
-Die fünf Wachen aus `wachen.sh` laufen auch in der CI (`.github/workflows/tdd.yml`), denn
+Die sechs Wachen aus `wachen.sh` laufen auch in der CI (`.github/workflows/tdd.yml`), denn
 ein Hook greift nur bei dem, der ihn aktiviert hat. Die Datenwache selbst läuft nur im Hook,
 in der CI werden ihre Tests gefahren. Die Gedankenstrich-Wache bleibt bewusst lokal im
 Hook: eine Schreibregel dieses Projekts ist kein Grund, einen fremden Pull Request
