@@ -7,14 +7,14 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import get_db
 from app.models.invoice import Invoice
-from app.services import auftragsschluessel
+from app.services import auftragsschluessel, auftragszahlung
 from app.services.bezahlt_am import (
     BezahltAmFehler,
     BezahltTrotzGutschrift,
     vorbereiten_bezahlt,
 )
 from app.services.rechnung.fehler import RechnungFehler
-from app.services.rechnung.finalisieren import ausfuehren
+from app.services.rechnung.finalisieren import ausfuehren, entwurf_sperren
 from app.services.storno import GutschriftNichtStornierbar, pruefe_stornierbar
 from app.zeit import heute
 
@@ -31,6 +31,17 @@ def finalize_invoice(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
         ausfuehren(db, invoice_id)
     except RechnungFehler as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail) from e
+    return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
+
+
+@router.post("/{invoice_id}/zahlungshinweis-uebernehmen")
+def zahlungshinweis_uebernehmen(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
+    try:
+        invoice = entwurf_sperren(db, invoice_id)
+        auftragszahlung.uebernehmen(invoice)
+    except RechnungFehler as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail) from e
+    db.commit()
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
 
 

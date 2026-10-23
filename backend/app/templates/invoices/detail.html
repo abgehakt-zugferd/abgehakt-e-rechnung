@@ -28,152 +28,8 @@
         </span>
     </div>
 
-    <!-- Action Bar -->
-    <div class="flex flex-wrap gap-3 mb-6">
-        {% if invoice.status == 'draft' %}
-        {# Eine Gutschrift spiegelt ihr Original und ist deshalb nicht bearbeitbar (#8).
-           Der Router weist den Aufruf ohnehin ab; hier verschwindet nur der Knopf,
-           der ins Leere fuehrte. #}
-        {% if invoice.invoice_type not in ('credit_note', 'self_billing_storno') %}
-        <a href="/invoices/{{ invoice.id }}/bearbeiten" class="btn-secondary">✎ BEARBEITEN</a>
-        {% endif %}
-        <a href="/invoices/{{ invoice.id }}/vorschau" class="btn-secondary">👁 VORSCHAU</a>
-        <form method="post" action="/invoices/{{ invoice.id }}/pruefen">
-            <button type="submit" class="btn-secondary">🔍 PRÜFEN (§ 14 UStG)</button>
-        </form>
-        <form method="post" action="/invoices/{{ invoice.id }}/finalisieren"
-              onsubmit="return confirm('Rechnung finalisieren? Danach keine Änderung mehr möglich.')">
-            <button type="submit" class="btn-primary">✓ FINALISIEREN &amp; ZUGFeRD</button>
-        </form>
-        <form method="post" action="/invoices/{{ invoice.id }}/verwerfen"
-              onsubmit="return confirm('Entwurf verwerfen? Die Rechnungsnummer {{ invoice.invoice_number }} bleibt vergeben, der Entwurf ist über den Filter „Verworfen“ weiter auffindbar.')">
-            <button type="submit" class="btn-danger">🗑 VERWERFEN</button>
-        </form>
-        {% endif %}
-
-        {% if invoice.status == 'discarded' %}
-        <form method="post" action="/invoices/{{ invoice.id }}/zurueckholen">
-            <button type="submit" class="btn-secondary">↩ ZURÜCKHOLEN</button>
-        </form>
-        {% endif %}
-
-        {% if invoice.pdf_filename %}
-        <a href="/invoices/{{ invoice.id }}/pdf" class="btn-secondary" target="_blank">⬇ PDF LADEN</a>
-        {% endif %}
-
-        {% if invoice.status in ('issued', 'paid') %}
-        <form method="post" action="/invoices/{{ invoice.id }}/pruefen">
-            <button type="submit" class="btn-secondary">🔍 ERNEUT PRÜFEN</button>
-        </form>
-        {% endif %}
-
-        {# Auch bei `paid`: ein bezahlter Beleg darf noch einmal verschickt werden
-           (#146) — der DATEV-Upload scheitert im Betrieb regelmäßig. #}
-        {% if invoice.status in ('issued', 'paid') and smtp_configured %}
-        <div x-data="{ open: false }" class="relative">
-            <button @click="open = !open" class="btn-primary">
-                {% if invoice.datev_sent_at %}📧 ERNEUT SENDEN{% else %}📧 SENDEN{% if datev_configured %} + DATEV{% endif %}{% endif %}
-            </button>
-            <div x-show="open" x-cloak @click.outside="open = false"
-                 style="position:absolute; right:0; top:calc(100% + 8px); width:320px; background:var(--surface); border:2px solid var(--border-hi); padding:20px; z-index:10; box-shadow:6px 6px 0 rgba(0,0,0,0.9), 0 0 20px var(--gold-glow);">
-                <form method="post" action="/invoices/{{ invoice.id }}/datev-senden"
-                      {% if invoice.datev_sent_at %}onsubmit="return confirm('Diese Rechnung wurde am {{ invoice.datev_sent_at.strftime('%d.%m.%Y um %H:%M') }} bereits versendet. Erneut senden?')"{% endif %}>
-                    <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--cyan); margin-bottom:12px;">E-MAIL VERSAND</p>
-                    <label class="label">EMPFÄNGER</label>
-                    <input type="email" name="customer_email" value="{{ invoice.customer.email if invoice.customer else '' }}" class="input" style="margin-bottom:12px;" required>
-                    <label class="label">KOPIE AN (CC)</label>
-                    {# `multiple`: ohne das Attribut weist schon der Browser eine
-                       kommagetrennte Liste ab, und der Server bekäme die zweite
-                       Adresse nie zu sehen (#58). #}
-                    <input type="email" multiple name="cc_email" value="{{ cc_default }}" class="input" style="margin-bottom:6px;" placeholder="optional, mehrere mit Komma">
-                    {# Ein vorbelegtes Feld erklärt sich nicht von selbst: woher der
-                       Wert kommt und was ein Überschreiben bedeutet, entscheidet
-                       darüber, ob jemand die Voreinstellung für alle Kunden ändert,
-                       obwohl er nur diesen einen Versand meint. #}
-                    <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); line-height:1.4; color:var(--text-dim); margin-bottom:12px;">
-                        {% if cc_herkunft == 'kunde' %}
-                        Aus dem Kundenstamm von {{ invoice.customer.name }}. Änderung gilt nur für diesen Versand.
-                        {% elif cc_herkunft == 'einstellungen' %}
-                        Aus den Einstellungen, gilt für alle Kunden. Änderung gilt nur für diesen Versand.
-                        {% else %}
-                        Mehrere Adressen mit Komma trennen. Für den Kunden sichtbar.
-                        {% endif %}
-                    </p>
-                    {% if datev_configured %}
-                    <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); line-height:1.6; color:var(--green); margin-bottom:12px;">✓ BCC → DATEV UPLOAD MAIL</p>
-                    {% endif %}
-                    <button type="submit" class="btn-primary" style="width:100%;">ABSENDEN</button>
-                </form>
-            </div>
-        </div>
-        {% endif %}
-
-        {# Entscheidung 6 (Bauschritt 5a): Die Buchhaltung kann den Beleg
-           bekommen, bevor der Kunde ihn hat — ein eigener Weg nur an die
-           Upload-Adresse, ohne Blindkopie. Nur bei gestellten Belegen und nur
-           mit konfigurierter Upload-Adresse: Ohne sie kann die Route nicht
-           gelingen, und ein Knopf, der nur einen Fehler zeigt, wäre keiner. #}
-        {% if invoice.status in ('issued', 'paid') and datev_configured %}
-        <form method="post" action="/invoices/{{ invoice.id }}/an-buchhaltung"
-              {% if invoice.datev_sent_at %}onsubmit="return confirm('Dieser Beleg ging bereits an die Buchhaltung. Erneut senden?')"{% endif %}>
-            <button type="submit" class="btn-secondary">NUR AN DIE BUCHHALTUNG</button>
-        </form>
-        {% endif %}
-
-        {% if invoice.status == 'paid' and invoice.bezahlt_am %}
-        <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--green);">
-            bezahlt am {{ invoice.bezahlt_am.strftime('%d.%m.%Y') }}
-        </p>
-        {% endif %}
-
-        {% if invoice.status == 'issued' %}
-        <form method="post" action="/invoices/{{ invoice.id }}/status" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
-            <input type="hidden" name="new_status" value="paid">
-            <label style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
-                bezahlt am
-                <input type="date" name="bezahlt_am" value="{{ heute.isoformat() }}"
-                       min="{{ invoice.issue_date.isoformat() }}" max="{{ heute.isoformat() }}"
-                       style="margin-left:6px; font-family:'VT323',monospace; font-size:var(--fs-text); background:var(--bg); color:var(--text-hi); border:1px solid var(--border); padding:4px 6px;">
-            </label>
-            <button type="submit" class="btn-success">✓ ALS BEZAHLT MARKIEREN</button>
-        </form>
-        {% if invoice.invoice_type not in ('credit_note', 'self_billing_storno') %}
-        <form method="post" action="/invoices/{{ invoice.id }}/status"
-              onsubmit="return confirm('Rechnung als storniert markieren? (nur Status, kein Stornobeleg)')">
-            <input type="hidden" name="new_status" value="cancelled">
-            <button type="submit" class="btn-danger">✗ ALS STORNIERT MARKIEREN</button>
-        </form>
-        {% endif %}
-        {% endif %}
-
-        {% if invoice.invoice_type == 'credit_note' and invoice.status in ('issued', 'paid') %}
-        {# Issue #142: eine gestellte Gutschrift ist endgueltig. Nicht nur sperren, den Weg zeigen. #}
-        <div data-hinweis="gutschrift-endgueltig" style="flex-basis:100%; padding:10px 14px; border:2px solid var(--border); font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
-            Diese Stornorechnung ist endgültig; sie ist selbst die Korrektur und lässt sich nicht stornieren.
-            {% if invoice.original_invoice %}
-            War sie falsch, stelle zur Rechnung
-            <a href="/invoices/{{ invoice.original_invoice.id }}" style="color:var(--gold); text-decoration:underline;">{{ invoice.original_invoice.invoice_number }}</a>
-            eine neue Rechnung.
-            {% if original_ersetzbar %}
-            <a href="/invoices/neu?ersetzt={{ invoice.original_invoice.id }}" class="btn-secondary" style="margin-left:6px;">ERSATZRECHNUNG ANLEGEN</a>
-            {% endif %}
-            {% else %}
-            War sie falsch, stelle eine neue Rechnung.
-            {% endif %}
-        </div>
-        {% endif %}
-
-        {% if invoice.status in ('issued', 'paid') and invoice.invoice_type not in ('credit_note', 'self_billing_storno') %}
-        <form method="post" action="/invoices/{{ invoice.id }}/storno"
-              onsubmit="return confirm('Stornorechnung zu diesem Beleg erzeugen? Die Originalrechnung bleibt erhalten.')">
-            <button type="submit" class="btn-secondary">↩ STORNO ERSTELLEN</button>
-        </form>
-        {% endif %}
-        {% if ersetzbar %}
-        <a href="/invoices/neu?ersetzt={{ invoice.id }}" class="btn-secondary">ERSATZRECHNUNG ANLEGEN</a>
-        {% endif %}
-        <a href="/invoices/neu?vorlage={{ invoice.id }}" class="btn-secondary">ALS VORLAGE</a>
-    </div>
+    {% include "invoices/detail_zahlungshinweis.html" %}
+    {% include "invoices/detail_aktionen.html" %}
 
     {% if invoice.ersetzte_rechnung %}
     <div style="margin-bottom:16px; padding:12px 16px; border:2px solid var(--border); font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--gold);">
@@ -292,69 +148,7 @@
             </div>
             {% endif %}
 
-            <!-- Line items -->
-            <div class="card">
-                <h2 style="margin-bottom:16px;">POSITIONEN</h2>
-                <div class="overflow-x-auto" style="border:1px solid var(--border); margin-bottom:16px;">
-                    <table class="w-full" style="font-family:'VT323',monospace; font-size:var(--fs-gross);">
-                        <thead style="background:var(--panel);">
-                            <tr>
-                                <th class="table-header" style="padding:8px 12px; text-align:left;">POS.</th>
-                                <th class="table-header" style="padding:8px 12px; text-align:left;">BESCHREIBUNG</th>
-                                <th class="table-header" style="padding:8px 12px; text-align:right;">MENGE</th>
-                                <th class="table-header" style="padding:8px 12px; text-align:right;">PREIS</th>
-                                <th class="table-header" style="padding:8px 12px; text-align:right;">MWST.</th>
-                                <th class="table-header" style="padding:8px 12px; text-align:right;">NETTO</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in invoice.items %}
-                            <tr class="table-row">
-                                <td style="padding:8px 12px; color:var(--text-dim);">{{ item.position }}</td>
-                                {# pre-line: ohne das kollabieren die Umbrueche und die
-                                   Detailseite saehe anders aus als das PDF. #}
-                                <td style="padding:8px 12px; color:var(--text); white-space:pre-line;">{{ item.description }}{% if item.artikelnummer %}
-<span style="color:var(--text-dim); font-size:var(--fs-klein);">Art.-Nr. {{ item.artikelnummer }}</span>{% endif %}{% if item.leistung_von and item.leistung_bis %}
-<span style="color:var(--text-dim); font-size:var(--fs-klein);">Leistungszeitraum {{ item.leistung_von.strftime('%d.%m.%Y') }} – {{ item.leistung_bis.strftime('%d.%m.%Y') }}</span>{% endif %}</td>
-                                <td style="padding:8px 12px; text-align:right; color:var(--text-dim); white-space:nowrap;">{{ item.quantity|menge }} {{ item.unit }}</td>
-                                <td style="padding:8px 12px; text-align:right; color:var(--text-dim); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text); white-space:nowrap;">{{ item.unit_price|euro }}</td>
-                                <td style="padding:8px 12px; text-align:right; color:var(--text-dim); white-space:nowrap;">{{ item.tax_rate|int }} %</td>
-                                <td style="padding:8px 12px; text-align:right; color:var(--text-hi); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text); white-space:nowrap;">{{ item.net_amount|euro }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <!-- Totals -->
-                <div style="border-top:2px solid var(--border-hi); padding-top:14px; font-family:'VT323',monospace; font-size:var(--fs-gross);">
-                    {# Abzug auf Belegebene (#147): net_total ist die Basis NACH Abzug,
-                       deshalb steht die Summe der Positionen als eigene Zeile davor. #}
-                    {% if invoice.abzug_betrag %}
-                    <div class="flex justify-between" style="color:var(--text-dim); margin-bottom:4px;">
-                        <span>Positionssumme</span>
-                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ (invoice.net_total + invoice.abzug_betrag)|euro }}</span>
-                    </div>
-                    <div class="flex justify-between" style="color:var(--text-dim); margin-bottom:4px;">
-                        <span>Abzug: {{ invoice.abzug_grund }}</span>
-                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ invoice.abzug_betrag|euro }}</span>
-                    </div>
-                    {% endif %}
-                    <div class="flex justify-between" style="color:var(--text-dim); margin-bottom:4px;">
-                        <span>Nettobetrag</span>
-                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ invoice.net_total|euro }}</span>
-                    </div>
-                    <div class="flex justify-between" style="color:var(--text-dim); margin-bottom:8px;">
-                        <span>MwSt.</span>
-                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ invoice.tax_total|euro }}</span>
-                    </div>
-                    <div class="flex justify-between" style="border-top:1px solid var(--border); padding-top:10px;">
-                        <span style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--gold);">GESAMTBETRAG</span>
-                        <span style="font-family:'Press Start 2P',monospace; font-size:var(--fs-text); color:var(--gold); text-shadow:0 0 15px rgba(255,215,0,0.35);">{{ invoice.gross_total|euro }}</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Payment terms -->
+            {% include "invoices/detail_positionen.html" %}
             {% if invoice.payment_terms %}
             <div class="card">
                 <p class="label">Zahlungsbedingungen</p>
@@ -424,53 +218,7 @@
                 {% endif %}
             </div>
 
-            <!-- Validation result -->
-            {% if validation %}
-            <div class="card" style="border-color:{% if validation.is_valid %}rgba(0,230,118,0.4){% else %}rgba(255,77,124,0.4){% endif %};">
-                <div class="flex items-center gap-3 mb-3">
-                    <h2 style="margin-bottom:0;">PRÜFPROTOKOLL</h2>
-                    <span class="badge badge-{{ 'paid' if validation.is_valid else 'cancelled' }}">{{ '✓ OK' if validation.is_valid else '✗ FEHLER' }}</span>
-                </div>
-                <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); line-height:1.6; color:var(--text-dim); margin-bottom:12px;">{{ validation.validated_at.strftime('%d.%m.%Y %H:%M') }}</p>
-
-                {% if validation.errors %}
-                <div style="margin-bottom:12px;">
-                    {% for err in validation.errors %}
-                    <div style="display:flex; gap:8px; margin-bottom:6px; font-family:'VT323',monospace; font-size:var(--fs-gross);">
-                        <span style="color:var(--pink); flex-shrink:0;">✗</span>
-                        <div>
-                            <span style="color:var(--pink);">{{ err.message }}</span>
-                            {% if err.field %}<span style="color:var(--text-dim);"> ({{ err.field }})</span>{% endif %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-
-                {% if validation.warnings %}
-                <div>
-                    {% for w in validation.warnings %}
-                    <div style="display:flex; gap:8px; margin-bottom:6px; font-family:'VT323',monospace; font-size:var(--fs-gross);">
-                        <span style="color:var(--amber); flex-shrink:0;">⚠</span>
-                        <span style="color:var(--amber);">{{ w.message }}</span>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-
-                {% if not validation.errors and not validation.warnings %}
-                <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--green);">✓ Alle Pflichtangaben nach § 14 UStG vorhanden.</p>
-                {% endif %}
-            </div>
-            {% else %}
-            <div class="card" style="border-style:dashed; border-color:var(--border-hi); text-align:center; padding:24px;">
-                <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); color:var(--text-dim); margin-bottom:12px;">NOCH NICHT GEPRÜFT</p>
-                <form method="post" action="/invoices/{{ invoice.id }}/pruefen">
-                    <button type="submit" class="btn-secondary" style="font-size:var(--fs-mikro);">JETZT PRÜFEN →</button>
-                </form>
-            </div>
-            {% endif %}
-
+            {% include "invoices/detail_pruefung.html" %}
             <!-- Versandprotokoll (#146) -->
             {% if invoice.send_logs %}
             <div class="card">
@@ -548,21 +296,5 @@
         </div>
     </div>
 </div>
-<script>
-// Jede Aktion hier (Mustang-Subprocess, SMTP-Versand, PDF-Erzeugung) kann mehrere
-// Sekunden dauern. Ohne Sperre feuert ein zweiter Klick eine weitere parallele
-// Subprocess-Anfrage, die sich mit der ersten überschneidet und den Eindruck eines
-// endlosen Ladens erzeugt (2026-07-08 beim Prüfen der wiederhergestellten Rechnung
-// Z-2026-002 beobachtet: 3 ValidationResult-Zeilen aus 3 Klicks statt einer).
-document.querySelectorAll('main form').forEach(function (form) {
-    form.addEventListener('submit', function (e) {
-        if (e.defaultPrevented) return; // z.B. abgebrochener confirm()-Dialog
-        var btn = form.querySelector('button[type="submit"]');
-        if (btn) {
-            btn.disabled = true;
-            btn.style.opacity = '0.6';
-        }
-    });
-});
-</script>
+{% include "invoices/detail_skript.html" %}
 {% endblock %}

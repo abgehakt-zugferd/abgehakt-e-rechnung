@@ -8,6 +8,7 @@ from xml.sax.saxutils import escape
 from reportlab.platypus import Paragraph
 
 from app.models.invoice import Invoice
+from app.services.auftragszahlung import ohne_ueberweisungsaufforderung
 from app.services.belegart import belegart, zahlung_an_kunde
 from app.services.belegsprache import Belegdarstellung, darstellung, resolve_belegsprache
 from app.services.zugferd_xml import EXEMPTION_REASONS
@@ -42,6 +43,8 @@ def zahlung_an_kunde_beleg(invoice) -> bool:
 
 def zahlungs_empfaenger(invoice, company):
     """(Name, IBAN, BIC, Bankname) für Anzeige und EPC-QR, oder None."""
+    if ohne_ueberweisungsaufforderung(invoice):
+        return None
     customer = invoice.customer
     if zahlung_an_kunde_beleg(invoice):
         if not customer or not customer.bank_iban:

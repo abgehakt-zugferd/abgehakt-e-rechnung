@@ -1,0 +1,47 @@
+            <!-- Validation result -->
+            {% if validation %}
+            <div class="card" style="border-color:{% if validation.is_valid %}rgba(0,230,118,0.4){% else %}rgba(255,77,124,0.4){% endif %};">
+                <div class="flex items-center gap-3 mb-3">
+                    <h2 style="margin-bottom:0;">PRÜFPROTOKOLL</h2>
+                    <span class="badge badge-{{ 'paid' if validation.is_valid else 'cancelled' }}">{{ '✓ OK' if validation.is_valid else '✗ FEHLER' }}</span>
+                </div>
+                <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); line-height:1.6; color:var(--text-dim); margin-bottom:12px;">{{ validation.validated_at.strftime('%d.%m.%Y %H:%M') }}</p>
+
+                {% if validation.errors %}
+                <div style="margin-bottom:12px;">
+                    {% for err in validation.errors %}
+                    <div style="display:flex; gap:8px; margin-bottom:6px; font-family:'VT323',monospace; font-size:var(--fs-gross);">
+                        <span style="color:var(--pink); flex-shrink:0;">✗</span>
+                        <div>
+                            <span style="color:var(--pink);">{{ err.message }}</span>
+                            {% if err.field %}<span style="color:var(--text-dim);"> ({{ err.field }})</span>{% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if validation.warnings %}
+                <div>
+                    {% for w in validation.warnings %}
+                    <div style="display:flex; gap:8px; margin-bottom:6px; font-family:'VT323',monospace; font-size:var(--fs-gross);">
+                        <span style="color:var(--amber); flex-shrink:0;">⚠</span>
+                        <span style="color:var(--amber);">{{ w.message }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if not validation.errors and not validation.warnings %}
+                <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--green);">✓ Alle Pflichtangaben nach § 14 UStG vorhanden.</p>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="card" style="border-style:dashed; border-color:var(--border-hi); text-align:center; padding:24px;">
+                <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); color:var(--text-dim); margin-bottom:12px;">NOCH NICHT GEPRÜFT</p>
+                <form method="post" action="/invoices/{{ invoice.id }}/pruefen">
+                    <button type="submit" class="btn-secondary" style="font-size:var(--fs-mikro);">JETZT PRÜFEN →</button>
+                </form>
+            </div>
+            {% endif %}
+

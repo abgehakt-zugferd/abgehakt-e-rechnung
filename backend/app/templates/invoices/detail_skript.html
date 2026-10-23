@@ -1,0 +1,17 @@
+<script>
+// Jede Aktion hier (Mustang-Subprocess, SMTP-Versand, PDF-Erzeugung) kann mehrere
+// Sekunden dauern. Ohne Sperre feuert ein zweiter Klick eine weitere parallele
+// Subprocess-Anfrage, die sich mit der ersten überschneidet und den Eindruck eines
+// endlosen Ladens erzeugt (2026-07-08 beim Prüfen der wiederhergestellten Rechnung
+// Z-2026-002 beobachtet: 3 ValidationResult-Zeilen aus 3 Klicks statt einer).
+document.querySelectorAll('main form').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+        if (e.defaultPrevented) return; // z.B. abgebrochener confirm()-Dialog
+        var btn = form.querySelector('button[type="submit"]');
+        if (btn) {
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+        }
+    });
+});
+</script>

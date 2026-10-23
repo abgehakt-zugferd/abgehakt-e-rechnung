@@ -17,7 +17,6 @@ im Beleg.
 
 from __future__ import annotations
 
-from datetime import timedelta
 from decimal import Decimal
 from typing import Optional
 
@@ -80,6 +79,16 @@ def entwurf_anlegen(
             "Am Kunden fehlt die Steuervorgabe für Aufträge (AE) bzw. die USt-IdNr."
         )
 
+    entwurf = _kopf(db, urteil, kunde, nutzlast)
+    db.add(entwurf)
+    db.flush()
+    _positionen(db, entwurf, nutzlast)
+    entwurf.archive_until = berechne_archive_until(entwurf.issue_date)
+    merken(db, urteil, dateiname=dateiname)
+    return entwurf
+
+
+def _kopf(db, urteil, kunde, nutzlast):
     zeitraum = nutzlast["leistungszeitraum"]
     von = _datum(zeitraum["von"])
     bis = _datum(zeitraum["bis"])
@@ -87,9 +96,9 @@ def entwurf_anlegen(
     # Ausstellungsdatum nur vorlaeufig (Festlegung 14): Es zaehlt der
     # Kalendertag von erzeugt_am in Europe/Berlin (app.zeit.kalendertag)
     # wie bei der 389, aber gestellt wird die Rechnung erst beim
-    # Finalisieren, das das Datum auf heute setzt. Ohne Zahlungshinweis
-    # ist der Entwurf 14 Tage spaeter faellig - dieselbe Voreinstellung
-    # wie bei entwuerfe_anlegen; mit Hinweis entfaellt BT-9 (Entscheidung 4).
+    # Finalisieren, das das Datum auf heute setzt. Die Zahlungsbedingung
+    # kommt allein vom Kunden. Fehlt sie, bleibt der Entwurf ohne Termin
+    # bestehen; Finalisieren wartet auf die Kundenvorgabe (#206).
     ausstellung = kalendertag(urteil.erzeugt_am) if urteil.erzeugt_am else heute()
     vorgabe = entwurfs_vorbelegung(kunde, von, bis)
 
@@ -97,7 +106,7 @@ def entwurf_anlegen(
         invoice_number=generate_next_invoice_number(db, issue_date=ausstellung),
         customer_id=kunde.id,
         issue_date=ausstellung,
-        due_date=None if vorgabe.zahlungshinweis else ausstellung + timedelta(days=14),
+        due_date=None,
         service_period_start=von,
         service_period_end=bis,
         payment_terms=vorgabe.zahlungshinweis,
@@ -115,9 +124,10 @@ def entwurf_anlegen(
         uebergabe_beleg_sha256=urteil.beleg_sha256,
     )
     auftragsschluessel.belegen(entwurf, nutzlast["auftragsschluessel"])
-    db.add(entwurf)
-    db.flush()
+    return entwurf
 
+
+def _positionen(db, entwurf, nutzlast):
     netto_summe = Decimal("0")
     for lfd, position in enumerate(
         sorted(nutzlast["positionen"], key=lambda p: p["nr"]), 1,
@@ -148,7 +158,3 @@ def entwurf_anlegen(
     entwurf.net_total = netto_summe
     entwurf.tax_total = Decimal("0")
     entwurf.gross_total = netto_summe
-    entwurf.archive_until = berechne_archive_until(entwurf.issue_date)
-
-    merken(db, urteil, dateiname=dateiname)
-    return entwurf

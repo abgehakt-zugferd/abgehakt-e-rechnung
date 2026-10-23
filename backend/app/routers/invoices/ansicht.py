@@ -15,6 +15,7 @@ from app.models.invoice import Invoice, ValidationResult
 from app.routers.invoices.abbildung import firma_laden
 from app.routers.invoices.vorlagen import templates
 from app.services import aenderungsprotokoll, datev_email, pdf_generator, zugferd_xml
+from app.services.auftragszahlung import hinweis_fehlt
 from app.services.belegart import UnknownInvoiceTypeError, belegart
 from app.services.einheiten import UnknownUnitError
 from app.services.ersatzrechnung import ErsatzNichtMoeglich, pruefe_ersetzbar
@@ -112,6 +113,7 @@ def _detail_kontext(db: Session, invoice: Invoice) -> dict:
     ersetzbar, original_ersetzbar = _ersetzbarkeit(db, invoice)
     kunde_zustellung_am, kunde_weg = _kunde_zustellung_fuer_detail(invoice)
     return {
+        "zahlungshinweis_fehlt": hinweis_fehlt(invoice),
         "invoice": invoice,
         "company": company,
         "validation": latest_validation,
