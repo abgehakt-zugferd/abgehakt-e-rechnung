@@ -3,6 +3,9 @@
 `re.match` mit einem Muster, das auf `$` endet, trifft auch vor einem
 abschliessenden Zeilenende. `fullmatch` verlangt die ganze Zeichenkette:
 `probe:1\\n` ist dann ein anderer, unbrauchbarer Wert als `probe:1`.
+Auch Decimal nimmt `"174.33\\n"` anstandslos; ohne die Formprobe waere der
+Betrag gerechnet und der Auftragsschluessel an AUFTRAG_SCHON_GERECHNET
+vorbeigeschlichen.
 """
 
 import re
