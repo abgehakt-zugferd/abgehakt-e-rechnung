@@ -4,10 +4,13 @@ from xml.etree import ElementTree as ET
 
 import pytest
 from pypdf import PdfReader
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.models.company import Company
 from app.models.invoice import Invoice
 from app.services import mustang, pdf_generator, zugferd_xml
+from app.services.auftragszahlung import hinweis_fehlt, ist_rechnungsauftrag
 from app.services.rechnungsauftrag_wirkung import entwurf_anlegen
 from tests.factories import orm_company
 from tests.probe_daten import IBAN_FIRMA_PROBE
@@ -36,6 +39,43 @@ def test_fehlender_hinweis_erzeugt_entwurf_ohne_faelligkeit(pg_session, hinweis)
     assert inv.status == "draft"
     assert inv.due_date is None
     assert not inv.payment_terms
+    # rechnungsauftrag_wirkung setzt invoice_type=None (Standard 380); der
+    # CHECK und ist_rechnungsauftrag müssen dieselbe Grenze nutzen.
+    assert inv.invoice_type is None
+    assert ist_rechnungsauftrag(inv)
+    assert hinweis_fehlt(inv)
+
+
+def test_hinweisregel_gilt_nicht_fuer_formular_alias_standard(pg_session):
+    """Das Formular speichert Standardrechnungen als NULL, nicht als
+    'standard'. Ein Alias am Beleg ist kein offener Rechnungsauftrag."""
+    inv, _, _ = _entwurf(pg_session, None)
+    inv.invoice_type = "standard"
+    assert not ist_rechnungsauftrag(inv)
+    assert not hinweis_fehlt(inv)
+
+
+def test_check_erlaubt_auftrag_ohne_hinweis_weist_manuell_ab(pg_session):
+    inv, _, _ = _entwurf(pg_session, None)
+    assert inv.invoice_type is None
+    # Bereits gespeichert: Auftrag mit NULL-Typ ohne Termin und Hinweis.
+    pg_session.execute(
+        text("UPDATE invoices SET payment_terms = NULL WHERE id = :id"),
+        {"id": inv.id},
+    )
+    pg_session.flush()
+    # Formular-Alias 'standard' gehört nicht zur Ausnahme (wie Migration 032).
+    with pytest.raises(IntegrityError), pg_session.begin_nested():
+        pg_session.execute(
+            text("UPDATE invoices SET invoice_type = 'standard' WHERE id = :id"),
+            {"id": inv.id},
+        )
+    # Manueller Entwurf: ohne Auftragskennung greift der alte CHECK.
+    with pytest.raises(IntegrityError), pg_session.begin_nested():
+        pg_session.execute(text(
+            "INSERT INTO invoices (invoice_number, issue_date, status) "
+            "VALUES ('RE-MAN-206', '2026-10-05', 'draft')"
+        ))
 
 
 def test_warnung_und_finalisierungssperre(client, pg_session):
@@ -79,9 +119,10 @@ def test_pdf_zahlungsangaben_und_xml(pg_session, tmp_path, mit_termin):
     reader = PdfReader(pdf)
     text = "\n".join(page.extract_text() for page in reader.pages)
     assert HINWEIS in text.replace("\n", " ")
+    # Textmarker statt Bildzahl: ein Firmenlogo im Storage wäre sonst ein
+    # falsches Positiv für den QR-Block.
     for angabe in ("IBAN:", "Verwendungszweck", "Zum Überweisen scannen", "19.10.2026"):
         assert (angabe in text) is mit_termin, angabe
-    assert bool(sum(len(page.images) for page in reader.pages)) is mit_termin
     xml = zugferd_xml.generate_xml(inv, firma)
     root = ET.fromstring(xml)
     assert root.find(f".//{RAM}SpecifiedTradePaymentTerms/{RAM}Description").text == HINWEIS

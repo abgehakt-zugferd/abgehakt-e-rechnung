@@ -4,10 +4,13 @@ from app.services.rechnung.fehler import RechnungFehler
 
 
 def ist_rechnungsauftrag(invoice) -> bool:
+    # Gleicher Schnitt wie ck_invoices_faelligkeit_oder_bedingungen /
+    # Migration 032: nur invoice_type IS NULL. Das Formular-Alias
+    # "standard" wird beim Speichern zu NULL; am Beleg steht es nicht.
     return bool(
         getattr(invoice, "auftragsschluessel", None)
         and getattr(invoice, "uebergabe_beleg_sha256", None)
-        and getattr(invoice, "invoice_type", None) in (None, "standard")
+        and getattr(invoice, "invoice_type", None) is None
     )
 
 
@@ -27,6 +30,9 @@ def fehlermeldung(invoice) -> str:
 
 
 def finalisierung_pruefen(invoice) -> None:
+    # Eigene Sperre, kein Doppel zum Validator: BR-CO-25 greift nur, wenn
+    # weder BT-9 noch BT-20 gesetzt sind. Mit Termin ohne Hinweis liefe
+    # Finalisieren sonst durch; die Meldung soll den Kundenpfad nennen.
     if hinweis_fehlt(invoice):
         raise RechnungFehler(400, fehlermeldung(invoice))
 
