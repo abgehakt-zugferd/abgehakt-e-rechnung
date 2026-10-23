@@ -35,6 +35,7 @@ from app.services.abrechnungsauftrag_wirkung import (
 from app.services.archive_frist import berechne_archive_until
 from app.services.invoice_number import generate_next_invoice_number
 from app.services.kundenvorgaben import entwurfs_vorbelegung
+from app.services.ersteinrichtung import ERSTEINRICHTUNG_OFFEN_MELDUNG
 from app.services.rechnung.firma import eingerichtete_firma
 from app.services.uebergabe_befund import Belegurteil
 from app.services.uebergabe_eingang import merken
@@ -63,7 +64,7 @@ def entwurf_anlegen(
     if company is None:
         company = eingerichtete_firma(db)
         if company is None:
-            raise WirkungFehler("Firmendaten sind nicht eingerichtet.")
+            raise WirkungFehler(ERSTEINRICHTUNG_OFFEN_MELDUNG)
 
     nutzlast = urteil.nutzlast
     kunde = _kunde(db, nutzlast["kunde"]["partner_id"])

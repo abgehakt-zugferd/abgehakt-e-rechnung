@@ -22,6 +22,7 @@ from app.routers import (
     customers, invoices, settings as settings_router, export, setup,
     updates, archive, uebergaben, aufstellungen,
 )
+from app.services.ersteinrichtung import ist_eingerichtet
 from app.dependencies.herkunft import pruefe_herkunft
 from app.dependencies.beleg_integration_dep import lade_beleg_integration
 from app.dependencies.update_banner_dep import load_update_banner
@@ -278,7 +279,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     # Installation wieder für uneingerichtet, sobald jemand das Feld leerte.
     # Und ein Tor statt eines Hinweises: mit leeren Firmendaten weiterzuarbeiten
     # endet in Rechnungen ohne Verkäufer — im PDF wie in der ZUGFeRD-XML.
-    if not setup.ist_eingerichtet(company):
+    if not ist_eingerichtet(company):
         return RedirectResponse("/setup", status_code=303)
 
     today = kalender_heute()

@@ -5,8 +5,6 @@ Einstieg hierher. Ein wegklickbarer Banner auf dem Dashboard hätte die Nutzerin
 mit leeren Firmendaten weiterarbeiten lassen — und leere Firmendaten stehen
 anschließend im PDF und in der rechtlich maßgeblichen ZUGFeRD-XML.
 """
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -19,7 +17,12 @@ from app.darstellung import registriere_darstellungsfilter
 from app.laender import registriere_laender_globals
 from app.database import get_db
 from app.models.company import Company
-from app.services.pflichtangaben import RECHTSFORMEN, pflichtangaben
+from app.services.ersteinrichtung import (
+    ADRESS_PFLICHTFELDER,
+    einrichtung_abschliessen,
+    einrichtung_luecke,
+)
+from app.services.pflichtangaben import RECHTSFORMEN
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -27,23 +30,14 @@ register_branding_globals(templates)
 registriere_darstellungsfilter(templates)
 registriere_laender_globals(templates)
 
-PFLICHTFELDER = ("name", "address_line1", "zip_code", "city")
 FREIE_FELDER = ("address_line2", "country", "tax_number", "vat_id",
                 "email", "phone", "bank_iban", "bank_bic", "bank_name",
                 "rechtsform", "sitz", "registergericht", "registernummer",
                 "vertretung", "aufsichtsrat_vorsitz")
 
 
-PFLICHTANGABEN_FELDER = ("rechtsform", "sitz", "registergericht", "registernummer",
-                         "vertretung", "aufsichtsrat_vorsitz")
-
-
 def _company(db: Session) -> Company | None:
     return db.query(Company).filter(Company.id == 1).first()
-
-
-def ist_eingerichtet(company: Company | None) -> bool:
-    return bool(company and company.setup_completed_at is not None)
 
 
 @router.get("", response_class=HTMLResponse)
@@ -60,26 +54,12 @@ def formular(request: Request, db: Session = Depends(get_db)):
 async def speichern(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     werte = {feld: (form.get(feld) or "").strip()
-             for feld in PFLICHTFELDER + FREIE_FELDER}
+             for feld in ADRESS_PFLICHTFELDER + FREIE_FELDER}
 
-    fehlend = [feld for feld in PFLICHTFELDER if not werte[feld]]
-    if fehlend:
-        return _mit_fehler(request, db, werte,
-                           "Bitte Firmenname und vollständige Anschrift angeben.")
-
-    # § 14 UStG: die Rechnung braucht Steuernummer ODER USt-IdNr. Fehlt beides,
-    # wäre jede spätere Rechnung fehlerhaft — und zwar unbemerkt, weil der
-    # Validator erst beim Prüfen anschlägt.
-    if not werte["tax_number"] and not werte["vat_id"]:
-        return _mit_fehler(request, db, werte,
-                           "Steuernummer oder USt-IdNr. ist für § 14 UStG erforderlich.")
-
-    # Pflichtangaben auf Geschäftsbriefen: geprüft an einer Wegwerf-Firma, damit
-    # eine Absage nichts in der Sitzung hinterlässt.
-    probe = Company(**{f: werte[f] or None for f in PFLICHTANGABEN_FELDER}, city=werte["city"])
-    if (luecke := pflichtangaben(probe).luecke()):
-        return _mit_fehler(request, db, werte,
-                           f"Pflichtangaben für Rechnungen fehlen: {luecke}.")
+    probe = Company(**{feld: werte[feld] or None for feld in werte})
+    probe.city = werte["city"]
+    if (meldung := einrichtung_luecke(probe)):
+        return _mit_fehler(request, db, werte, meldung)
 
     if (meldung := pruefe_iban(werte["bank_iban"])):
         return _mit_fehler(request, db, werte, meldung)
@@ -103,7 +83,7 @@ async def speichern(request: Request, db: Session = Depends(get_db)):
             wert = wert or None
         setattr(company, feld, wert)
     company.country = werte["country"] or "DE"
-    company.setup_completed_at = datetime.now(timezone.utc)
+    einrichtung_abschliessen(company)
     db.commit()
 
     return RedirectResponse("/dashboard", status_code=303)

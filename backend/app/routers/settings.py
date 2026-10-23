@@ -5,10 +5,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.company import Company
-from app.models.app_config import AppConfig
 from app.services import datev_email, empfaenger, mailtext
 from app.routers import settings_mailtext
+from app.routers.settings_zeilen import get_or_create_app_config, get_or_create_company
 from app.services.bankverbindung import normalisiere_bic, normalisiere_iban, pruefe_bic, pruefe_iban
 from app.services.invoice_number import pruefe_praefix
 from app.services.ust_id_pruefung import (
@@ -20,6 +19,7 @@ from app.services.ust_id_pruefung import (
     zuruecksetzen as ust_zuruecksetzen,
 )
 from app.services.adresse import bereinige_adresszeile2
+from app.services.ersteinrichtung import einrichtung_nachziehen
 from app.services.pflichtangaben import RECHTSFORMEN, pflichtangaben
 from app.services.protokoll import PROTOKOLL_VERSION
 from app.services.steuer_ruecklage import (
@@ -39,26 +39,6 @@ registriere_darstellungsfilter(templates)
 registriere_laender_globals(templates)
 
 
-def _get_or_create_company(db: Session) -> Company:
-    company = db.query(Company).filter(Company.id == 1).first()
-    if not company:
-        company = Company(id=1)
-        db.add(company)
-        db.commit()
-        db.refresh(company)
-    return company
-
-
-def _get_or_create_app_config(db: Session) -> AppConfig:
-    config = db.query(AppConfig).filter(AppConfig.id == 1).first()
-    if not config:
-        config = AppConfig(id=1)
-        db.add(config)
-        db.commit()
-        db.refresh(config)
-    return config
-
-
 def _pflicht_hinweis(company) -> str | None:
     """Was das Stellen noch sperrt, in denselben Worten wie der Validator."""
     luecke = pflichtangaben(company).luecke()
@@ -74,8 +54,8 @@ def settings_page(
     mail_werte: dict | None = None,
     mail_fehler: dict | None = None,
 ):
-    company = _get_or_create_company(db)
-    config = _get_or_create_app_config(db)  # Template braucht ihn für die CC-Vorbelegung (#147)
+    company = get_or_create_company(db)
+    config = get_or_create_app_config(db)  # Template braucht ihn für die CC-Vorbelegung (#147)
     from app.config import get_settings
     cfg = get_settings()
     # Effektive Konfiguration (DB überschreibt .env) – das Template zeigt genau die Werte,
@@ -163,7 +143,7 @@ def save_company(
             error="Deutsche und englische Standard-Zahlungsbedingungen sind Pflichtfelder.",
         )
 
-    company = _get_or_create_company(db)
+    company = get_or_create_company(db)
     alt_vat = company.vat_id
     neu_vat = normalisiere_ust_id(vat_id) if (vat_id or "").strip() else None
     if neu_vat:
@@ -203,6 +183,7 @@ def save_company(
     company.kst_satz_percent = Decimal(kst_satz_percent.replace(",", ".").strip())
     company.soli_auf_kst_percent = Decimal(soli_auf_kst_percent.replace(",", ".").strip())
     company.gewerbe_hebesatz = int(gewerbe_hebesatz.strip())
+    einrichtung_nachziehen(company)
     db.commit()
     return RedirectResponse(url="/settings?saved=true", status_code=303)
 
@@ -215,7 +196,7 @@ def pruefe_company_ust_id(
     check_name: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
-    company = _get_or_create_company(db)
+    company = get_or_create_company(db)
     if bestaetigt != "1":
         raise HTTPException(400, "Einwilligung erforderlich")
     vat, name, fehler = eingaben_fuer_pruefung(
@@ -236,7 +217,7 @@ def pruefe_company_ust_id(
 def speichere_beleg_integration(aktiv: str = Form(default=""), db: Session = Depends(get_db)):
     """Der Schalter (#22). Ohne Haken kommt das Feld gar nicht mit - genau das
     ist "aus"; ein fehlendes Formularfeld darf hier nicht "unveraendert" heissen."""
-    config = _get_or_create_app_config(db)
+    config = get_or_create_app_config(db)
     config.beleg_integration_aktiv = aktiv == "1"
     db.commit()
     return RedirectResponse(url="/settings/?saved=true", status_code=303)
@@ -254,7 +235,7 @@ def save_smtp(
     smtp_use_tls: bool = Form(False),
     db: Session = Depends(get_db),
 ):
-    config = _get_or_create_app_config(db)
+    config = get_or_create_app_config(db)
     host = smtp_host.strip() if smtp_host else None
     config.smtp_host = host
     # Ohne Host gilt die DB-SMTP-Konfiguration als nicht gesetzt: auch den Port leeren,
@@ -281,7 +262,7 @@ def save_datev(
     cc_fehler = empfaenger.pruefe(invoice_cc_email)
     if cc_fehler:
         return RedirectResponse(url=f"/settings?error={cc_fehler}", status_code=303)
-    config = _get_or_create_app_config(db)
+    config = get_or_create_app_config(db)
     config.datev_bcc_email = datev_bcc_email.strip() if datev_bcc_email else None
     # Leer heißt „keine Kopie" — NULL, nicht der leere String (#147). Mehrere
     # Adressen sind zulässig (#58); gespeichert wird die kanonische Schreibweise.
@@ -299,4 +280,4 @@ def test_smtp(test_email: str = Form(...), db: Session = Depends(get_db)):
         return RedirectResponse(url=f"/settings?error={str(e)}", status_code=303)
 
 
-settings_mailtext.register(router, settings_page, _get_or_create_app_config)
+settings_mailtext.register(router, settings_page, get_or_create_app_config)
