@@ -90,6 +90,25 @@ finalisiert. Die gesperrten Felder (Netto-Beträge, Beteiligter, Leistungszeitra
 Formular als „aus dem Beleg übernommen" gekennzeichnet; ist ein Betrag falsch, ist der
 Beleg falsch, und die Gegenseite erzeugt einen neuen.
 
+## Übergabekette eines Absenders neu beginnen
+
+In der Testinstanz kann die gemerkte Kette eines Absenders zurückgesetzt werden,
+ohne die Datenbank zu leeren: das Wartungsskript entfernt nur die Eingänge dieses
+Absenders (`uebergabe_eingaenge`). Rechnungen, Entwürfe, Aufstellungen, Kunden und
+Firmendaten bleiben. Außerhalb der Testinstanz verweigert das Skript den Lauf
+(Exit-Code ungleich 0, keine Datenbankänderung).
+
+```bash
+docker compose -p abgehakt-test \
+  -f docker-compose.yml -f docker-compose.integration.yml \
+  --env-file integration.env exec app \
+  python -m scripts.uebergabe_kette_neu_beginnen <absender>
+```
+
+`<absender>` ist die Kennung wie im Beleg (zum Beispiel `absender`). Danach liefert
+`zuletzt_angenommen` für diesen Absender wieder `None`, und die Kette kann von
+vorn gelesen werden.
+
 ## Wegwerfen
 
 ```bash
