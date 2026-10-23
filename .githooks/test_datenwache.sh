@@ -45,8 +45,11 @@ commit_mit() {
 }
 
 lauf() {
+    # ZEMP_ECHTDATEN_MUSTER_REPO in JEDEM Fall ausdruecklich setzen (Issue #202
+    # Teil 2), damit kein Test an ~/.zemp/echtdaten-muster.abgehakt.txt haengt.
+    repo_muster="${5:-/nicht/da}"
     aus=$( cd "$1" && printf 'refs/heads/probe %s refs/heads/probe %s\n' "$2" "$3" \
-        | ZEMP_ECHTDATEN_MUSTER="$4" "$wache" 2>&1 )
+        | ZEMP_ECHTDATEN_MUSTER="$4" ZEMP_ECHTDATEN_MUSTER_REPO="$repo_muster" "$wache" 2>&1 )
     rc=$?
 }
 
@@ -283,6 +286,31 @@ alt=$(commit_mit "$r" alt.txt "$(_iban_probe)")
 neu=$(commit_mit "$r" neu.txt "harmloser Nachtrag")
 lauf "$r" "$neu" "$alt" /nicht/da
 befund "nur_neue_commits_zaehlen" 0 ""
+
+# Issue #202 Teil 2: repo-eigene Musterdatei (ZEMP_ECHTDATEN_MUSTER_REPO).
+# Wird wie die gemeinsame Datei behandelt (Klasse "Zusatzmuster"), fehlt sie,
+# ist das kein Fehler. Die Schleife laeuft ueber beide Dateien, nicht kopiert.
+
+mr="$werkstatt/muster-repo.txt"
+printf '# Kommentar\nProbe-Repo-Klarname\n' > "$mr"
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "Probe-Repo-Klarname bekommt Post")
+lauf "$r" "$s" "$leer" /nicht/da "$mr"
+befund "repo_muster_in_zeile_blockiert" 1 "Zusatzmuster"
+
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "harmlos" "Erwaehnung Probe-Repo-Klarname im Entwurf")
+lauf "$r" "$s" "$leer" /nicht/da "$mr"
+befund "repo_muster_in_commit_nachricht_blockiert" 1 "Zusatzmuster (Commit-Nachricht)"
+
+# Repo-Datei fehlt (Pfad existiert nicht): sauberer Commit laeuft durch.
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "harmloser Text, Betrag 24,30 Euro")
+lauf "$r" "$s" "$leer" /nicht/da /nicht/da
+befund "repo_datei_fehlt_laeuft_durch" 0 ""
+
+# Gemeinsame Datei wirkt weiter, auch wenn die repo-eigene Datei fehlt.
+r=$(neues_repo); s=$(commit_mit "$r" a.txt "Probe-Autorin bekommt 25 Prozent")
+lauf "$r" "$s" "$leer" "$m" /nicht/da
+befund "gemeinsame_datei_wirkt_wie_bisher" 1 "Zusatzmuster"
 
 if [ "$fehl" -ne 0 ]; then
     echo "" >&2
