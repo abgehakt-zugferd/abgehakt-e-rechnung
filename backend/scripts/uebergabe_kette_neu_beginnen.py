@@ -55,11 +55,11 @@ def _eingaenge_entfernen(absender: str, *, db: Optional[Session]) -> int:
         db.commit()
         if anzahl == 0:
             print(
-                f"Keine Eingaenge fuer Absender {absender}.",
+                f"Keine Eingänge für Absender {absender}.",
                 file=sys.stderr,
             )
         else:
-            print(f"{anzahl} Eingaenge fuer Absender {absender} entfernt.")
+            print(f"{anzahl} Eingänge für Absender {absender} entfernt.")
         return 0
     finally:
         if eigene:

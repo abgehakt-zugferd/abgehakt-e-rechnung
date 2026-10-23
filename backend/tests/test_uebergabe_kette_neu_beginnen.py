@@ -111,7 +111,7 @@ def test_ohne_testinstanz_verweigert_und_laesst_eingaenge(
     err = capsys.readouterr().err
 
     assert code != 0
-    assert err.strip()
+    assert "Testinstanz" in err
     assert pg_session.query(UebergabeEingang).count() == vorher
 
 
@@ -120,9 +120,9 @@ def test_null_eingaenge_eigene_meldung(pg_session, als_testinstanz, capsys):
     out = capsys.readouterr()
 
     assert code == 0
-    text = (out.out + out.err).lower()
-    assert "0" in text or "kein" in text
-    assert "absender-ohne-eingang" in (out.out + out.err)
+    text = out.out + out.err
+    assert "Keine Eingänge" in text
+    assert "absender-ohne-eingang" in text
 
 
 def test_fehlender_absender_bricht_ab(als_testinstanz, capsys):
