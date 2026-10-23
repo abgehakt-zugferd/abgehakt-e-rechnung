@@ -18,6 +18,9 @@ eingehaengt; nichts davon landet im Repositorium. Eine der Dateien traegt
 absichtlich einen Namen, der nicht zu ihrem Inhalt passt - genau die
 macht `anlage_inhalt_falsch` messbar. Der Leser oeffnet keine xlsx: Er
 prueft Hash und Groesse der Bytes.
+
+Die Fallliste kommt aus erwartung.json (#217), nicht aus einer Namensliste
+in diesem Modul.
 """
 
 import hashlib
@@ -26,26 +29,17 @@ import json
 import pytest
 
 from app.services.uebergabe_befund import Empfangslage, beleg_beurteilen
+from tests.vektoren.erwartung_lesen import (
+    eintraege,
+    erwarteter_code,
+    lagebedarf,
+    namen_beim_sammeln,
+    pruefe_vollstaendigkeit,
+)
 
 PARTNER_DES_PROBEBESTANDS = ("3f5b1c80-0000-4000-8000-00000000000d",)
 
-ANGENOMMEN = ("01_gueltig",)
-ABGELEHNT = (
-    "partner_id_unbekannt",
-    "betraege_gehen_nicht_auf",
-    "quellensteuer_negativ",
-    "umrechnung_fehlt",
-    "umrechnung_bei_euro",
-    "typcode",
-    "zahlungsnummer_gleitkomma",
-    "waehrung_klein",
-    "nur_eine_anlage",
-    "medientyp_pdf",
-    "anlage_fehlt",
-    "anlage_groesse_falsch",
-    "anlage_inhalt_falsch",
-    "auftragsschluessel_zeilenende",
-)
+_NAMEN = namen_beim_sammeln("aufstellungen")
 
 
 class Lage(Empfangslage):
@@ -78,11 +72,6 @@ class Lage(Empfangslage):
         return datei.read_bytes() if datei.is_file() else None
 
 
-def _erwartung(vektoren) -> dict:
-    roh = json.loads((vektoren / "erwartung.json").read_text(encoding="utf-8"))
-    return {e["name"]: e for e in roh["aufstellungen"]}
-
-
 def _lage_nach_dem_gueltigen(vektoren, dokumente=None):
     """Die Lage, in der `01_gueltig` bereits angenommen wurde: Er ist der
     vorgaenger jedes weiteren Vektors der Gruppe, und seine Kennung ist
@@ -100,70 +89,47 @@ def _lage_nach_dem_gueltigen(vektoren, dokumente=None):
     )
 
 
+def _lage_fuer(vektoren, bedarf, roh):
+    if not bedarf.nach_01:
+        return Lage(
+            vektoren / "aufstellungen" / "anlagen",
+            partner=PARTNER_DES_PROBEBESTANDS,
+        )
+    dokumente = None
+    if bedarf.mit_dokument:
+        schluessel = json.loads(roh)["nutzlast"]["auftragsschluessel"]
+        dokumente = {schluessel: "Entwurf"}
+    return _lage_nach_dem_gueltigen(vektoren, dokumente=dokumente)
+
+
 def test_jeder_aufstellungsvektor_ist_gemessen(vektoren):
     """Kein stilles Weglassen: jede Datei im Ordner kommt in einem Test vor,
     und jeder Name in erwartung.json hat eine Datei."""
-    dateien = {p.stem for p in (vektoren / "aufstellungen").glob("*.json")}
-    assert dateien == set(_erwartung(vektoren))
-    assert dateien == set(ANGENOMMEN) | set(ABGELEHNT) | {"auftrag_schon_gerechnet"}
+    pruefe_vollstaendigkeit(vektoren, "aufstellungen")
 
 
-@pytest.mark.parametrize("name", ANGENOMMEN)
-def test_angenommener_aufstellungsvektor_wird_angenommen(
+@pytest.mark.parametrize("name", _NAMEN)
+def test_aufstellungsvektor_trifft_seine_erwartung(
     vektoren, schluesselordner, name,
 ):
-    """erwartung.json ohne erwarteten Code: angenommen, Hash wie erwartet.
-
-    `01_gueltig` ist der Kettenanfang (vorgaenger null); sein Partner steht
-    im Stamm, seine beiden Anlagen liegen unter ihrem Hash, und die
-    umrechnung steht, weil die waehrung USD ist."""
-    eintrag = _erwartung(vektoren)[name]
+    """Soll aus erwartung.json: angenommen, genau ein Befund, oder schon gerechnet."""
+    eintrag = eintraege(vektoren, "aufstellungen")[name]
+    bedarf = lagebedarf(eintrag.get("voraussetzung"))
     roh = (vektoren / "aufstellungen" / f"{name}.json").read_bytes()
-    lage = Lage(vektoren / "aufstellungen" / "anlagen",
-                partner=PARTNER_DES_PROBEBESTANDS)
+    lage = _lage_fuer(vektoren, bedarf, roh)
 
     urteil = beleg_beurteilen(roh, lage, schluessel_wurzel=schluesselordner)
+    erwartet = erwarteter_code(eintrag)
 
-    assert urteil.angenommen, [f"{f.code} {f.pfad}" for f in urteil.feststellungen]
-    assert urteil.feststellungen == ()
-    assert urteil.beleg_sha256 == eintrag["beleg_sha256"]
-
-
-@pytest.mark.parametrize("name", ABGELEHNT)
-def test_abgelehnter_aufstellungsvektor_trifft_seinen_befundcode(
-    vektoren, schluesselordner, name,
-):
-    """erwartung.json mit erwartetem Code: GENAU dieser eine Befund."""
-    eintrag = _erwartung(vektoren)[name]
-    roh = (vektoren / "aufstellungen" / f"{name}.json").read_bytes()
-
-    urteil = beleg_beurteilen(
-        roh, _lage_nach_dem_gueltigen(vektoren), schluessel_wurzel=schluesselordner,
-    )
-
-    assert not urteil.angenommen
-    assert [f.code for f in urteil.feststellungen] == [eintrag["erwarteter_code"]]
-    assert urteil.beleg_sha256 == eintrag["beleg_sha256"]
-
-
-def test_zum_auftragsschluessel_gerechnet(vektoren, schluesselordner):
-    """erwartung.json zu `auftrag_schon_gerechnet`: derselbe Schluessel wie
-    `01_gueltig`, ein neuer Beleg (neue beleg_id). Der Befund nennt im
-    erhalten das Dokument, das zu diesem Schluessel bereits besteht -
-    'Entwurf', wie es erwartung.json beschreibt ('Rechnungsnummer oder
-    Entwurf'): Mehr als ein Entwurf entsteht aus einer Aufstellung nicht."""
-    eintrag = _erwartung(vektoren)["auftrag_schon_gerechnet"]
-    roh = (vektoren / "aufstellungen" / "auftrag_schon_gerechnet.json").read_bytes()
-    schluessel = json.loads(roh)["nutzlast"]["auftragsschluessel"]
-
-    urteil = beleg_beurteilen(
-        roh,
-        _lage_nach_dem_gueltigen(vektoren, dokumente={schluessel: "Entwurf"}),
-        schluessel_wurzel=schluesselordner,
-    )
-
-    assert not urteil.angenommen
-    assert [(f.code, f.pfad, f.erhalten) for f in urteil.feststellungen] == [
-        ("AUFTRAG_SCHON_GERECHNET", "$.nutzlast.auftragsschluessel", "Entwurf"),
-    ]
+    if erwartet == "KEINE_ABLEHNUNG":
+        assert urteil.angenommen, [f"{f.code} {f.pfad}" for f in urteil.feststellungen]
+        assert urteil.feststellungen == ()
+    elif erwartet == "AUFTRAG_SCHON_GERECHNET":
+        assert not urteil.angenommen
+        assert [(f.code, f.pfad, f.erhalten) for f in urteil.feststellungen] == [
+            ("AUFTRAG_SCHON_GERECHNET", "$.nutzlast.auftragsschluessel", "Entwurf"),
+        ]
+    else:
+        assert not urteil.angenommen
+        assert [f.code for f in urteil.feststellungen] == [erwartet]
     assert urteil.beleg_sha256 == eintrag["beleg_sha256"]

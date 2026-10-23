@@ -1,10 +1,10 @@
-"""Die kanonische Form gegen die Formatvektoren (abgehakt#169).
+"""Die kanonische Form gegen die Formatvektoren (abgehakt#169, Parametrisierung #217).
 
 Die Gruppe `kanonisch` in erwartung.json faellt die Faelle, an denen sich zwei
 Umsetzungen der kanonischen Form scheiden - jede Anwendung misst in der eigenen
 Suite gegen dieselben Bytes. Gemessen wird `uebergabebeleg.kanonisch` am Sollhash
 aus erwartung.json und an den Sollbytes der `.kanonisch`-Datei; in diesem Test
-steht kein abgeschriebener Hash.
+steht kein abgeschriebener Hash. Die Fallliste kommt aus erwartung.json.
 
 Darunter ist `nfd_wird_nfc`: § 3 Zusatz 1 verlangt Normalform NFC, RFC 8785
 alleine nicht. macOS liefert Namen routinemaessig in NFD; wer hier nicht
@@ -18,36 +18,27 @@ import json
 import pytest
 
 from app.services.uebergabebeleg import kanonisch
-
-NAMEN = (
-    "schluesselordnung",
-    "nfd_wird_nfc",
-    "nfc_bleibt_nfc",
-    "geld_ist_zeichenkette",
-    "null_ist_kettenanfang",
-    "steuerzeichen",
-    "verschachtelt",
-    "ganzzahlen",
+from tests.vektoren.erwartung_lesen import (
+    eintraege,
+    namen_beim_sammeln,
+    pruefe_vollstaendigkeit,
 )
-
-
-def _erwartung(vektoren) -> dict:
-    roh = json.loads((vektoren / "erwartung.json").read_text(encoding="utf-8"))
-    return {eintrag["name"]: eintrag for eintrag in roh["kanonisch"]}
 
 
 def test_jeder_kanonisch_vektor_ist_gemessen(vektoren):
     """Kein stilles Weglassen: jede Datei im Ordner kommt in einem Test vor."""
-    dateien = {p.stem for p in (vektoren / "kanonisch").glob("*.json")}
-    assert dateien == set(_erwartung(vektoren))
-    assert dateien == set(NAMEN)
+    pruefe_vollstaendigkeit(vektoren, "kanonisch")
 
 
-@pytest.mark.parametrize("name", NAMEN)
+@pytest.mark.parametrize("name", namen_beim_sammeln("kanonisch"))
 def test_der_leser_trifft_sollbytes_und_sollhash(vektoren, name):
     """Der Vektor .json geht durch kanonisch() und muss die .kanonisch-Bytes
     treffen - byteweise und im Hash, sonst ist diese Umsetzung eine andere."""
-    eintrag = _erwartung(vektoren)[name]
+    eintrag = eintraege(vektoren, "kanonisch")[name]
+    if "sha256" not in eintrag or "bytes" not in eintrag:
+        raise AssertionError(
+            f"keine lesbare Erwartung: {name!r} ohne sha256/bytes"
+        )
     roh = (vektoren / "kanonisch" / f"{name}.json").read_bytes()
     soll = (vektoren / "kanonisch" / f"{name}.kanonisch").read_bytes()
 
