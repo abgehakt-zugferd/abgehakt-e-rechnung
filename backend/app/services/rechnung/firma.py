@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.models.company import Company
+from app.services.ersteinrichtung import ist_eingerichtet
 from app.services.rechnung.fehler import RechnungFehler
 
 
@@ -16,7 +17,7 @@ def eingerichtete_firma(
     if for_update:
         q = q.with_for_update()
     c = q.first()
-    if c is None or c.setup_completed_at is None:
+    if not ist_eingerichtet(c):
         return None
     return c
 

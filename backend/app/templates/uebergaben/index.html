@@ -12,7 +12,7 @@
 
     {% if fehler %}
     <div style="margin-bottom:16px; padding:12px 16px; background:rgba(255,77,124,0.08); border:2px solid rgba(255,77,124,0.3); font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--pink);">
-        ✗ Nicht angelegt: {{ fehler }}
+        ✗ Nicht angelegt: {{ fehler|mit_setup_link }}
     </div>
     {% endif %}
     {% if hinweis %}

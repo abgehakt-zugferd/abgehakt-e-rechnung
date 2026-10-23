@@ -29,6 +29,7 @@ from app.models.invoice import Invoice, InvoiceItem
 from app.services.archive_frist import berechne_archive_until
 from app.services.invoice_number import generate_next_invoice_number
 from app.services.kunde_zuordenbar import Zuordnung, kennung_aufloesen, meldung_fuer
+from app.services.ersteinrichtung import ERSTEINRICHTUNG_OFFEN_MELDUNG
 from app.services.rechnung.firma import eingerichtete_firma
 from app.services.steuerstatus import (
     SteuerstatusFehler,
@@ -96,7 +97,7 @@ def entwuerfe_anlegen(
     if company is None:
         company = eingerichtete_firma(db)
         if company is None:
-            raise WirkungFehler("Firmendaten sind nicht eingerichtet.")
+            raise WirkungFehler(ERSTEINRICHTUNG_OFFEN_MELDUNG)
 
     nutzlast = urteil.nutzlast
     quartal = nutzlast.get("abrechnungsquartal", "")

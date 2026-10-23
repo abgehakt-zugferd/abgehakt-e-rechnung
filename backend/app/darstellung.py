@@ -20,12 +20,15 @@ deutsche Zahlen ist zu einfach, um dafür eine Umgebungsabhängigkeit einzugehen
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 
 from app.services.beleg_status import badge_klasse, etikett
 from app.services.belegsprache import darstellung as beleg_darstellung
 
 _DE = beleg_darstellung("de")
 _PLATZHALTER = "\x00"
+_SETUP_PFAD = "/setup"
+_SETUP_LINK = f'<a href="{_SETUP_PFAD}">{_SETUP_PFAD}</a>'
 
 
 def betrag(wert, nachkommastellen: int = 2) -> str:
@@ -60,6 +63,16 @@ def menge(wert) -> str:
     return _DE.format_menge(wert)
 
 
+def mit_setup_link(text: str) -> Markup:
+    """Fehlertext escaped; nur der Pfad /setup wird zum Anker (#205).
+
+    Bewusst kein `|safe` auf dem Rohtext: fremde Zeichen in der Query bleiben
+    maskiert, der eine bekannte Pfad wird nach dem Escapen ersetzt.
+    """
+    escaped = str(escape(text or ""))
+    return Markup(escaped.replace(_SETUP_PFAD, _SETUP_LINK))
+
+
 def registriere_darstellungsfilter(templates: Jinja2Templates) -> None:
     """Macht `|euro` und `|menge` in einem Jinja-Environment verfügbar.
 
@@ -75,3 +88,4 @@ def registriere_darstellungsfilter(templates: Jinja2Templates) -> None:
     templates.env.filters["menge"] = menge
     templates.env.filters["beleg_etikett"] = etikett
     templates.env.filters["beleg_badge"] = badge_klasse
+    templates.env.filters["mit_setup_link"] = mit_setup_link
