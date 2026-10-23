@@ -8,8 +8,6 @@ Entwurf (kein Invoice, kein UebergabeEingang), sichtbar als `WirkungFehler`.
 
 import uuid
 from datetime import datetime, timezone
-from decimal import Decimal
-
 import pytest
 
 from app.models.company import Company
@@ -129,10 +127,9 @@ def _urteil_abrechnungsauftrag():
         nutzlast_art="abrechnungsauftrag",
         erzeugt_am=ERZEUGT,
         nutzlast=nutzlast,
-        abrechnungsquartal="2026-Q2",
-        projekt="Probeverlag",
-        zahl_gutschriften=1,
-        summe_netto=Decimal("174.33"),
+        gegenstand="Probeverlag",
+        zeitraum="2026-Q2",
+        summe="174,33",
     )
 
 

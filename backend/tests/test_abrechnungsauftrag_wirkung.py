@@ -74,10 +74,13 @@ def _urteil(
         feststellungen=() if angenommen else (Feststellung("SIGNATUR_UNGUELTIG", "$"),),
         absender="tantiemen-app", nutzlast_art="abrechnungsauftrag",
         erzeugt_am=ERZEUGT if erzeugt_am is None else erzeugt_am,
-        nutzlast=nutzlast, abrechnungsquartal="2026-Q2", projekt="Probeverlag",
-        zahl_gutschriften=len(nutzlast["gutschriften"]),
-        summe_netto=Decimal(nutzlast["gutschriften"][0]["summe"]["netto"])
-        if nutzlast["gutschriften"] else Decimal("0"),
+        nutzlast=nutzlast,
+        gegenstand="Probeverlag", zeitraum="2026-Q2",
+        summe=(
+            f"{Decimal(nutzlast['gutschriften'][0]['summe']['netto']):.2f}"
+            .replace(".", ",")
+            if nutzlast["gutschriften"] else "0,00"
+        ),
     )
 
 

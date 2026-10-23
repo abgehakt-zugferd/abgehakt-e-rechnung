@@ -18,6 +18,7 @@ from app.database import SessionLocal
 from app.routers.uebergaben import RICHTUNG
 from app.services.uebergabe_befund import beleg_beurteilen
 from app.services.uebergabe_eingang import DatenbankLage
+from app.services.uebergabe_listenzeile import annahme_stand
 
 
 def main() -> int:
@@ -43,10 +44,7 @@ def main() -> int:
             if urteil.bereits_verarbeitet:
                 stand = "bereits verarbeitet"
             elif urteil.angenommen:
-                stand = (
-                    f"angenommen, {urteil.zahl_gutschriften} Gutschrift(en), "
-                    f"{urteil.summe_netto} netto"
-                )
+                stand = annahme_stand(urteil)
             else:
                 abgelehnt += 1
                 erster = urteil.feststellungen[0]

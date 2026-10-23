@@ -46,6 +46,7 @@ from app.services.uebergabe_eingang import (
     KopieFehler,
     kopie_aufbewahren,
 )
+from app.services.uebergabe_listenzeile import zeile_aus_urteil
 
 logger = logging.getLogger(__name__)
 
@@ -97,10 +98,6 @@ def _datei(ordner: Path, dateiname: str) -> Path:
     return datei
 
 
-def _geld(wert) -> str:
-    return f"{wert:.2f}".replace(".", ",") if wert is not None else ""
-
-
 def _zeile(datei: Path, db: Session) -> dict:
     """Ein Beleg, ein Befund. Der Befund entsteht hier und nicht in der Ansicht."""
     roh = datei.read_bytes()
@@ -123,12 +120,7 @@ def _zeile(datei: Path, db: Session) -> dict:
             beleg_sha256=hashlib.sha256(roh).hexdigest(),
             feststellungen=(Feststellung("BELEG_UNLESBAR", "$"),),
         )
-    return {
-        "dateiname": datei.name,
-        "urteil": urteil,
-        "erzeugt_am": urteil.erzeugt_am.strftime("%d.%m.%Y %H:%M") if urteil.erzeugt_am else "",
-        "summe_netto": _geld(urteil.summe_netto),
-    }
+    return zeile_aus_urteil(datei.name, urteil)
 
 
 def _zurueck(fehler: str) -> RedirectResponse:
