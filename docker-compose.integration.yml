@@ -37,7 +37,7 @@ services:
     volumes: !override
       - ./storage-integration:/app/storage
       - ${UEBERGABEN_ORDNER:?in integration.env setzen}:/uebergaben
-      - ./backend/schluessel:/app/schluessel:ro
+      - ./schluessel-integration:/app/schluessel:ro
     environment:
       INSTALLATION_MODE: testinstanz
       TESTINSTANZ_MAIL_TO: ${TESTINSTANZ_MAIL_TO:?in integration.env setzen}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fuenf Wachen, die vor jedem Push und in der CI laufen.
+# Sechs Wachen, die vor jedem Push und in der CI laufen.
 #
 # Sie stehen hier als Skript und nicht in der Testsuite, weil sie Dateien im
 # Wurzelverzeichnis lesen: der Testcontainer wird aus `backend/` gebaut und sieht den
@@ -114,6 +114,52 @@ if grep -qE '\$\{DB_[A-Z_]*PASSWORD:-' docker-compose.yml; then
     echo "  Pflichtvariablen mit :? — s. .env.example (wie feiyr/tantiemen)."
   } >&2
   fehler=1
+fi
+
+# Ketten-Testinstanz: Probeschluessel liegen in schluessel-integration/, bewusst
+# neben backend/, damit sie nicht ins Auslieferungsabbild geraten. Ein Mount von
+# ./backend/schluessel liefert nur das README und endet mit SCHLUESSEL_UNBEKANNT.
+# Jeder Mount auf /app/schluessel muss ./schluessel-integration sein; fehlt der
+# Mount ganz, ist das ROT (kein stiller Erfolg bei leerer Treffermenge).
+compose_int="docker-compose.integration.yml"
+if [ ! -f "$compose_int" ]; then
+  {
+    echo ""
+    echo "schluessel: ROT - $compose_int fehlt."
+  } >&2
+  fehler=1
+else
+  schluessel_fund=0
+  schluessel_falsch=""
+  while IFS= read -r zeile; do
+    printf '%s\n' "$zeile" | grep -qE '^[[:space:]]*#' && continue
+    printf '%s\n' "$zeile" | grep -qE ':/app/schluessel' || continue
+    printf '%s\n' "$zeile" | grep -qE '^[[:space:]]*-' || continue
+    schluessel_fund=1
+    quelle=$(printf '%s\n' "$zeile" | sed -n \
+      's/^[[:space:]]*-[[:space:]]*"\{0,1\}\([^":]*\):\/app\/schluessel.*/\1/p')
+    if [ "$quelle" != "./schluessel-integration" ]; then
+      schluessel_falsch="${schluessel_falsch}${zeile}
+"
+    fi
+  done < "$compose_int"
+  if [ "$schluessel_fund" -eq 0 ]; then
+    {
+      echo ""
+      echo "schluessel: ROT - kein Mount auf /app/schluessel in $compose_int."
+      echo "  Gemeint ist './schluessel-integration:/app/schluessel:ro'."
+    } >&2
+    fehler=1
+  elif [ -n "$schluessel_falsch" ]; then
+    {
+      echo ""
+      echo "schluessel: ROT - Mount auf /app/schluessel zeigt nicht auf ./schluessel-integration."
+      echo "  Probeschluessel liegen neben backend/, sonst wandern sie ins Auslieferungsabbild."
+      echo "  Gemeint ist './schluessel-integration:/app/schluessel:ro'."
+      printf '%s' "$schluessel_falsch"
+    } >&2
+    fehler=1
+  fi
 fi
 
 exit "$fehler"
