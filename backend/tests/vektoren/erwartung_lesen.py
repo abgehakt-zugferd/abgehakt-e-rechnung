@@ -118,7 +118,12 @@ def pruefe_vollstaendigkeit(vektoren: Path, gruppe: str) -> None:
 
 
 def lagebedarf(voraussetzung: Optional[str]) -> Lagebedarf:
-    """Wertet die Voraussetzung aus; Unbekanntes scheitert sichtbar."""
+    """Wertet die Voraussetzung aus; Unbekanntes scheitert sichtbar.
+
+    Fehlt das Feld, gilt trotzdem die Lage nach `01_gueltig` (nach_01): Einige
+    Ablehnungsvektoren nennen keine Voraussetzung, weil ihr Schluessel nicht
+    mit 01 kollidiert - gemessen werden sie dennoch als Naechster der Kette.
+    """
     if voraussetzung is None:
         return Lagebedarf(nach_01=True, mit_dokument=False)
     bedarf = _BEKANNTE_VORAUSSETZUNGEN.get(voraussetzung)
