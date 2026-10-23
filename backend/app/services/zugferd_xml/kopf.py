@@ -20,14 +20,36 @@ def systemnotizen(invoice_type: str | None, original_nummer: str | None) -> list
     return []
 
 
+def _belegnotiz(wert: str | None) -> str | None:
+    """Nicht-leerer Freitext fuer BT-22, sonst None (EN 16931 R74).
+
+    Reiner Text vom Beleg: kein ReportLab-Markup (``description_markup``
+    wandelt Zeilenumbrueche in ``<br/>`` um — das gehoert nicht in die CII).
+    Escaping uebernimmt ``esc`` beim Schreiben. ``None`` und Leerraum fallen
+    weg; ``or ""`` verhindert, dass ``None`` als Literal ``"None"`` landet.
+    """
+    text = (wert or "").strip()
+    return text or None
+
+
 def notes_xml(invoice: Invoice) -> str:
     # BT-22 ist beim Gutschriftverfahren Pflicht und darf nicht von frei
     # bearbeitbaren Nutzernotizen abhängen.
+    # Reihenfolge: Systemnotizen, Kopftext, Fusstext, dann invoice.notes.
+    # BT-21 (SubjectCode) entfaellt: UNTDID 4451 hat keinen klaren Code fuer
+    # Beleg-Kopf- bzw. Fusstext (AAI/ACB waeren Rateerei).
     art = belegart(invoice.invoice_type).intern
     original_nummer = (
         invoice.original_invoice.invoice_number if art == "self_billing_storno" else None
     )
-    notizen = systemnotizen(invoice.invoice_type, original_nummer)
+    notizen = list(systemnotizen(invoice.invoice_type, original_nummer))
+    for wert in (
+        getattr(invoice, "kopftext", None),
+        getattr(invoice, "fusstext", None),
+    ):
+        text = _belegnotiz(wert)
+        if text is not None:
+            notizen.append(text)
     if invoice.notes:
         notizen.append(invoice.notes)
     return "".join(f"""
