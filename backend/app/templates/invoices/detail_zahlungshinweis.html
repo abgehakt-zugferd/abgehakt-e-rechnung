@@ -1,0 +1,11 @@
+{% if zahlungshinweis_fehlt %}
+<div role="alert" class="card" style="border:2px solid var(--gold); margin-bottom:16px;">
+    <strong>Zahlungshinweis fehlt</strong>
+    <p>Finalisieren ist gesperrt. Bitte den Zahlungshinweis
+        <a href="/customers/{{ invoice.customer_id }}/bearbeiten">beim Kunden hinterlegen</a>
+        und anschließend in diesen Entwurf übernehmen.</p>
+    <form method="post" action="/invoices/{{ invoice.id }}/zahlungshinweis-uebernehmen">
+        <button type="submit" class="btn-secondary">Kundenvorgabe übernehmen</button>
+    </form>
+</div>
+{% endif %}

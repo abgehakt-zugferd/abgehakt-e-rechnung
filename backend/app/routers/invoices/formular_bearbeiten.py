@@ -25,6 +25,7 @@ from app.routers.invoices.formular_schreiben import (
     zahlungsfrist_pruefen,
 )
 from app.services import belegsperre, kundenvorgaben
+from app.services.auftragszahlung import ist_rechnungsauftrag
 from app.services.belegart import InvoiceTypeNotSelectable, manuelle_belegart
 from app.services.belegsummen import Belegsummen, belegsummen
 
@@ -129,6 +130,9 @@ def sprache_und_zahlung_uebernehmen(invoice: Invoice, form, company: Company) ->
         invoice.document_language = belegsprache_aus_form(
             form, fehlt=invoice.document_language or "de",
         )
+        if ist_rechnungsauftrag(invoice):
+            invoice.payment_terms = (form.get("payment_terms") or "").strip() or None
+            return
         invoice.payment_terms = zahlungsbedingungen(
             form, company, invoice.document_language,
         )

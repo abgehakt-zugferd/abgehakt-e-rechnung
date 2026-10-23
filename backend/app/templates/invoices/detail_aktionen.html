@@ -1,0 +1,147 @@
+    <!-- Action Bar -->
+    <div class="flex flex-wrap gap-3 mb-6">
+        {% if invoice.status == 'draft' %}
+        {# Eine Gutschrift spiegelt ihr Original und ist deshalb nicht bearbeitbar (#8).
+           Der Router weist den Aufruf ohnehin ab; hier verschwindet nur der Knopf,
+           der ins Leere fuehrte. #}
+        {% if invoice.invoice_type not in ('credit_note', 'self_billing_storno') %}
+        <a href="/invoices/{{ invoice.id }}/bearbeiten" class="btn-secondary">✎ BEARBEITEN</a>
+        {% endif %}
+        <a href="/invoices/{{ invoice.id }}/vorschau" class="btn-secondary">👁 VORSCHAU</a>
+        <form method="post" action="/invoices/{{ invoice.id }}/pruefen">
+            <button type="submit" class="btn-secondary">🔍 PRÜFEN (§ 14 UStG)</button>
+        </form>
+        <form method="post" action="/invoices/{{ invoice.id }}/finalisieren"
+              onsubmit="return confirm('Rechnung finalisieren? Danach keine Änderung mehr möglich.')">
+            <button type="submit" class="btn-primary" {% if zahlungshinweis_fehlt %}disabled{% endif %}>✓ FINALISIEREN &amp; ZUGFeRD</button>
+        </form>
+        <form method="post" action="/invoices/{{ invoice.id }}/verwerfen"
+              onsubmit="return confirm('Entwurf verwerfen? Die Rechnungsnummer {{ invoice.invoice_number }} bleibt vergeben, der Entwurf ist über den Filter „Verworfen“ weiter auffindbar.')">
+            <button type="submit" class="btn-danger">🗑 VERWERFEN</button>
+        </form>
+        {% endif %}
+
+        {% if invoice.status == 'discarded' %}
+        <form method="post" action="/invoices/{{ invoice.id }}/zurueckholen">
+            <button type="submit" class="btn-secondary">↩ ZURÜCKHOLEN</button>
+        </form>
+        {% endif %}
+
+        {% if invoice.pdf_filename %}
+        <a href="/invoices/{{ invoice.id }}/pdf" class="btn-secondary" target="_blank">⬇ PDF LADEN</a>
+        {% endif %}
+
+        {% if invoice.status in ('issued', 'paid') %}
+        <form method="post" action="/invoices/{{ invoice.id }}/pruefen">
+            <button type="submit" class="btn-secondary">🔍 ERNEUT PRÜFEN</button>
+        </form>
+        {% endif %}
+
+        {# Auch bei `paid`: ein bezahlter Beleg darf noch einmal verschickt werden
+           (#146) — der DATEV-Upload scheitert im Betrieb regelmäßig. #}
+        {% if invoice.status in ('issued', 'paid') and smtp_configured %}
+        <div x-data="{ open: false }" class="relative">
+            <button @click="open = !open" class="btn-primary">
+                {% if invoice.datev_sent_at %}📧 ERNEUT SENDEN{% else %}📧 SENDEN{% if datev_configured %} + DATEV{% endif %}{% endif %}
+            </button>
+            <div x-show="open" x-cloak @click.outside="open = false"
+                 style="position:absolute; right:0; top:calc(100% + 8px); width:320px; background:var(--surface); border:2px solid var(--border-hi); padding:20px; z-index:10; box-shadow:6px 6px 0 rgba(0,0,0,0.9), 0 0 20px var(--gold-glow);">
+                <form method="post" action="/invoices/{{ invoice.id }}/datev-senden"
+                      {% if invoice.datev_sent_at %}onsubmit="return confirm('Diese Rechnung wurde am {{ invoice.datev_sent_at.strftime('%d.%m.%Y um %H:%M') }} bereits versendet. Erneut senden?')"{% endif %}>
+                    <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--cyan); margin-bottom:12px;">E-MAIL VERSAND</p>
+                    <label class="label">EMPFÄNGER</label>
+                    <input type="email" name="customer_email" value="{{ invoice.customer.email if invoice.customer else '' }}" class="input" style="margin-bottom:12px;" required>
+                    <label class="label">KOPIE AN (CC)</label>
+                    {# `multiple`: ohne das Attribut weist schon der Browser eine
+                       kommagetrennte Liste ab, und der Server bekäme die zweite
+                       Adresse nie zu sehen (#58). #}
+                    <input type="email" multiple name="cc_email" value="{{ cc_default }}" class="input" style="margin-bottom:6px;" placeholder="optional, mehrere mit Komma">
+                    {# Ein vorbelegtes Feld erklärt sich nicht von selbst: woher der
+                       Wert kommt und was ein Überschreiben bedeutet, entscheidet
+                       darüber, ob jemand die Voreinstellung für alle Kunden ändert,
+                       obwohl er nur diesen einen Versand meint. #}
+                    <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); line-height:1.4; color:var(--text-dim); margin-bottom:12px;">
+                        {% if cc_herkunft == 'kunde' %}
+                        Aus dem Kundenstamm von {{ invoice.customer.name }}. Änderung gilt nur für diesen Versand.
+                        {% elif cc_herkunft == 'einstellungen' %}
+                        Aus den Einstellungen, gilt für alle Kunden. Änderung gilt nur für diesen Versand.
+                        {% else %}
+                        Mehrere Adressen mit Komma trennen. Für den Kunden sichtbar.
+                        {% endif %}
+                    </p>
+                    {% if datev_configured %}
+                    <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro); line-height:1.6; color:var(--green); margin-bottom:12px;">✓ BCC → DATEV UPLOAD MAIL</p>
+                    {% endif %}
+                    <button type="submit" class="btn-primary" style="width:100%;">ABSENDEN</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Entscheidung 6 (Bauschritt 5a): Die Buchhaltung kann den Beleg
+           bekommen, bevor der Kunde ihn hat — ein eigener Weg nur an die
+           Upload-Adresse, ohne Blindkopie. Nur bei gestellten Belegen und nur
+           mit konfigurierter Upload-Adresse: Ohne sie kann die Route nicht
+           gelingen, und ein Knopf, der nur einen Fehler zeigt, wäre keiner. #}
+        {% if invoice.status in ('issued', 'paid') and datev_configured %}
+        <form method="post" action="/invoices/{{ invoice.id }}/an-buchhaltung"
+              {% if invoice.datev_sent_at %}onsubmit="return confirm('Dieser Beleg ging bereits an die Buchhaltung. Erneut senden?')"{% endif %}>
+            <button type="submit" class="btn-secondary">NUR AN DIE BUCHHALTUNG</button>
+        </form>
+        {% endif %}
+
+        {% if invoice.status == 'paid' and invoice.bezahlt_am %}
+        <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--green);">
+            bezahlt am {{ invoice.bezahlt_am.strftime('%d.%m.%Y') }}
+        </p>
+        {% endif %}
+
+        {% if invoice.status == 'issued' %}
+        <form method="post" action="/invoices/{{ invoice.id }}/status" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+            <input type="hidden" name="new_status" value="paid">
+            <label style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                bezahlt am
+                <input type="date" name="bezahlt_am" value="{{ heute.isoformat() }}"
+                       min="{{ invoice.issue_date.isoformat() }}" max="{{ heute.isoformat() }}"
+                       style="margin-left:6px; font-family:'VT323',monospace; font-size:var(--fs-text); background:var(--bg); color:var(--text-hi); border:1px solid var(--border); padding:4px 6px;">
+            </label>
+            <button type="submit" class="btn-success">✓ ALS BEZAHLT MARKIEREN</button>
+        </form>
+        {% if invoice.invoice_type not in ('credit_note', 'self_billing_storno') %}
+        <form method="post" action="/invoices/{{ invoice.id }}/status"
+              onsubmit="return confirm('Rechnung als storniert markieren? (nur Status, kein Stornobeleg)')">
+            <input type="hidden" name="new_status" value="cancelled">
+            <button type="submit" class="btn-danger">✗ ALS STORNIERT MARKIEREN</button>
+        </form>
+        {% endif %}
+        {% endif %}
+
+        {% if invoice.invoice_type == 'credit_note' and invoice.status in ('issued', 'paid') %}
+        {# Issue #142: eine gestellte Gutschrift ist endgueltig. Nicht nur sperren, den Weg zeigen. #}
+        <div data-hinweis="gutschrift-endgueltig" style="flex-basis:100%; padding:10px 14px; border:2px solid var(--border); font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+            Diese Stornorechnung ist endgültig; sie ist selbst die Korrektur und lässt sich nicht stornieren.
+            {% if invoice.original_invoice %}
+            War sie falsch, stelle zur Rechnung
+            <a href="/invoices/{{ invoice.original_invoice.id }}" style="color:var(--gold); text-decoration:underline;">{{ invoice.original_invoice.invoice_number }}</a>
+            eine neue Rechnung.
+            {% if original_ersetzbar %}
+            <a href="/invoices/neu?ersetzt={{ invoice.original_invoice.id }}" class="btn-secondary" style="margin-left:6px;">ERSATZRECHNUNG ANLEGEN</a>
+            {% endif %}
+            {% else %}
+            War sie falsch, stelle eine neue Rechnung.
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if invoice.status in ('issued', 'paid') and invoice.invoice_type not in ('credit_note', 'self_billing_storno') %}
+        <form method="post" action="/invoices/{{ invoice.id }}/storno"
+              onsubmit="return confirm('Stornorechnung zu diesem Beleg erzeugen? Die Originalrechnung bleibt erhalten.')">
+            <button type="submit" class="btn-secondary">↩ STORNO ERSTELLEN</button>
+        </form>
+        {% endif %}
+        {% if ersetzbar %}
+        <a href="/invoices/neu?ersetzt={{ invoice.id }}" class="btn-secondary">ERSATZRECHNUNG ANLEGEN</a>
+        {% endif %}
+        <a href="/invoices/neu?vorlage={{ invoice.id }}" class="btn-secondary">ALS VORLAGE</a>
+    </div>
+

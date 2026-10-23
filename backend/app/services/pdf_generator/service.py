@@ -11,6 +11,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 from app.models.company import Company
 from app.models.invoice import Invoice
+from app.services.auftragszahlung import ohne_ueberweisungsaufforderung
 from app.services.belegrollen import besetzung
 from app.services.pdf_fonts import register_fonts
 from app.services.pdf_fuss import Fuss, leinwand
@@ -56,7 +57,9 @@ def generate_pdf(invoice: Invoice, company: Company, output_path: Path, draft: b
 
 
 def _doc_und_canvas(output_path, invoice, company, d, rollen, body):
-    fuss = Fuss(company, d, rollen=rollen, schrift=body, breite=A4[0] - 4 * cm, links=2 * cm, mit_bank=not ist_gutschrift(invoice))
+    mit_bank = not ist_gutschrift(invoice) and not ohne_ueberweisungsaufforderung(invoice)
+    fuss = Fuss(company, d, rollen=rollen, schrift=body, breite=A4[0] - 4 * cm,
+                links=2 * cm, mit_bank=mit_bank)
     doc = SimpleDocTemplate(
         str(output_path),
         pagesize=A4,

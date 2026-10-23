@@ -9,6 +9,7 @@ from app.config import get_settings
 from app.models.company import Company
 from app.models.invoice import Invoice
 from app.services import auftragsschluessel, mustang, pdf_generator, pdfa, validator, zugferd_xml
+from app.services.auftragszahlung import finalisierung_pruefen
 from app.services.archive_frist import berechne_archive_until
 from app.services.belegart import ist_storno
 from app.services.rechnung.fehler import RechnungFehler
@@ -253,6 +254,7 @@ def archivieren_und_committen(db: Session, zugferd_pdf: Path, xml_path: Path) ->
 def ausfuehren(db: Session, invoice_id) -> Invoice:
     """Entwurf finalisieren: prüfen, Beleg erzeugen, archivieren, committen."""
     invoice = entwurf_sperren(db, invoice_id)
+    finalisierung_pruefen(invoice)
     stelltag_verschieben(invoice)
     company = get_company(db)
     rechtskonform_pruefen(invoice, company)

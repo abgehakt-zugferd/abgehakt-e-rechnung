@@ -1,0 +1,63 @@
+            <!-- Line items -->
+            <div class="card">
+                <h2 style="margin-bottom:16px;">POSITIONEN</h2>
+                <div class="overflow-x-auto" style="border:1px solid var(--border); margin-bottom:16px;">
+                    <table class="w-full" style="font-family:'VT323',monospace; font-size:var(--fs-gross);">
+                        <thead style="background:var(--panel);">
+                            <tr>
+                                <th class="table-header" style="padding:8px 12px; text-align:left;">POS.</th>
+                                <th class="table-header" style="padding:8px 12px; text-align:left;">BESCHREIBUNG</th>
+                                <th class="table-header" style="padding:8px 12px; text-align:right;">MENGE</th>
+                                <th class="table-header" style="padding:8px 12px; text-align:right;">PREIS</th>
+                                <th class="table-header" style="padding:8px 12px; text-align:right;">MWST.</th>
+                                <th class="table-header" style="padding:8px 12px; text-align:right;">NETTO</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in invoice.items %}
+                            <tr class="table-row">
+                                <td style="padding:8px 12px; color:var(--text-dim);">{{ item.position }}</td>
+                                {# pre-line: ohne das kollabieren die Umbrueche und die
+                                   Detailseite saehe anders aus als das PDF. #}
+                                <td style="padding:8px 12px; color:var(--text); white-space:pre-line;">{{ item.description }}{% if item.artikelnummer %}
+<span style="color:var(--text-dim); font-size:var(--fs-klein);">Art.-Nr. {{ item.artikelnummer }}</span>{% endif %}{% if item.leistung_von and item.leistung_bis %}
+<span style="color:var(--text-dim); font-size:var(--fs-klein);">Leistungszeitraum {{ item.leistung_von.strftime('%d.%m.%Y') }} – {{ item.leistung_bis.strftime('%d.%m.%Y') }}</span>{% endif %}</td>
+                                <td style="padding:8px 12px; text-align:right; color:var(--text-dim); white-space:nowrap;">{{ item.quantity|menge }} {{ item.unit }}</td>
+                                <td style="padding:8px 12px; text-align:right; color:var(--text-dim); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text); white-space:nowrap;">{{ item.unit_price|euro }}</td>
+                                <td style="padding:8px 12px; text-align:right; color:var(--text-dim); white-space:nowrap;">{{ item.tax_rate|int }} %</td>
+                                <td style="padding:8px 12px; text-align:right; color:var(--text-hi); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text); white-space:nowrap;">{{ item.net_amount|euro }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Totals -->
+                <div style="border-top:2px solid var(--border-hi); padding-top:14px; font-family:'VT323',monospace; font-size:var(--fs-gross);">
+                    {# Abzug auf Belegebene (#147): net_total ist die Basis NACH Abzug,
+                       deshalb steht die Summe der Positionen als eigene Zeile davor. #}
+                    {% if invoice.abzug_betrag %}
+                    <div class="flex justify-between" style="color:var(--text-dim); margin-bottom:4px;">
+                        <span>Positionssumme</span>
+                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ (invoice.net_total + invoice.abzug_betrag)|euro }}</span>
+                    </div>
+                    <div class="flex justify-between" style="color:var(--text-dim); margin-bottom:4px;">
+                        <span>Abzug: {{ invoice.abzug_grund }}</span>
+                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ invoice.abzug_betrag|euro }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="flex justify-between" style="color:var(--text-dim); margin-bottom:4px;">
+                        <span>Nettobetrag</span>
+                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ invoice.net_total|euro }}</span>
+                    </div>
+                    <div class="flex justify-between" style="color:var(--text-dim); margin-bottom:8px;">
+                        <span>MwSt.</span>
+                        <span style="font-family:'Share Tech Mono',monospace; font-size:var(--fs-gross);">{{ invoice.tax_total|euro }}</span>
+                    </div>
+                    <div class="flex justify-between" style="border-top:1px solid var(--border); padding-top:10px;">
+                        <span style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--gold);">GESAMTBETRAG</span>
+                        <span style="font-family:'Press Start 2P',monospace; font-size:var(--fs-text); color:var(--gold); text-shadow:0 0 15px rgba(255,215,0,0.35);">{{ invoice.gross_total|euro }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment terms -->

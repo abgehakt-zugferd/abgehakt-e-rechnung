@@ -156,15 +156,17 @@ def test_zahlungshinweis_des_kunden_ersetzt_die_faelligkeit(pg_session):
     )
 
 
-def test_ohne_zahlungshinweis_ist_der_entwurf_in_14_tagen_faellig(pg_session):
+def test_ohne_zahlungshinweis_entsteht_entwurf_ohne_faelligkeit(pg_session):
+    """#206: Ohne Kundenvorgabe keine erfundene Frist; der Entwurf bleibt offen."""
     _kunde(pg_session, zahlungshinweis=None)
 
     entwurf = entwurf_anlegen(pg_session, _urteil())
     pg_session.flush()
 
+    assert entwurf.status == "draft"
     assert entwurf.payment_terms is None
     assert entwurf.issue_date == date(2026, 9, 3)
-    assert entwurf.due_date == date(2026, 9, 17)
+    assert entwurf.due_date is None
 
 
 def test_der_beleg_wird_gemerkt(pg_session):
@@ -232,9 +234,11 @@ def test_finalisieren_setzt_das_ausstellungsdatum_auf_heute(pg_session):
     """Der Entwurf traegt das Datum nur vorlaeufig (Kalendertag von
     erzeugt_am); gestellt wird die Rechnung am Tag des Finalisierens. Das
     Faelligkeitsdatum wandert um denselben Abstand mit, die Archivfrist
-    haengt am neuen Tag."""
-    _kunde(pg_session, zahlungshinweis=None)
+    haengt am neuen Tag. Ein Termin am Entwurf ist hier gesetzt, weil #206
+    ohne Kundenvorgabe keinen Termin mehr erfindet."""
+    _kunde(pg_session)
     entwurf = entwurf_anlegen(pg_session, _urteil())
+    entwurf.due_date = entwurf.issue_date + timedelta(days=14)
     pg_session.commit()
     vorher = entwurf.issue_date
 
