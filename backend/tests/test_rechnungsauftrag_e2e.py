@@ -103,8 +103,11 @@ def test_380_aus_einem_auftrag_bis_zum_archiv_durch_die_echte_pipeline(
         assert r.status_code == 303, r.text
         pg_session.expire_all()
         row = pg_session.get(Invoice, entwurf.id)
-        assert row.status == "issued"
+        # #227: aus Rechnungsauftrag bei Ausstellung bezahlt.
+        assert row.status == "paid"
         assert "<ram:TypeCode>380</ram:TypeCode>" in row.zugferd_xml
+        assert "<ram:DuePayableAmount>0.00</ram:DuePayableAmount>" in row.zugferd_xml
+        assert "TotalPrepaidAmount" in row.zugferd_xml
         # Die negative Position ist als solche kodiert: Das Vorzeichen sitzt
         # auf der Menge (BR-27 verbietet negative Einzelpreise), der
         # Positionsbetrag bleibt negativ.

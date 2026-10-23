@@ -9,9 +9,10 @@ from app.config import get_settings
 from app.models.company import Company
 from app.models.invoice import Invoice
 from app.services import auftragsschluessel, mustang, pdf_generator, pdfa, validator, zugferd_xml
-from app.services.auftragszahlung import finalisierung_pruefen
+from app.services.auftragszahlung import finalisierung_pruefen, ist_rechnungsauftrag
 from app.services.archive_frist import berechne_archive_until
 from app.services.belegart import ist_storno
+from app.services.bezahlt_am import vorbereiten_bezahlt
 from app.services.rechnung.fehler import RechnungFehler
 from app.services.rechnung.firma import get_company
 from app.zeit import heute
@@ -235,6 +236,20 @@ def als_gestellt_markieren(invoice: Invoice, zugferd_pdf: Path) -> None:
             auftragsschluessel.freigeben(original)
 
 
+def als_bezahlt_wenn_rechnungsauftrag(db: Session, invoice: Invoice) -> None:
+    """Rechnungsauftrag: nach issued denselben Weg wie „als bezahlt markieren“.
+
+    Guard erlaubt bezahlt_am nur bei issued→paid (nicht draft→paid). Flush
+    dazwischen, damit die History den Zwischenstand sieht. bezahlt_am = heute
+    wie die Statusroute ohne Formular-Datum; auf dem Beleg steht kein Datum.
+    """
+    if not ist_rechnungsauftrag(invoice):
+        return
+    db.flush()
+    vorbereiten_bezahlt(db, invoice, None, heute=heute())
+    invoice.status = "paid"
+
+
 def archivieren_und_committen(db: Session, zugferd_pdf: Path, xml_path: Path) -> None:
     # Erst ins Archiv, dann committen. Die umgekehrte Reihenfolge wäre der
     # schlechtere Fehler: eine gestellte Rechnung ohne Beleg auf der Platte ist
@@ -267,6 +282,7 @@ def ausfuehren(db: Session, invoice_id) -> Invoice:
         zugferd_pdf, xml_path = beleg_im_arbeitsverzeichnis(
             db, invoice, company, arbeitsverzeichnis, xml_content)
         als_gestellt_markieren(invoice, zugferd_pdf)
+        als_bezahlt_wenn_rechnungsauftrag(db, invoice)
         archivieren_und_committen(db, zugferd_pdf, xml_path)
     finally:
         shutil.rmtree(arbeitsverzeichnis, ignore_errors=True)

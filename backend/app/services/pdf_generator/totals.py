@@ -9,6 +9,7 @@ from reportlab.lib.units import cm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.platypus import Paragraph, Table, TableStyle
 
+from app.services.auftragszahlung import ist_rechnungsauftrag
 from app.services.belegart import belegart
 from app.services.belegsummen import belegsummen
 
@@ -26,14 +27,17 @@ def append_steuer_und_summenblock(story, invoice, d, styles: Styles, body_font, 
     betrag_breite = _betrag_breite(invoice, summen, tax_groups, endbetrag, styles, d, body_font, bold_font)
     totals_table = Table(rows, colWidths=[SUMMEN_BREITE * 0.6, max(SUMMEN_BREITE * 0.4, betrag_breite)])
     totals_table.hAlign = "RIGHT"
+    # Goldzeile: Rechnungsbetrag; bei Rechnungsauftrag liegen darunter noch
+    # „Bereits gezahlt“ und „Offener Betrag“ (letzte Zeile).
+    gold_zeile = -3 if ist_rechnungsauftrag(invoice) else -1
     totals_table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), body_font),
         ("ALIGN", (0, 0), (-1, -1), "LEFT"),
         ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-        ("LINEABOVE", (0, -1), (-1, -1), 1, GOLD),
-        ("BACKGROUND", (0, -1), (-1, -1), GOLD_TINT),
-        ("TOPPADDING", (0, -1), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, -1), (-1, -1), 6),
+        ("LINEABOVE", (0, gold_zeile), (-1, gold_zeile), 1, GOLD),
+        ("BACKGROUND", (0, gold_zeile), (-1, gold_zeile), GOLD_TINT),
+        ("TOPPADDING", (0, gold_zeile), (-1, gold_zeile), 6),
+        ("BOTTOMPADDING", (0, gold_zeile), (-1, gold_zeile), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -2), 3),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
@@ -58,6 +62,17 @@ def _totals_data(invoice, d, styles, tax_groups, summen):
     label = d.label_gutschriftbetrag if belegart(invoice.invoice_type).intern == "self_billing" else d.label_rechnungsbetrag
     endbetrag = money(summen.brutto) if mit_abzug else money(invoice.gross_total)
     rows.append([Paragraph(f"<b>{label}</b>", styles.small_bold), Paragraph(f"<b>{endbetrag}</b>", styles.right_bold)])
+    if ist_rechnungsauftrag(invoice):
+        # Kein Zahlungsdatum/keine Zahlungsnummer: kommen erst mit spaeterem
+        # Uebergabeformat. Nur Betrag und offener Rest (0,00).
+        rows.append([
+            Paragraph(d.label_bereits_gezahlt, styles.small),
+            Paragraph(endbetrag, styles.right),
+        ])
+        rows.append([
+            Paragraph(f"<b>{d.label_offener_betrag}</b>", styles.small_bold),
+            Paragraph(f"<b>{money(Decimal('0'))}</b>", styles.right_bold),
+        ])
     return rows, endbetrag
 
 
