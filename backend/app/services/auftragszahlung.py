@@ -1,5 +1,8 @@
 """Zahlungsvorgabe für Rechnungsaufträge, ohne erfundene Zahlungsfrist."""
 
+from sqlalchemy import and_
+
+from app.services.belegart import invoice_type_ungesetzt
 from app.services.rechnung.fehler import RechnungFehler
 
 
@@ -11,6 +14,23 @@ def ist_rechnungsauftrag(invoice) -> bool:
         getattr(invoice, "auftragsschluessel", None)
         and getattr(invoice, "uebergabe_beleg_sha256", None)
         and getattr(invoice, "invoice_type", None) is None
+    )
+
+
+def ist_rechnungsauftrag_sql(model=None):
+    """SQL-Zwilling zu ist_rechnungsauftrag: dieselbe Bedingung, eine Quelle.
+
+    Kennzahlen und Listenfilter schliessen darueber aus, statt die drei
+    Felder erneut zu formulieren. `model` defaultet auf Invoice.
+    invoice_type nur ueber belegart.invoice_type_ungesetzt (#172).
+    """
+    if model is None:
+        from app.models.invoice import Invoice
+        model = Invoice
+    return and_(
+        model.auftragsschluessel.isnot(None),
+        model.uebergabe_beleg_sha256.isnot(None),
+        invoice_type_ungesetzt(model.invoice_type),
     )
 
 

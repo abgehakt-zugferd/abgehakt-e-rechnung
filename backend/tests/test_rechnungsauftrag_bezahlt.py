@@ -1,7 +1,7 @@
-"""#227: Rechnung aus Rechnungsauftrag ist bei Ausstellung bezahlt.
+"""#227: Rechnung aus Rechnungsauftrag ist bei Ausstellung bezahlt (XML/PDF).
 
-XML: BT-113 = Brutto, BT-115 = 0.00 (BR-CO-16). PDF: Bereits gezahlt / Offener
-Betrag. Status paid, nicht offen/ueberfaellig. Andere Rechnungen unveraendert.
+Status bleibt issued ohne bezahlt_am; Kennzahlen/Ueberfaellig schliessen aus.
+Python-Praedikat und SQL-Ausdruck treffen dieselben Belege.
 """
 from decimal import Decimal
 from xml.etree import ElementTree as ET
@@ -12,9 +12,15 @@ from pypdf import PdfReader
 from app.models.company import Company
 from app.models.invoice import Invoice
 from app.services import mustang, pdf_generator, zugferd_xml
-from app.services.auftragszahlung import ist_rechnungsauftrag
+from app.services.auftragszahlung import ist_rechnungsauftrag, ist_rechnungsauftrag_sql
+from app.services.beleg_status import badge_klasse, etikett
 from app.services.belegsprache import darstellung
-from app.services.dashboard_kennzahlen import offene_forderungen, ueberfaellige_forderungen
+from app.services.dashboard_kennzahlen import (
+    bezahlt_im_zeitraum,
+    offene_forderungen,
+    ueberfaellige_forderungen,
+    umsatz_im_zeitraum,
+)
 from app.services.rechnungsauftrag_wirkung import entwurf_anlegen
 from app.zeit import heute
 from tests.factories import orm_company, orm_customer, orm_invoice_for
@@ -23,6 +29,7 @@ from tests.test_rechnungsauftrag_wirkung import _kunde, _urteil
 
 HINWEIS = "Die Zahlung erfolgt durch Auszahlung des Leistungsempfängers."
 RAM = "{urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100}"
+ETIKETT_AUSSTELLUNG = "Bezahlt bei Ausstellung"
 
 
 def _entwurf(db, *, sprache="de", hinweis=HINWEIS):
@@ -133,7 +140,33 @@ def test_andere_rechnung_ohne_prepaid_due_gleich_brutto(pg_session, tmp_path):
     assert "Amount due" not in text
 
 
-def test_finalisieren_setzt_paid_nicht_offen_nicht_ueberfaellig(client, pg_session):
+def test_python_und_sql_rechnungsauftrag_treffen_dieselbe_menge(pg_session):
+    """Eine Bedingung, zwei Fassungen: Python-Praedikat und SQL-Ausdruck."""
+    import uuid
+    auftrag, _ = _entwurf(pg_session)
+    kunde = orm_customer(customer_number=f"K-{uuid.uuid4().hex[:8]}")
+    pg_session.add(kunde)
+    pg_session.flush()
+    normal = orm_invoice_for(kunde, invoice_number="RE-227-NORM")
+    pg_session.add(normal)
+    # Nur Schluessel, kein Uebergabe-Hash: kein Rechnungsauftrag.
+    halb = orm_invoice_for(kunde, invoice_number="RE-227-HALB")
+    halb.auftragsschluessel = "probe:halb:ohne-hash"
+    pg_session.add(halb)
+    pg_session.commit()
+
+    alle = pg_session.query(Invoice).all()
+    sql_ids = {
+        row.id for row in pg_session.query(Invoice).filter(ist_rechnungsauftrag_sql())
+    }
+    python_ids = {row.id for row in alle if ist_rechnungsauftrag(row)}
+    assert sql_ids == python_ids
+    assert auftrag.id in sql_ids
+    assert normal.id not in sql_ids
+    assert halb.id not in sql_ids
+
+
+def test_finalisieren_bleibt_issued_ohne_bezahlt_am_nicht_offen(client, pg_session):
     inv, _ = _entwurf(pg_session)
     antwort = client.post(f"/invoices/{inv.id}/finalisieren")
     assert antwort.status_code == 303, antwort.text
@@ -141,12 +174,29 @@ def test_finalisieren_setzt_paid_nicht_offen_nicht_ueberfaellig(client, pg_sessi
     row = pg_session.get(Invoice, inv.id)
     assert "TotalPrepaidAmount" in row.zugferd_xml
     assert "<ram:DuePayableAmount>0.00</ram:DuePayableAmount>" in row.zugferd_xml
-    # Kennzahlen vor Status: bleibt der Beleg issued, faellt offen zuerst.
+    assert row.status == "issued"
+    assert row.bezahlt_am is None
     offen = offene_forderungen(pg_session)
     assert offen.anzahl == 0
     assert offen.betrag == Decimal("0")
     ueber = ueberfaellige_forderungen(pg_session, heute())
     assert ueber.anzahl == 0
     assert ueber.betrag == Decimal("0")
-    assert row.status == "paid"
-    assert row.bezahlt_am == heute()
+    # Weder offen noch in bezahlten Umsatz-/Erloeskennzahlen.
+    assert bezahlt_im_zeitraum(pg_session, heute().replace(day=1)) == Decimal("0")
+    assert umsatz_im_zeitraum(pg_session, heute().replace(day=1)) == Decimal("0")
+    assert etikett(row.status, row.kunde_zugestellt_am, row) == ETIKETT_AUSSTELLUNG
+    assert badge_klasse(row.status, row.kunde_zugestellt_am, row) == "paid"
+    html = client.get(f"/invoices/{row.id}").text
+    assert ETIKETT_AUSSTELLUNG in html
+    assert 'badge badge-paid' in html
+    assert 'badge badge-offen' not in html
+    liste = client.get("/invoices/?status=issued")
+    assert liste.status_code == 200, liste.text
+    assert ETIKETT_AUSSTELLUNG in liste.text
+    # KPI-Link: Rechnungsauftrag erscheint nicht unter offenen Forderungen.
+    kpi = client.get(
+        "/invoices/?status=issued&art=rechnung&storno=ohne&forderung=offen"
+    )
+    assert kpi.status_code == 200, kpi.text
+    assert row.invoice_number not in kpi.text

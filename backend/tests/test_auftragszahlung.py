@@ -176,8 +176,9 @@ def test_uebernommener_hinweis_erlaubt_echte_finalisierung(client, pg_session):
     antwort = client.post(f"/invoices/{inv.id}/finalisieren")
     assert antwort.status_code == 303, antwort.text
     pg_session.refresh(inv)
-    # #227: Rechnungsauftrag ist bei Ausstellung bezahlt (issued→paid).
-    assert inv.status == "paid"
+    # #227: Rechnungsauftrag bleibt issued, ohne erfundenes bezahlt_am.
+    assert inv.status == "issued"
+    assert inv.bezahlt_am is None
     assert inv.due_date is None
     assert HINWEIS in inv.zugferd_xml
     assert client.post(f"/invoices/{inv.id}/zahlungshinweis-uebernehmen").status_code == 400

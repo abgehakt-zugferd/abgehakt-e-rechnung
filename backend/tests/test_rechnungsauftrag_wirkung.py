@@ -254,8 +254,9 @@ def test_finalisieren_setzt_das_ausstellungsdatum_auf_heute(pg_session):
 
     pg_session.expire_all()
     gestellt = pg_session.get(Invoice, entwurf.id)
-    # #227: Rechnungsauftrag wird beim Finalisieren als bezahlt markiert.
-    assert gestellt.status == "paid"
+    # #227: Status issued, kein erfundenes Zahlungsdatum.
+    assert gestellt.status == "issued"
+    assert gestellt.bezahlt_am is None
     assert gestellt.issue_date == heute()
     assert gestellt.issue_date != vorher
     assert gestellt.due_date == heute() + timedelta(days=14)
