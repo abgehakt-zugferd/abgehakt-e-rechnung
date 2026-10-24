@@ -458,9 +458,9 @@ def test_eine_kaputte_datei_legt_die_belegliste_nicht_lahm(client, pg_session, b
 def test_eine_unbekannte_kaputtheit_kostet_nur_die_eine_zeile(
     client, pg_session, belegordner, monkeypatch, caplog,
 ):
-    """Sicherheitsnetz des Routers: Jede unerwartete Ausnahme der Beurteilung
-    wird je Datei als BELEG_UNLESBAR gezeigt und geloggt - die Liste bleibt
-    200. Das ersetzt nicht die gezielten Befunde des Lesers."""
+    """Sicherheitsnetz der Listenaufbereitung: Jede unerwartete Ausnahme der
+    Beurteilung wird je Datei als BELEG_UNLESBAR gezeigt und geloggt - die
+    Liste bleibt 200. Das ersetzt nicht die gezielten Befunde des Lesers."""
     ordner, signieren = belegordner
     _kunde(pg_session)
     _schalter(pg_session)
@@ -469,7 +469,9 @@ def test_eine_unbekannte_kaputtheit_kostet_nur_die_eine_zeile(
     def unbekannt(roh, lage, **kwargs):
         raise RuntimeError("eine noch unbekannte Kaputtheit")
 
-    monkeypatch.setattr("app.routers.uebergaben.beleg_beurteilen", unbekannt)
+    monkeypatch.setattr(
+        "app.services.uebergabe_listenaufbereitung.beleg_beurteilen", unbekannt,
+    )
     with caplog.at_level(logging.ERROR):
         antwort = client.get("/uebergaben")
 
