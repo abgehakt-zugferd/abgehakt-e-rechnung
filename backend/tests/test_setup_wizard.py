@@ -137,6 +137,8 @@ def test_ohne_einrichtung_entsteht_keine_rechnung(pg_session):
     finally:
         app.dependency_overrides.clear()
 
-    assert r.status_code == 400
+    # Tor (#218) faengt vor get_company ab: 303 auf /setup, kein Beleg.
+    assert r.status_code == 303
+    assert r.headers["location"] == "/setup"
     pg_session.expire_all()
     assert pg_session.query(Invoice).count() == 0
