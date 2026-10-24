@@ -61,7 +61,7 @@ backend/app/
 │   ├── app_config.py         # Betriebseinstellungen (Singleton id=1)
 │   └── uebergabe_eingang.py  # Gedächtnis der Beleg-Integration (beleg_id + beleg_sha256)
 ├── routers/                  # HTTP-Handler
-│   ├── setup.py              # Ersteinrichtung, Tor vor allem anderen
+│   ├── setup.py              # Ersteinrichtungs-Wizard (/setup)
 │   ├── customers.py
 │   ├── invoices/             # je Zweck ein Modul: Liste, Formular, Ansicht, Finalisieren, Versand, Storno
 │   ├── export.py             # GoBD-Datenexport (Z3)
@@ -128,7 +128,8 @@ backend/app/
 ├── dependencies/             # was jede Route braucht
 │   ├── update_banner_dep.py  # legt den Hinweis auf request.state, fängt jeden Fehler
 │   ├── beleg_integration_dep.py  # Schalter der Beleg-Integration, gleiche Zusagen
-│   └── herkunft.py           # Herkunftsprüfung: kein Schreiben von fremden Seiten
+│   ├── herkunft.py           # Herkunftsprüfung: kein Schreiben von fremden Seiten
+│   └── einrichtungstor.py    # app-weites Tor: ohne Einrichtung 303 auf /setup
 ├── static/                   # Schriften und JavaScript, lokal ausgeliefert, kein CDN
 ├── assets/                   # Schriftdateien für das PDF
 └── templates/                # Jinja2
@@ -360,9 +361,21 @@ Bearbeiten-Modus bewusst nicht).
 ### Ersteinrichtung ist ein Tor, kein Hinweis
 
 Eine frische Installation hat eine leere Firmenzeile und `setup_completed_at IS NULL`.
-`/dashboard` leitet dann auf `/setup` um, und die Rechnungserzeugung verweigert unabhängig
-davon mit `400` (`_get_company`). Ohne Firmenname, Anschrift und Steuernummer **oder**
-USt-IdNr. entsteht keine Rechnung, sie wäre nach § 14 UStG fehlerhaft.
+Das app-weite Tor in `app/dependencies/einrichtungstor.py` (`erfordere_einrichtung`)
+leitet dann per 303 auf `/setup` um: Default-Deny. Freigegeben sind nur `/setup`,
+`/settings`, `/archiv`, `/export`, `/updates`, `/static` und `/`. Setup und Einstellungen
+schließen die Einrichtung ab; Archiv und GoBD-Export müssen für Aufbewahrung und
+Betriebsprüfung auch ohne abgeschlossene Einrichtung erreichbar bleiben. Updates und
+statische Dateien gehören nicht zur Belegerzeugung; `/` bleibt der Einstieg und leitet
+weiter, das Ziel selbst ist geschützt.
+
+`HTTPException(303)` würde der HTML-Fehlerhandler zu einer Fehlerseite machen, deshalb
+die eigene Ausnahme `EinrichtungOffen`. Der Compose-Healthcheck ruft `/dashboard` auf;
+die 303-Umleitung bleibt für `curl -f` gesund, weil 3xx dort kein Fehler sind.
+
+Unabhängig vom Tor verweigert die Rechnungserzeugung mit `400` (`get_company`), solange
+die Einrichtung fehlt. Ohne Firmenname, Anschrift und Steuernummer **oder** USt-IdNr.
+entsteht keine Rechnung, sie wäre nach § 14 UStG fehlerhaft.
 
 ### Update-Prüfung
 
