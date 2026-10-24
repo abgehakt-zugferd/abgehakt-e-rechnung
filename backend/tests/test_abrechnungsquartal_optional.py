@@ -1,28 +1,60 @@
-"""#230 Commit A: abrechnungsquartal steuert keine Ausgabe mehr.
+"""#230: abrechnungsquartal steuert keine Ausgabe; optional ab Fassung 1.8.
 
 Wirkung ueber entwuerfe_anlegen, Liste ueber anzeigefelder, XML ueber
-generate_xml. Auftraege MIT Feld; die Annahme ohne Feld folgt in Commit B.
+generate_xml; Annahme ohne Feld ueber beleg_beurteilen (Commit B).
 """
 
 import copy
 import uuid
 from datetime import datetime, timezone
 
+import pytest
+
 from app.models.company import Company
 from app.models.customer import Customer
 from app.services.abrechnungsauftrag_wirkung import entwuerfe_anlegen
-from app.services.uebergabe_befund import Belegurteil
+from app.services.uebergabe_befund import Belegurteil, Empfangslage, beleg_beurteilen
 from app.services.uebergabe_listenzeile import anzeigefelder
 from app.services.zugferd_xml import generate_xml
 from tests.helpers.uebergabe import (
     PARTNER_A,
     auftrag,
+    beleg,
     gutschrift,
+    schluesselpaar,
 )
 
 ERZEUGT = datetime(2026, 9, 3, 11, 0, tzinfo=timezone.utc)
 PARTNER_UUID = uuid.UUID(PARTNER_A)
 HALBGEVIERT = "\u2013"
+
+
+@pytest.fixture
+def schluessel(tmp_path):
+    return schluesselpaar(tmp_path / "schluessel")
+
+
+class _Lage(Empfangslage):
+    def partner_bekannt(self, partner_id: str) -> bool:
+        return partner_id == PARTNER_A
+
+
+def _nutzlast_ohne_quartal(**aenderungen):
+    nutzlast = auftrag(**aenderungen)
+    del nutzlast["abrechnungsquartal"]
+    return nutzlast
+
+
+def test_auftrag_ohne_abrechnungsquartal_wird_angenommen(schluessel):
+    signieren, wurzel = schluessel
+    roh = beleg(signieren, _nutzlast_ohne_quartal())
+
+    urteil = beleg_beurteilen(
+        roh, _Lage(), schluessel_wurzel=wurzel,
+    )
+
+    assert urteil.angenommen, [f.code for f in urteil.feststellungen]
+    assert "abrechnungsquartal" not in (urteil.nutzlast or {})
 
 
 def _kunde(pg_session):
