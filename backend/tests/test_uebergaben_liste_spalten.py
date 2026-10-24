@@ -116,7 +116,7 @@ def test_abrechnungsauftrag_fuellt_neutrale_spalten(client, pg_session, belegord
     text = client.get("/uebergaben").text
 
     assert "Probeverlag" in text
-    assert "2026-Q2" in text
+    assert "01.04.2026\u201330.06.2026" in text
     assert "174,33" in text
 
 

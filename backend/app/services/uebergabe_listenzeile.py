@@ -8,6 +8,8 @@ beliebig geformte Nutzlasten; fehlende oder unbrauchbare Teile bleiben leer.
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
+from app.services.leistungszeitraum_anzeige import spanne_aus_gutschriften
+
 
 def _geld(wert: Optional[Decimal]) -> str:
     return f"{wert:.2f}".replace(".", ",") if wert is not None else ""
@@ -73,10 +75,14 @@ def _summe_mit_waehrung(betrag: Optional[Decimal], waehrung) -> str:
 
 
 def _aus_abrechnungsauftrag(nutzlast: dict) -> tuple[str, str, str]:
-    quartal = nutzlast.get("abrechnungsquartal")
+    # Zeitraum aus den Gutschriften (fruehester Beginn bis spaetestes Ende),
+    # nicht aus abrechnungsquartal: Quartal beschreibt mehrmonatige Fenster
+    # falsch, und das Feld entfaellt mit Fassung 1.8 (#230). Rechnungs- und
+    # Aufstellungsauftrag bleiben bei YYYY-MM, weil deren Leser den Zeitraum
+    # auf einen Kalendermonat begrenzt.
     return (
         _projektname(nutzlast),
-        quartal if isinstance(quartal, str) else "",
+        spanne_aus_gutschriften(nutzlast.get("gutschriften")),
         _geld(_summe_gutschriften(nutzlast)),
     )
 
