@@ -176,7 +176,7 @@ from sqlalchemy.exc import ProgrammingError
 
 
 @pytest.mark.parametrize("tbl", ["invoices", "customers", "aufstellungen",
-                                 "aufstellung_anlagen"])
+                                 "aufstellung_anlagen", "uebergabe_eingaenge"])
 def test_app_role_delete_denied(pg_app_engine, tbl):
     """Rechte greifen VOR dem Trigger → 42501 (permission denied), erreicht den
     Trigger gar nicht erst. Die Default-Privilegien raeumen DELETE auf KEINE

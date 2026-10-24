@@ -101,10 +101,10 @@ def test_ohne_testinstanz_verweigert_und_laesst_eingaenge(
     vorher = pg_session.query(UebergabeEingang).count()
 
     def boom():
-        raise AssertionError("SessionLocal darf vor der Pruefung nicht greifen")
+        raise AssertionError("Owner-Session darf vor der Pruefung nicht greifen")
 
     monkeypatch.setattr(
-        "scripts.uebergabe_kette_neu_beginnen.SessionLocal", boom,
+        "scripts.uebergabe_kette_neu_beginnen._owner_session", boom,
     )
 
     code = main(["absender-a"])
@@ -131,3 +131,65 @@ def test_fehlender_absender_bricht_ab(als_testinstanz, capsys):
 
     assert code != 0
     assert err.strip()
+
+
+def test_skript_verbindet_ueber_database_url_nicht_app(
+    als_testinstanz, monkeypatch,
+):
+    """Nullprobe: App-Verbindung (SessionLocal) statt DATABASE_URL → rot."""
+    settings = get_settings()
+    gesehen: dict[str, str] = {}
+
+    def stopp(url, **_kw):
+        gesehen["url"] = url
+        raise RuntimeError("stopp-nach-url")
+
+    monkeypatch.setattr(
+        "scripts.uebergabe_kette_neu_beginnen.create_engine", stopp,
+    )
+    with pytest.raises(RuntimeError, match="stopp-nach-url"):
+        main(["absender-x"])
+    assert gesehen["url"] == settings.database_url
+    assert gesehen["url"] != settings.app_database_url
+
+
+def test_eigene_verbindung_loescht_als_eigentuemer(
+    pg_session, als_testinstanz, monkeypatch, capsys,
+):
+    """Ohne db=: Owner-URL gegen die Test-DB — App-Rolle haette keinen DELETE."""
+    from tests.conftest import TEST_DB_NAME
+
+    _eingang(pg_session, "absender-a", sha="1" * 64, beleg_id="a" * 36)
+    pg_session.commit()
+    settings = get_settings()
+    basis, _, _ = settings.database_url.rpartition("/")
+    monkeypatch.setattr(settings, "database_url", f"{basis}/{TEST_DB_NAME}")
+
+    code = main(["absender-a"])
+    out = capsys.readouterr()
+
+    assert code == 0
+    assert "1" in out.out
+    pg_session.expire_all()
+    assert pg_session.query(UebergabeEingang).count() == 0
+
+
+def test_app_session_darf_eingaenge_nicht_loeschen(
+    pg_session, pg_app_engine, als_testinstanz,
+):
+    """Sperre trifft die App-Rolle wirklich (nicht nur die Owner-Fixture)."""
+    from sqlalchemy.exc import ProgrammingError
+    from sqlalchemy.orm import sessionmaker
+
+    _eingang(pg_session, "absender-a", sha="1" * 64, beleg_id="a" * 36)
+    pg_session.commit()
+    vorher = pg_session.query(UebergabeEingang).count()
+    app_db = sessionmaker(bind=pg_app_engine, autocommit=False, autoflush=False)()
+    try:
+        with pytest.raises(ProgrammingError) as exc:
+            main(["absender-a"], db=app_db)
+        assert "42501" in str(exc.value) or "permission denied" in str(exc.value)
+    finally:
+        app_db.close()
+    pg_session.expire_all()
+    assert pg_session.query(UebergabeEingang).count() == vorher
