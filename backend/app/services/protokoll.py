@@ -21,9 +21,11 @@ from typing import Optional
 
 from app.services.uebergabe_form import ganz_passt
 
-PROTOKOLL_VERSION = "1.7"
+PROTOKOLL_VERSION = "1.8"
 
-AKZEPTIERTE_FASSUNGEN = ("1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7")
+AKZEPTIERTE_FASSUNGEN = (
+    "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8",
+)
 
 ABGELEHNT_AB_MAJOR = 2
 
@@ -210,6 +212,7 @@ FELDER = {   'umschlag': {   'pflicht': [   'format_version',
                                                                                      'erloes_netto'],
                                                                       'erlaubt': []},
                                                   'gutschriften[]': {   'pflicht': [   'beteiligter',
+                                                                                       'auftragsschluessel',
                                                                                        'typcode',
                                                                                        'leistungszeitraum',
                                                                                        'positionen',
@@ -232,7 +235,23 @@ FELDER = {   'umschlag': {   'pflicht': [   'format_version',
                                                   'vortraege[]': {   'pflicht': [   'beteiligter',
                                                                                     'netto',
                                                                                     'grund'],
-                                                                     'erlaubt': []}}},
+                                                                     'erlaubt': []}},
+                              # `werte` gehoert zum Gleichlauf mit protokoll.json
+                              # (_ohne_prosa laesst den Schluessel stehen). Der
+                              # Leser prueft das Muster in
+                              # uebergabe_auftragsschluessel_probe; der
+                              # Quartal-Text ist Prosa aus dem Protokoll.
+                              'werte': {   'gutschriften[].auftragsschluessel': {   'muster': '^[a-z0-9:-]{1,128}$'},
+                                           'abrechnungsquartal': (
+                                               'Ab 1.8 entbehrlich (entschieden 2026-10-25): '
+                                               'Ein Lauf hat kein Quartalsraster mehr, das Feld '
+                                               'kam aus dem Fensterende. Der Empfaenger nimmt '
+                                               'Auftraege mit und ohne es an und leitet keine '
+                                               'Ausgabe daraus ab; den Zeitraum traegt '
+                                               'gutschriften[].leistungszeitraum. Der Sender '
+                                               'laesst es weg, sobald alle Empfaenger 1.8 lesen; '
+                                               'entfernt wird es mit dem naechsten major.'
+                                           )}},
     'rechnungsauftrag': {   'pflicht': [   'auftragsschluessel',
                                            'kunde',
                                            'typcode',

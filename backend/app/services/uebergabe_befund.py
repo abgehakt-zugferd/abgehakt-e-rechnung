@@ -44,8 +44,11 @@ from app.services.protokoll import (
     fassung_annehmbar,
     zeit,
 )
+from app.services.uebergabe_auftragsschluessel_probe import (
+    feststellungen_gutschrift_schluessel,
+    feststellungen_nutzlast_schluessel,
+)
 from app.services.uebergabe_form import (
-    AUFTRAGSSCHLUESSEL_FORM,
     DATUM_FORM,
     GELDFORM,
     KURS_FORM,
@@ -352,36 +355,6 @@ def _felder_pruefen(objekt, verzeichnis, pfad) -> list:
     return funde
 
 
-def _auftragsschluessel_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
-    """§§ 8a und 8b, gemeinsam: die Form des auftragsschluessels und der
-    zweite Haken.
-
-    Erst mit einer Form, die der Empfaenger zeichnen kann, lohnt die Frage
-    an die Lage, ob zu diesem Schluessel bereits ein Beleg besteht: Nach
-    einem Wert ausserhalb der Form wird nicht gesucht, denn der Absender
-    meinte einen anderen.
-    """
-    funde: list = []
-    schluessel = nutzlast["auftragsschluessel"]
-    if not ganz_passt(AUFTRAGSSCHLUESSEL_FORM, schluessel):
-        funde.append(Feststellung(
-            "WERT_UNBRAUCHBAR", "$.nutzlast.auftragsschluessel",
-            erwartet="1 bis 128 Zeichen aus a-z, 0-9, : und -",
-            erhalten=str(schluessel),
-        ))
-    else:
-        schon = lage.dokument_zu_auftragsschluessel(schluessel)
-        if schon is not None:
-            # Kein Fehler des Absenders, sondern die Abbildung des Bestands:
-            # Der Auftrag wurde bereits gerechnet, und im erhalten steht die
-            # Rechnungsnummer oder 'Entwurf' des Belegs, der daraus entstand.
-            funde.append(Feststellung(
-                "AUFTRAG_SCHON_GERECHNET", "$.nutzlast.auftragsschluessel",
-                erhalten=schon,
-            ))
-    return funde
-
-
 def _kunde_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
     """§§ 8a und 8b, gemeinsam: der Kunde hinter partner_id muss im Stamm
     stehen. Ohne ihn gibt es keine Steuerkategorie und keinen Vermerk, und
@@ -456,7 +429,7 @@ def _rechnungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
 
     # Teil 1c: Auftragsschluessel und Kunde - seit § 8b gemeinsam mit dem
     # aufstellungsauftrag, eine Quelle, keine Kopie.
-    funde += _auftragsschluessel_pruefen(nutzlast, lage)
+    funde += feststellungen_nutzlast_schluessel(nutzlast, lage, Feststellung)
     funde += _kunde_pruefen(nutzlast, lage)
 
     # Geschlossene Vorraete. 380 ist die Ausgangsrechnung; 389 ist die
@@ -648,7 +621,7 @@ def _aufstellungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
     funde: list = []
 
     # §§ 8a und 8b gemeinsam: der Schluessel und der Kunde hinter ihm.
-    funde += _auftragsschluessel_pruefen(nutzlast, lage)
+    funde += feststellungen_nutzlast_schluessel(nutzlast, lage, Feststellung)
     funde += _kunde_pruefen(nutzlast, lage)
 
     # Die waehrung als Form (ISO 4217), ohne Wertevorrat: Ein Vorrat stuende
@@ -817,6 +790,9 @@ def _aufstellungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
 def _abrechnungsauftrag_pruefen(nutzlast: dict, lage: Empfangslage) -> list:
     """§ 8: die drei Pruefhaken und die Aufloesung des Beteiligten."""
     funde: list = []
+
+    # § 8 ab 1.8: Auftragsschluessel je Gutschrift (Form und Bestand).
+    funde += feststellungen_gutschrift_schluessel(nutzlast, lage, Feststellung)
 
     # Summe grundlagen <= bemessung.erloes_netto. NIE Gleichheit: `grundlagen`
     # ist ein Auszug, kein Nachweis des Erloeses. Als signierte Erloesmeldung

@@ -93,8 +93,11 @@ def _urteil_aus_nutzlast(nutzlast, sha="a" * 64):
 
 
 def test_wirkung_mit_quartal_setzt_bt10_leer_und_notiz_mit_zeitraum(pg_session):
+    """Ohne Gutschrift-Schluessel bleibt BT-10 leer; Quartal steuert nichts."""
     _kunde(pg_session)
-    nutzlast = auftrag()
+    gut = gutschrift()
+    del gut["auftragsschluessel"]
+    nutzlast = auftrag(gutschriften=[gut])
 
     entwurf = entwuerfe_anlegen(pg_session, _urteil_aus_nutzlast(nutzlast))[0]
     pg_session.flush()

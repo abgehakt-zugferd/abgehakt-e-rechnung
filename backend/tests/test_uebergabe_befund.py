@@ -96,6 +96,7 @@ def _auftrag(**aenderungen) -> dict:
         }],
         "gutschriften": [{
             "beteiligter": {"partner_id": PARTNER_A, "anzeigename": "Autorin A"},
+            "auftragsschluessel": "probe:lauf-1:autorin-a",
             "typcode": "389",
             "leistungszeitraum": {"von": "2026-04-01", "bis": "2026-06-30"},
             "positionen": [{

@@ -60,9 +60,15 @@ def schluesselpaar(wurzel):
     return privat.sign, wurzel
 
 
-def gutschrift(partner_id=PARTNER_A, netto="174.33", name="Autorin A"):
+def gutschrift(
+    partner_id=PARTNER_A,
+    netto="174.33",
+    name="Autorin A",
+    auftragsschluessel="probe:lauf-1:autorin-a",
+):
     return {
         "beteiligter": {"partner_id": partner_id, "anzeigename": name},
+        "auftragsschluessel": auftragsschluessel,
         "typcode": "389",
         "leistungszeitraum": {"von": "2026-04-01", "bis": "2026-06-30"},
         "positionen": [{
