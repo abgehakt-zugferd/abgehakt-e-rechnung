@@ -47,7 +47,9 @@ def test_anlegeformular_faengt_leere_firma_vor_der_nummernvergabe(pg_session):
                       '"quantity":"1","unit_price":"100","tax_rate":"19"}]',
     })
 
-    assert r.status_code == 400, r.text
+    # Tor (#218) leitet um, bevor get_company 400 liefern wuerde.
+    assert r.status_code == 303, r.text
+    assert r.headers["location"] == "/setup"
     pg_session.expire_all()
     assert pg_session.query(Company).filter(Company.id == 1).one().invoice_counter == vorher
     assert pg_session.query(Invoice).count() == 0
