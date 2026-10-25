@@ -68,7 +68,8 @@
         </div>
 
         <!-- Offene Rechnungen -->
-        <a data-kpi="offen" href="/invoices?status=issued&art=rechnung&storno=ohne" class="card card-hover" style="display:block; text-decoration:none; color:inherit;">
+        {# forderung=offen: dieselbe Ausschlussmenge wie offene_forderungen (#227). #}
+        <a data-kpi="offen" href="/invoices?status=issued&art=rechnung&storno=ohne&forderung=offen" class="card card-hover" style="display:block; text-decoration:none; color:inherit;">
             <div class="flex items-center justify-between">
                 <div>
                     <p class="kpi__beschriftung">OFFENE FORDERUNGEN</p>

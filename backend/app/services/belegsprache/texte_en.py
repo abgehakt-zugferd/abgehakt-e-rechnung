@@ -30,6 +30,8 @@ DARSTELLUNG_EN = {
     "abzugzeile_muster": "Allowance: {grund}",
     "label_gutschriftbetrag": "Credit note amount",
     "label_rechnungsbetrag": "Invoice total",
+    "label_bereits_gezahlt": "Already paid",
+    "label_offener_betrag": "Amount due",
     "steuerzeile_muster": "plus {satz} VAT on {basis}",
     "label_verwendungszweck": "Reference:",
     "label_scan_to_pay": "Scan to pay",

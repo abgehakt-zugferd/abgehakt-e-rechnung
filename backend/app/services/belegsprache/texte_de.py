@@ -30,6 +30,8 @@ DARSTELLUNG_DE = {
     "abzugzeile_muster": "Abzug: {grund}",
     "label_gutschriftbetrag": "Gutschriftbetrag",
     "label_rechnungsbetrag": "Rechnungsbetrag",
+    "label_bereits_gezahlt": "Bereits gezahlt",
+    "label_offener_betrag": "Offener Betrag",
     "steuerzeile_muster": "zzgl. {satz} MwSt. auf {basis}",
     "label_verwendungszweck": "Verwendungszweck:",
     "label_scan_to_pay": "Zum Überweisen scannen.",

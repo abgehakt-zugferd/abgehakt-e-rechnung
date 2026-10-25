@@ -201,9 +201,17 @@ def offene_auszahlungen(db: Session) -> OffenePosten:
 
 
 def _offene_posten(db: Session, typ_filter) -> OffenePosten:
+    # Rechnungsauftrag: bei Ausstellung bezahlt, Status bleibt issued ohne
+    # bezahlt_am (#227) — gehoert nicht zu offenen Forderungen.
+    from app.services.auftragszahlung import ist_rechnungsauftrag_sql
     anzahl, betrag = db.query(
         func.count(Invoice.id), func.coalesce(func.sum(Invoice.gross_total), 0),
-    ).filter(Invoice.status == "issued", typ_filter, ~WIRKSAM_STORNIERT).one()
+    ).filter(
+        Invoice.status == "issued",
+        typ_filter,
+        ~WIRKSAM_STORNIERT,
+        ~ist_rechnungsauftrag_sql(Invoice),
+    ).one()
     return OffenePosten(anzahl=anzahl, betrag=betrag)
 
 

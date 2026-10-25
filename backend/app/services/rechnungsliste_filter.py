@@ -8,6 +8,7 @@ from sqlalchemy.orm import Query
 
 from app.models.customer import Customer
 from app.models.invoice import Invoice
+from app.services.auftragszahlung import ist_rechnungsauftrag_sql
 from app.services.beleg_status import ohne_zustellung_bedingung, ueberfaellig_bedingung
 from app.services.belegart import belegart_filter
 from app.services.storno_wirkung import WIRKSAM_STORNIERT
@@ -20,6 +21,7 @@ class Listenfilter:
     faellig: str
     versand: str
     storno: str
+    forderung: str
 
 
 def filtere_rechnungsliste(
@@ -31,6 +33,7 @@ def filtere_rechnungsliste(
     faellig: str = "",
     versand: str = "",
     storno: str = "",
+    forderung: str = "",
     heute: date | None = None,
 ) -> tuple[Query, Listenfilter]:
     """Wendet Status-, Such- und Auswahlfilter an; unbekannte Werte werden geleert."""
@@ -79,4 +82,13 @@ def filtere_rechnungsliste(
     else:
         storno = ""
 
-    return query, Listenfilter(art=art, faellig=faellig, versand=versand, storno=storno)
+    if forderung == "offen":
+        # Offene Forderungen: Rechnungsauftrag ausnehmen (#227), wie
+        # dashboard_kennzahlen.offene_forderungen.
+        query = query.filter(~ist_rechnungsauftrag_sql(Invoice))
+    else:
+        forderung = ""
+
+    return query, Listenfilter(
+        art=art, faellig=faellig, versand=versand, storno=storno, forderung=forderung,
+    )
