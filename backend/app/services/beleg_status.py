@@ -57,13 +57,15 @@ def ueberfaellig_bedingung(heute):
     Eine SQL-Bedingung fuer Kennzahl und Listenfilter (Issue #177). Beide
     Stellen fragen hier, statt Status, Belegart und Storno je fuer sich neu
     zu formulieren. Ein Beleg ohne Faelligkeitsdatum ist nie ueberfaellig
-    (BR-CO-25, Bauschritt 2b).
+    (BR-CO-25, Bauschritt 2b). Rechnungsauftraege sind bei Ausstellung
+    bezahlt und gehoeren nicht in diese Menge (#227).
 
     Imports liegen in der Funktion: `WIRKSAM_STORNIERT` kommt aus
     `storno_wirkung` und bindet fest an `Invoice`; ein Modul-Import oben
     wuerde `beleg_status` und die Kennzahlen zyklisch koppeln.
     """
     from app.models.invoice import Invoice
+    from app.services.auftragszahlung import ist_rechnungsauftrag_sql
     from app.services.belegart import belegart_filter
     from app.services.storno_wirkung import WIRKSAM_STORNIERT
 
@@ -71,18 +73,29 @@ def ueberfaellig_bedingung(heute):
         Invoice.status == "issued",
         belegart_filter(Invoice.invoice_type, None, "prepayment"),
         ~WIRKSAM_STORNIERT,
+        ~ist_rechnungsauftrag_sql(Invoice),
         Invoice.due_date.isnot(None),
         Invoice.due_date < heute,
     )
 
 
-def etikett(status: str, kunde_zugestellt_am: datetime | None = None) -> str:
+def etikett(status: str, kunde_zugestellt_am: datetime | None = None, invoice=None) -> str:
+    # Rechnungsauftrag: Zahlung liegt vor der Ausstellung, Status bleibt issued
+    # ohne bezahlt_am (#227). Nicht als Versand-„offen“ lesen.
+    if invoice is not None and status == "issued":
+        from app.services.auftragszahlung import ist_rechnungsauftrag
+        if ist_rechnungsauftrag(invoice):
+            return "Bezahlt bei Ausstellung"
     if status == "issued":
         return "Nicht versendet" if ist_nicht_versendet(status, kunde_zugestellt_am) else "Versendet"
     return _ETIKETT.get(status, status)
 
 
-def badge_klasse(status: str, kunde_zugestellt_am: datetime | None = None) -> str:
+def badge_klasse(status: str, kunde_zugestellt_am: datetime | None = None, invoice=None) -> str:
+    if invoice is not None and status == "issued":
+        from app.services.auftragszahlung import ist_rechnungsauftrag
+        if ist_rechnungsauftrag(invoice):
+            return "paid"
     if status == "issued":
         return "offen" if ist_nicht_versendet(status, kunde_zugestellt_am) else "sent"
     return status

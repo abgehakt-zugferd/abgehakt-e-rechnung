@@ -22,8 +22,11 @@ from app.routers import (
     customers, invoices, settings as settings_router, export, setup,
     updates, archive, uebergaben, aufstellungen,
 )
-from app.services.ersteinrichtung import ist_eingerichtet
 from app.dependencies.herkunft import pruefe_herkunft
+from app.dependencies.einrichtungstor import (
+    anbinden_einrichtungstor,
+    erfordere_einrichtung,
+)
 from app.dependencies.beleg_integration_dep import lade_beleg_integration
 from app.dependencies.update_banner_dep import load_update_banner
 from app.config import get_settings
@@ -109,12 +112,15 @@ app = FastAPI(
     # `pruefe_herkunft` ZUERST: sie weist eine fremde Anfrage ab, bevor
     # irgendeine Route nachsieht, ob es den angefragten Datensatz gibt — sonst
     # verriete schon die Antwort (403 gegen 404), welche Kennungen vergeben sind.
+    # Danach `erfordere_einrichtung` (#218): Umleitung auf /setup ohne Einrichtung.
     dependencies=[
         Depends(pruefe_herkunft),
+        Depends(erfordere_einrichtung),
         Depends(load_update_banner),
         Depends(lade_beleg_integration),
     ],
 )
+anbinden_einrichtungstor(app)
 templates = Jinja2Templates(directory="app/templates")
 register_branding_globals(templates)
 registriere_darstellungsfilter(templates)
@@ -274,13 +280,6 @@ def root():
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
     company = db.query(Company).filter(Company.id == 1).first()
-    # Ein Flag, keine Heuristik auf Feldinhalten (#99 §4.0): die frühere Prüfung
-    # „keine Steuernummer und keine USt-IdNr." erklärte eine längst eingerichtete
-    # Installation wieder für uneingerichtet, sobald jemand das Feld leerte.
-    # Und ein Tor statt eines Hinweises: mit leeren Firmendaten weiterzuarbeiten
-    # endet in Rechnungen ohne Verkäufer — im PDF wie in der ZUGFeRD-XML.
-    if not ist_eingerichtet(company):
-        return RedirectResponse("/setup", status_code=303)
 
     today = kalender_heute()
     month_start = today.replace(day=1)

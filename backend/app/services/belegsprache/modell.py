@@ -62,6 +62,8 @@ class Belegdarstellung:
     abzugzeile_muster: str  # mit {grund}
     label_gutschriftbetrag: str
     label_rechnungsbetrag: str
+    label_bereits_gezahlt: str
+    label_offener_betrag: str
     steuerzeile_muster: str  # mit {satz} und {basis}
 
     # Zahlung / QR / Stempel

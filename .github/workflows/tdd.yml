@@ -39,6 +39,9 @@ jobs:
       - name: Pre-Push-Waechter (Wurzelaufloesung)
         run: .githooks/test_pre_push_waechter.sh
 
+      - name: Pre-Push-Stand (gepushter Commit, nicht Checkout)
+        run: .githooks/test_pre_push_stand.sh
+
       - name: Wachen (Schluessel-Mount und Schluesselordner)
         run: .githooks/test_wachen.sh
 

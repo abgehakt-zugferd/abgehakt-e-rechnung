@@ -229,7 +229,7 @@ def test_der_gueltige_auftrag_wird_angenommen(vektoren, schluesselordner):
     )
 
     assert urteil.angenommen, [f"{f.code} {f.pfad}" for f in urteil.feststellungen]
-    assert urteil.zeitraum == "2026-Q2"
+    assert urteil.zeitraum == "01.01.2026\u201330.06.2026"
     assert urteil.summe == "440,10"
     assert erwarteter_code(eintrag) == "KEINE_ABLEHNUNG"
     assert urteil.beleg_sha256 == eintrag["beleg_sha256"]

@@ -144,7 +144,7 @@ def test_ein_gueltiger_auftrag_wird_angenommen(schluessel):
     assert urteil.feststellungen == ()
     assert urteil.beleg_id == "11111111-2222-4333-8444-555555555555"
     assert urteil.gegenstand == "Probeverlag"
-    assert urteil.zeitraum == "2026-Q2"
+    assert urteil.zeitraum == "01.04.2026\u201330.06.2026"
     assert urteil.summe == "174,33"
 
 

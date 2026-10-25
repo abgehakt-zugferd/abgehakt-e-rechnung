@@ -86,7 +86,9 @@ def test_monat2_zu_frueh_ist_kette_springt_bis_monat1_fertig(
     )
     ablegen(ordner, "m2a.json", m2a)
     liste = client.get("/uebergaben").text
-    assert "KETTE_SPRINGT" in liste
+    # Liste: Vorgaenger m1b liegt annehmbar, noch nicht angelegt (#233).
+    assert "wartet auf Vorgänger m1b.json" in liste
+    assert "KETTE_SPRINGT" not in liste
 
     antwort = anlegen(client, "m2a.json")
     assert antwort.status_code == 303

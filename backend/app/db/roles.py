@@ -24,6 +24,7 @@ OWNER_ROLE = "abgehakt_admin"
 # anlegt (geprueft in test_immutability_triggers.py).
 PROTECTED_NO_DELETE = (
     "invoices", "customers", "aufstellungen", "aufstellung_anlagen",
+    "uebergabe_eingaenge",
 )
 
 

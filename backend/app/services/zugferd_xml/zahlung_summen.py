@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from app.models.company import Company
 from app.models.invoice import Invoice
+from app.services.auftragszahlung import ist_rechnungsauftrag
 from app.services.bankverbindung import iban_fuer_ausgabe
 from app.services.belegart import belegart, zahlung_an_kunde
 from app.services.belegsummen import Belegsummen
@@ -152,12 +153,22 @@ def monetary_summation_xml(invoice: Invoice, summen: Belegsummen) -> str:
         allowance_total = (
             f"\n                <ram:AllowanceTotalAmount>{fmt_amount(summen.abzug)}</ram:AllowanceTotalAmount>"
         )
+    # CII-Sequenz: GrandTotalAmount, dann TotalPrepaidAmount (BT-113), dann
+    # DuePayableAmount (BT-115). Rechnungsauftrag: voll vorausgezahlt, BR-CO-16.
+    if ist_rechnungsauftrag(invoice):
+        prepaid = (
+            f"\n                <ram:TotalPrepaidAmount>{fmt_amount(summen.brutto)}</ram:TotalPrepaidAmount>"
+        )
+        due = fmt_amount(Decimal("0"))
+    else:
+        prepaid = ""
+        due = fmt_amount(summen.brutto)
     return f"""            <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
                 <ram:LineTotalAmount>{fmt_amount(summen.positionen_netto)}</ram:LineTotalAmount>{allowance_total}
                 <ram:TaxBasisTotalAmount>{fmt_amount(summen.steuerbasis)}</ram:TaxBasisTotalAmount>
                 <ram:TaxTotalAmount currencyID="{esc(invoice.currency)}">{fmt_amount(summen.steuer)}</ram:TaxTotalAmount>
-                <ram:GrandTotalAmount>{fmt_amount(summen.brutto)}</ram:GrandTotalAmount>
-                <ram:DuePayableAmount>{fmt_amount(summen.brutto)}</ram:DuePayableAmount>
+                <ram:GrandTotalAmount>{fmt_amount(summen.brutto)}</ram:GrandTotalAmount>{prepaid}
+                <ram:DuePayableAmount>{due}</ram:DuePayableAmount>
             </ram:SpecifiedTradeSettlementHeaderMonetarySummation>"""
 
 

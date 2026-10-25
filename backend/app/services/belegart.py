@@ -159,6 +159,15 @@ def belegart_filter(spalte, *interne: str | None):
     return or_(*teile)
 
 
+def invoice_type_ungesetzt(spalte):
+    """SQL: invoice_type IS NULL, ohne Formular-Alias.
+
+    Rechnungsauftrag (#206/#227) und der CHECK verlangen NULL, nicht
+    'standard'. belegart_filter(..., None) waere weiter (Aliase).
+    """
+    return spalte.is_(None)
+
+
 # Gutschriften im Geldfluss samt Alias-Schreibweisen. Abgeleitet aus _ALIASES
 # (Issue #172), bewusst ohne 389-Storno und ohne Korrektur — siehe zahlung_an_kunde.
 # Einzige verbleibende Leserin: pruefregeln/empfehlungen.py (Kunden-IBAN-Warnung).

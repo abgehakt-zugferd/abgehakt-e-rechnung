@@ -7,11 +7,9 @@ Uebergabeliste ist `/setup` ein Link ohne freies HTML in Fehlertexten.
 
 from __future__ import annotations
 
-import html
 import re
 import uuid
 from datetime import datetime, timezone
-from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -26,7 +24,7 @@ from app.services.ersteinrichtung import ERSTEINRICHTUNG_OFFEN_MELDUNG
 from app.services.rechnungsauftrag_wirkung import entwurf_anlegen
 from app.services.uebergabe_befund import Belegurteil
 from app.services.uebergabebeleg import ABSENDER_TANTIEMEN
-from tests.helpers.uebergabe import PARTNER_A, beleg, rechnungsauftrag
+from tests.helpers.uebergabe import PARTNER_A, rechnungsauftrag
 from tests.probe_daten import HRB_PROBE, STEUER_PROBE_ZEHN
 
 ERZEUGT = datetime(2026, 9, 3, 11, 0, tzinfo=timezone.utc)
@@ -230,44 +228,11 @@ def test_uebergaben_fehler_zeigt_setup_als_link_ohne_fremdes_html(
     assert re.search(r'<a href="/setup">/setup</a>', seite.text)
 
 
-def test_wirkung_fehler_erreicht_uebergaben_mit_setup_link(
-    client, pg_session, tmp_path,
-):
-    from app.config import get_settings
-    from tests.helpers.uebergabe import schluesselpaar
-
+def test_uebergaben_post_ohne_einrichtung_leitet_auf_setup_um(client, pg_session):
+    """Tor (#218): Formular-POST auf Uebergaben landet auf /setup, nicht in der Wirkung."""
     _firma_offen(pg_session)
-    _kunde_abrechnungsauftrag(pg_session)
 
-    ordner = tmp_path / "uebergaben"
-    richtung = ordner / "tantiemen-app-nach-abgehakt"
-    richtung.mkdir(parents=True)
-    signieren, schluessel = schluesselpaar(tmp_path / "schluessel")
-    einstellungen = get_settings()
-    vorher = (einstellungen.uebergaben_ordner, einstellungen.schluessel_pfad)
-    einstellungen.uebergaben_ordner = str(ordner)
-    einstellungen.schluessel_pfad = str(schluessel)
+    antwort = client.post("/uebergaben/auftrag.json/rechnung-anlegen")
 
-    cfg = pg_session.query(AppConfig).filter(AppConfig.id == 1).first()
-    if cfg is None:
-        cfg = AppConfig(id=1)
-        pg_session.add(cfg)
-    cfg.beleg_integration_aktiv = True
-    pg_session.commit()
-
-    (richtung / "auftrag.json").write_bytes(beleg(signieren))
-    try:
-        antwort = client.post("/uebergaben/auftrag.json/rechnung-anlegen")
-        assert antwort.status_code == 303
-        ort = antwort.headers["location"]
-        meldung = parse_qs(urlparse(ort).query)["fehler"][0]
-        assert meldung == ERSTEINRICHTUNG_OFFEN_MELDUNG
-
-        seite = client.get(ort)
-        assert seite.status_code == 200
-        assert ERSTEINRICHTUNG_OFFEN_MELDUNG.split("/setup")[0] in html.unescape(
-            seite.text
-        )
-        assert 'href="/setup"' in seite.text
-    finally:
-        einstellungen.uebergaben_ordner, einstellungen.schluessel_pfad = vorher
+    assert antwort.status_code == 303
+    assert antwort.headers["location"] == "/setup"

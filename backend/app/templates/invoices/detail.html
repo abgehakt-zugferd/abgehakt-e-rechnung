@@ -22,9 +22,10 @@
                 <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim);">{{ invoice.customer.name if invoice.customer else '–' }}</p>
             </div>
         </div>
-        <span class="badge badge-{{ invoice.status|beleg_badge(invoice.kunde_zugestellt_am) }}" style="font-size:var(--fs-klein); padding:5px 10px;">
-            {# Bauschritt 5b: „nicht versendet“ meint den KUNDEN, nicht die Buchhaltung. #}
-            {{ invoice.status|beleg_etikett(invoice.kunde_zugestellt_am) }}
+        <span class="badge badge-{{ invoice.status|beleg_badge(invoice.kunde_zugestellt_am, invoice) }}" style="font-size:var(--fs-klein); padding:5px 10px;">
+            {# Bauschritt 5b: „nicht versendet“ meint den KUNDEN, nicht die Buchhaltung.
+               Rechnungsauftrag (#227): „Bezahlt bei Ausstellung“, nicht badge-offen. #}
+            {{ invoice.status|beleg_etikett(invoice.kunde_zugestellt_am, invoice) }}
         </span>
     </div>
 

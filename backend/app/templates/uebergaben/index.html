@@ -69,7 +69,9 @@
                     <td style="padding:10px 14px; color:var(--text); white-space:nowrap;">{{ zeile.zeitraum or '–' }}</td>
                     <td style="padding:10px 14px; color:var(--text); text-align:right; font-family:'Share Tech Mono',monospace; white-space:nowrap;">{{ zeile.summe or '–' }}</td>
                     <td style="padding:10px 14px; font-family:'Share Tech Mono',monospace; font-size:var(--fs-text);">
-                        {% if urteil.bereits_verarbeitet %}
+                        {% if zeile.befund_anzeige %}
+                        <span style="color:var(--text-dim);">{{ zeile.befund_anzeige }}</span>
+                        {% elif urteil.bereits_verarbeitet %}
                         <span style="color:var(--text-dim);">BEREITS VERARBEITET</span>
                         {% elif urteil.angenommen %}
                         <span style="color:var(--green);">ANGENOMMEN</span>
