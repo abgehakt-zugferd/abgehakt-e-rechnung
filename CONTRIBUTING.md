@@ -80,6 +80,17 @@ dafür würde still übersprungen, und ein übersprungener Test gilt hier als Fe
 Reihe nach laufen die Datenwache, die Gedankenstrich-Wache und die sechs Wachen aus
 `.githooks/wachen.sh`; auf die Suite folgt der Skip-Guard.
 
+**Geprüft wird der gepushte Commit, nicht der Checkout.** `git push origin <branch>` aus
+einem anderen Worktree oder bei ausgechecktem anderem Stand liefert dem Hook auf stdin je
+Ref die lokale SHA. Suite, Gedankenstrich-Wache und `.githooks/wachen.sh` laufen gegen
+genau diesen Stand (Wegwerf-Worktree unter `$TMPDIR`, Abräumen per trap). Entspricht
+`HEAD` bereits der lokalen SHA, bleibt der schnelle Weg im Arbeitsbaum: Export wäre
+derselbe Baum und kostet nur Zeit. Löschungen (SHA aus Nullen) werden übersprungen;
+mehrere Refs werden nacheinander geprüft. Die Meldung nennt den geprüften Commit.
+`backend/run-tests.sh` braucht nur `backend/` plus optional `UEBERGABE_VEKTOREN` (absoluter
+Pfad); `.githooks` liest es nicht. stdin wird einmal gelesen und an die Datenwache sowie
+die Stand-Prüfung weitergereicht, damit nichts die Ref-Zeilen vorher verbraucht.
+
 - **Datenwache** (`.githooks/datenwache.sh`): prüft je gepuschtem Commit nur die neu
   hinzukommenden Zeilen und zusätzlich die Commit-Nachricht auf Muster echter Daten, nämlich
   private Schlüssel, die Formate von IBAN, USt-IdNr. und Steuernummer, neu hinzukommende
