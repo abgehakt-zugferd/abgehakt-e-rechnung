@@ -36,3 +36,13 @@ HERLEITUNGSZEILE_MUSTER = {
     "de": "Bemessungsgrundlage {basis} × {satz} %",
     "en": "Assessment base {basis} × {satz} %",
 }
+
+# Gutschriftverfahren (389): Aussteller zahlt dem Leistenden (#231).
+GUTSCHRIFT_ZAHLUNG_MIT_IBAN = {
+    "de": "Der Betrag wird bis {datum} auf das Konto {iban} überwiesen.",
+    "en": "The amount will be transferred by {datum} to account {iban}.",
+}
+GUTSCHRIFT_ZAHLUNG_OHNE_IBAN = {
+    "de": "Der Betrag wird bis {datum} überwiesen.",
+    "en": "The amount will be transferred by {datum}.",
+}

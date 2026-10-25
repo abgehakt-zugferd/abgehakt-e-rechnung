@@ -12,6 +12,7 @@ from app.services import auftragsschluessel, mustang, pdf_generator, pdfa, valid
 from app.services.auftragszahlung import finalisierung_pruefen
 from app.services.archive_frist import berechne_archive_until
 from app.services.belegart import ist_storno
+from app.services.belegsprache.zahlungshinweis import zahlungstext_vor_finalisieren
 from app.services.rechnung.fehler import RechnungFehler
 from app.services.rechnung.firma import get_company
 from app.zeit import heute
@@ -257,6 +258,8 @@ def ausfuehren(db: Session, invoice_id) -> Invoice:
     finalisierung_pruefen(invoice)
     stelltag_verschieben(invoice)
     company = get_company(db)
+    # Nach Stelltag: Faelligkeit steht fest; alter Vorgabetext wird persistiert (#231).
+    zahlungstext_vor_finalisieren(invoice, company)
     rechtskonform_pruefen(invoice, company)
 
     xml_content = xml_erzeugen(invoice, company)

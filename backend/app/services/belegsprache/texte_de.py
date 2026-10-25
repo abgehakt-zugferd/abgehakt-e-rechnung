@@ -8,6 +8,7 @@ DARSTELLUNG_DE = {
     "titel_gutschrift": "GUTSCHRIFT",
     "titel_korrektur": "KORREKTURRECHNUNG",
     "label_rechnungsnummer": "Rechnungsnummer:",
+    "label_gutschriftnummer": "Gutschriftnummer:",
     "label_rechnungsdatum": "Rechnungsdatum:",
     "label_leistungsdatum": "Leistungsdatum:",
     "label_leistungszeitraum": "Leistungszeitraum:",

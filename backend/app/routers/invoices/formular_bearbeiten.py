@@ -27,6 +27,8 @@ from app.routers.invoices.formular_schreiben import (
 from app.services import belegsperre, kundenvorgaben
 from app.services.auftragszahlung import ist_rechnungsauftrag
 from app.services.belegart import InvoiceTypeNotSelectable, manuelle_belegart
+from app.services.belegsprache import darstellung
+from app.services.belegsprache.zahlungshinweis import zahlungstext_beim_speichern
 from app.services.belegsummen import Belegsummen, belegsummen
 
 
@@ -135,6 +137,12 @@ def sprache_und_zahlung_uebernehmen(invoice: Invoice, form, company: Company) ->
             return
         invoice.payment_terms = zahlungsbedingungen(
             form, company, invoice.document_language,
+        )
+        invoice.payment_terms = zahlungstext_beim_speichern(
+            invoice.invoice_type, invoice.payment_terms, company,
+            due_date=invoice.due_date, issue_date=invoice.issue_date,
+            customer=invoice.customer,
+            darstellung=darstellung(invoice.document_language or "de"),
         )
     except HTTPException as fehler:
         raise FormularFehler(fehler.detail) from fehler
