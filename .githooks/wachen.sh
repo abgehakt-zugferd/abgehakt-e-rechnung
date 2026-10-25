@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sechs Wachen, die vor jedem Push und in der CI laufen.
+# Sieben Wachen, die vor jedem Push und in der CI laufen.
 #
 # Sie stehen hier als Skript und nicht in der Testsuite, weil sie Dateien im
 # Wurzelverzeichnis lesen: der Testcontainer wird aus `backend/` gebaut und sieht den
@@ -160,6 +160,21 @@ else
     } >&2
     fehler=1
   fi
+fi
+
+# Oeffentliche Schluessel der Uebergabe-Absender unter backend/schluessel/ sind
+# Instanzdaten, kein Repo-Inhalt (oeffentliches Repo). Erlaubt versioniert ist
+# nur README.md; alles andere, das git ls-files dort meldet, ist ROT.
+schluessel_versioniert="$(git ls-files 'backend/schluessel/' \
+  | grep -v '^backend/schluessel/README\.md$' || true)"
+if [ -n "$schluessel_versioniert" ]; then
+  {
+    echo ""
+    echo "schluesselordner: ROT - unter backend/schluessel/ ist mehr als README.md versioniert."
+    echo "  Instanzdaten gehoeren nicht ins oeffentliche Repo; nur README.md bleibt."
+    echo "$schluessel_versioniert"
+  } >&2
+  fehler=1
 fi
 
 exit "$fehler"
