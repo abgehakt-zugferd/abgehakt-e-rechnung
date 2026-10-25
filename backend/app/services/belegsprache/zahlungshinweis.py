@@ -1,14 +1,15 @@
 """Zahlungstext im Gutschriftverfahren (389) vs. Firmenvorgabe (#231).
 
-PDF und BT-20 lesen denselben Text. Traegt der Beleg noch die Firmenvorgabe
-(oder keinen Text), entsteht der Gutschrift-Wortlaut; freier Nutzereingriff
-bleibt unangetastet.
+Ersetzung nur beim Speichern und vor dem Finalisieren eines Entwurfs
+(persistiert in payment_terms). PDF und BT-20 lesen den gespeicherten Text.
 """
 from __future__ import annotations
 
 from datetime import date, timedelta
 
 from app.services.belegart import UnknownInvoiceTypeError, belegart
+from app.services.belegsprache import darstellung as darstellung_fuer
+from app.services.belegsprache import resolve_belegsprache
 from app.services.belegsprache.modell import Belegdarstellung
 from app.zeit import heute
 
@@ -24,40 +25,6 @@ def ist_firmen_zahlung_vorgabe(text: str | None, company) -> bool:
         if wert and str(wert).strip():
             vorgaben.add(str(wert).strip())
     return gespeichert in vorgaben
-
-
-def _faelligkeit(invoice) -> date:
-    due = getattr(invoice, "due_date", None)
-    if due is not None:
-        return due
-    ausstellung = getattr(invoice, "issue_date", None)
-    if ausstellung is not None:
-        return ausstellung + timedelta(days=14)
-    return heute()
-
-
-def _iban_leistender(invoice) -> str | None:
-    kunde = getattr(invoice, "customer", None)
-    if kunde is None:
-        return None
-    iban = (getattr(kunde, "bank_iban", None) or "").strip()
-    return iban or None
-
-
-def zahlungstext_self_billing(invoice, company, d: Belegdarstellung) -> str | None:
-    """Verbindlicher Zahlungstext fuer 389, sonst None (Caller-Fallback)."""
-    try:
-        if belegart(getattr(invoice, "invoice_type", None)).intern != "self_billing":
-            return None
-    except UnknownInvoiceTypeError:
-        return None
-    gespeichert = (getattr(invoice, "payment_terms", None) or "").strip()
-    if gespeichert and not ist_firmen_zahlung_vorgabe(gespeichert, company):
-        return gespeichert
-    return d.zahlung_gutschriftverfahren(
-        datum=_faelligkeit(invoice),
-        iban=_iban_leistender(invoice),
-    )
 
 
 def zahlungstext_beim_speichern(
@@ -87,3 +54,17 @@ def zahlungstext_beim_speichern(
     if customer is not None:
         iban = (getattr(customer, "bank_iban", None) or "").strip() or None
     return darstellung.zahlung_gutschriftverfahren(datum=faellig, iban=iban)
+
+
+def zahlungstext_vor_finalisieren(invoice, company) -> None:
+    """Entwurf mit Firmenvorgabe: Gutschrift-Text vor PDF/XML persistieren."""
+    sprache = resolve_belegsprache(getattr(invoice, "document_language", None) or "de")
+    invoice.payment_terms = zahlungstext_beim_speichern(
+        getattr(invoice, "invoice_type", None),
+        getattr(invoice, "payment_terms", None),
+        company,
+        due_date=getattr(invoice, "due_date", None),
+        issue_date=getattr(invoice, "issue_date", None),
+        customer=getattr(invoice, "customer", None),
+        darstellung=darstellung_fuer(sprache),
+    )

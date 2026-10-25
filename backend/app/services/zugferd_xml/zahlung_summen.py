@@ -7,8 +7,6 @@ from app.models.invoice import Invoice
 from app.services.auftragszahlung import ist_rechnungsauftrag
 from app.services.bankverbindung import iban_fuer_ausgabe
 from app.services.belegart import belegart, zahlung_an_kunde
-from app.services.belegsprache import darstellung, resolve_belegsprache
-from app.services.belegsprache.zahlungshinweis import zahlungstext_self_billing
 from app.services.belegsummen import Belegsummen
 from app.services.iban import IbanProfil
 
@@ -116,7 +114,7 @@ def gutschrift_zahlung_an_kunde(invoice: Invoice) -> bool:
     return zahlung_an_kunde(getattr(invoice, "invoice_type", None))
 
 
-def payment_terms_xml(invoice: Invoice, company: Company | None = None) -> str:
+def payment_terms_xml(invoice: Invoice) -> str:
     """Gutschrift ohne Fälligkeit: keine Zahlungsaufforderung in der XML (#48).
 
     Ohne due_date (Bauschritt 2b) entfällt BT-9 ganz: ein leeres
@@ -124,11 +122,6 @@ def payment_terms_xml(invoice: Invoice, company: Company | None = None) -> str:
     BT-20 (Description) trägt die Zahlungsregel allein (BR-CO-25).
     """
     text = invoice.payment_terms or "Zahlbar ohne Abzug."
-    if company is not None:
-        sprache = resolve_belegsprache(getattr(invoice, "document_language", None) or "de")
-        ersetzt = zahlungstext_self_billing(invoice, company, darstellung(sprache))
-        if ersetzt is not None:
-            text = ersetzt
     if belegart(invoice.invoice_type).intern == "credit_note" or invoice.due_date is None:
         return f"""
             <ram:SpecifiedTradePaymentTerms>
@@ -189,6 +182,6 @@ def header_trade_settlement_xml(
 {tax_summaries_xml(invoice, summen)}
 {billing_period_xml(invoice)}
 {allowance_charge_xml(invoice, summen)}
-{payment_terms_xml(invoice, company)}
+{payment_terms_xml(invoice)}
 {monetary_summation_xml(invoice, summen)}{reference_xml(invoice)}
         </ram:ApplicableHeaderTradeSettlement>"""

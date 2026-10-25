@@ -12,7 +12,6 @@ from reportlab.platypus import Image, KeepTogether, Paragraph, Table, TableStyle
 
 from app.services.bankverbindung import iban_fuer_ausgabe
 from app.services.belegart import belegart
-from app.services.belegsprache.zahlungshinweis import zahlungstext_self_billing
 from app.services.epc_qr import build_epc_payload, qr_png_bytes
 from app.services.iban import IbanProfil
 
@@ -21,9 +20,6 @@ from .logic import ist_gutschrift, zahlung_an_kunde_beleg, zahlungs_empfaenger
 
 
 def payment_text(invoice, company, d):
-    ersetzt = zahlungstext_self_billing(invoice, company, d)
-    if ersetzt is not None:
-        return ersetzt
     if zahlung_an_kunde_beleg(invoice) and zahlungs_empfaenger(invoice, company):
         text = invoice.payment_terms or d.fallback_gutschrift_ueberweisung
     elif ist_gutschrift(invoice):
