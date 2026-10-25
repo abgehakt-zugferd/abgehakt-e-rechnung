@@ -27,77 +27,31 @@ wurzel="$(git rev-parse --show-toplevel)" || exit 1
 [ -n "$wurzel" ] || { echo "pre-push: Repo-Wurzel nicht bestimmbar." >&2; exit 1; }
 cd "$wurzel" || exit 1
 
-# Datenwache (#49): nur neu hinzukommende Zeilen der gepushten Commits. Liest stdin
-# (pre-push-Refs); nichts anderes darf stdin vorher verbrauchen.
-if ! .githooks/datenwache.sh; then
+# stdin nur einmal lesen (#219): Datenwache und Stand-Pruefung brauchen dieselben
+# Zeilen. Command-Substitution frisst Schluss-Newlines; Markierung verhindert das.
+push_refs=$(cat; printf x) || exit 1
+push_refs=${push_refs%x}
+
+# Datenwache (#49): nur neu hinzukommende Zeilen der gepushten Commits.
+if ! printf '%s' "$push_refs" | .githooks/datenwache.sh; then
   echo "  Push blockiert." >&2
   exit 1
 fi
 
-run_tests() {
-  # Zwei Bedingungen, nicht eine: Seit `docker-compose.yml` das Auslieferungsabbild
-  # baut (target: prod), laeuft im Normalfall ein app-Container OHNE pytest. Ein
-  # blindes `exec ... pytest` gaebe dort "not found" und damit ein falsches ROT -
-  # es saehe nach kaputter Suite aus, waere aber nur das richtige Abbild. Wer die
-  # Suite im Container will, startet zusaetzlich docker-compose.dev.yml.
-  if docker compose ps --services --status running 2>/dev/null | grep -qx app &&
-     docker compose exec -T app python -c "import pytest" >/dev/null 2>&1 </dev/null; then
-    echo "tdd: Entwicklungsstack laeuft, Suite im app-Container." >&2
-    docker compose exec -T app python -m pytest tests/ -q </dev/null
-  else
-    echo "tdd: kein Entwicklungsstack, kanonische Baseline (backend/run-tests.sh)." >&2
-    (cd backend && ./run-tests.sh)
-  fi
-}
-
-# Gedankenstrich-Wache (Festlegung 2026-08-08). Bewusst hier und nicht als pytest:
-# die Dokumente liegen im Repo-Wurzelverzeichnis, der Testcontainer sieht nur
-# `backend/`. Ein pytest dafuer wuerde still skippen, und ein Skip ist in diesem
-# Repo ein Fehlschlag (Skip-Guard unten) - der Push waere dann aus dem falschen
-# Grund rot. Zahl-Strich-Zahl (`§§ 140-148`, `2025-2026`) ist eine Spanne und bleibt.
-striche="$(git ls-files '*.md' | while read -r f; do
-    perl -ne 's/(?<=\d)[\x{2013}\x{2014}](?=\d)//g; print "'"'"'$ARGV:$.: $_" if /[\x{2013}\x{2014}]/' -CSD "$f"
-  done)"
-if [ -n "$striche" ]; then
-  {
-    echo ""
-    echo "dokumente: ROT - Gedankenstrich in Markdown gefunden. Push blockiert."
-    echo "  Komma, Doppelpunkt, Strichpunkt oder zwei Saetze statt dessen."
-    echo "$striche"
-  } >&2
-  exit 1
-fi
-
-# Netzbindungs- und Auslieferungs-Wache. Sie stehen in `.githooks/wachen.sh`, weil die
-# CI sie ebenfalls aufruft (`.github/workflows/tdd.yml`) - zwei Abschriften derselben
-# Regel laufen auseinander, und die CI-Abschrift faellt dabei zuletzt auf. Die
-# Gedankenstrich-Wache oben bleibt bewusst hier und nur hier: eine Schreibregel dieses
-# Projekts ist kein Grund, einen fremden Pull Request abzuweisen.
-if ! .githooks/wachen.sh; then
-  echo "  Push blockiert." >&2
-  exit 1
-fi
-
-out="$(mktemp)"
-trap 'rm -f "$out"' EXIT
-
-if run_tests 2>&1 | tee "$out"; then
-  # Skip-Guard wie in CI: still geskippte Tests (fehlendes Postgres/Mustang/GS)
-  # würden den kritischen E-Rechnungs-Pfad verbergen.
-  if grep -qE "[1-9][0-9]* skipped" "$out"; then
-    {
-      echo ""
-      echo "tdd: ROT, Tests wurden übersprungen (Skip-Guard). Push blockiert."
-    } >&2
+leer=0000000000000000000000000000000000000000
+# Je gepushter Ref den Stand <local sha> pruefen (Suite, Wachen, Gedankenstriche).
+# Loeschungen (local sha = 0…0) ueberspringen. Mehrere Refs: jeder fuer sich.
+# Default-IFS: Felder an Whitespace trennen. `IFS= read` wuerde die ganze Zeile
+# in das erste Feld legen und lokal_sha leer lassen (Push ohne Stand-Pruefung).
+while read -r _lokal_ref lokal_sha _fern_ref _fern_sha || [ -n "${lokal_sha:-}" ]; do
+  [ -z "${lokal_sha:-}" ] && continue
+  [ "$lokal_sha" = "$leer" ] && continue
+  if ! .githooks/pre-push-stand.sh "$lokal_sha"; then
     exit 1
   fi
-  echo "tdd: grün, Push erlaubt."
-  exit 0
-fi
+done <<EOF
+$push_refs
+EOF
 
-{
-  echo ""
-  echo "tdd: ROT, Push blockiert. Kein ungetesteter Code verlässt das Repo."
-  echo "     Bewusste Ausnahme nur via:  git push --no-verify"
-} >&2
-exit 1
+echo "tdd: grün, Push erlaubt."
+exit 0
