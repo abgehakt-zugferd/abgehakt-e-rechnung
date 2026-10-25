@@ -27,9 +27,10 @@ mkdir -p ~/uebergaben-test/tantiemen-app-nach-abgehakt
 mkdir -p ~/uebergaben-test/abgehakt-nach-tantiemen-app
 # UEBERGABEN_ORDNER in integration.env auf diesen Pfad setzen
 
-# Öffentliche Schlüssel der Übergabe-Absender bereitstellen, je Absender ein
+# Öffentliche Probeschlüssel der Übergabe-Absender bereitstellen, je Absender ein
 # Unterordner mit je Schlüssel zwei Dateien (schluessel-integration/, nicht
-# unter backend/: Probeschlüssel sollen nicht ins Auslieferungsabbild geraten):
+# unter backend/: Probeschlüssel sollen nicht ins Auslieferungsabbild geraten;
+# echte Installationsschlüssel liegen in backend/schluessel/, siehe dortiges README):
 #   schluessel-integration/<absender>/<schluessel_id>.pub    (PEM)
 #   schluessel-integration/<absender>/<schluessel_id>.json   (Beiblatt, siehe unten)
 

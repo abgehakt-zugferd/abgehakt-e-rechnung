@@ -8,6 +8,12 @@ integration.env
 schluessel-integration/*
 !schluessel-integration/README.md
 
+# Oeffentliche Schluessel der Uebergabe-Absender: Instanzdaten der einzelnen
+# Installation, kein Repo-Inhalt (oeffentliches Repo). Der lokale Build nimmt
+# den Ordner per COPY mit ins Abbild; private Schluessel gehoeren nie hierher.
+backend/schluessel/*
+!backend/schluessel/README.md
+
 # DSGVO – Echte Rechnungsdaten (niemals in Git!)
 # storage/ ist ein LAUFZEIT-Volume, kein Repo-Inhalt: Belege (pdfs/xml), der
 # selbstverwaltete `secret.key` (#99 §5.4) und das Firmenlogo der jeweiligen
