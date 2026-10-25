@@ -6,15 +6,20 @@ wieder None liefert. Nur in einer Testinstanz. Rechnungen, Entwuerfe,
 Aufstellungen, Kunden und Firmendaten bleiben unberuehrt. Aufbewahrungskopien
 bleiben liegen: kopie_aufbewahren ist bei gleichem Hash idempotent, ein
 erneutes Annehmen desselben Belegs scheitert nicht an der Kopie.
+
+Die App-Rolle darf `uebergabe_eingaenge` nicht loeschen (#220). Dieses Skript
+verbindet deshalb als Eigentuemer (`DATABASE_URL`, wie Alembic), und zwar erst
+NACH der Testinstanz-Pruefung.
 """
 from __future__ import annotations
 
 import sys
 from typing import Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.database import SessionLocal
+from app.config import get_settings
 from app.installation import is_testinstanz
 from app.models.uebergabe_eingang import UebergabeEingang
 
@@ -39,10 +44,17 @@ def main(argv: Optional[list[str]] = None, *, db: Optional[Session] = None) -> i
     return _eingaenge_entfernen(absender, db=db)
 
 
+def _owner_session() -> Session:
+    """Eigentuemerrolle aus `database_url` (DATABASE_URL), nie die App-Rolle."""
+    settings = get_settings()
+    engine = create_engine(settings.database_url, pool_pre_ping=True)
+    return sessionmaker(bind=engine, autocommit=False, autoflush=False)()
+
+
 def _eingaenge_entfernen(absender: str, *, db: Optional[Session]) -> int:
     eigene = db is None
     if eigene:
-        db = SessionLocal()
+        db = _owner_session()
     try:
         zeilen = (
             db.query(UebergabeEingang)

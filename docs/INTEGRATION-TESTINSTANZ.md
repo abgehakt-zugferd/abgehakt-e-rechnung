@@ -96,7 +96,9 @@ In der Testinstanz kann die gemerkte Kette eines Absenders zurückgesetzt werden
 ohne die Datenbank zu leeren: das Wartungsskript entfernt nur die Eingänge dieses
 Absenders (`uebergabe_eingaenge`). Rechnungen, Entwürfe, Aufstellungen, Kunden und
 Firmendaten bleiben. Außerhalb der Testinstanz verweigert das Skript den Lauf
-(Exit-Code ungleich 0, keine Datenbankänderung).
+(Exit-Code ungleich 0, keine Datenbankänderung). Die App-Rolle darf diese Zeilen
+nicht löschen; das Skript verbindet deshalb über `DATABASE_URL` (Eigentümerrolle,
+wie Alembic), erst nach der Testinstanz-Prüfung.
 
 ```bash
 docker compose -p abgehakt-test \
