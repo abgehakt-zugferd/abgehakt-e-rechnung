@@ -67,7 +67,10 @@ def test_self_billing_pdf_mit_kunden_iban_epc_qr(tmp_path):
     text = "".join(page.extract_text() or "" for page in PdfReader(str(out)).pages)
     assert IBAN_PROBE in text
     assert "Zum Überweisen scannen" in text
-    assert "Gutschriftbetrag auf die unten genannte Bankverbindung" in text
+    assert (
+        f"Der Betrag wird bis 15.09.2026 auf das Konto {IBAN_PROBE} überwiesen."
+        in text
+    )
 
 
 def test_self_billing_zugferd_traegt_kunden_iban():

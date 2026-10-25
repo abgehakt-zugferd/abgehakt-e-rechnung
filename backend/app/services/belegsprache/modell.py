@@ -11,6 +11,8 @@ from app.services.belegsprache.grundlagen import (
 )
 from app.services.belegsprache.texte_geteilt import (
     ANLAGENQUELLEN,
+    GUTSCHRIFT_ZAHLUNG_MIT_IBAN,
+    GUTSCHRIFT_ZAHLUNG_OHNE_IBAN,
     HERLEITUNGSZEILE_MUSTER,
     SELF_BILLING_STORNO_TITEL,
     SELBSTABRECHNUNG_BEZEICHNUNG,
@@ -33,6 +35,7 @@ class Belegdarstellung:
 
     # Kopf / Meta
     label_rechnungsnummer: str
+    label_gutschriftnummer: str
     label_rechnungsdatum: str
     label_leistungsdatum: str
     label_leistungszeitraum: str
@@ -206,3 +209,20 @@ class Belegdarstellung:
 
     def abzugzeile(self, grund: str) -> str:
         return self.abzugzeile_muster.format(grund=grund)
+
+    def belegnummer_etikett(self, belegart_intern: str | None) -> str:
+        """PDF-Etikett der Belegnummer: Gutschriftnummer bei 389 (#231)."""
+        from app.services.belegart import belegart
+
+        if belegart(belegart_intern).intern == "self_billing":
+            return self.label_gutschriftnummer
+        return self.label_rechnungsnummer
+
+    def zahlung_gutschriftverfahren(self, *, datum: date, iban: str | None) -> str:
+        """Zahlungstext 389: Aussteller ueberweist dem Leistenden (#231)."""
+        formatiert = self.format_datum(datum)
+        if iban:
+            return GUTSCHRIFT_ZAHLUNG_MIT_IBAN[self.code].format(
+                datum=formatiert, iban=iban,
+            )
+        return GUTSCHRIFT_ZAHLUNG_OHNE_IBAN[self.code].format(datum=formatiert)

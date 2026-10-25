@@ -24,6 +24,8 @@ from app.routers.invoices.formular_lesen import (
 from app.services import kundenvorgaben
 from app.services.archive_frist import berechne_archive_until
 from app.services.belegart import InvoiceTypeNotSelectable, ist_storno, manuelle_belegart
+from app.services.belegsprache import darstellung
+from app.services.belegsprache.zahlungshinweis import zahlungstext_beim_speichern
 from app.services.belegsummen import Belegsummen, belegsummen
 from app.services.ersatzrechnung import ErsatzNichtMoeglich, pruefe_ersetzbar
 from app.services.kunde_zuordenbar import (
@@ -226,6 +228,15 @@ def kopfdaten_lesen(db: Session, form, company: Company) -> dict:
     invoice_type = belegart_neuanlage(form)
     document_language, vorgabe, payment_terms = sprache_und_zahlungsbedingungen(
         db, form, company, customer_id, leistungszeit)
+    kunde = (
+        db.query(Customer).filter(Customer.id == customer_id).first()
+        if customer_id is not None else None
+    )
+    payment_terms = zahlungstext_beim_speichern(
+        invoice_type, payment_terms, company,
+        due_date=due_date, issue_date=issue_date, customer=kunde,
+        darstellung=darstellung(document_language),
+    )
     zahlungsfrist_pruefen(due_date, payment_terms)
     return dict(
         customer_id=customer_id,

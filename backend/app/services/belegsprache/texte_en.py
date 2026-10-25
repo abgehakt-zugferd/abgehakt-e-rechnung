@@ -8,6 +8,7 @@ DARSTELLUNG_EN = {
     "titel_gutschrift": "SELF-BILLED INVOICE (Gutschrift)",
     "titel_korrektur": "CORRECTIVE INVOICE",
     "label_rechnungsnummer": "Invoice number:",
+    "label_gutschriftnummer": "Credit note number:",
     "label_rechnungsdatum": "Invoice date:",
     "label_leistungsdatum": "Date of supply:",
     "label_leistungszeitraum": "Period of supply:",

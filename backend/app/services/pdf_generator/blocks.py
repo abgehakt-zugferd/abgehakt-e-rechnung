@@ -228,7 +228,7 @@ def _customer_addr(customer):
 
 def _meta_text(invoice, customer, d):
     meta_rows = [
-        (d.label_rechnungsnummer, invoice.invoice_number),
+        (d.belegnummer_etikett(getattr(invoice, "invoice_type", None)), invoice.invoice_number),
         (d.label_rechnungsdatum, d.format_datum(invoice.issue_date)),
     ]
     if invoice.delivery_date:

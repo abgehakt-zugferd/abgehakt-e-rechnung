@@ -27,6 +27,8 @@ from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services.archive_frist import berechne_archive_until
+from app.services.belegsprache import darstellung
+from app.services.belegsprache.zahlungshinweis import zahlungstext_beim_speichern
 from app.services.invoice_number import generate_next_invoice_number
 from app.services.kunde_zuordenbar import Zuordnung, kennung_aufloesen, meldung_fuer
 from app.services.ersteinrichtung import ERSTEINRICHTUNG_OFFEN_MELDUNG
@@ -129,6 +131,11 @@ def entwuerfe_anlegen(
         zeitraum_notiz = zeitraum_text(zeitraum)
         notiz = f"Abrechnungsauftrag {zeitraum_notiz}, {projekt}".strip(", ")
 
+        zahlung = zahlungstext_beim_speichern(
+            belegart, company.payment_terms_default, company,
+            due_date=faellig, issue_date=ausstellung, customer=kunde,
+            darstellung=darstellung("de"),
+        )
         entwurf = Invoice(
             invoice_number=generate_next_invoice_number(db, issue_date=ausstellung),
             customer_id=kunde.id,
@@ -136,7 +143,7 @@ def entwuerfe_anlegen(
             due_date=faellig,
             service_period_start=_datum(zeitraum.get("von")),
             service_period_end=_datum(zeitraum.get("bis")),
-            payment_terms=company.payment_terms_default,
+            payment_terms=zahlung,
             buyer_reference=schluessel,
             notes=notiz,
             tax_category=kategorie,
