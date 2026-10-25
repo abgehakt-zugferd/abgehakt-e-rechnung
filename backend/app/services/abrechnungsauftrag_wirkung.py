@@ -35,6 +35,7 @@ from app.services.steuerstatus import (
     SteuerstatusFehler,
     steuer_fuer as _steuer_aus_status,
 )
+from app.services.leistungszeitraum_anzeige import zeitraum_text
 from app.services.uebergabe_befund import Belegurteil, herleitungsbetrag
 from app.zeit import heute, kalendertag
 from app.services.uebergabe_eingang import merken
@@ -100,7 +101,7 @@ def entwuerfe_anlegen(
             raise WirkungFehler(ERSTEINRICHTUNG_OFFEN_MELDUNG)
 
     nutzlast = urteil.nutzlast
-    quartal = nutzlast.get("abrechnungsquartal", "")
+    # abrechnungsquartal ist optional und wird nicht mehr ausgegeben (#230).
     projekt = (nutzlast.get("projekt") or {}).get("name", "")
     # Ausstellungsdatum des Entwurfs ist der Kalendertag von erzeugt_am,
     # gerechnet in der festen Zeitzone Europe/Berlin (app.zeit.kalendertag;
@@ -119,6 +120,14 @@ def entwuerfe_anlegen(
         kunde = _kunde(db, (gutschrift.get("beteiligter") or {}).get("partner_id"))
         kategorie, satz = steuer_fuer(kunde)
         zeitraum = gutschrift.get("leistungszeitraum") or {}
+        # BT-10: auftragsschluessel der Gutschrift, sonst weglassen (R74).
+        # Das Protokoll (1.7) nennt ihn an gutschriften[] noch nicht; gelesen
+        # wird er trotzdem, sobald er mitreist.
+        schluessel = gutschrift.get("auftragsschluessel")
+        if not isinstance(schluessel, str) or not schluessel:
+            schluessel = None
+        zeitraum_notiz = zeitraum_text(zeitraum)
+        notiz = f"Abrechnungsauftrag {zeitraum_notiz}, {projekt}".strip(", ")
 
         entwurf = Invoice(
             invoice_number=generate_next_invoice_number(db, issue_date=ausstellung),
@@ -128,8 +137,8 @@ def entwuerfe_anlegen(
             service_period_start=_datum(zeitraum.get("von")),
             service_period_end=_datum(zeitraum.get("bis")),
             payment_terms=company.payment_terms_default,
-            buyer_reference=quartal or None,
-            notes=f"Abrechnungsauftrag {quartal}, {projekt}".strip(", "),
+            buyer_reference=schluessel,
+            notes=notiz,
             tax_category=kategorie,
             invoice_type=belegart,
             status="draft",
