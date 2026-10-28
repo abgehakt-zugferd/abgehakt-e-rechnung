@@ -30,8 +30,9 @@ geändert hat; lesen Sie ihn, bevor Sie auf eine neue Fassung wechseln.
 - **Bestellnummer des Kunden als BT-13:** Die Bestellnummer kann in der Rechnung gepflegt werden
   und wird in der XML als `BuyerOrderReferencedDocument` ausgegeben.
 - **Belegsprache Deutsch oder Englisch:** Die Sprache steuert die maschinell erzeugte
-  menschenlesbare Darstellung im PDF, inklusive Überschriften sowie Zahlen- und Datumsformat.
-  Eigene Texte wie Positionsbeschreibungen und Zahlungsbedingungen werden nicht übersetzt.
+  menschenlesbare Darstellung im PDF (Überschriften, Zahlen- und Datumsformat) und die
+  Beschriftungen der Pflichtangaben in der E-Rechnungs-XML (BT-33). Eigene Texte wie
+  Positionsbeschreibungen und Zahlungsbedingungen werden nicht übersetzt.
 - **Kundenstamm** mit Schnittstellen-ID für Kettenimport, CC-Adressen pro Kunde und optionaler
   Bankverbindung des Beteiligten für Auszahlungen (siehe unten).
 - **Belege aus einem vorgelagerten System:** optional nimmt Abgehakt signierte

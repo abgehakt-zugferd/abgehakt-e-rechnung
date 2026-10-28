@@ -7,6 +7,17 @@ Klammern.
 
 ## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.0.1)
 
+### Korrektur zur Belegsprache (#245)
+
+Unter *Rechnungs-PDF* stand bisher, die Belegsprache wirke nur auf das PDF und
+die XML behalte die deutschen Rechtstexte. Das trifft so nicht zu: Die
+Beschriftungen der Pflichtangaben des Geschäftsbriefs (BT-33) folgen der
+Belegsprache auch in der CII-XML (`zugferd_xml/parteien.py` über
+`pflichtangaben`). Unverändert sprachunabhängig bleiben Codes, Datumsformate
+(`YYYYMMDD`), Beträge, Nutzereingaben und die Steuerbefreiungstexte E/K/O; der
+Reverse-Charge-Hinweis AE bleibt in beiden Ausgaben zweisprachig. Der ältere
+Eintrag unten bleibt als damalige Formulierung stehen.
+
 ### Vor dem Wechsel lesen
 
 Der Wechsel bringt 19 Schemaänderungen mit (Migrationen 005 bis 023). Der Start

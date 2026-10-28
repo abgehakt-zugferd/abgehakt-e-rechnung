@@ -80,7 +80,7 @@ backend/app/
 │   ├── validator.py          # § 14 UStG, regelbasiert
 │   ├── einheiten.py          # fester Einheitenkatalog für Formular, Validator und CII
 │   ├── belegart.py           # Belegart → BT-3 TypeCode, manuelle Wählbarkeit
-│   ├── belegsprache/         # Belegsprache de|en → PDF-Darstellung, Texte je Sprache
+│   ├── belegsprache/         # Belegsprache de|en → PDF-Darstellung; BT-33 nutzt dieselbe Sprache
 │   ├── mailtext.py           # Betreff und Rumpf der Rechnungsmail je Belegsprache
 │   ├── invoice_number.py     # fortlaufende Nummern
 │   ├── customer_number.py    # Vorschlag für Kundennummern, überschreibbar
@@ -322,13 +322,15 @@ des Belegs (PDF-Titel, Labels, Zahlen- und Datumsformat) sowie den Mailtext. Sie
 Kundenland noch
 an einer globalen Laufzeiteinstellung. Unbekannte Werte fallen nicht still auf Deutsch
 zurück (`resolve_belegsprache`). Nach dem Finalisieren ist das Feld unveränderlich (nicht in
-`MUTABLE_AFTER_FINALIZE`). Die CII-XML trägt **kein** Sprachattribut, und übersetzt wird dort
-nichts: weder Codes noch Nutzereingaben. Eine mittelbare Wirkung gibt es trotzdem, und sie ist
-gewollt: Bleibt das Feld Zahlungsbedingungen leer, setzt `_zahlungsbedingungen` die Vorgabe der
-gewählten Sprache (`payment_terms_default_en` bei `en`), und dieser gespeicherte Text steht
-anschließend in `SpecifiedTradePaymentTerms/Description`. Die Sprache wählt also den Text aus,
-sie übersetzt ihn nicht. Fehlt die englische Vorgabe, weist das Speichern mit 400 ab, statt
-still Deutsch in einen englischen Beleg zu schreiben.
+`MUTABLE_AFTER_FINALIZE`). Die CII-XML trägt **kein** Sprachattribut. Codes und Nutzereingaben
+werden nicht übersetzt. Die Beschriftungen der Pflichtangaben des Geschäftsbriefs (BT-33)
+folgen der Belegsprache: `zugferd_xml/parteien.seller_legal_xml` ruft
+`pflichtangaben(company, sprache)` auf. Eine weitere mittelbare Wirkung: Bleibt das Feld
+Zahlungsbedingungen leer, setzt `_zahlungsbedingungen` die Vorgabe der gewählten Sprache
+(`payment_terms_default_en` bei `en`), und dieser gespeicherte Text steht anschließend in
+`SpecifiedTradePaymentTerms/Description`. Die Sprache wählt den Text aus, sie übersetzt ihn
+nicht. Fehlt die englische Vorgabe, weist das Speichern mit 400 ab, statt still Deutsch in einen
+englischen Beleg zu schreiben.
 
 ### Einheiten kommen aus einem Katalog und werden nie umgedeutet
 

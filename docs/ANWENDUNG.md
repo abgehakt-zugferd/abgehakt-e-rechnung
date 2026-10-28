@@ -647,13 +647,15 @@ Einstellung. Eine Vorlage und eine Stornorechnung übernehmen die Sprache ihres 
 eine aus Vorlage angelegte Rechnung kann sie vor dem Speichern noch ändern.
 
 Die Belegsprache steuert den Mailtext und die menschenlesbare Darstellung im PDF: Belegtitel,
-Beschriftungen, Zahlen und Datumsformate sowie die vom Programm erzeugten Hinweise. Sie
-übersetzt weder Positionsbeschreibungen noch selbst eingegebene Zahlungsbedingungen. Die
-Sprachkennzeichnung selbst wird nicht in die E-Rechnungs-XML geschrieben. Bleiben die
-Zahlungsbedingungen leer, übernimmt das Programm jedoch die Standard-Zahlungsbedingungen
-der gewählten Sprache und schreibt diesen Text auch in die XML. Wählen Sie eine englische
-Rechnung ohne eigene Zahlungsbedingungen, braucht die Firma in den Einstellungen englische
-Standard-Zahlungsbedingungen; fehlen sie, weist das Programm das Speichern zurück.
+Beschriftungen, Zahlen und Datumsformate sowie die vom Programm erzeugten Hinweise. Dieselben
+Beschriftungen der Pflichtangaben des Geschäftsbriefs stehen in der E-Rechnungs-XML unter
+BT-33. Sie übersetzt weder Positionsbeschreibungen noch selbst eingegebene Zahlungsbedingungen.
+Codes, Datumsformate und Beträge in der XML bleiben sprachunabhängig; eine eigene
+Sprachkennzeichnung wird nicht geschrieben. Bleiben die Zahlungsbedingungen leer, übernimmt
+das Programm jedoch die Standard-Zahlungsbedingungen der gewählten Sprache und schreibt diesen
+Text auch in die XML. Wählen Sie eine englische Rechnung ohne eigene Zahlungsbedingungen,
+braucht die Firma in den Einstellungen englische Standard-Zahlungsbedingungen; fehlen sie,
+weist das Programm das Speichern zurück.
 
 Nach dem Finalisieren ist die Sprache unveränderlich. Ein fremder oder manipulierter
 Sprachwert wird ebenfalls vor der Nummernvergabe zurückgewiesen, statt still auf Deutsch

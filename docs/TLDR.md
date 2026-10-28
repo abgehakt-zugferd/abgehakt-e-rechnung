@@ -20,8 +20,9 @@ per Mail an Kunden und Buchhaltung und hält sie GoBD-gerecht unveränderbar vor
    Gutschriftverfahren (389, teilweise umgesetzt). Eine Quelle: `services/belegart.py`.
 6. Die XML hat rechtlich Vorrang. PDF und XML entstehen aus denselben Daten, Summen aus
    genau einer Stelle (`services/belegsummen.py`).
-7. Die Belegsprache (Deutsch/Englisch) ändert nur das PDF; die XML behält die deutschen
-   Rechtstexte.
+7. Die Belegsprache (Deutsch/Englisch) steuert PDF und Mailtext sowie die Beschriftungen
+   der Pflichtangaben in der XML (BT-33). Codes, Datumsformate (`YYYYMMDD`), Beträge und
+   die Steuerbefreiungstexte E/K/O bleiben sprachunabhängig; AE bleibt zweisprachig.
 8. Außer dem Mailversand über Ihren SMTP-Server geht Abgehakt nur auf Klick und nach
    Einwilligung ins Netz: USt-IdNr.-Prüfung bei VIES und die Suche nach Updates.
 9. Optional nimmt Abgehakt signierte Abrechnungsaufträge eines vorgelagerten Systems aus einem
