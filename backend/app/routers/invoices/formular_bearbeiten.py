@@ -17,8 +17,8 @@ from app.routers.invoices.formular_lesen import (
     positionen_aus_formular,
     pruefe_einheiten,
     pruefe_positionsangaben,
-    zahlungsbedingungen,
 )
+from app.routers.invoices.zahlungsbedingungen import zahlungsbedingungen
 from app.routers.invoices.formular_schreiben import (
     FRIST_ODER_BEDINGUNGEN_FEHLT,
     kunde_zuordnung_pruefen,
