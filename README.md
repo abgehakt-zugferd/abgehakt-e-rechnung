@@ -198,15 +198,15 @@ stattdessen und wechselt auf den Versionsstand:
 
 ```bash
 git clone https://github.com/abgehakt-zugferd/abgehakt-e-rechnung.git
-cd abgehakt-e-rechnung
+cd abgehakt-e-rechnung && git checkout v1.0.1
 ```
 
 Die zuletzt veröffentlichte Fassung ist **v1.0.1** (`backend/VERSION`, Abschnitt
 `v1.0.1` im CHANGELOG). Der Funktionsumfang dieses README und der Abschnitt
-*Nächste Fassung* im CHANGELOG beschreiben den aktuellen Stand des Repositoriums,
-der als Tag noch nicht veröffentlicht ist. Wer bewusst nur die letzte Release-Fassung
-will: `git checkout v1.0.1`. Ohne Tag (Hauptzweig) läuft man auf dem beschriebenen
-Zwischenstand.
+*Nächste Fassung* im CHANGELOG beschreiben dagegen den aktuellen Stand des
+Hauptzweigs, der noch nicht als Fassung veröffentlicht ist. Ohne Release-Archiv und
+ohne Tag bekommt man diesen Zwischenstand: Er kann Fehler enthalten, die in keiner
+veröffentlichten Fassung stehen.
 
 **3. Passwörter setzen.** Im entpackten Verzeichnis:
 
