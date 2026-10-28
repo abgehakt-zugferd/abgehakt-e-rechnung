@@ -62,22 +62,16 @@ def _namen_ablehnung_mit_befund() -> list[str]:
     return sorted(namen)
 
 
-def _namen_auftraege_abgelehnt() -> list[str]:
-    ordner = vektorordner()
-    if ordner is None:
-        return []
-    return sorted(
-        name
-        for name, eintrag in eintraege(ordner / "vektoren", "auftraege").items()
-        if eintrag.get("erwarteter_code") not in (None, "KEINE_ABLEHNUNG")
-    )
+def _namen_auftraege_ausser_01() -> list[str]:
+    return [name for name in namen_beim_sammeln("auftraege") if name != "01_gueltig"]
 
 
 class Lage(Empfangslage):
-    def __init__(self, zuletzt=None, kennungen=None, partner=()):
+    def __init__(self, zuletzt=None, kennungen=None, partner=(), dokumente=None):
         self._zuletzt = zuletzt
         self._kennungen = kennungen or {}
         self._partner = partner
+        self._dokumente = dokumente or {}
 
     def zuletzt_angenommen(self, absender):
         return self._zuletzt
@@ -87,6 +81,9 @@ class Lage(Empfangslage):
 
     def partner_bekannt(self, partner_id):
         return partner_id in self._partner
+
+    def dokument_zu_auftragsschluessel(self, schluessel):
+        return self._dokumente.get(schluessel)
 
 
 def _kettenanfang(vektoren):
@@ -235,7 +232,7 @@ def test_der_gueltige_auftrag_wird_angenommen(vektoren, schluesselordner):
     assert urteil.beleg_sha256 == eintrag["beleg_sha256"]
 
 
-def _lage_nach_dem_gueltigen(vektoren, partner=PARTNER_DES_PROBEBESTANDS):
+def _lage_nach_dem_gueltigen(vektoren, partner=PARTNER_DES_PROBEBESTANDS, dokumente=None):
     roh = (vektoren / "auftraege" / "01_gueltig.json").read_bytes()
     beleg = json.loads(roh)
     from app.services.protokoll import zeit
@@ -244,7 +241,22 @@ def _lage_nach_dem_gueltigen(vektoren, partner=PARTNER_DES_PROBEBESTANDS):
         zuletzt=(hashlib.sha256(roh).hexdigest(), zeit(beleg["erzeugt_am"])),
         kennungen={beleg["beleg_id"]: hashlib.sha256(roh).hexdigest()},
         partner=partner,
+        dokumente=dokumente,
     )
+
+
+def _lage_fuer(vektoren, bedarf, roh):
+    if not bedarf.nach_01:
+        return Lage(partner=PARTNER_DES_PROBEBESTANDS)
+    dokumente = None
+    if bedarf.mit_dokument:
+        # § 8 ab 1.8: je Gutschrift ein Schluessel; 01 hat beide gelegt.
+        dokumente = {
+            g["auftragsschluessel"]: "Entwurf"
+            for g in json.loads(roh)["nutzlast"]["gutschriften"]
+            if isinstance(g.get("auftragsschluessel"), str)
+        }
+    return _lage_nach_dem_gueltigen(vektoren, dokumente=dokumente)
 
 
 def test_jeder_auftragsvektor_ist_gemessen(vektoren):
@@ -252,19 +264,29 @@ def test_jeder_auftragsvektor_ist_gemessen(vektoren):
     pruefe_vollstaendigkeit(vektoren, "auftraege")
 
 
-@pytest.mark.parametrize("name", _namen_auftraege_abgelehnt())
-def test_auftragsvektor_trifft_seinen_befundcode(vektoren, schluesselordner, name):
+@pytest.mark.parametrize("name", _namen_auftraege_ausser_01())
+def test_auftragsvektor_trifft_seine_erwartung(vektoren, schluesselordner, name):
+    """Soll aus erwartung.json: angenommen, Befundcode, oder schon gerechnet."""
     eintrag = eintraege(vektoren, "auftraege")[name]
-    lagebedarf(eintrag.get("voraussetzung"))
-    erwartet = erwarteter_code(eintrag)
+    bedarf = lagebedarf(eintrag.get("voraussetzung"))
     roh = (vektoren / "auftraege" / f"{name}.json").read_bytes()
+    lage = _lage_fuer(vektoren, bedarf, roh)
+    erwartet = erwarteter_code(eintrag)
 
-    urteil = beleg_beurteilen(
-        roh, _lage_nach_dem_gueltigen(vektoren), schluessel_wurzel=schluesselordner,
-    )
+    urteil = beleg_beurteilen(roh, lage, schluessel_wurzel=schluesselordner)
 
-    assert not urteil.angenommen
-    assert [f.code for f in urteil.feststellungen] == [erwartet]
+    if erwartet == "KEINE_ABLEHNUNG":
+        assert urteil.angenommen, [f"{f.code} {f.pfad}" for f in urteil.feststellungen]
+        assert urteil.feststellungen == ()
+    elif erwartet == "AUFTRAG_SCHON_GERECHNET":
+        assert not urteil.angenommen
+        assert all(f.code == "AUFTRAG_SCHON_GERECHNET" for f in urteil.feststellungen)
+        assert len(urteil.feststellungen) >= 1
+        assert all(f.erhalten == "Entwurf" for f in urteil.feststellungen)
+    else:
+        assert not urteil.angenommen
+        assert [f.code for f in urteil.feststellungen] == [erwartet]
+    assert urteil.beleg_sha256 == eintrag["beleg_sha256"]
 
 
 def test_der_gueltige_auftrag_braucht_beide_partner_im_stamm(vektoren, schluesselordner):
