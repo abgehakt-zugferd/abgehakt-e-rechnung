@@ -46,19 +46,8 @@ def belegsprache_aus_form(form, *, fehlt: str = "de") -> str:
         raise HTTPException(400, str(fehler)) from fehler
 
 
-def zahlungsbedingungen(form, company: Company, sprache: str,
-                        kunden_hinweis: str | None = None) -> str:
-    """Leeres Feld → Zahlungshinweis des Kunden, sonst Vorgabe der gewaehlten
-    Sprache. Englisch ohne Vorgabe: 400.
-
-    Der Kundenhinweis (Entscheidung 4) steht VOR der Sprachvorgabe der Firma:
-    er gilt fuer DIESEN Kunden, die Firmavorgabe ist der Rueckfall fuer alle.
-    """
-    eingabe = (form.get("payment_terms") or "").strip()
-    if eingabe:
-        return eingabe
-    if kunden_hinweis:
-        return kunden_hinweis
+def _firmen_vorgabe(company: Company, sprache: str) -> str:
+    """Firmenvorgabe der gewaehlten Belegsprache; en ohne Vorgabe → 400."""
     if sprache == "en":
         vorgabe = (company.payment_terms_default_en or "").strip()
         if not vorgabe:
@@ -68,7 +57,35 @@ def zahlungsbedingungen(form, company: Company, sprache: str,
                 "Bitte zuerst unter Einstellungen hinterlegen.",
             )
         return vorgabe
-    return company.payment_terms_default
+    return (company.payment_terms_default or "").strip()
+
+
+def zahlungsbedingungen(form, company: Company, sprache: str,
+                        kunden_hinweis: str | None = None) -> str:
+    """Leeres Feld → Zahlungshinweis des Kunden, sonst Vorgabe der gewaehlten
+    Sprache. Steht genau die Vorgabe der anderen Sprache im Feld, wird sie
+    durch die Vorgabe der gewaehlten Sprache ersetzt (#248). Freitext bleibt.
+    Englisch ohne Vorgabe: 400.
+
+    Der Kundenhinweis (Entscheidung 4) steht VOR der Sprachvorgabe der Firma:
+    er gilt fuer DIESEN Kunden, die Firmavorgabe ist der Rueckfall fuer alle.
+    Am Schreibpfad folgt danach zahlungstext_beim_speichern (#231): erst
+    Sprach-Tausch, dann ggf. Gutschrift-Text auf der Firmenvorgabe.
+    """
+    eingabe = (form.get("payment_terms") or "").strip()
+    andere = "de" if sprache == "en" else "en"
+    andere_vorgabe = (
+        (company.payment_terms_default or "").strip()
+        if andere == "de"
+        else (company.payment_terms_default_en or "").strip()
+    )
+    if eingabe and andere_vorgabe and eingabe == andere_vorgabe:
+        return _firmen_vorgabe(company, sprache)
+    if eingabe:
+        return eingabe
+    if kunden_hinweis:
+        return kunden_hinweis
+    return _firmen_vorgabe(company, sprache)
 
 
 def _calc_item(quantity: Decimal, unit_price: Decimal, tax_rate: Decimal) -> tuple[Decimal, Decimal, Decimal]:

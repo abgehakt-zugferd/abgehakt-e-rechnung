@@ -528,7 +528,7 @@ function invoiceForm() {
 
             if (this.$refs.paymentTerms) {
                 // Vorhandener Text (Vorlage/Entwurf) hat Vorrang. Sonst Vorgabe
-                // der gewaehlten Sprache. Sprachwechsel ueberschreibt nie.
+                // der gewaehlten Sprache.
                 const vorhanden = (vorgaben.paymentTerms || '').trim();
                 if (vorhanden) {
                     this.$refs.paymentTerms.value = vorhanden;
@@ -541,10 +541,14 @@ function invoiceForm() {
         },
 
         onDocumentLanguageChange() {
-            // Nur leeres Feld nachziehen. Vorhandene Nutzereingabe (auch aus
-            // Vorlage) bleibt unveraendert — keine stillschweigende Uebersetzung.
+            // Leeres Feld oder unveraenderte Vorgabe der anderen Sprache →
+            // Vorgabe der neuen Sprache. Freitext bleibt (#248).
             if (!this.$refs.paymentTerms) return;
-            if (this.$refs.paymentTerms.value.trim()) return;
+            const aktuell = this.$refs.paymentTerms.value.trim();
+            const andere = this.documentLanguage === 'en'
+                ? this.paymentTermsDe
+                : this.paymentTermsEn;
+            if (aktuell && aktuell !== (andere || '').trim()) return;
             this.$refs.paymentTerms.value = this.documentLanguage === 'en'
                 ? this.paymentTermsEn
                 : this.paymentTermsDe;
