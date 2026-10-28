@@ -20,10 +20,10 @@ Eintrag unten bleibt als damalige Formulierung stehen.
 
 ### Vor dem Wechsel lesen
 
-Der Wechsel bringt 19 Schemaänderungen mit (Migrationen 005 bis 023). Der Start
-führt sie selbst aus. **Vorher sichern**, wie im README unter *Sicherung und
-Rücksicherung* beschrieben. Drei davon greifen in Bestandsdaten ein oder können
-den Start anhalten:
+Der Wechsel bringt Schemaänderungen mit; die Kette steht unter
+`backend/alembic/versions/`. Der Start führt sie selbst aus. **Vorher sichern**,
+wie im README unter *Sicherung und Rücksicherung* beschrieben. Drei greifen in
+Bestandsdaten ein oder können den Start anhalten:
 
 - **Rechtsform nachtragen, sonst lässt sich nichts mehr stellen** (Migration 019,
   #133). Rechnungen tragen jetzt die Pflichtangaben für Geschäftsbriefe
@@ -65,6 +65,9 @@ den Tag ihrer letzten Änderung (Migration 018, #130). Die Umsatzkennzahlen der
   Systems, hinter einem Schalter und nur lesend auf einen Ordner
   (`UEBERGABEN_ORDNER`, `SCHLUESSEL_PFAD`) (#69). Der Absender bestimmt die Belegart
   (381 oder 389); für 389 gelten die Grenzen oben.
+- **Abrechnungsaufstellung** als eigenes Modell (kein TypeCode): Entwurf aus
+  Aufstellungsauftrag, PDF/A, Versand an die Buchhaltung, Storno, Archivbereich
+  und Aufnahme in den GoBD-Export.
 
 ### Inhalt der E-Rechnung
 

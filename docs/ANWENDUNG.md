@@ -144,8 +144,10 @@ umsatzsteuerlichen Status (`ungeklaert`, `regelbesteuert`, `kleinunternehmer`). 
 ist bewusst **ungeklärt**, keine ungeprüfte Annahme. Speichern bleibt bei ungeklärtem Status
 möglich; blockiert wird erst das Finalisieren einer 389. Ohne Steuernummer und ohne USt-IdNr.
 scheitert die Finalisierung ebenfalls (§ 14 Abs. 4 S. 1 Nr. 2 UStG). Die XML-Ausgabe mit
-getauschten Rollen gehört nicht zu diesem Stand; das Feld `tax_number` ist gespeichert und
-geprüft, noch nicht in die ZUGFeRD-XML geschrieben.
+getauschten Rollen ist umgesetzt (`services/belegrollen.besetzung`): Bei 389 und ihrem
+Storno ist der Kunde Verkäufer und die Firma Erwerber. Die Steuernummer des Verkäufers
+(bei 389 also die des Kunden) steht als `schemeID="FC"` in der CII-XML
+(`zugferd_xml/parteien.seller_tax_xml`).
 
 Es gibt zwei getrennte Wege, einen Kunden aus dem Tagesgeschäft zu nehmen, mit
 unterschiedlicher Wirkung:
@@ -502,7 +504,21 @@ dieses Programm nur liest. Für solche Installationen gibt es unter **Einstellun
 Schalter **Beleg-Integration einschalten** (Route `POST /settings/beleg-integration`,
 Feld `beleg_integration_aktiv`). Ohne den Schalter fehlt das Merkmal vollständig: kein
 Menüpunkt, keine Spalte in der Kundenliste, und auch wer die Adresse kennt, erreicht
-keine Seite. Eingeschaltet erscheint im Menü der Punkt **BELEGE**.
+keine Seite. Eingeschaltet erscheinen im Menü die Punkte **BELEGE** und **AUFSTELLUNGEN**.
+
+### Einrichtung
+
+1. **Schalter** unter Einstellungen auf **Beleg-Integration einschalten** stellen
+   (`beleg_integration_aktiv` in `models/app_config.py`).
+2. **Übergabeordner** über die Umgebungsvariable `UEBERGABEN_ORDNER` setzen; das Programm
+   liest ihn nur (`config.uebergaben_ordner`).
+3. **Öffentliche Schlüssel** der Absender unter `backend/schluessel/` ablegen: je Absender
+   ein Unterordner, darin je Schlüssel eine `.pub`-Datei (PEM) und ein Beiblatt `.json`
+   (`backend/schluessel/README.md`, geladen über `services/uebergabe_schluessel.py`).
+   Ohne eigenen `SCHLUESSEL_PFAD` gilt dieser eingebaute Ordner.
+4. **Abbild neu bauen** mit `docker compose up -d --build`. Der Ordner liegt im
+   Anwendungsabbild (`Dockerfile` kopiert den Build-Kontext); ohne Neubau sieht die
+   laufende Installation neue Schlüssel nicht.
 
 ### Was die Seite zeigt
 
@@ -911,32 +927,36 @@ Ersatzrechnung stehen oder die Gutschrift kann fehlen.
 ## Archiv
 
 Unter **ARCHIV** liegen die abgelegten Dateien jedes finalisierten Belegs: das ZUGFeRD-PDF
-und die E-Rechnungs-XML, beides acht Jahre aufbewahrungspflichtig. Die Seite zeigt zwei
-Bereiche, **PDF** und **XML**, je als Tabelle mit Dateiname, Änderungszeitpunkt, Größe und
-einem Link **laden** je Datei (routers/archive.py).
+und die E-Rechnungs-XML, dazu die PDFs der Abrechnungsaufstellungen, alles acht Jahre
+aufbewahrungspflichtig. Die Seite zeigt drei Bereiche, **PDF**, **XML** und
+**Aufstellungen**, je als Tabelle mit Dateiname, Änderungszeitpunkt, Größe und einem Link
+**laden** je Datei (`routers/archive.py`, `BEREICHE` mit `pdfs`, `xml`, `aufstellungen`).
 
 Über **Dateiname** suchen Sie, etwa nach einem Teil der Rechnungsnummer; die Suche trifft
 einen Teil des Namens, unabhängig von Groß- und Kleinschreibung. **ZURÜCKSETZEN** leert das
 Feld. Pro Bereich zeigt die Tabelle 100 Dateien, die neuesten zuerst; darüber blättern Sie
 mit **ZURÜCK** und **WEITER**.
 
-Sichtbar sind nur Dateien, zu denen ein Beleg der Datenbank gehört. Was auf der Platte liegt,
-ohne dass ein Beleg darauf zeigt, bleibt unsichtbar; Reste der Vorschau und fremde Importe
-erscheinen gar nicht erst. Wollen Sie alles auf einmal, mit Tabellen und Änderungsprotokoll
-als Prüferpaket, führt die Seite unten zum GoBD-Export.
+Sichtbar sind nur Dateien, zu denen ein Beleg oder eine gestellte bzw. stornierte
+Aufstellung der Datenbank gehört. Was auf der Platte liegt, ohne dass ein Datensatz darauf
+zeigt, bleibt unsichtbar; Reste der Vorschau und fremde Importe erscheinen gar nicht erst.
+Wollen Sie alles auf einmal, mit Tabellen und Änderungsprotokoll als Prüferpaket, führt die
+Seite unten zum GoBD-Export.
 
 ---
 
 ## GoBD-Export
 
 Der Menüpunkt **GOBD-EXPORT** erzeugt die Datenträgerüberlassung für eine Prüfung: alle
-Tabellen, alle Originalbelege und das Änderungsprotokoll in einer ZIP-Datei (routers/export.py,
-services/gobd_export.py).
+Tabellen, alle Originalbelege, die Abrechnungsaufstellungen des Zeitraums und das
+Änderungsprotokoll in einer ZIP-Datei (`routers/export.py`, `services/gobd_export.py`,
+`services/gobd_export_aufstellungen.py`).
 
-Wählen Sie den Zeitraum über **Von** und **Bis**, gemessen am Ausstellungsdatum der Belege;
-vorausgefüllt sind der Jahresanfang und heute. Ein Enddatum vor dem Startdatum lehnt die
-Seite ab („Das Enddatum darf nicht vor dem Startdatum liegen."). **ZIP HERUNTERLADEN**
-liefert eine Datei namens `gobd-export_<von>_<bis>.zip` mit folgendem Inhalt:
+Wählen Sie den Zeitraum über **Von** und **Bis**, gemessen am Ausstellungsdatum der Belege
+bzw. Aufstellungen; vorausgefüllt sind der Jahresanfang und heute. Ein Enddatum vor dem
+Startdatum lehnt die Seite ab („Das Enddatum darf nicht vor dem Startdatum liegen.").
+**ZIP HERUNTERLADEN** liefert eine Datei namens `gobd-export_<von>_<bis>.zip` mit
+folgendem Inhalt:
 
 - `rechnungen.csv`: alle Belege des Zeitraums außer Entwürfen, verworfene Entwürfe
   ausdrücklich mit dabei, weil ihre Nummer vergeben wurde und ihre Zeile die Lücke im
@@ -954,6 +974,9 @@ liefert eine Datei namens `gobd-export_<von>_<bis>.zip` mit folgendem Inhalt:
 - `index.xml` und `gdpdu.dtd`: die Beschreibungsdateien des GDPdU-Standards, damit die
   Prüfsoftware die Tabellen einlesen kann.
 - `dokumente/`: von jedem Beleg das ZUGFeRD-PDF und die E-Rechnungs-XML.
+- Aufstellungen des Zeitraums samt ihren xlsx-Anlagen (Auswahl und Schreibweise in
+  `services/gobd_export_aufstellungen.py`); fehlende Anlagendateien erscheinen in
+  `fehlende_dateien.txt`.
 - `dokumentation.txt`: Zeichensatz, Trennzeichen und Datumsformat der Tabellen. Fehlt eine
   Belegdatei, listet `fehlende_dateien.txt` sie auf.
 

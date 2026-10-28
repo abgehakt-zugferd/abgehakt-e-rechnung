@@ -58,14 +58,17 @@ backend/app/
 │   ├── company.py            # eigene Firma (Singleton id=1)
 │   ├── customer.py           # Kundenstamm
 │   ├── invoice.py            # Invoice, InvoiceItem, ValidationResult, InvoiceSendLog, AuditLog
+│   ├── aufstellung.py        # Abrechnungsaufstellung (eigenes Modell, kein TypeCode)
+│   ├── aufstellung_send_log.py
 │   ├── app_config.py         # Betriebseinstellungen (Singleton id=1)
 │   └── uebergabe_eingang.py  # Gedächtnis der Beleg-Integration (beleg_id + beleg_sha256)
 ├── routers/                  # HTTP-Handler
 │   ├── setup.py              # Ersteinrichtungs-Wizard (/setup)
 │   ├── customers.py
 │   ├── invoices/             # je Zweck ein Modul: Liste, Formular, Ansicht, Finalisieren, Versand, Storno
-│   ├── export.py             # GoBD-Datenexport (Z3)
-│   ├── archive.py            # Archivansicht storage/{pdfs,xml}
+│   ├── aufstellungen.py      # Liste, Detail, Finalisieren, Versand, Storno der Aufstellung
+│   ├── export.py             # GoBD-Datenexport (Z3), inkl. Aufstellungen
+│   ├── archive.py            # Archivansicht storage/{pdfs,xml,aufstellungen}
 │   ├── updates.py            # Update-Hinweis (nur auf Klick)
 │   ├── uebergaben.py         # Übergabebelege ansehen, als Entwurf anlegen (#22)
 │   ├── settings.py           # Firmendaten, SMTP-Test
@@ -94,6 +97,9 @@ backend/app/
 │   ├── bezahlt_am.py         # Zahlungsdatum beim Bezahltsetzen: Plausibilität und Gutschrift-Sperre
 │   ├── customer_guard.py     # kein Hard-Delete von Kunden
 │   ├── gobd_export.py        # ZIP-Export (CSV + Belege + Audit-Log)
+│   ├── gobd_export_aufstellungen.py  # Aufstellungen und Anlagen im GoBD-Export
+│   ├── aufstellung_*.py      # Entwurf, Finalisieren, PDF, Versand, Storno der Aufstellung
+│   ├── aufstellungsauftrag_wirkung.py  # Entwurf aus angenommenem Aufstellungsauftrag
 │   ├── datev_email.py        # SMTP-Versand + DATEV-BCC
 │   ├── crypto.py             # verschlüsselt Secrets in der Datenbank (SMTP-Passwort)
 │   ├── dashboard_kennzahlen.py # USt-, Steuer-Rücklagen-, offene und überfällige Forderungen
