@@ -7,7 +7,7 @@ import pytest
 
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceSendLog
-from scripts.beleg_migration_nachziehen import nachziehen
+from scripts.beleg_migration_nachziehen import main, nachziehen
 
 
 def _inv(pg_session, number, issue, due, *, payment_terms=None):
@@ -42,6 +42,21 @@ def _inv(pg_session, number, issue, due, *, payment_terms=None):
     pg_session.add(inv)
     pg_session.commit()
     return inv
+
+
+def test_ohne_argument_bricht_ab_ohne_nachziehen(monkeypatch, capsys):
+    """Aufruf ohne Nummern: Hilfe auf stderr, Exit != 0, nachziehen nicht erreicht."""
+
+    def verboten(*_args, **_kwargs):
+        raise AssertionError("nachziehen darf ohne Argument nicht laufen")
+
+    monkeypatch.setattr(
+        "scripts.beleg_migration_nachziehen.nachziehen", verboten,
+    )
+    code = main([])
+    err = capsys.readouterr().err
+    assert code != 0
+    assert err.strip()
 
 
 def test_nachziehen_setzt_versand_und_bezahlt(pg_session):
