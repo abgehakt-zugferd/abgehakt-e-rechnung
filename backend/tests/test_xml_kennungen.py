@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 
 from app.services import mustang, zugferd_xml
 from tests.factories import orm_company, orm_customer, orm_invoice, orm_invoice_for, orm_item
+from tests.helpers import mustang_befund
 
 RAM = "{urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100}"
 
@@ -19,7 +20,7 @@ def _gueltig(xml: str, tmp_path) -> None:
     pfad = tmp_path / "beleg.xml"
     pfad.write_text(xml, encoding="utf-8")
     befund = mustang.validate(pfad)
-    assert befund["is_valid"], befund["errors"]
+    mustang_befund.gueltig(befund, befund["errors"])
 
 
 def test_kundennummer_steht_als_bt46_in_der_xml(tmp_path):

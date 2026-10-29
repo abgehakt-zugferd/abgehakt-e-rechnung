@@ -35,6 +35,7 @@ from tests.factories import (
     validator_invoice_stub,
 )
 from tests.helpers.finalize_pipeline import cleanup, finalize_with_fake_pipeline
+from tests.helpers import mustang_befund
 
 RAM = "{urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100}"
 
@@ -168,7 +169,7 @@ def test_mustang_meldet_die_gruppen_xml_als_valide(tmp_path):
     pfad.write_text(xml, encoding="utf-8")
 
     befund = mustang.validate(pfad)
-    assert befund["is_valid"], befund["errors"]
+    mustang_befund.gueltig(befund, befund["errors"])
     assert "XML:valid" in befund["raw"], befund["raw"]
 
 

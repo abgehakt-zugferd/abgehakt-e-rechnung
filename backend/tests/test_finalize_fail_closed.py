@@ -279,3 +279,23 @@ def test_finalize_bleibt_entwurf_wenn_mustang_in_die_zeitgrenze_laeuft(pg_sessio
         assert not (settings.storage_path / "xml" / f"{number}.xml").exists()
     finally:
         cleanup(number)
+
+
+def test_finalize_blocks_when_java_not_startable(pg_session):
+    """#252: fehlendes Java (OSError) ist nicht ausfuehrbar und sperrt wie die Zeitgrenze."""
+    inv = valid_draft(pg_session)
+    number = inv.invoice_number
+    try:
+        with patch("app.services.pdf_generator.generate_pdf", side_effect=fake_generate_pdf), \
+             patch("app.services.pdfa.gs_available", return_value=True), \
+             patch("app.services.pdfa.to_pdfa3", return_value=True), \
+             patch("app.services.mustang.jar_available", return_value=True), \
+             patch("app.services.mustang.subprocess.run", side_effect=FileNotFoundError("java")):
+            r = client(pg_session).post(f"/invoices/{inv.id}/finalisieren")
+        assert r.status_code == 400, r.text
+        pg_session.expire_all()
+        row = pg_session.get(Invoice, inv.id)
+        assert row.status == "draft"
+        assert row.pdf_filename is None
+    finally:
+        cleanup(number)

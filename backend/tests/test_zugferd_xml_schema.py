@@ -23,6 +23,7 @@ from app.models.customer import Customer
 from app.models.invoice import Invoice
 from app.services import mustang, zugferd_xml
 from tests.factories import orm_company as _company, orm_invoice_for as _invoice, orm_item as _item
+from tests.helpers import mustang_befund
 
 pytestmark = pytest.mark.skipif(
     not mustang.jar_available(), reason="Mustang-JAR nicht verfügbar"
@@ -71,10 +72,8 @@ CUSTOMER_VARIANTS = {
 def test_buyer_address_variants_are_schema_valid(key):
     cust = Customer(**CUSTOMER_VARIANTS[key])
     result = _validate(_invoice(cust), _company())
-    assert result["is_valid"], (
-        f"CII-XML für Käuferadresse {key!r} ist NICHT schema-valide:\n"
-        f"{result['errors']}\n{result['raw']}"
-    )
+    mustang_befund.gueltig(result, f"CII-XML für Käuferadresse {key!r} ist NICHT schema-valide:\n"
+        f"{result['errors']}\n{result['raw']}")
 
 
 # ── Adressblock: Verkäufer (SellerTradeParty) ───────────────────────────────
@@ -86,10 +85,8 @@ def test_buyer_address_variants_are_schema_valid(key):
 def test_seller_address_variants_are_schema_valid(company_over):
     cust = Customer(**CUSTOMER_VARIANTS["de_minimal"])
     result = _validate(_invoice(cust), _company(**company_over))
-    assert result["is_valid"], (
-        f"CII-XML für Verkäuferadresse {company_over} ist NICHT schema-valide:\n"
-        f"{result['errors']}\n{result['raw']}"
-    )
+    mustang_befund.gueltig(result, f"CII-XML für Verkäuferadresse {company_over} ist NICHT schema-valide:\n"
+        f"{result['errors']}\n{result['raw']}")
 
 
 # ── Steuersätze/Summen: schema-valide XML über Sätze und gemischte Positionen ──
@@ -107,13 +104,13 @@ def _multi_item_invoice(items):
 def test_single_tax_rate_xml_is_schema_valid(rate):
     inv = _multi_item_invoice([_item(1, "2", "100.00", rate)])
     result = _validate(inv, _company())
-    assert result["is_valid"], f"Steuersatz {rate}% XML nicht valide:\n{result['raw']}"
+    mustang_befund.gueltig(result, f"Steuersatz {rate}% XML nicht valide:\n{result['raw']}")
 
 
 def test_mixed_tax_rates_xml_is_schema_valid():
     inv = _multi_item_invoice([_item(1, "2", "100.00", "19"), _item(2, "1", "50.00", "7")])
     result = _validate(inv, _company())
-    assert result["is_valid"], f"Gemischte Sätze XML nicht valide:\n{result['raw']}"
+    mustang_befund.gueltig(result, f"Gemischte Sätze XML nicht valide:\n{result['raw']}")
 
 
 # ── Sonderfälle (Audit #98 P2): Storno/Reverse-Charge/Seller ohne IBAN ────────
@@ -129,9 +126,7 @@ def test_credit_note_381_is_schema_valid():
                    original_invoice_id=_uuid.uuid4())
     inv.original_invoice = original
     result = _validate(inv, _company())
-    assert result["is_valid"], (
-        f"credit_note (381) XML nicht valide:\n{result['errors']}\n{result['raw']}"
-    )
+    mustang_befund.gueltig(result, f"credit_note (381) XML nicht valide:\n{result['errors']}\n{result['raw']}")
     xml = zugferd_xml.generate_xml(inv, _company())
     assert "<ram:TypeCode>381</ram:TypeCode>" in xml
     assert "RE-2026-100" in xml  # Referenz auf Original
@@ -146,9 +141,7 @@ def test_reverse_charge_ae_is_schema_valid():
     inv.customer = cust
     inv.tax_category = "AE"
     result = _validate(inv, _company())
-    assert result["is_valid"], (
-        f"Reverse-Charge (AE) XML nicht valide:\n{result['errors']}\n{result['raw']}"
-    )
+    mustang_befund.gueltig(result, f"Reverse-Charge (AE) XML nicht valide:\n{result['errors']}\n{result['raw']}")
 
 
 def test_ae_exemption_reason_code_steht_nach_category_code():
@@ -177,9 +170,7 @@ def test_ae_exemption_reason_code_steht_nach_category_code():
     assert tax.find("ram:ExemptionReasonCode", ns).text == "VATEX-EU-AE"
 
     result = _validate(inv, company)
-    assert result["is_valid"], (
-        f"AE mit VATEX-EU-AE nicht schema-valide:\n{result['errors']}\n{result['raw']}"
-    )
+    mustang_befund.gueltig(result, f"AE mit VATEX-EU-AE nicht schema-valide:\n{result['errors']}\n{result['raw']}")
 
 
 @pytest.mark.parametrize("category,rate,vat_id,country", [
@@ -198,9 +189,7 @@ def test_steuerfreie_kategorien_sind_schema_valid(category, rate, vat_id, countr
     inv.tax_total = Decimal("0")
     inv.gross_total = inv.net_total
     result = _validate(inv, _company())
-    assert result["is_valid"], (
-        f"Kategorie {category} XML nicht valide:\n{result['errors']}\n{result['raw']}"
-    )
+    mustang_befund.gueltig(result, f"Kategorie {category} XML nicht valide:\n{result['errors']}\n{result['raw']}")
 
 
 def test_seller_without_iban_is_schema_valid():
@@ -208,9 +197,7 @@ def test_seller_without_iban_is_schema_valid():
     die XML muss trotzdem schema-valide bleiben."""
     cust = Customer(**CUSTOMER_VARIANTS["de_minimal"])
     result = _validate(_invoice(cust), _company(bank_iban=None, bank_bic=None))
-    assert result["is_valid"], (
-        f"Seller ohne IBAN XML nicht valide:\n{result['errors']}\n{result['raw']}"
-    )
+    mustang_befund.gueltig(result, f"Seller ohne IBAN XML nicht valide:\n{result['errors']}\n{result['raw']}")
 
 
 def test_verkaeufer_nur_mit_steuernummer_ist_gueltig():
@@ -228,7 +215,7 @@ def test_verkaeufer_nur_mit_steuernummer_ist_gueltig():
     customer = Customer(**CUSTOMER_VARIANTS["de_minimal"])
     result = _validate(_invoice(customer), company)
 
-    assert result["is_valid"], result["raw"][-1200:]
+    mustang_befund.gueltig(result, result["raw"][-1200:])
     assert "BR-CO-26" not in result["raw"]
 
 
@@ -264,9 +251,7 @@ def test_kleinbetrag_ohne_leistungsdatum_ist_schema_valid(category, rate, vat_id
 
     result = _validate(inv, _company())
 
-    assert result["is_valid"], (
-        f"Kategorie {category} ohne Leistungsdatum nicht valide:\n{result['raw'][-1500:]}"
-    )
+    mustang_befund.gueltig(result, f"Kategorie {category} ohne Leistungsdatum nicht valide:\n{result['raw'][-1500:]}")
 
 
 def test_innergemeinschaftliche_lieferung_ohne_leistungsdatum_bleibt_unzulaessig():
@@ -289,9 +274,7 @@ def test_innergemeinschaftliche_lieferung_ohne_leistungsdatum_bleibt_unzulaessig
 
     result = _validate(inv, _company())
 
-    assert not result["is_valid"], (
-        "Mustang nimmt die ig. Lieferung ohne Leistungsdatum inzwischen an"
-    )
+    mustang_befund.ungueltig(result, "Mustang nimmt die ig. Lieferung ohne Leistungsdatum inzwischen an")
     assert "ActualDeliverySupplyChainEvent" in result["raw"], result["raw"][-1500:]
 
 
@@ -308,10 +291,8 @@ def test_leistungszeitraum_ohne_leistungsdatum_ist_schema_valid():
         service_period_end=date(2026, 6, 30),
     )
     result = _validate(inv, _company())
-    assert result["is_valid"], (
-        f"Leistungszeitraum ohne Einzeldatum nicht schema-valide:\n"
-        f"{result['errors']}\n{result['raw'][-1500:]}"
-    )
+    mustang_befund.gueltig(result, f"Leistungszeitraum ohne Einzeldatum nicht schema-valide:\n"
+        f"{result['errors']}\n{result['raw'][-1500:]}")
     assert "BillingSpecifiedPeriod" in zugferd_xml.generate_xml(inv, _company())
 
 
@@ -329,10 +310,8 @@ def test_rechnung_mit_bestellnummer_ist_schema_valid():
     assert "PO-445" in xml
 
     result = _validate(inv, _company())
-    assert result["is_valid"], (
-        f"Rechnung mit Bestellnummer nicht schema-valide:\n"
-        f"{result['errors']}\n{result['raw'][-1500:]}"
-    )
+    mustang_befund.gueltig(result, f"Rechnung mit Bestellnummer nicht schema-valide:\n"
+        f"{result['errors']}\n{result['raw'][-1500:]}")
 
 
 def test_abzug_auf_belegebene_ist_schema_valid():
@@ -352,7 +331,5 @@ def test_abzug_auf_belegebene_ist_schema_valid():
     inv.abzug_grund = "Anrechnung Vorleistung"
 
     result = _validate(inv, _company())
-    assert result["is_valid"], (
-        f"Abzug auf Belegebene nicht schema-valide:\n"
-        f"{result['errors']}\n{result['raw'][-1500:]}"
-    )
+    mustang_befund.gueltig(result, f"Abzug auf Belegebene nicht schema-valide:\n"
+        f"{result['errors']}\n{result['raw'][-1500:]}")

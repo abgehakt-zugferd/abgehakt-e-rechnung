@@ -19,6 +19,7 @@ from app.models.invoice import Invoice, ValidationResult
 from app.services import mustang, pdfa
 from app.services.abrechnungsauftrag_wirkung import entwuerfe_anlegen
 from tests.test_abrechnungsauftrag_wirkung import _kunde, _urteil
+from tests.helpers import mustang_befund
 
 settings = get_settings()
 
@@ -71,10 +72,8 @@ def test_389_vom_auftrag_bis_zum_archiv_durch_die_echte_pipeline(pg_session):
 
         # 4. Mustang nimmt die 389 mit getauschten Rollen an: UND-Bedingung.
         result = mustang.validate(pdf_path)
-        assert result["is_valid"], (
-            f"Mustang lehnt die 389 ab:\nFehler: {result['errors']}\n"
-            f"Rohbericht:\n{result['raw']}\nXML:\n{row.zugferd_xml}"
-        )
+        mustang_befund.gueltig(result, f"Mustang lehnt die 389 ab:\nFehler: {result['errors']}\n"
+            f"Rohbericht:\n{result['raw']}\nXML:\n{row.zugferd_xml}")
         assert "XML:valid" in result["raw"], result["raw"]
         assert "Parsed PDF:valid" in result["raw"]
     finally:
@@ -160,7 +159,7 @@ def test_389_finalisieren_stornieren_storno_finalisieren(client, pg_session):
         assert xml.find('.//ram:InvoiceReferencedDocument/ram:IssuerAssignedID', ns).text == original.invoice_number
         assert xml.find('.//ram:SellerTradeParty/ram:Name', ns).text == original.customer.name
         report = mustang.validate(settings.storage_path / 'pdfs' / storno.pdf_filename)
-        assert report['is_valid'], f"{report['errors']}\n{report['raw']}"
+        mustang_befund.gueltig(report, f"{report['errors']}\n{report['raw']}")
         assert 'XML:valid' in report['raw'], report['raw']
     finally:
         for nummer in nummern:

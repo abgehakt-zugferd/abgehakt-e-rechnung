@@ -15,6 +15,7 @@ from app.services.rechnungsauftrag_wirkung import entwurf_anlegen
 from tests.factories import orm_company
 from tests.probe_daten import IBAN_FIRMA_PROBE
 from tests.test_rechnungsauftrag_wirkung import _kunde, _urteil
+from tests.helpers import mustang_befund
 
 HINWEIS = "Die Zahlung erfolgt durch Auszahlung des Leistungsempfängers."
 RAM = "{urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100}"
@@ -131,7 +132,7 @@ def test_pdf_zahlungsangaben_und_xml(pg_session, tmp_path, mit_termin):
     pfad = tmp_path / "rechnung.xml"
     pfad.write_text(xml)
     ergebnis = mustang.validate(pfad)
-    assert ergebnis["is_valid"], ergebnis
+    mustang_befund.gueltig(ergebnis, ergebnis)
 
 
 @pytest.mark.parametrize("hinweis", [None, "   "])

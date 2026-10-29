@@ -26,6 +26,7 @@ from app.zeit import heute
 from tests.factories import orm_company, orm_customer, orm_invoice_for
 from tests.probe_daten import IBAN_FIRMA_PROBE
 from tests.test_rechnungsauftrag_wirkung import _kunde, _urteil
+from tests.helpers import mustang_befund
 
 HINWEIS = "Die Zahlung erfolgt durch Auszahlung des Leistungsempfängers."
 RAM = "{urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100}"
@@ -84,7 +85,7 @@ def test_mustang_nimmt_prepaid_rechnungsauftrag_an(pg_session, tmp_path):
     pfad = tmp_path / "auftrag.xml"
     pfad.write_text(xml)
     ergebnis = mustang.validate(pfad)
-    assert ergebnis["is_valid"], ergebnis
+    mustang_befund.gueltig(ergebnis, ergebnis)
 
 
 @pytest.mark.parametrize("sprache,bereits,offen", [

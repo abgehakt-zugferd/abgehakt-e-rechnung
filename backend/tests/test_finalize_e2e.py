@@ -19,6 +19,7 @@ from app.main import app
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem, ValidationResult
 from app.services import mustang, pdfa
+from tests.helpers import mustang_befund
 
 settings = get_settings()
 
@@ -90,7 +91,7 @@ def test_finalize_erzeugt_gueltiges_zugferd_pdf(pg_session):
 
         # 4. Mustang validiert das kombinierte PDF: Parsed PDF:valid XML:valid
         result = mustang.validate(pdf_path)
-        assert result["is_valid"], f"ZUGFeRD-PDF ist NICHT valide:\n{result['raw']}"
+        mustang_befund.gueltig(result, f"ZUGFeRD-PDF ist NICHT valide:\n{result['raw']}")
         assert "Parsed PDF:valid" in result["raw"]
         assert "XML:valid" in result["raw"]
     finally:
@@ -130,7 +131,7 @@ def test_kleinbetrag_ohne_leistungsdatum_wird_ein_gueltiges_zugferd_pdf(pg_sessi
 
         pdf_path = settings.storage_path / "pdfs" / row.pdf_filename
         result = mustang.validate(pdf_path)
-        assert result["is_valid"], f"ZUGFeRD-PDF ist NICHT valide:\n{result['raw'][-1500:]}"
+        mustang_befund.gueltig(result, f"ZUGFeRD-PDF ist NICHT valide:\n{result['raw'][-1500:]}")
         assert "XML:valid" in result["raw"]
     finally:
         if pdf_path:

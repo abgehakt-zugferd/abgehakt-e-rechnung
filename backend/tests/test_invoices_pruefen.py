@@ -15,6 +15,7 @@ daher kein Mustang-Skip nötig.
 import uuid
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -136,3 +137,20 @@ def test_pruefen_mit_schemafehler_xml_setzt_is_valid_false(pg_session):
     result = _latest_result(pg_session, inv.id)
     assert result.mustang_output is not None
     assert result.is_valid is False        # Mustang-Schemafehler zieht is_valid runter
+
+
+def test_pruefen_ohne_ausfuehrbares_mustang_ist_nie_gueltig(pg_session):
+    """#252: nicht gemessen heisst nicht gueltig, und der Grund bleibt sichtbar.
+
+    Kein Mustang-Skip: der Test laeuft gerade ohne JAR und beweist das Sperren.
+    """
+    inv = _invoice(pg_session, with_item=True)
+    inv.zugferd_xml = "<nonsense/>"
+    pg_session.commit()
+
+    with patch("app.services.mustang.JAR", "/nicht/vorhanden/Mustang-CLI.jar"):
+        _client(pg_session).post(f"/invoices/{inv.id}/pruefen")
+
+    result = _latest_result(pg_session, inv.id)
+    assert result.is_valid is False
+    assert "nicht gemessen" in result.mustang_output

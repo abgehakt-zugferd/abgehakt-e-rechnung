@@ -33,6 +33,7 @@ from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services import mustang, pdfa, zugferd_xml
 from app.services.validator import validate_invoice
+from tests.helpers import mustang_befund
 
 
 def teardown_function():
@@ -224,7 +225,7 @@ def test_kleinunternehmer_rechnung_ist_schema_gueltig():
     finally:
         p.unlink(missing_ok=True)
 
-    assert ergebnis["is_valid"], ergebnis.get("raw", "")
+    mustang_befund.gueltig(ergebnis, ergebnis.get("raw", ""))
 
 
 @pytest.mark.skipif(
@@ -266,7 +267,7 @@ def test_kleinunternehmer_finalize_e2e_erzeugt_gueltiges_zugferd_pdf(pg_session)
     try:
         assert pdf_path.exists()
         result = mustang.validate(pdf_path)
-        assert result["is_valid"], result.get("raw", "")
+        mustang_befund.gueltig(result, result.get("raw", ""))
         assert "XML:valid" in result["raw"]
     finally:
         pdf_path.unlink(missing_ok=True)

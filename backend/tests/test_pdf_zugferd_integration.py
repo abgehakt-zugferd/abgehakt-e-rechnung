@@ -7,6 +7,7 @@ from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services import mustang, pdf_generator, pdfa, zugferd_xml
+from tests.helpers import mustang_befund
 
 
 def _company():
@@ -59,4 +60,4 @@ def test_branded_pdf_passes_pdfa_validation(tmp_path):
     assert mustang.combine(pdfa_pdf, xml_path, combined), "Mustang combine ist fehlgeschlagen"
 
     result = mustang.validate(combined)
-    assert result["is_valid"], f"PDF/A-Validierung rot:\n{result['raw']}"
+    mustang_befund.gueltig(result, f"PDF/A-Validierung rot:\n{result['raw']}")

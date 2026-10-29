@@ -18,6 +18,7 @@ from app.main import app
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services import mustang, pdfa
+from tests.helpers import mustang_befund
 
 settings = get_settings()
 
@@ -104,7 +105,7 @@ def test_storno_finalize_erzeugt_gueltige_gutschrift(pg_session):
 
         # 4. Mustang validiert das kombinierte PDF
         result = mustang.validate(pdf_path)
-        assert result["is_valid"], f"Storno-ZUGFeRD-PDF NICHT valide:\n{result['raw']}"
+        mustang_befund.gueltig(result, f"Storno-ZUGFeRD-PDF NICHT valide:\n{result['raw']}")
         assert "Parsed PDF:valid" in result["raw"]
         assert "XML:valid" in result["raw"]
 
