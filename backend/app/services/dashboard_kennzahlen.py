@@ -61,21 +61,14 @@ class Ueberfaellig:
     aeltester_tage: int | None
 
 
-def _summe_feld(
-    db: Session,
-    feld,
-    seit: date,
-    *,
-    art: str | tuple | None,
-    bis_ausschliesslich: date | None = None,
-) -> Decimal:
-    """Summiert ein Betragsfeld gestellter Belege einer Art seit `seit`.
+def beleg_bedingungen(
+    art: str | tuple | None, seit: date, bis_ausschliesslich: date | None = None,
+) -> list:
+    """Bedingungen an `Invoice` fuer gestellte Belege einer Art im Zeitraum.
 
+    Einzige Quelle der Belegmenge: `_summe_feld` und die Aufstellung je
+    Steuerkategorie (Issue #256) filtern beide darueber.
     `art` ist `invoice_type`; None steht fuer die gewoehnliche Rechnung.
-    Gutschriften summiert `storno_wirkung.summe_gutschriften`, nicht diese Funktion.
-    Betraege werden ohne Ruecksicht auf `invoices.currency` addiert. Das ist eine
-    bestehende Vereinfachung: gemischte Waehrungen werden nicht getrennt.
-
     Halboffener Zeitraum [seit, bis_ausschliesslich) wie bei allen Kennzahlen
     (Issue #160).
     """
@@ -97,16 +90,30 @@ def _summe_feld(
     # doppelt (Issue #141).
     gestellt = or_(Invoice.status.in_(GESTELLT),
                    and_(Invoice.status == "cancelled", WIRKSAM_STORNIERT))
-    bedingungen = [
-        gestellt,
-        typ_filter,
-        datum >= seit,
-    ]
+    bedingungen = [gestellt, typ_filter, datum >= seit]
     if bis_ausschliesslich is not None:
         bedingungen.append(datum < bis_ausschliesslich)
+    return bedingungen
+
+
+def _summe_feld(
+    db: Session,
+    feld,
+    seit: date,
+    *,
+    art: str | tuple | None,
+    bis_ausschliesslich: date | None = None,
+) -> Decimal:
+    """Summiert ein Betragsfeld gestellter Belege einer Art seit `seit`.
+
+    Gutschriften summiert `storno_wirkung.summe_gutschriften`, nicht diese Funktion.
+    Betraege werden ohne Ruecksicht auf `invoices.currency` addiert. Das ist eine
+    bestehende Vereinfachung: gemischte Waehrungen werden nicht getrennt.
+    Die Belegmenge liefert `beleg_bedingungen`.
+    """
     return (
         db.query(func.coalesce(func.sum(feld), 0))
-        .filter(*bedingungen)
+        .filter(*beleg_bedingungen(art, seit, bis_ausschliesslich))
         .scalar()
     ) or Decimal("0")
 

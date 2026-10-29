@@ -55,6 +55,7 @@ from app.services.dashboard_kennzahlen import (
     vorsteuer_honorargutschriften,
 )
 from app.services.steuer_ruecklage import steuerruecklage_anteil_prozent
+from app.services.steuerkategorie_aufstellung import steuerkategorie_aufstellung
 
 # GoBD: Statusmaschinen-Guards + Audit-Log — Registrierung beim App-Import,
 # damit ausnahmslos jede Session (Web, Skripte) erfasst wird.
@@ -342,6 +343,8 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         "vat_liability_ytd": vat_liability_ytd,
         "vat_liability_quarter": vat_liability_quarter,
         "vat_quarter_label": f"Q{quarter_number} {today.year}",
+        # Offenes Ende wie vat_liability_quarter: dieselbe Zeitlogik (#256).
+        "steuerzeilen_quartal": steuerkategorie_aufstellung(db, quarter_start, None),
         "steuer_ruecklage_ytd": steuer_ruecklage_ytd,
         "estimated_tax_ytd": estimated_tax_ytd,
         "vorsteuer_honorargutschriften_ytd": vorsteuer_honorargutschriften_ytd,

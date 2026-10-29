@@ -47,28 +47,19 @@ def _topf_filter(original, topf: str | tuple | None):
     return belegart_filter(original.invoice_type, topf)
 
 
-def summe_gutschriften(
-    db: Session,
-    feld,
+def gutschrift_bedingungen(
     seit: date,
     *,
     topf: str | tuple | None,
     bis_ausschliesslich: date | None = None,
     ausgezahlt: bool = False,
-) -> Decimal:
-    """Summiert gestellte Gutschriften, deren Original in `topf` zaehlt.
+) -> tuple:
+    """(original, Bedingungen) fuer wirksame Gutschriften im Zeitraum.
 
-    Eine Gutschrift gehoert in denselben Topf wie ihr Original (Issue #141):
-    `topf` None ist die gewoehnliche Rechnung, sonst der `invoice_type` des
-    Originals. Gutschriften ohne Original (Altbestand) zaehlen zur
-    gewoehnlichen Rechnung. Gezaehlt wird nach dem Datum der Gutschrift.
-
-    Mit `ausgezahlt` zaehlen nur Rueckzahlungen: ausgezahlte (paid) Gutschriften
-    zu einem bezahlten Original, nach ihrem `bezahlt_am`. Ohne bezahltes
-    Original ist nie Geld hereingekommen, das zurueckgehen koennte.
-
-    Der Zeitraum ist halboffen [seit, bis_ausschliesslich) wie bei allen
-    Kennzahlen (Issue #160): angrenzende Zeitraeume greifen nicht ineinander.
+    `original` ist der Alias des Originalbelegs: die Abfrage muss ihn mit
+    `Invoice.original_invoice_id == original.id` aussen verbinden. Einzige
+    Quelle der Gutschriftmenge fuer `summe_gutschriften` und die Aufstellung
+    je Steuerkategorie (Issue #256).
     """
     original = aliased(Invoice)
     topf_filter = _topf_filter(original, topf)
@@ -92,6 +83,35 @@ def summe_gutschriften(
     ]
     if bis_ausschliesslich is not None:
         bedingungen.append(datum < bis_ausschliesslich)
+    return original, bedingungen
+
+
+def summe_gutschriften(
+    db: Session,
+    feld,
+    seit: date,
+    *,
+    topf: str | tuple | None,
+    bis_ausschliesslich: date | None = None,
+    ausgezahlt: bool = False,
+) -> Decimal:
+    """Summiert gestellte Gutschriften, deren Original in `topf` zaehlt.
+
+    Eine Gutschrift gehoert in denselben Topf wie ihr Original (Issue #141):
+    `topf` None ist die gewoehnliche Rechnung, sonst der `invoice_type` des
+    Originals. Gutschriften ohne Original (Altbestand) zaehlen zur
+    gewoehnlichen Rechnung. Gezaehlt wird nach dem Datum der Gutschrift.
+
+    Mit `ausgezahlt` zaehlen nur Rueckzahlungen: ausgezahlte (paid) Gutschriften
+    zu einem bezahlten Original, nach ihrem `bezahlt_am`. Ohne bezahltes
+    Original ist nie Geld hereingekommen, das zurueckgehen koennte.
+
+    Der Zeitraum ist halboffen [seit, bis_ausschliesslich) wie bei allen
+    Kennzahlen (Issue #160): angrenzende Zeitraeume greifen nicht ineinander.
+    """
+    original, bedingungen = gutschrift_bedingungen(
+        seit, topf=topf, bis_ausschliesslich=bis_ausschliesslich, ausgezahlt=ausgezahlt,
+    )
     return (
         db.query(func.coalesce(func.sum(feld), 0))
         .select_from(Invoice)
