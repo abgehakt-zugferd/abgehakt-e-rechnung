@@ -6,7 +6,6 @@ from types import SimpleNamespace
 
 from fastapi import HTTPException
 
-from app.models.company import Company
 from app.models.invoice import Invoice, InvoiceItem
 from app.services import belegsperre, positionsangaben
 from app.services.belegart import UnknownInvoiceTypeError, belegart
@@ -44,31 +43,6 @@ def belegsprache_aus_form(form, *, fehlt: str = "de") -> str:
         return resolve_belegsprache(roh if roh is not None else "")
     except UnknownDocumentLanguageError as fehler:
         raise HTTPException(400, str(fehler)) from fehler
-
-
-def zahlungsbedingungen(form, company: Company, sprache: str,
-                        kunden_hinweis: str | None = None) -> str:
-    """Leeres Feld → Zahlungshinweis des Kunden, sonst Vorgabe der gewaehlten
-    Sprache. Englisch ohne Vorgabe: 400.
-
-    Der Kundenhinweis (Entscheidung 4) steht VOR der Sprachvorgabe der Firma:
-    er gilt fuer DIESEN Kunden, die Firmavorgabe ist der Rueckfall fuer alle.
-    """
-    eingabe = (form.get("payment_terms") or "").strip()
-    if eingabe:
-        return eingabe
-    if kunden_hinweis:
-        return kunden_hinweis
-    if sprache == "en":
-        vorgabe = (company.payment_terms_default_en or "").strip()
-        if not vorgabe:
-            raise HTTPException(
-                400,
-                "Englische Standard-Zahlungsbedingungen fehlen in den Einstellungen. "
-                "Bitte zuerst unter Einstellungen hinterlegen.",
-            )
-        return vorgabe
-    return company.payment_terms_default
 
 
 def _calc_item(quantity: Decimal, unit_price: Decimal, tax_rate: Decimal) -> tuple[Decimal, Decimal, Decimal]:

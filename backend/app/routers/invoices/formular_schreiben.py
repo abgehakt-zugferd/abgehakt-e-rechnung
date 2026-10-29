@@ -19,8 +19,8 @@ from app.routers.invoices.formular_lesen import (
     pruefe_einheiten,
     pruefe_positionsangaben,
     vorbelegung_aus,
-    zahlungsbedingungen,
 )
+from app.routers.invoices.zahlungsbedingungen import zahlungsbedingungen
 from app.services import kundenvorgaben
 from app.services.archive_frist import berechne_archive_until
 from app.services.belegart import InvoiceTypeNotSelectable, ist_storno, manuelle_belegart
