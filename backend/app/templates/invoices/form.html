@@ -12,12 +12,17 @@
     {# Vorhandene Positionen als JSON-Block: im x-init-Attribut wuerde jedes
        Anfuehrungszeichen aus einer Beschreibung das Attribut zerreissen. #}
     <script type="application/json" id="vorhandene-positionen">{{ items_json | default('[]', true) | safe }}</script>
+    {# Belegart-Formwerte aus belegart.py (keine Literale hier). invoiceType steuert
+       die Herleitung-Sichtbarkeit in Alpine; ohne Auswahlbox gilt der Bestand. #}
+    {% set start_invoice_type = belegart(belegung.invoice_type if belegung else None).form_wert or 'standard' %}
     <script type="application/json" id="formular-vorgaben">{
         "taxCategory": {{ (belegung.tax_category if belegung else 'S') | tojson }},
         "documentLanguage": {{ (belegung.document_language if belegung and belegung.document_language else 'de') | tojson }},
         "paymentTerms": {{ ((belegung.payment_terms if belegung else None) or '') | tojson }},
         "paymentTermsDe": {{ (company.payment_terms_default if company else '') | tojson }},
-        "paymentTermsEn": {{ ((company.payment_terms_default_en if company else None) or '') | tojson }}
+        "paymentTermsEn": {{ ((company.payment_terms_default_en if company else None) or '') | tojson }},
+        "invoiceType": {{ start_invoice_type | tojson }},
+        "honorargutschriftFormWert": {{ belegart('self_billing').form_wert | tojson }}
     }</script>
 
     <div class="flex items-center gap-3 mb-6">
@@ -176,12 +181,14 @@
                                                   style="font-family:'VT323',monospace; font-size:var(--fs-gross); line-height:1.35; resize:none; overflow:hidden;"></textarea>
                                     </div>
 
-                                    <div>
+                                    <div x-show="zeigtHerleitung(item)">
                                         <label class="label">Bemessungsgrundlage netto / Beteiligungssatz (optional)</label>
                                         <input type="number" x-model="item.basis_netto" step="0.01" placeholder="Bemessungsgrundlage netto" class="input"
                                                {% if aus_beleg %}readonly{% endif %}>
                                         <input type="number" x-model="item.satz" step="0.01" placeholder="Beteiligungssatz %" class="input"
                                                {% if aus_beleg %}readonly{% endif %}>
+                                    </div>
+                                    <div>
                                         <label class="label">Artikel-/Leistungsnummer (optional)</label>
                                         <input type="text" x-model="item.artikelnummer" maxlength="50"
                                                class="input font-mono" style="font-size:var(--fs-gross); padding:6px 8px; max-width:220px;">
@@ -391,7 +398,9 @@
                     {% set aktuelle_belegart = ((invoice.invoice_type if invoice else (vorbelegung.invoice_type if vorbelegung else None)) or "standard") %}
                     <div>
                         <label class="label">Belegart</label>
-                        <select name="invoice_type" class="input">
+                        <select name="invoice_type" class="input"
+                                x-model="invoiceType"
+                                @change="onBelegartChange()">
                             {% for art in manuelle_belegarten() %}
                             <option value="{{ art.form_wert }}" {% if aktuelle_belegart == (art.intern or "standard") %}selected{% endif %}>{{ art.label }}</option>
                             {% endfor %}
@@ -492,6 +501,9 @@ function invoiceForm() {
         documentLanguage: 'de',
         paymentTermsDe: '',
         paymentTermsEn: '',
+        invoiceType: 'standard',
+        honorargutschriftFormWert: '',
+        _belegartVorher: 'standard',
         netTotal: 0,
         grossTotal: 0,
         taxSummary: {},
@@ -516,6 +528,9 @@ function invoiceForm() {
             this.documentLanguage = vorgaben.documentLanguage || 'de';
             this.paymentTermsDe = vorgaben.paymentTermsDe || '';
             this.paymentTermsEn = vorgaben.paymentTermsEn || '';
+            this.invoiceType = vorgaben.invoiceType || 'standard';
+            this.honorargutschriftFormWert = vorgaben.honorargutschriftFormWert || '';
+            this._belegartVorher = this.invoiceType;
 
             if (vorhandene.length) {
                 // Bearbeiten: gespeicherte Positionen laden und die Summen einmal
@@ -538,6 +553,29 @@ function invoiceForm() {
                         : this.paymentTermsDe;
                 }
             }
+        },
+
+        hatHerleitung(item) {
+            return String(item.basis_netto || '').trim() !== ''
+                || String(item.satz || '').trim() !== '';
+        },
+
+        zeigtHerleitung(item) {
+            return this.invoiceType === this.honorargutschriftFormWert
+                || this.hatHerleitung(item);
+        },
+
+        onBelegartChange() {
+            // Nur beim Verlassen der Honorargutschrift leeren: sonst wandern die
+            // Werte unsichtbar ueber items_json mit (x-show entfernt nur die Anzeige).
+            // Wechsel zwischen anderen Belegarten laesst Bestandswerte (Fall 3) stehen.
+            const warHg = this._belegartVorher === this.honorargutschriftFormWert;
+            this._belegartVorher = this.invoiceType;
+            if (!warHg || this.invoiceType === this.honorargutschriftFormWert) return;
+            this.items.forEach((item) => {
+                item.basis_netto = '';
+                item.satz = '';
+            });
         },
 
         onDocumentLanguageChange() {
