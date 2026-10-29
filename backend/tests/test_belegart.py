@@ -45,6 +45,7 @@ from tests.factories import (
     zugferd_invoice_stub,
 )
 from tests.test_pdf_generator import _sample_company
+from tests.helpers import mustang_befund
 
 
 def teardown_function():
@@ -708,11 +709,9 @@ class TestV10MustangFreigabe:
         xml_path = tmp_path / "voraus.xml"
         xml_path.write_text(xml, encoding="utf-8")
         result = mustang.validate(xml_path)
-        assert result["is_valid"], (
-            f"386-CII ohne BT-113/BT-72 mit zukuenftigem BG-14 validiert NICHT "
+        mustang_befund.gueltig(result, f"386-CII ohne BT-113/BT-72 mit zukuenftigem BG-14 validiert NICHT "
             f"(gepinnte JAR, siehe Dockerfile).\nFehler: {result['errors']}\n"
-            f"Rohbericht:\n{result['raw']}\nXML:\n{xml}"
-        )
+            f"Rohbericht:\n{result['raw']}\nXML:\n{xml}")
 
     def test_386_eingebettetes_en16931_pdf_validiert(self, tmp_path):
         company, invoice = _v10_firma(), _v10_rechnung()
@@ -731,10 +730,12 @@ class TestV10MustangFreigabe:
         assert mustang.combine(pdfa_pdf, xml_path, combined), "Mustang combine fehlgeschlagen"
 
         result = mustang.validate(combined)
-        assert result["is_valid"] and "XML:valid" in result["raw"], (
+        meldung = (
             f"Eingebettetes 386-PDF validiert NICHT.\nFehler: {result['errors']}\n"
             f"Rohbericht:\n{result['raw']}"
         )
+        mustang_befund.gueltig(result, meldung)
+        assert "XML:valid" in result["raw"], meldung
 
 
 # ── Vorlagenvertrag: Belegart wird nie vererbt (docs/specs/kopieren.md) ────

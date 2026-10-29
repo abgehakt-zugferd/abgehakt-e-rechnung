@@ -46,6 +46,7 @@ from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services import mustang, zugferd_xml, pdf_generator
+from tests.helpers import mustang_befund
 
 
 def _company(**over) -> Company:
@@ -206,7 +207,7 @@ def test_die_erweiterte_rechnung_bleibt_schema_gueltig():
     finally:
         p.unlink(missing_ok=True)
 
-    assert ergebnis["is_valid"], ergebnis.get("raw", "")
+    mustang_befund.gueltig(ergebnis, ergebnis.get("raw", ""))
 
 
 @pytest.mark.skipif(not mustang.jar_available(), reason="Mustang-JAR nicht verfügbar")

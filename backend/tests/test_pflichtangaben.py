@@ -19,6 +19,7 @@ from app.services import mustang, pdf_generator, zugferd_xml
 from app.services.pflichtangaben import RECHTSFORMEN, pflichtangaben
 from tests.factories import orm_company, orm_customer, orm_invoice_for
 from tests.probe_daten import HRB_PROBE, IBAN_FIRMA_PROBE, STEUER_PROBE_ELF
+from tests.helpers import mustang_befund
 
 
 def _gmbh(**over) -> Company:
@@ -190,7 +191,7 @@ def test_xml_traegt_registernummer_als_bt30_und_angaben_als_bt33(tmp_path):
     pfad = tmp_path / "beleg.xml"
     pfad.write_text(xml, encoding="utf-8")
     befund = mustang.validate(pfad)
-    assert befund["is_valid"], befund["errors"]
+    mustang_befund.gueltig(befund, befund["errors"])
 
 
 def _entwurf(pg_session) -> Invoice:

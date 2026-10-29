@@ -19,6 +19,7 @@ from app.main import app
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services import mustang, pdfa
+from tests.helpers import mustang_befund
 
 settings = get_settings()
 
@@ -115,7 +116,7 @@ def test_ersatzrechnung_verweist_im_xml_auf_die_stornierte_rechnung(pg_session):
         assert '<qdt:DateTimeString format="102">20260708</qdt:DateTimeString>' in referenz[1]
 
         result = mustang.validate(settings.storage_path / "pdfs" / row.pdf_filename)
-        assert result["is_valid"], f"Ersatzrechnung NICHT valide:\n{result['raw']}"
+        mustang_befund.gueltig(result, f"Ersatzrechnung NICHT valide:\n{result['raw']}")
     finally:
         for nummer in nummern:
             for pfad in _artefakte(nummer):

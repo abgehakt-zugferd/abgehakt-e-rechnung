@@ -20,6 +20,7 @@ from app.models.invoice import Invoice
 
 from app.services import mustang, zugferd_xml
 from tests.factories import orm_company, orm_invoice, orm_item
+from tests.helpers import mustang_befund
 
 RAM = "{urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100}"
 UDT = "{urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100}"
@@ -61,7 +62,7 @@ def test_positionszeitraum_steht_als_bt134_135_zwischen_steuer_und_summe(tmp_pat
     pfad = tmp_path / "beleg.xml"
     pfad.write_text(xml, encoding="utf-8")
     befund = mustang.validate(pfad)
-    assert befund["is_valid"], befund["errors"]
+    mustang_befund.gueltig(befund, befund["errors"])
 
 
 @pytest.mark.parametrize("von, bis", [

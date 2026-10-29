@@ -22,6 +22,7 @@ from app.models.invoice import Invoice, InvoiceItem
 from app.services import mustang, pdf_generator, zugferd_xml
 from app.services.invoice_guard import InvoiceStateError
 from app.services.storno import build_storno
+from tests.helpers import mustang_befund
 
 
 def _company(**over):
@@ -202,4 +203,4 @@ def test_rechnung_mit_bestellnummer_bleibt_schema_gueltig():
     finally:
         p.unlink(missing_ok=True)
 
-    assert ergebnis["is_valid"], ergebnis.get("raw", "")
+    mustang_befund.gueltig(ergebnis, ergebnis.get("raw", ""))
