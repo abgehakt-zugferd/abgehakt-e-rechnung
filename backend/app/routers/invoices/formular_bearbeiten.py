@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
+from app.routers.invoices.formular_herleitung import pruefe_herleitung_belegart
 from app.routers.invoices.formular_lesen import (
     abzug_aus_form,
     belegart_waehlbar,
@@ -59,18 +60,23 @@ def belegart_aendern(invoice: Invoice, form) -> None:
     # ist ein mitgesendeter Wert immer ein manipulierter POST.
     typ_manuell_waehlbar = belegart_waehlbar(invoice)
     roh_typ = form.get("invoice_type")
-    if roh_typ is None:
-        return
-    if not typ_manuell_waehlbar:
+    if roh_typ is not None and not typ_manuell_waehlbar:
         raise FormularFehler(
             "INVOICE_TYPE_NOT_SELECTABLE: Die Belegart dieses Entwurfs "
             f"({invoice.invoice_type}) steht nicht zur manuellen Wahl; "
             "sie entsteht auf ihrem eigenen Weg und bleibt unveraendert.",
         )
     try:
-        invoice.invoice_type = manuelle_belegart(roh_typ)
+        ziel_typ = invoice.invoice_type if roh_typ is None else manuelle_belegart(roh_typ)
+        if not belegsperre.gilt(invoice):
+            pruefe_herleitung_belegart(
+                json.loads(form.get("items_json", "[]")), ziel_typ, bestand=invoice,
+            )
+        invoice.invoice_type = ziel_typ
     except InvoiceTypeNotSelectable as fehler:
         raise FormularFehler(str(fehler)) from fehler
+    except HTTPException as fehler:
+        raise FormularFehler(fehler.detail) from fehler
 
 
 def beleg_binden(
