@@ -7,6 +7,13 @@ Klammern.
 
 ## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.0.1)
 
+### Umsatz je Steuerkategorie auf der Übersicht (#256)
+
+Die Übersicht zeigt eine Tabelle des laufenden Quartals mit Netto und Umsatzsteuer
+je Steuerkategorie und Steuersatz. Das trennt Reverse Charge, innergemeinschaftliche
+Lieferungen, nicht steuerbare und steuerfreie Umsätze für die Voranmeldung. Belegmenge
+und Zeitlogik sind die der Kacheln; Belege in anderer Währung stehen getrennt.
+
 ### Korrektur zur Belegsprache (#245)
 
 Unter *Rechnungs-PDF* stand bisher, die Belegsprache wirke nur auf das PDF und
