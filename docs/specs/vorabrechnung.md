@@ -64,7 +64,9 @@ Die vorhandene `TYPE_CODE_MAP` kann dazu in eine fachliche Quelle umziehen; ihre
 | `self_billing`, `self-billing` | Nein | 389 im bestehenden fachlichen Integrationsweg |
 | unbekannter Wert | Nein | `INVOICE_TYPE_INVALID` im Validator und `UnknownInvoiceTypeError` im Generator bleiben fail-closed |
 
-Abgelöst durch docs/specs/gutschriftverfahren-389.md (manuelle Anlage der 389 geplant, im Code noch nicht umgesetzt).
+Abgelöst durch docs/specs/gutschriftverfahren-389.md. Die manuelle Anlage der 389 ist
+umgesetzt (`belegart.py`: `self_billing` mit `manuell_waehlbar=True`, Formularwert
+`honorargutschrift`).
 
 Reihenfolge beim Schreiben: bestehenden Entwurf und dessen Herkunft pruefen, manuelle Auswahl pruefen, Feldregeln pruefen, erst dann speichern beziehungsweise Nummer vergeben. Systembelege behalten ihre Art bei fehlendem Feld; mitgesendete manuelle Typaenderung wird abgelehnt, nicht ignoriert. Ein normaler draft darf zwischen Standard und Vorausrechnung wechseln. Ein finalisierter Beleg darf das nicht. Das Formular bietet fuer Systembelege kein editierbares Typfeld. Ein manipulierter POST scheitert serverseitig mit HTTP 400 und `INVOICE_TYPE_NOT_SELECTABLE`; der allgemeine Validator allein genuegt nicht, weil 381/389 allgemein gueltige Codes sind.
 

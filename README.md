@@ -30,16 +30,23 @@ geändert hat; lesen Sie ihn, bevor Sie auf eine neue Fassung wechseln.
 - **Bestellnummer des Kunden als BT-13:** Die Bestellnummer kann in der Rechnung gepflegt werden
   und wird in der XML als `BuyerOrderReferencedDocument` ausgegeben.
 - **Belegsprache Deutsch oder Englisch:** Die Sprache steuert die maschinell erzeugte
-  menschenlesbare Darstellung im PDF, inklusive Überschriften sowie Zahlen- und Datumsformat.
-  Eigene Texte wie Positionsbeschreibungen und Zahlungsbedingungen werden nicht übersetzt.
+  menschenlesbare Darstellung im PDF (Überschriften, Zahlen- und Datumsformat) und die
+  Beschriftungen der Pflichtangaben in der E-Rechnungs-XML (BT-33). Eigene Texte wie
+  Positionsbeschreibungen und Zahlungsbedingungen werden nicht übersetzt.
 - **Kundenstamm** mit Schnittstellen-ID für Kettenimport, CC-Adressen pro Kunde und optionaler
   Bankverbindung des Beteiligten für Auszahlungen (siehe unten).
 - **Belege aus einem vorgelagerten System:** optional nimmt Abgehakt signierte
   Abrechnungsaufträge aus einem Ordner an, den das Programm nur liest, in den es nie
-  hineinschreibt. Es prüft Signatur und Inhalt und legt auf Knopfdruck Rechnungsentwürfe an. Eingeschaltet
-  wird die Integration in den Einstellungen, eingerichtet über die Umgebungsvariablen
-  `UEBERGABEN_ORDNER` und `SCHLUESSEL_PFAD`. Ablauf und Befunde:
+  hineinschreibt. Es prüft Signatur und Inhalt und legt auf Knopfdruck Rechnungs- oder
+  Aufstellungsentwürfe an. Eingeschaltet wird die Integration unter Einstellungen
+  (**Beleg-Integration**); eingerichtet über `UEBERGABEN_ORDNER`, die öffentlichen
+  Schlüssel unter `backend/schluessel/` (je Absender `.pub` und Beiblatt `.json`) und
+  anschließend `docker compose up -d --build`, damit das Abbild die Schlüssel enthält.
+  Optional `SCHLUESSEL_PFAD`, sonst gilt der eingebaute Ordner. Ablauf und Befunde:
   [Belege aus Übergaben](docs/ANWENDUNG.md#belege-aus-uebergaben).
+- **Abrechnungsaufstellung:** eigenes Modell ohne E-Rechnungs-TypeCode, aus einem
+  Aufstellungsauftrag der Beleg-Integration. PDF/A an die Buchhaltung, eigener
+  Archivbereich und Bestandteil des GoBD-Exports.
 - **USt-IdNr. bei VIES prüfen:** Existenz und Gültigkeit einer USt-IdNr. gegen die offizielle
   EU-Schnittstelle, nur auf Knopfdruck nach Einwilligung im Dialog auf der Seite; kein Abruf beim
   Speichern und nichts im Hintergrund. Ablauf und Grenzen:
@@ -48,7 +55,8 @@ geändert hat; lesen Sie ihn, bevor Sie auf eine neue Fassung wechseln.
   Beteiligten; normale Rechnungen zahlen an Ihre Firmen-IBAN in den Einstellungen.
 - **Versand** per E-Mail an den Kunden, optional mit Kopie an die Kanzlei und Blindkopie an die
   DATEV-Upload-Adresse, über Ihren eigenen Mailserver.
-- **GoBD-Export:** Prüferpaket mit Belegen, Stammdaten und Änderungsprotokoll für einen Zeitraum.
+- **GoBD-Export:** Prüferpaket mit Belegen, Abrechnungsaufstellungen samt Anlagen,
+  Stammdaten und Änderungsprotokoll für einen Zeitraum.
 - **Übersicht mit Kennzahlen:** Rechnungen gesamt, offene Forderungen, Bezahlt diesen Monat
   (brutto nach Zahlungsdatum), Umsatz seit Jahresanfang (netto, nur bezahlte Belege nach
   Zahlungsdatum), **schuldige Umsatzsteuer** (USt gestellter und bezahlter
@@ -193,8 +201,12 @@ git clone https://github.com/abgehakt-zugferd/abgehakt-e-rechnung.git
 cd abgehakt-e-rechnung && git checkout v1.0.1
 ```
 
-Ohne Release-Archiv und ohne Tag (also direkt vom Hauptzweig) bekommt man einen
-Zwischenstand: der kann Fehler enthalten, die in keiner veröffentlichten Fassung stehen.
+Die zuletzt veröffentlichte Fassung ist **v1.0.1** (`backend/VERSION`, Abschnitt
+`v1.0.1` im CHANGELOG). Der Funktionsumfang dieses README und der Abschnitt
+*Nächste Fassung* im CHANGELOG beschreiben dagegen den aktuellen Stand des
+Hauptzweigs, der noch nicht als Fassung veröffentlicht ist. Ohne Release-Archiv und
+ohne Tag bekommt man diesen Zwischenstand: Er kann Fehler enthalten, die in keiner
+veröffentlichten Fassung stehen.
 
 **3. Passwörter setzen.** Im entpackten Verzeichnis:
 
@@ -203,8 +215,12 @@ cp .env.example .env
 ```
 
 Dann `.env` in einem Texteditor öffnen und die **drei Datenbankpasswörter** ersetzen
-(`DB_BOOTSTRAP_PASSWORD`, `DB_PASSWORD`, `DB_APP_PASSWORD`). Frei erfundene, lange
-Zeichenketten genügen; sie werden nirgends eingetippt.
+(`DB_BOOTSTRAP_PASSWORD`, `DB_PASSWORD`, `DB_APP_PASSWORD`). Lange, selbst gewählte
+Zeichenketten genügen; sie werden nirgends eingetippt. Zeichen wie `@`, `:` oder `/`
+dürfen darin nicht vorkommen: `docker-compose.yml` setzt `DATABASE_URL`,
+`BOOTSTRAP_DATABASE_URL` und `APP_DATABASE_URL` durch Einsetzen von Benutzer und
+Passwort in die Adresse, **ohne URL-Kodierung**. Ein `@` im Passwort würde sonst als
+Trenner vor dem Host gelesen.
 
 Für das dritte Passwort ist allein **`DB_APP_PASSWORD` maßgeblich**: der
 `environment`-Block in `docker-compose.yml` baut die Datenbankadresse der Anwendung bei

@@ -4,7 +4,7 @@ Stand: 25.09.2026. Spezifikation fuer einen getrennten, spaeter test-first auszu
 
 ## Ergebnis und fachlicher Umfang
 
-Jede Rechnung traegt genau eine Belegsprache: `de` oder `en`. Sie steuert ausschliesslich die maschinell erzeugte menschliche Darstellung des Belegs, insbesondere das PDF und dessen Zahlen- und Datumsdarstellung. Sie haengt weder am Kundenland noch an einer globalen Laufzeitsprache.
+Jede Rechnung traegt genau eine Belegsprache: `de` oder `en`. Sie steuert die maschinell erzeugte menschliche Darstellung des Belegs (PDF, Zahlen- und Datumsdarstellung, Mailtext) und die Beschriftungen der Pflichtangaben in der CII-XML (BT-33). Sie haengt weder am Kundenland noch an einer globalen Laufzeitsprache.
 
 **Auftraggeberentscheidung:** Die Sprache gehoert zur Rechnung, nicht zur globalen Einstellung. Ein Entwurf zeigt damit weiterhin, in welcher Sprache er gedacht ist; ein fertiges PDF bleibt ohnehin eingefroren.
 
@@ -34,7 +34,9 @@ Schnittstelle als Spezifikation, nicht als auszufuehrender Code:
 
 **Loeschtest:** Ohne `belegsprache.py` tauchen Labels, vier Belegtitel, Fallback-Texte, Steuerhinweise, Geld-, Mengen- und Datumsregeln in PDF-Generator, `darstellung.py`, Belegart und Router wieder auf. Das Modul traegt diese gemeinsame Komplexitaet hinter einer kleinen Schnittstelle. Ein `get_language(invoice)`-Durchreicher, der nur `invoice.document_language` zurueckgibt, bestuende den Test nicht.
 
-**Ein realer Adapter:** Das PDF ist der einzige heutige Verbraucher der lokalisierten Schablone. Die XML ist kein zweiter Adapter fuer dieselbe Darstellung, siehe Abschnitt XML. Die Weboberflaeche bleibt deutsch und ist ausdruecklich kein zweiter lokalisierter Ausgabekanal; sie bietet nur die deutsche Eingabeauswahl `Belegsprache` mit Deutsch und Englisch. Eine austauschbare PDF-, HTML- oder XML-Ausgabeschnittstelle wird nicht vorsorglich erfunden.
+**Ein realer Adapter (urspruengliche Vorgabe):** Das PDF war als einziger Verbraucher der lokalisierten Schablone geplant. Die Weboberflaeche bleibt deutsch und ist ausdruecklich kein zweiter lokalisierter Ausgabekanal; sie bietet nur die deutsche Eingabeauswahl `Belegsprache` mit Deutsch und Englisch.
+
+**Nachtrag 28.10.2026, Ist-Stand (#245):** Die XML ist fuer denselben Sprachcode ein zweiter Adapter bei den Pflichtangaben des Geschaeftsbriefs: `zugferd_xml/parteien.seller_legal_xml` loest `document_language` auf und schreibt die Beschriftungen aus `pflichtangaben(company, sprache)` nach BT-33 (`ram:Description`). Die Registerwerte selbst (Amtsgericht, HRB) bleiben unveraendert. Codes, Datumsformate und Betraege in der XML bleiben sprachunabhaengig, siehe S10 und Abschnitt XML.
 
 ## Zahlen, Daten und Schablonentexte
 
@@ -73,9 +75,11 @@ Schnittstelle als Spezifikation, nicht als auszufuehrender Code:
 
 **Normbefund:** Der Steuerbefreiungsgrund darf als Text in einer anderen Sprache vorliegen; die Peppol-Regel akzeptiert einen gleichwertigen Standardtext in anderer Sprache. Das bestaetigt die Lokalisierung des Freitextes, nicht einen neuen Sprachcode. [Peppol VAT exemption reason](https://docs.peppol.eu/poacc/billing/3.0/syntax/ubl-invoice/cac-TaxTotal/cac-TaxSubtotal/cac-TaxCategory/cbc-TaxExemptionReason/)
 
-**Auftraggeberentscheidung:** Fuer AE bleibt der oben zitierte zweisprachige Wortlaut in PDF und XML auch im englischen Modus. Der XML-Generator bekommt fuer E, K und O keine automatische Uebersetzung von Nutzertexten. Ob deren gesetzliche Befreiungstexte im englischen PDF zugleich in der XML englisch, deutsch oder zweisprachig stehen sollen, ist nicht entschieden: nur PDF-englisch laesst XML beim bisherigen deutschen Rechtstext; eine gemeinsame englische Fassung aendert auch die XML-Freitexte. Beide Wege sind normseitig nicht durch einen Sprachcode unterscheidbar.
+**Auftraggeberentscheidung:** Fuer AE bleibt der oben zitierte zweisprachige Wortlaut in PDF und XML auch im englischen Modus. Der XML-Generator bekommt fuer E, K und O keine automatische Uebersetzung von Nutzertexten.
 
-**Auftraggeberentscheidung, 25.09.2026:** Die XML behaelt fuer E, K und O den deutschen Rechtstext, auch wenn das PDF englisch ist. Begruendung: die XML liest eine Maschine, und der deutsche Wortlaut ist der, den eine Betriebspruefung erwartet. Der englische Modus aendert damit ausschliesslich das PDF. Praktisch beruehrt das den Anlassfall nicht, der auf AE laeuft; dort bleibt der Hinweis ohnehin in beiden Ausgaben zweisprachig.
+**Auftraggeberentscheidung, 25.09.2026:** Die XML behaelt fuer E, K und O den deutschen Rechtstext, auch wenn das PDF englisch ist. Begruendung: die XML liest eine Maschine, und der deutsche Wortlaut ist der, den eine Betriebspruefung erwartet. Praktisch beruehrt das den Anlassfall nicht, der auf AE laeuft; dort bleibt der Hinweis ohnehin in beiden Ausgaben zweisprachig.
+
+**Nachtrag 28.10.2026 (#245):** Die Formulierung „der englische Modus aendert ausschliesslich das PDF“ aus dem Eintrag vom 25.09.2026 gilt so nicht mehr fuer den gesamten XML-Inhalt. Entschieden bleibt: Die XML-Erzeugung aendert sich nicht weiter; korrigiert wird die Doku. Ist-Stand: BT-33-Beschriftungen folgen der Belegsprache (`parteien.seller_legal_xml` / `pflichtangaben`). Sprachunabhaengig bleiben TypeCode, Waehrungs-, Laender-, Steuer-, VATEX- und Einheitencodes, Datumswerte `YYYYMMDD`, formatierte Betraege, Nutzereingaben (Beschreibung, Bemerkung, Zahlungsbedingungen) und die Befreiungstexte in `zugferd_xml/steuerbefreiung.py` (E/K/O deutsch, AE zweisprachig). Kein neues XML-Sprachfeld entsteht (S10).
 
 ## Migration, Unveraenderbarkeit und Archiv
 

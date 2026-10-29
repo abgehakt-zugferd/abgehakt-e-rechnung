@@ -58,14 +58,17 @@ backend/app/
 │   ├── company.py            # eigene Firma (Singleton id=1)
 │   ├── customer.py           # Kundenstamm
 │   ├── invoice.py            # Invoice, InvoiceItem, ValidationResult, InvoiceSendLog, AuditLog
+│   ├── aufstellung.py        # Abrechnungsaufstellung (eigenes Modell, kein TypeCode)
+│   ├── aufstellung_send_log.py
 │   ├── app_config.py         # Betriebseinstellungen (Singleton id=1)
 │   └── uebergabe_eingang.py  # Gedächtnis der Beleg-Integration (beleg_id + beleg_sha256)
 ├── routers/                  # HTTP-Handler
 │   ├── setup.py              # Ersteinrichtungs-Wizard (/setup)
 │   ├── customers.py
 │   ├── invoices/             # je Zweck ein Modul: Liste, Formular, Ansicht, Finalisieren, Versand, Storno
-│   ├── export.py             # GoBD-Datenexport (Z3)
-│   ├── archive.py            # Archivansicht storage/{pdfs,xml}
+│   ├── aufstellungen.py      # Liste, Detail, Finalisieren, Versand, Storno der Aufstellung
+│   ├── export.py             # GoBD-Datenexport (Z3), inkl. Aufstellungen
+│   ├── archive.py            # Archivansicht storage/{pdfs,xml,aufstellungen}
 │   ├── updates.py            # Update-Hinweis (nur auf Klick)
 │   ├── uebergaben.py         # Übergabebelege ansehen, als Entwurf anlegen (#22)
 │   ├── settings.py           # Firmendaten, SMTP-Test
@@ -80,7 +83,7 @@ backend/app/
 │   ├── validator.py          # § 14 UStG, regelbasiert
 │   ├── einheiten.py          # fester Einheitenkatalog für Formular, Validator und CII
 │   ├── belegart.py           # Belegart → BT-3 TypeCode, manuelle Wählbarkeit
-│   ├── belegsprache/         # Belegsprache de|en → PDF-Darstellung, Texte je Sprache
+│   ├── belegsprache/         # Belegsprache de|en → PDF-Darstellung; BT-33 nutzt dieselbe Sprache
 │   ├── mailtext.py           # Betreff und Rumpf der Rechnungsmail je Belegsprache
 │   ├── invoice_number.py     # fortlaufende Nummern
 │   ├── customer_number.py    # Vorschlag für Kundennummern, überschreibbar
@@ -94,6 +97,9 @@ backend/app/
 │   ├── bezahlt_am.py         # Zahlungsdatum beim Bezahltsetzen: Plausibilität und Gutschrift-Sperre
 │   ├── customer_guard.py     # kein Hard-Delete von Kunden
 │   ├── gobd_export.py        # ZIP-Export (CSV + Belege + Audit-Log)
+│   ├── gobd_export_aufstellungen.py  # Aufstellungen und Anlagen im GoBD-Export
+│   ├── aufstellung_*.py      # Entwurf, Finalisieren, PDF, Versand, Storno der Aufstellung
+│   ├── aufstellungsauftrag_wirkung.py  # Entwurf aus angenommenem Aufstellungsauftrag
 │   ├── datev_email.py        # SMTP-Versand + DATEV-BCC
 │   ├── crypto.py             # verschlüsselt Secrets in der Datenbank (SMTP-Passwort)
 │   ├── dashboard_kennzahlen.py # USt-, Steuer-Rücklagen-, offene und überfällige Forderungen
@@ -322,13 +328,15 @@ des Belegs (PDF-Titel, Labels, Zahlen- und Datumsformat) sowie den Mailtext. Sie
 Kundenland noch
 an einer globalen Laufzeiteinstellung. Unbekannte Werte fallen nicht still auf Deutsch
 zurück (`resolve_belegsprache`). Nach dem Finalisieren ist das Feld unveränderlich (nicht in
-`MUTABLE_AFTER_FINALIZE`). Die CII-XML trägt **kein** Sprachattribut, und übersetzt wird dort
-nichts: weder Codes noch Nutzereingaben. Eine mittelbare Wirkung gibt es trotzdem, und sie ist
-gewollt: Bleibt das Feld Zahlungsbedingungen leer, setzt `_zahlungsbedingungen` die Vorgabe der
-gewählten Sprache (`payment_terms_default_en` bei `en`), und dieser gespeicherte Text steht
-anschließend in `SpecifiedTradePaymentTerms/Description`. Die Sprache wählt also den Text aus,
-sie übersetzt ihn nicht. Fehlt die englische Vorgabe, weist das Speichern mit 400 ab, statt
-still Deutsch in einen englischen Beleg zu schreiben.
+`MUTABLE_AFTER_FINALIZE`). Die CII-XML trägt **kein** Sprachattribut. Codes und Nutzereingaben
+werden nicht übersetzt. Die Beschriftungen der Pflichtangaben des Geschäftsbriefs (BT-33)
+folgen der Belegsprache: `zugferd_xml/parteien.seller_legal_xml` ruft
+`pflichtangaben(company, sprache)` auf. Eine weitere mittelbare Wirkung: Bleibt das Feld
+Zahlungsbedingungen leer, setzt `_zahlungsbedingungen` die Vorgabe der gewählten Sprache
+(`payment_terms_default_en` bei `en`), und dieser gespeicherte Text steht anschließend in
+`SpecifiedTradePaymentTerms/Description`. Die Sprache wählt den Text aus, sie übersetzt ihn
+nicht. Fehlt die englische Vorgabe, weist das Speichern mit 400 ab, statt still Deutsch in einen
+englischen Beleg zu schreiben.
 
 ### Einheiten kommen aus einem Katalog und werden nie umgedeutet
 

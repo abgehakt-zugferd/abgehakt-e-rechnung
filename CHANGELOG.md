@@ -7,12 +7,23 @@ Klammern.
 
 ## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.0.1)
 
+### Korrektur zur Belegsprache (#245)
+
+Unter *Rechnungs-PDF* stand bisher, die Belegsprache wirke nur auf das PDF und
+die XML behalte die deutschen Rechtstexte. Das trifft so nicht zu: Die
+Beschriftungen der Pflichtangaben des Geschäftsbriefs (BT-33) folgen der
+Belegsprache auch in der CII-XML (`zugferd_xml/parteien.py` über
+`pflichtangaben`). Unverändert sprachunabhängig bleiben Codes, Datumsformate
+(`YYYYMMDD`), Beträge, Nutzereingaben und die Steuerbefreiungstexte E/K/O; der
+Reverse-Charge-Hinweis AE bleibt in beiden Ausgaben zweisprachig. Der ältere
+Eintrag unten bleibt als damalige Formulierung stehen.
+
 ### Vor dem Wechsel lesen
 
-Der Wechsel bringt 19 Schemaänderungen mit (Migrationen 005 bis 023). Der Start
-führt sie selbst aus. **Vorher sichern**, wie im README unter *Sicherung und
-Rücksicherung* beschrieben. Drei davon greifen in Bestandsdaten ein oder können
-den Start anhalten:
+Der Wechsel bringt Schemaänderungen mit; die Kette steht unter
+`backend/alembic/versions/`. Der Start führt sie selbst aus. **Vorher sichern**,
+wie im README unter *Sicherung und Rücksicherung* beschrieben. Drei greifen in
+Bestandsdaten ein oder können den Start anhalten:
 
 - **Rechtsform nachtragen, sonst lässt sich nichts mehr stellen** (Migration 019,
   #133). Rechnungen tragen jetzt die Pflichtangaben für Geschäftsbriefe
@@ -54,6 +65,9 @@ den Tag ihrer letzten Änderung (Migration 018, #130). Die Umsatzkennzahlen der
   Systems, hinter einem Schalter und nur lesend auf einen Ordner
   (`UEBERGABEN_ORDNER`, `SCHLUESSEL_PFAD`) (#69). Der Absender bestimmt die Belegart
   (381 oder 389); für 389 gelten die Grenzen oben.
+- **Abrechnungsaufstellung** als eigenes Modell (kein TypeCode): Entwurf aus
+  Aufstellungsauftrag, PDF/A, Versand an die Buchhaltung, Storno, Archivbereich
+  und Aufnahme in den GoBD-Export.
 
 ### Inhalt der E-Rechnung
 

@@ -17,11 +17,14 @@ per Mail an Kunden und Buchhaltung und hält sie GoBD-gerecht unveränderbar vor
 4. Korrigiert wird nie durch Ändern, sondern per Gutschrift (381) und, wenn nötig, einer
    Ersatzrechnung mit Verweis auf die Vorgängerrechnung (BT-25).
 5. Belegarten: Standardrechnung (380), Anzahlungsrechnung (386), Gutschrift/Storno (381),
-   Gutschriftverfahren (389, teilweise umgesetzt). Eine Quelle: `services/belegart.py`.
+   Honorargutschrift/Gutschriftverfahren (389, manuell und aus Übergabe). Daneben die
+   Abrechnungsaufstellung als eigenes Modell ohne TypeCode. Quellen: `services/belegart.py`,
+   `models/aufstellung.py`.
 6. Die XML hat rechtlich Vorrang. PDF und XML entstehen aus denselben Daten, Summen aus
    genau einer Stelle (`services/belegsummen.py`).
-7. Die Belegsprache (Deutsch/Englisch) ändert nur das PDF; die XML behält die deutschen
-   Rechtstexte.
+7. Die Belegsprache (Deutsch/Englisch) steuert PDF und Mailtext sowie die Beschriftungen
+   der Pflichtangaben in der XML (BT-33). Codes, Datumsformate (`YYYYMMDD`), Beträge und
+   die Steuerbefreiungstexte E/K/O bleiben sprachunabhängig; AE bleibt zweisprachig.
 8. Außer dem Mailversand über Ihren SMTP-Server geht Abgehakt nur auf Klick und nach
    Einwilligung ins Netz: USt-IdNr.-Prüfung bei VIES und die Suche nach Updates.
 9. Optional nimmt Abgehakt signierte Abrechnungsaufträge eines vorgelagerten Systems aus einem
@@ -51,7 +54,8 @@ Alle Pfade unter `backend/app/`, sofern nicht anders angegeben.
 | Sprache und Beschriftungen des Belegs | `services/belegsprache/` |
 | Steuerstatus des Kunden, Kategorie gegen Land | `services/steuerstatus.py`, `steuerkategorie_land.py` |
 | Rechnungs- und Kundennummern | `services/invoice_number.py`, `customer_number.py` |
-| GoBD-Export und Archiv | `services/gobd_export.py`, `routers/export.py`, `routers/archive.py`, `services/archive_frist.py` |
+| GoBD-Export und Archiv | `services/gobd_export.py`, `gobd_export_aufstellungen.py`, `routers/export.py`, `routers/archive.py`, `services/archive_frist.py` |
+| Abrechnungsaufstellung | `models/aufstellung.py`, `routers/aufstellungen.py`, `services/aufstellung_*.py`, `aufstellungsauftrag_wirkung.py` |
 | Beleg-Integration (Übergaben) | `routers/uebergaben.py`, `services/uebergabe_befund.py`, `uebergabebeleg.py`, `abrechnungsauftrag_wirkung.py`, `belegsperre.py`, `protokoll.py` |
 | VIES-Prüfung, Update-Hinweis | `services/ust_id_pruefung.py`, `update_check.py`, `update_banner.py` |
 | Einstellungen und Umgebungsvariablen | `config.py` (Umgebung), `models/app_config.py` und `models/company.py` (in der Datenbank) |
