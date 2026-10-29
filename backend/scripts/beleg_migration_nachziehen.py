@@ -133,6 +133,20 @@ def nachziehen(
             db.close()
 
 
+def main(argv: list[str] | None = None) -> int:
+    """CLI-Einstieg: ohne Nummern Hilfe auf stderr und Abbruch, sonst nachziehen."""
+    if argv is None:
+        argv = sys.argv[1:]
+    if not argv:
+        print(
+            "Nutzung: beleg_migration_nachziehen.py <Rechnungsnummer> "
+            "[weitere Nummern ...]",
+            file=sys.stderr,
+        )
+        return 2
+    nachziehen(argv)
+    return 0
+
+
 if __name__ == "__main__":
-    nums = sys.argv[1:] or ["Z-2026-002", "Z-2026-004"]
-    nachziehen(nums)
+    raise SystemExit(main())
