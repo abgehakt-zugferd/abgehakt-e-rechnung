@@ -250,3 +250,8 @@ def manuelle_belegart(form_value: str | None) -> str | None:
         if art.form_wert == form_value:
             return art.intern
     raise InvoiceTypeNotSelectable(form_value)
+
+
+def ist_honorargutschrift(invoice_type: str | None) -> bool:
+    """Honorargutschrift einschließlich gespeicherter Aliase, ohne Storno."""
+    return belegart(invoice_type) == _SELF_BILLING

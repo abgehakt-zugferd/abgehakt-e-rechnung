@@ -21,6 +21,7 @@ from app.routers.invoices.formular_lesen import (
     vorbelegung_aus,
     zahlungsbedingungen,
 )
+from app.routers.invoices.formular_herleitung import pruefe_herleitung_belegart
 from app.services import kundenvorgaben
 from app.services.archive_frist import berechne_archive_until
 from app.services.belegart import InvoiceTypeNotSelectable, ist_storno, manuelle_belegart
@@ -226,6 +227,7 @@ def kopfdaten_lesen(db: Session, form, company: Company) -> dict:
     delivery_date, service_period_start, service_period_end = leistungszeit
     tax_category = form.get("tax_category", "S").strip() or "S"
     invoice_type = belegart_neuanlage(form)
+    pruefe_herleitung_belegart(json.loads(form.get("items_json", "[]")), invoice_type)
     document_language, vorgabe, payment_terms = sprache_und_zahlungsbedingungen(
         db, form, company, customer_id, leistungszeit)
     kunde = (
