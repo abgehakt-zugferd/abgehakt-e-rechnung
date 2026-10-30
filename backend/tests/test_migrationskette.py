@@ -30,8 +30,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.config import get_settings
+from tests.helpers.testdb import je_prozess
 
-MIGRATIONS_DB = "abgehakt_migrationstest"
+MIGRATIONS_DB = je_prozess("abgehakt_migrationstest")
 
 # Absolut, nicht relativ: der Test darf nicht davon abhängen, aus welchem
 # Verzeichnis pytest gestartet wurde.

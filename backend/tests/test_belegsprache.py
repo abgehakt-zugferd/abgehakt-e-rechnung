@@ -39,6 +39,7 @@ from app.services.belegsprache import (
 from app.services.invoice_guard import InvoiceStateError
 from app.services.storno import build_storno
 from app.config import get_settings
+from tests.helpers.testdb import je_prozess
 
 AE_HINWEIS = (
     "Steuerschuldnerschaft des Leistungsempfängers / reverse charge, "
@@ -542,7 +543,7 @@ def test_s9_migration_setzt_bestand_auf_de_ohne_dateien():
     """Upgrade 014 -> 015: Bestandsbeleg wird explizit de, Dateien unangetastet."""
     settings = get_settings()
     basis, _, _ = settings.database_url.rpartition("/")
-    dbname = "abgehakt_belegsprache_mig"
+    dbname = je_prozess("abgehakt_belegsprache_mig")
     admin = create_engine(settings.database_url, isolation_level="AUTOCOMMIT", pool_pre_ping=True)
     with admin.connect() as conn:
         conn.execute(text(f"DROP DATABASE IF EXISTS {dbname} WITH (FORCE)"))

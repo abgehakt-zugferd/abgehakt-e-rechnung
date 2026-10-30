@@ -17,6 +17,13 @@ from sqlalchemy.engine import Connection
 
 APP_ROLE = "abgehakt_app"
 OWNER_ROLE = "abgehakt_admin"
+# Schluessel der Advisory-Sperre, die die Rollen-Provisionierung clusterweit
+# serialisiert. Rollen gehoeren dem ganzen Postgres-Cluster, nicht einer
+# Datenbank: zwei gleichzeitige Provisionierungen (parallele Testprozesse,
+# parallele Starts) laufen sonst in `duplicate_object` oder `tuple concurrently
+# updated`. Advisory-Schluessel gelten ebenfalls clusterweit pro Datenbank,
+# deshalb ein fester, nirgends sonst benutzter Wert (ASCII "abgehakt").
+APP_ROLE_LOCK_KEY = 0x6162_6765_6861_6B74
 # Die ALTER DEFAULT PRIVILEGES raeumen DELETE auf ALLE kuenftigen Tabellen
 # ein (CRUD heisst dort C-R-U-D); diese Liste zieht es auf den
 # GoBD-geschuetzten zurueck. Die Aufstellungstabellen muessen hier stehen,
@@ -118,6 +125,10 @@ def ensure_app_role(
 ) -> None:
     if not password:
         raise ValueError("ensure_app_role: leeres Passwort (DB_APP_PASSWORD nicht gesetzt).")
+
+    # 0. Serialisieren, bevor irgendetwas die Rolle anfasst; die Sperre faellt mit
+    # Commit/Rollback der Transaktion des Aufrufers.
+    conn.execute(text("SELECT pg_advisory_xact_lock(:k)").bindparams(k=APP_ROLE_LOCK_KEY))
 
     # 1. Rolle idempotent anlegen, dann Attribute + Passwort setzen.
     conn.execute(text(
