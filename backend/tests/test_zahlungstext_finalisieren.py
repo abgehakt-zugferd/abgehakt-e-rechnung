@@ -128,6 +128,16 @@ def test_speichern_setzt_kundenhinweis_statt_firmenvorgabe(pg_session):
     assert entwurf.payment_terms == KUNDENHINWEIS
 
 
+def test_speichern_leeres_feld_bekommt_kundenhinweis_vor_firmenvorgabe(pg_session):
+    _firma(pg_session)
+    inv = _entwurf(pg_session, sprache="en", text=VORGABE_EN, kundenhinweis=KUNDENHINWEIS)
+
+    antwort, entwurf = _bearbeiten(pg_session, inv, sprache="en", text="")
+
+    assert antwort.status_code in (303, 200), antwort.text
+    assert entwurf.payment_terms == KUNDENHINWEIS
+
+
 @pytest.mark.parametrize("sprache", ["de", "en"])
 def test_finalisieren_laesst_freitext_unveraendert(pg_session, sprache):
     _firma(pg_session)

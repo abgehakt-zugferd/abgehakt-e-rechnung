@@ -12,7 +12,7 @@ Klammern.
 Beim Finalisieren eines Entwurfs wird die Zahlungsvorgabe der falschen Sprache jetzt
 ersetzt, wie schon beim Speichern: Steht im Feld genau die Firmenvorgabe der anderen
 Sprache, geht die Vorgabe der Belegsprache in PDF und XML (BT-20). Dabei hat ein
-Zahlungshinweis des Kunden Vorrang vor der Firmenvorgabe, auch beim Speichern. Freitext
+Zahlungshinweis des Kunden Vorrang vor der Firmenvorgabe, ebenso bei leerem Feld, auch beim Bearbeiten eines Entwurfs. Freitext
 bleibt unverändert. Fehlt die englische Vorgabe und gibt es keinen Kundenhinweis, wird
 das Finalisieren mit der Meldung des Speicherns blockiert, der Entwurf bleibt wie er war.
 Rechnungsaufträge und Gutschriften behalten ihren Weg.
