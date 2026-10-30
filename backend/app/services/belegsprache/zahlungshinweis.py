@@ -7,10 +7,17 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from app.services.auftragszahlung import ist_rechnungsauftrag
 from app.services.belegart import UnknownInvoiceTypeError, belegart
 from app.services.belegsprache import darstellung as darstellung_fuer
 from app.services.belegsprache import resolve_belegsprache
 from app.services.belegsprache.modell import Belegdarstellung
+from app.services.belegsprache.zahlungsvorgabe import (
+    ZahlungsvorgabeFehlt,
+    ist_vorgabe_der_anderen_sprache,
+    zahlungstext_in_belegsprache,
+)
+from app.services.rechnung.fehler import RechnungFehler
 from app.zeit import heute
 
 
@@ -57,14 +64,30 @@ def zahlungstext_beim_speichern(
 
 
 def zahlungstext_vor_finalisieren(invoice, company) -> None:
-    """Entwurf mit Firmenvorgabe: Gutschrift-Text vor PDF/XML persistieren."""
+    """Entwurf vor PDF/XML: Sprach-Tausch (#260), dann Gutschrift-Text (#231).
+
+    Rechnungsauftraege behalten ihren Weg (Hinweis aus dem Auftrag). Fehlt die
+    englische Vorgabe und der Kundenhinweis, bleibt der Entwurf unveraendert.
+    """
+    if ist_rechnungsauftrag(invoice):
+        return
     sprache = resolve_belegsprache(getattr(invoice, "document_language", None) or "de")
+    text = getattr(invoice, "payment_terms", None)
+    customer = getattr(invoice, "customer", None)
+    if ist_vorgabe_der_anderen_sprache(text, company, sprache):
+        try:
+            text = zahlungstext_in_belegsprache(
+                text, company, sprache,
+                getattr(customer, "zahlungshinweis", None),
+            )
+        except ZahlungsvorgabeFehlt as fehler:
+            raise RechnungFehler(400, str(fehler)) from fehler
     invoice.payment_terms = zahlungstext_beim_speichern(
         getattr(invoice, "invoice_type", None),
-        getattr(invoice, "payment_terms", None),
+        text,
         company,
         due_date=getattr(invoice, "due_date", None),
         issue_date=getattr(invoice, "issue_date", None),
-        customer=getattr(invoice, "customer", None),
+        customer=customer,
         darstellung=darstellung_fuer(sprache),
     )

@@ -30,6 +30,7 @@ from app.services.auftragszahlung import ist_rechnungsauftrag
 from app.services.belegart import InvoiceTypeNotSelectable, manuelle_belegart
 from app.services.belegsprache import darstellung
 from app.services.belegsprache.zahlungshinweis import zahlungstext_beim_speichern
+from app.services.belegsprache.zahlungsvorgabe import ist_vorgabe_der_anderen_sprache
 from app.services.belegsummen import Belegsummen, belegsummen
 
 
@@ -133,6 +134,21 @@ def steuerkategorie_uebernehmen(invoice: Invoice, form, aus_beleg: bool) -> None
         invoice.tax_category = form.get("tax_category", "S").strip() or "S"
 
 
+def _hinweis_beim_tausch(invoice: Invoice, form, company: Company) -> str | None:
+    """Kundenhinweis nur, wenn die Vorgabe der anderen Sprache ersetzt wird (#260).
+
+    Ein leeres Feld bekommt im Bearbeiten weiter die Firmenvorgabe; das ist
+    nicht Gegenstand von #260.
+    """
+    if invoice.customer is None:
+        return None
+    if not ist_vorgabe_der_anderen_sprache(
+        form.get("payment_terms"), company, invoice.document_language or "de",
+    ):
+        return None
+    return (invoice.customer.zahlungshinweis or "").strip() or None
+
+
 def sprache_und_zahlung_uebernehmen(invoice: Invoice, form, company: Company) -> None:
     try:
         invoice.document_language = belegsprache_aus_form(
@@ -143,6 +159,7 @@ def sprache_und_zahlung_uebernehmen(invoice: Invoice, form, company: Company) ->
             return
         invoice.payment_terms = zahlungsbedingungen(
             form, company, invoice.document_language,
+            kunden_hinweis=_hinweis_beim_tausch(invoice, form, company),
         )
         invoice.payment_terms = zahlungstext_beim_speichern(
             invoice.invoice_type, invoice.payment_terms, company,
