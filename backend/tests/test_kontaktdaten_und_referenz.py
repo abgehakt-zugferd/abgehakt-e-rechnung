@@ -220,12 +220,12 @@ def test_die_vier_hinweise_sind_verschwunden():
     try:
         os.write(fd, xml.encode("utf-8"))
         os.close(fd)
-        roh = mustang.validate(p).get("raw", "")
+        befund = mustang.validate(p)
     finally:
         p.unlink(missing_ok=True)
 
     for regel in ("BR-DE-2]", "BR-DE-15]", "PEPPOL-EN16931-R010", "PEPPOL-EN16931-R020"):
-        assert regel not in roh, f"{regel} steht weiterhin in der Mustang-Ausgabe"
+        mustang_befund.bericht_ohne(befund, regel, f"{regel} steht weiterhin in der Mustang-Ausgabe")
 
 
 # ── Die Angaben müssen auch eingebbar sein ──────────────────────────────────

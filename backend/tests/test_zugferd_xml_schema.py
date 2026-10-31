@@ -216,7 +216,7 @@ def test_verkaeufer_nur_mit_steuernummer_ist_gueltig():
     result = _validate(_invoice(customer), company)
 
     mustang_befund.gueltig(result, result["raw"][-1200:])
-    assert "BR-CO-26" not in result["raw"]
+    mustang_befund.bericht_ohne(result, "BR-CO-26")
 
 
 # ── Rechnung ohne Leistungsdatum (Kleinbetrag, § 33 UStDV) ──────────────────
@@ -275,7 +275,7 @@ def test_innergemeinschaftliche_lieferung_ohne_leistungsdatum_bleibt_unzulaessig
     result = _validate(inv, _company())
 
     mustang_befund.ungueltig(result, "Mustang nimmt die ig. Lieferung ohne Leistungsdatum inzwischen an")
-    assert "ActualDeliverySupplyChainEvent" in result["raw"], result["raw"][-1500:]
+    mustang_befund.bericht_enthaelt(result, "ActualDeliverySupplyChainEvent", result["raw"][-1500:])
 
 
 def test_leistungszeitraum_ohne_leistungsdatum_ist_schema_valid():
