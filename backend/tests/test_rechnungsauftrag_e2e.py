@@ -121,9 +121,8 @@ def test_380_aus_einem_auftrag_bis_zum_archiv_durch_die_echte_pipeline(
         pdf_path = settings.storage_path / "pdfs" / row.pdf_filename
         assert pdf_path.exists(), "Finalisiertes PDF fehlt auf der Platte"
         result = mustang.validate(pdf_path)
-        mustang_befund.gueltig(result, f"Mustang lehnt die 380 ab:\nFehler: {result['errors']}\n"
+        mustang_befund.gueltig_mit_xml(result, f"Mustang lehnt die 380 ab:\nFehler: {result['errors']}\n"
             f"Rohbericht:\n{result['raw']}\nXML:\n{row.zugferd_xml}")
-        assert "XML:valid" in result["raw"], result["raw"]
     finally:
         if pg_session.get(Invoice, entwurf.id) is not None:
             pdf_name = pg_session.get(Invoice, entwurf.id).pdf_filename

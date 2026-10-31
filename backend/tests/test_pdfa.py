@@ -12,6 +12,7 @@ from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
 from app.services import mustang, pdf_generator, pdfa
+from tests.helpers import mustang_befund
 
 
 def _company():
@@ -72,8 +73,8 @@ def test_to_pdfa3_output_is_valid_pdfa_per_mustang(tmp_path):
     # Ohne eingebettete ZUGFeRD-XML meldet Mustang die reine PDF/A-Prüfung im
     # <pdf>-Block. isCompliant=true bestätigt: das gs-Ausgabe-PDF ist gültiges
     # PDF/A (flavour=3b). Die volle ZUGFeRD-Validierung deckt der Integrationstest ab.
-    raw = mustang.validate(out)["raw"]
-    assert "isCompliant=true" in raw, raw
+    befund = mustang.validate(out)
+    mustang_befund.bericht_enthaelt(befund, "isCompliant=true")
 
 
 def test_ps_escape_strips_control_chars_and_escapes_specials():

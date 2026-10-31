@@ -105,9 +105,8 @@ def test_storno_finalize_erzeugt_gueltige_gutschrift(pg_session):
 
         # 4. Mustang validiert das kombinierte PDF
         result = mustang.validate(pdf_path)
-        mustang_befund.gueltig(result, f"Storno-ZUGFeRD-PDF NICHT valide:\n{result['raw']}")
-        assert "Parsed PDF:valid" in result["raw"]
-        assert "XML:valid" in result["raw"]
+        mustang_befund.gueltig_mit_xml(result, f"Storno-ZUGFeRD-PDF NICHT valide:\n{result['raw']}")
+        mustang_befund.bericht_enthaelt(result, "Parsed PDF:valid")
 
         # Original bleibt unverändert issued
         original_row = pg_session.get(Invoice, original.id)
