@@ -133,6 +133,11 @@ def steuerkategorie_uebernehmen(invoice: Invoice, form, aus_beleg: bool) -> None
         invoice.tax_category = form.get("tax_category", "S").strip() or "S"
 
 
+def _kundenhinweis(invoice: Invoice) -> str | None:
+    kunde = invoice.customer
+    return (kunde.zahlungshinweis or "").strip() or None if kunde is not None else None
+
+
 def sprache_und_zahlung_uebernehmen(invoice: Invoice, form, company: Company) -> None:
     try:
         invoice.document_language = belegsprache_aus_form(
@@ -143,6 +148,7 @@ def sprache_und_zahlung_uebernehmen(invoice: Invoice, form, company: Company) ->
             return
         invoice.payment_terms = zahlungsbedingungen(
             form, company, invoice.document_language,
+            kunden_hinweis=_kundenhinweis(invoice),
         )
         invoice.payment_terms = zahlungstext_beim_speichern(
             invoice.invoice_type, invoice.payment_terms, company,
