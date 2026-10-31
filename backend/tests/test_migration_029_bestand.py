@@ -15,9 +15,10 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.config import get_settings
+from tests.helpers.testdb import je_prozess
 from tests.test_migrationskette import _alembic_config
 
-DB = "abgehakt_migration029"
+DB = je_prozess("abgehakt_migration029")
 
 
 @pytest.fixture()

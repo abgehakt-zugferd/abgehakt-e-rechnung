@@ -15,8 +15,8 @@ nicht als Fehler.
 Kunden: mitgeschuetzt. Stammdaten tragen keine Verkaeuferangaben, stehen aber
 nicht auf der Ausnahmeliste des Auftrags; das Tor soll zur Einrichtung fuehren.
 """
-from __future__ import annotations
-
+# Absichtlich ohne `from __future__ import annotations`: Die Mutationspruefung ersetzt
+# Funktionen, und FastAPI loest `Request` dann nicht mehr aus Zeichenketten-Annotationen auf.
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
