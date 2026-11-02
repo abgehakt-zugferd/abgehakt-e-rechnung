@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceItem
+from app.services import auftragsschluessel
 from app.services.archive_frist import berechne_archive_until
 from app.services.belegsprache import darstellung
 from app.services.belegsprache.zahlungshinweis import zahlungstext_beim_speichern
@@ -152,6 +153,12 @@ def entwuerfe_anlegen(
             uebergabe_beleg_id=urteil.beleg_id,
             uebergabe_beleg_sha256=urteil.beleg_sha256,
         )
+        # Nachweis und Sperre wie bei der 380 (Festlegung 12): Ohne sie findet
+        # dokument_zu die Gutschrift nie, und ein zweites Einlesen desselben
+        # Auftrags legte sie doppelt an (#264). Der Leser verlangt den
+        # Schluessel ab Fassung 1.8; ohne ihn bleibt der Entwurf ungesperrt.
+        if schluessel is not None:
+            auftragsschluessel.belegen(entwurf, schluessel)
         db.add(entwurf)
         db.flush()
 
