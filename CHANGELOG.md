@@ -7,6 +7,16 @@ Klammern.
 
 ## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.0.1)
 
+### Platzhalter im Kopf- oder Fußtext sperren das Finalisieren (#270)
+
+Ein Entwurf, dessen Kopf- oder Fußtext noch einen Platzhalter zum Ersetzen trägt
+(`<M>`, `<MM/JJJJ>`, `<nr>`), wird beim Finalisieren mit einer Meldung abgelehnt, die
+Feld und Platzhalter nennt, zum Beispiel „Kopftext enthält noch den Platzhalter <M>“.
+Der Entwurf bleibt unverändert, Speichern geht weiter. Erkannt wird eine spitze Klammer
+auf, 1 bis 16 Zeichen ohne Klammern (das erste kein Leerraum) und eine spitze Klammer
+zu. „Menge < 5“, „a < b > c“ und „weniger als <10 €“ sperren nicht. Hinweis: auch ein
+Text wie `<name@beispiel.de>` im Kopf- oder Fußtext sperrt, weil er dem Muster entspricht.
+
 ### Zahlungstext folgt der Belegsprache auch beim Finalisieren (#260)
 
 Beim Finalisieren eines Entwurfs wird die Zahlungsvorgabe der falschen Sprache jetzt
