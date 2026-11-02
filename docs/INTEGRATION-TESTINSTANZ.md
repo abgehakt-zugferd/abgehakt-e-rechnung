@@ -128,3 +128,41 @@ unverändert. Zwei Compose-Dateien, anderer Projektname. Der eigene Projektname 
 reicht aber allein nicht: `container_name` und `ports` stehen in `docker-compose.yml` fest,
 und Container-Namen müssen auf dem Rechner global eindeutig sein, unabhängig vom
 Projektnamen. Deshalb überschreibt `docker-compose.integration.yml` beides.
+
+## Übergabeordner in der Live-Installation
+
+Die Live-Installation sieht den Übergabeordner nur, wenn der Betreiber ihn ausdrücklich
+zuschaltet. Ohne Zuschaltung läuft sie exakt wie mit `docker-compose.yml` allein. Die
+Zuschaltung hängt nur die eingehende Richtung ein, **nur lesend**; die Gegenrichtung
+(Quittungen) bleibt außen vor. Kein Pfad und kein Schlüssel steht im Repo.
+
+**Variablen** (in der lokalen Umgebungsdatei des Betreibers, nicht im Repo):
+
+```
+ZEMP_UEBERGABEN=<absoluter Pfad des Übergabeordners auf dem Rechner>
+COMPOSE_FILE=docker-compose.yml:docker-compose.uebergabe.yml
+```
+
+`ZEMP_UEBERGABEN` ist Pflicht, sobald zugeschaltet ist, und hat keinen Vorgabewert.
+Der Pfad muss absolut sein: Compose expandiert `~` nicht. Im Container erscheint der
+Ordner als `/uebergaben/<Richtung>` (schreibgeschützt), `UEBERGABEN_ORDNER` steht auf
+`/uebergaben`.
+
+**Schlüssel ablegen:** die öffentlichen Schlüssel der Absender liegen in
+`backend/schluessel/<absender>/`, je Schlüssel eine `.pub`-Datei (PEM) und ein Beiblatt
+`.json` (Feldbestand siehe oben, Hinweise in `backend/schluessel/README.md`). Der Ordner
+ist nicht in Git, der Build nimmt ihn ins Abbild. Private Schlüssel gehören nie dorthin.
+
+**Neubau:** `docker compose up -d --build`, **ohne** `down -v`. Das Volume der Datenbank
+und `./storage` bleiben, nur der App-Container wird ersetzt.
+
+**Prüfung danach:**
+
+```bash
+docker inspect abgehakt_app --format '{{range .Mounts}}{{.Destination}} rw={{.RW}}{{"\n"}}{{end}}'
+docker exec abgehakt_app printenv UEBERGABEN_ORDNER
+```
+
+Erwartet: `/uebergaben/<Richtung>` mit `rw=false`, daneben `/app/storage` mit `rw=true`, und
+kein Eintrag für die Gegenrichtung. Fehlt `ZEMP_UEBERGABEN` bei gesetztem `COMPOSE_FILE`,
+bricht Compose mit der Meldung der Pflichtvariable ab.
