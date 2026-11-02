@@ -734,8 +734,7 @@ class TestV10MustangFreigabe:
             f"Eingebettetes 386-PDF validiert NICHT.\nFehler: {result['errors']}\n"
             f"Rohbericht:\n{result['raw']}"
         )
-        mustang_befund.gueltig(result, meldung)
-        assert "XML:valid" in result["raw"], meldung
+        mustang_befund.gueltig_mit_xml(result, meldung)
 
 
 # ── Vorlagenvertrag: Belegart wird nie vererbt (docs/specs/kopieren.md) ────

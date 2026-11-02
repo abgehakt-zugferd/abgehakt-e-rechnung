@@ -91,9 +91,8 @@ def test_finalize_erzeugt_gueltiges_zugferd_pdf(pg_session):
 
         # 4. Mustang validiert das kombinierte PDF: Parsed PDF:valid XML:valid
         result = mustang.validate(pdf_path)
-        mustang_befund.gueltig(result, f"ZUGFeRD-PDF ist NICHT valide:\n{result['raw']}")
-        assert "Parsed PDF:valid" in result["raw"]
-        assert "XML:valid" in result["raw"]
+        mustang_befund.gueltig_mit_xml(result, f"ZUGFeRD-PDF ist NICHT valide:\n{result['raw']}")
+        mustang_befund.bericht_enthaelt(result, "Parsed PDF:valid")
     finally:
         if pdf_path:
             pdf_path.unlink(missing_ok=True)
@@ -131,8 +130,7 @@ def test_kleinbetrag_ohne_leistungsdatum_wird_ein_gueltiges_zugferd_pdf(pg_sessi
 
         pdf_path = settings.storage_path / "pdfs" / row.pdf_filename
         result = mustang.validate(pdf_path)
-        mustang_befund.gueltig(result, f"ZUGFeRD-PDF ist NICHT valide:\n{result['raw'][-1500:]}")
-        assert "XML:valid" in result["raw"]
+        mustang_befund.gueltig_mit_xml(result, f"ZUGFeRD-PDF ist NICHT valide:\n{result['raw'][-1500:]}")
     finally:
         if pdf_path:
             pdf_path.unlink(missing_ok=True)

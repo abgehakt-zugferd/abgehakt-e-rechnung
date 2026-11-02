@@ -267,8 +267,7 @@ def test_kleinunternehmer_finalize_e2e_erzeugt_gueltiges_zugferd_pdf(pg_session)
     try:
         assert pdf_path.exists()
         result = mustang.validate(pdf_path)
-        mustang_befund.gueltig(result, result.get("raw", ""))
-        assert "XML:valid" in result["raw"]
+        mustang_befund.gueltig_mit_xml(result, result.get("raw", ""))
     finally:
         pdf_path.unlink(missing_ok=True)
         (settings.storage_path / "xml" / f"{number}.xml").unlink(missing_ok=True)

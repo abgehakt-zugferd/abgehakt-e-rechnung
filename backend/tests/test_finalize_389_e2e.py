@@ -72,10 +72,9 @@ def test_389_vom_auftrag_bis_zum_archiv_durch_die_echte_pipeline(pg_session):
 
         # 4. Mustang nimmt die 389 mit getauschten Rollen an: UND-Bedingung.
         result = mustang.validate(pdf_path)
-        mustang_befund.gueltig(result, f"Mustang lehnt die 389 ab:\nFehler: {result['errors']}\n"
+        mustang_befund.gueltig_mit_xml(result, f"Mustang lehnt die 389 ab:\nFehler: {result['errors']}\n"
             f"Rohbericht:\n{result['raw']}\nXML:\n{row.zugferd_xml}")
-        assert "XML:valid" in result["raw"], result["raw"]
-        assert "Parsed PDF:valid" in result["raw"]
+        mustang_befund.bericht_enthaelt(result, "Parsed PDF:valid")
     finally:
         if pdf_path:
             pdf_path.unlink(missing_ok=True)
@@ -159,8 +158,7 @@ def test_389_finalisieren_stornieren_storno_finalisieren(client, pg_session):
         assert xml.find('.//ram:InvoiceReferencedDocument/ram:IssuerAssignedID', ns).text == original.invoice_number
         assert xml.find('.//ram:SellerTradeParty/ram:Name', ns).text == original.customer.name
         report = mustang.validate(settings.storage_path / 'pdfs' / storno.pdf_filename)
-        mustang_befund.gueltig(report, f"{report['errors']}\n{report['raw']}")
-        assert 'XML:valid' in report['raw'], report['raw']
+        mustang_befund.gueltig_mit_xml(report, f"{report['errors']}\n{report['raw']}")
     finally:
         for nummer in nummern:
             cleanup(nummer)
