@@ -17,6 +17,15 @@ auf, 1 bis 16 Zeichen ohne Klammern (das erste kein Leerraum) und eine spitze Kl
 zu. „Menge < 5“, „a < b > c“ und „weniger als <10 €“ sperren nicht. Hinweis: auch ein
 Text wie `<name@beispiel.de>` im Kopf- oder Fußtext sperrt, weil er dem Muster entspricht.
 
+### Übergabeordner der Live-Installation als Zuschaltung, nur lesend
+
+Neue Datei `docker-compose.uebergabe.yml`. Der Betreiber setzt in seiner lokalen
+Umgebungsdatei `ZEMP_UEBERGABEN` (absoluter Pfad, Pflicht, ohne Vorgabe) und
+`COMPOSE_FILE=docker-compose.yml:docker-compose.uebergabe.yml`; danach sieht die
+Live-Installation die eingehende Richtung des Übergabeordners schreibgeschützt. Die
+Gegenrichtung wird nicht eingehängt. Ohne Zuschaltung ändert sich nichts. Neubau ohne
+`down -v`; Schritte und Prüfung stehen in `docs/INTEGRATION-TESTINSTANZ.md`.
+
 ### Zahlungstext folgt der Belegsprache auch beim Finalisieren (#260)
 
 Beim Finalisieren eines Entwurfs wird die Zahlungsvorgabe der falschen Sprache jetzt

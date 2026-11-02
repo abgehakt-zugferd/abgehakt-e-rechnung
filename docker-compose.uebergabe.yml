@@ -1,0 +1,30 @@
+# Zuschaltung: die Produktion sieht den eingehenden Übergabeordner, nur lesend.
+#
+# Nicht Teil des Standardstarts. Wer sie nicht zuschaltet, betreibt die Installation
+# exakt wie mit `docker-compose.yml` allein. Zuschalten heisst, in der lokalen
+# Umgebungsdatei des Betreibers (nicht im Repo) zu setzen:
+#   ZEMP_UEBERGABEN=<absoluter Pfad des Wirtsordners, der die Richtungsordner enthält>
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.uebergabe.yml
+# Danach genügt `docker compose up -d --build` wie bisher. Anleitung:
+# docs/INTEGRATION-TESTINSTANZ.md, Abschnitt "Übergabeordner in der Live-Installation".
+#
+# Warum kein Vorgabepfad: der Ort liegt auf dem Rechner des Betreibers, nicht im Repo.
+# Warum ein absoluter Pfad: Compose expandiert `~` nicht, ein `~/…` würde als Ordner
+# `~` im Projektverzeichnis angelegt.
+
+services:
+  app:
+    volumes:
+      # Nur die eingehende Richtung, und nur lesend. ZEMP_UEBERGABEN ist der Wirtsordner,
+      # der die Richtungsordner enthält; eingehängt wird sein Unterordner dieser einen
+      # Richtung, damit unter dem Ziel die Belege direkt liegen. Die Anwendung liest diesen Ordner
+      # ausschliesslich (Belege und Anlagen); ein Schreibzugriff ist nicht nötig und
+      # würde einen Fehler im Container bis in den Ordner des Absenders durchreichen.
+      # Die Gegenrichtung (Quittungen) wird bewusst nicht eingehängt: Was dort läge,
+      # hat dieser Empfänger geschrieben, und die Zuschaltung ist reine Lesesicht.
+      - type: bind
+        source: ${ZEMP_UEBERGABEN:?in der lokalen Umgebungsdatei setzen (absoluter Pfad des Wirtsordners, der die Richtungsordner enthält), s. docker-compose.uebergabe.yml}/tantiemen-app-nach-abgehakt
+        target: /uebergaben/tantiemen-app-nach-abgehakt
+        read_only: true
+    environment:
+      UEBERGABEN_ORDNER: /uebergaben
