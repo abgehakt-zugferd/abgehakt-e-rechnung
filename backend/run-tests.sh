@@ -10,6 +10,12 @@
 # Nutzung:
 #   ./run-tests.sh            # baut Image (falls nötig) und läuft volle Suite im 3.11-Container
 #   ./run-tests.sh -k storno  # zusätzliche pytest-Argumente werden durchgereicht
+#
+# Parallele pytest-Prozesse gegen denselben Postgres (Mutationsprüfung), per Umgebung:
+#   ABGEHAKT_TEST_DB=<name>          Name der Test-Datenbank (Standard abgehakt_test)
+#   ABGEHAKT_TEST_DB_JE_PROZESS=1    hängt _<pid> an, jeder Prozess hat seine eigene DB
+# Dieses Skript reicht sie nicht an den Container durch; wer sie braucht, setzt sie
+# mit `docker run -e` (Details: docs/DEV-DOCU.md, Abschnitt zu parallelen Läufen).
 set -euo pipefail
 cd "$(dirname "$0")"
 

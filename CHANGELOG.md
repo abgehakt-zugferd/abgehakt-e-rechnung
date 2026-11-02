@@ -17,6 +17,14 @@ bleibt unverändert. Fehlt die englische Vorgabe und gibt es keinen Kundenhinwei
 das Finalisieren mit der Meldung des Speicherns blockiert, der Entwurf bleibt wie er war.
 Rechnungsaufträge und Gutschriften behalten ihren Weg.
 
+### Testsuite läuft parallel (Mutationsprüfung)
+
+Nur für Entwickler: Mehrere pytest-Prozesse gegen denselben Postgres löschen sich nicht
+mehr gegenseitig die Test-Datenbank. `ABGEHAKT_TEST_DB` setzt ihren Namen,
+`ABGEHAKT_TEST_DB_JE_PROZESS=1` gibt jedem Prozess eine eigene. Die Provisionierung der
+App-Rolle wird beim Start per Advisory-Sperre serialisiert; bei einem einzelnen Start
+ändert sich nichts. Am Verhalten der Anwendung ändert sich nichts.
+
 ### Umsatz je Steuerkategorie auf der Übersicht (#256)
 
 Die Übersicht zeigt eine Tabelle des laufenden Quartals mit Netto und Umsatzsteuer

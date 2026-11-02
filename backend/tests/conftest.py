@@ -1,6 +1,6 @@
 """
 Gemeinsame Fixtures. pg_engine/pg_session stellen eine echte Postgres-Wegwerf-DB
-(abgehakt_test) bereit — nötig für Tests von SQLAlchemy-Event-Listenern,
+(Name: tests/helpers/testdb.py) bereit — nötig für Tests von SQLAlchemy-Event-Listenern,
 die mit Mocks nicht beweisbar sind. Ohne erreichbares Postgres: skip.
 """
 from urllib.parse import urlparse
@@ -17,8 +17,11 @@ from app.database import get_db
 from app.db.immutability_triggers import TRUNCATE_TABLES, install
 from app.db.roles import ensure_app_role, resolve_owner_role
 from app.main import app
+from tests.helpers.rollensperre import clusterweite_rollensperre
+from tests.helpers.testdb import datenbankname
 
-TEST_DB_NAME = "abgehakt_test"
+# Name der Wegwerf-DB; je Prozess eindeutig mit ABGEHAKT_TEST_DB_JE_PROZESS=1.
+TEST_DB_NAME = datenbankname()
 
 
 def _vektor_lage() -> str:
@@ -113,7 +116,9 @@ def pg_engine():
 
     engine = create_engine(f"{base_url}/{TEST_DB_NAME}")
     Base.metadata.create_all(engine)
-    with engine.begin() as conn:
+    # Rollen gehoeren dem Cluster, die Test-DB nur diesem Prozess: ueber getrennte
+    # Datenbanken serialisiert nur die clusterweite Sperre (helpers/rollensperre.py).
+    with clusterweite_rollensperre(settings.database_url), engine.begin() as conn:
         install(conn)                                     # GoBD-Trigger in die Test-DB (wie Migration in Prod)
         # Owner = die Rolle aus DATABASE_URL (sie hat die Tabellen angelegt) — nicht
         # hart die Owner-Rolle: ALTER DEFAULT PRIVILEGES FOR ROLE <fremd> wäre permission denied.

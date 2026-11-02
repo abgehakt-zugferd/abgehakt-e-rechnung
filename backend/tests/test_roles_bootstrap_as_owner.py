@@ -18,9 +18,11 @@ import pytest
 from sqlalchemy import create_engine, text
 
 from app.config import get_settings
+from tests.helpers.rollensperre import clusterweite_rollensperre
+from tests.helpers.testdb import je_prozess
 from app.db.roles import APP_ROLE, ensure_app_role, resolve_owner_role
 
-OWNER = "abgehakt_test_owner"
+OWNER = je_prozess("abgehakt_test_owner")
 OWNER_PW = "test-owner-passwort-nur-fuer-testlauf"
 
 
@@ -32,7 +34,9 @@ def owner_engine(pg_engine):
     parsed = urlparse(settings.database_url)
     db_name = pg_engine.url.database
 
-    with pg_engine.begin() as c:
+    # Die Mitgliedschaft in abgehakt_app aendert eine clusterweite Rolle: ueber
+    # getrennte Test-Datenbanken serialisiert nur die clusterweite Sperre.
+    with clusterweite_rollensperre(settings.database_url), pg_engine.begin() as c:
         c.execute(text(f"DROP ROLE IF EXISTS {OWNER}"))
         c.execute(text(
             f"CREATE ROLE {OWNER} LOGIN NOSUPERUSER CREATEROLE PASSWORD '{OWNER_PW}'"
@@ -46,7 +50,7 @@ def owner_engine(pg_engine):
     engine = create_engine(url, pool_pre_ping=True)
     yield engine
     engine.dispose()
-    with pg_engine.begin() as c:
+    with clusterweite_rollensperre(settings.database_url), pg_engine.begin() as c:
         # Aufräumen erfordert die Rechte der Rolle selbst — pg_engine ist hier
         # nicht zwingend Superuser (Owner-Rolle), daher explizit Mitglied werden.
         c.execute(text(f"GRANT {OWNER} TO CURRENT_USER"))
