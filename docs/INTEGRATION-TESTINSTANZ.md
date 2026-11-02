@@ -139,14 +139,15 @@ Zuschaltung hängt nur die eingehende Richtung ein, **nur lesend**; die Gegenric
 **Variablen** (in der lokalen Umgebungsdatei des Betreibers, nicht im Repo):
 
 ```
-ZEMP_UEBERGABEN=<absoluter Pfad des Übergabeordners auf dem Rechner>
+ZEMP_UEBERGABEN=<absoluter Pfad des Wirtsordners, der die Richtungsordner enthält>
 COMPOSE_FILE=docker-compose.yml:docker-compose.uebergabe.yml
 ```
 
 `ZEMP_UEBERGABEN` ist Pflicht, sobald zugeschaltet ist, und hat keinen Vorgabewert.
-Der Pfad muss absolut sein: Compose expandiert `~` nicht. Im Container erscheint der
-Ordner als `/uebergaben/<Richtung>` (schreibgeschützt), `UEBERGABEN_ORDNER` steht auf
-`/uebergaben`.
+Der Pfad muss absolut sein: Compose expandiert `~` nicht. Er zeigt auf den Wirtsordner,
+in dem die Richtungsordner liegen (die eingehende und die Gegenrichtung); eingehängt wird
+nur der Unterordner der eingehenden Richtung. Im Container liegen die Belege direkt unter
+`/uebergaben/<Richtung>` (schreibgeschützt), `UEBERGABEN_ORDNER` steht auf `/uebergaben`.
 
 **Schlüssel ablegen:** die öffentlichen Schlüssel der Absender liegen in
 `backend/schluessel/<absender>/`, je Schlüssel eine `.pub`-Datei (PEM) und ein Beiblatt
@@ -163,6 +164,6 @@ docker inspect abgehakt_app --format '{{range .Mounts}}{{.Destination}} rw={{.RW
 docker exec abgehakt_app printenv UEBERGABEN_ORDNER
 ```
 
-Erwartet: `/uebergaben/<Richtung>` mit `rw=false`, daneben `/app/storage` mit `rw=true`, und
+Erwartet: `/uebergaben/<Richtung>` mit `rw=false` (`docker exec abgehakt_app ls /uebergaben/<Richtung>` zeigt die Belege direkt), daneben `/app/storage` mit `rw=true`, und
 kein Eintrag für die Gegenrichtung. Fehlt `ZEMP_UEBERGABEN` bei gesetztem `COMPOSE_FILE`,
 bricht Compose mit der Meldung der Pflichtvariable ab.
