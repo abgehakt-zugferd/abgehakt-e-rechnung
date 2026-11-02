@@ -7,6 +7,17 @@ Klammern.
 
 ## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.0.1)
 
+### Stornierte Belege zeigen „storniert durch“ (#269, #267)
+
+Hat ein Beleg eine gestellte oder bezahlte Gutschrift (bei einer Gutschrift des Typs 389
+den Storno dazu), steht in Belegansicht und Liste „storniert durch“ mit
+Link auf diesen Beleg. Der Status des Originals bleibt unverändert; die Anzeige folgt
+derselben Regel wie die Kennzahlen. Ein bezahlter und stornierter Beleg zeigt beides.
+Der Knopf „ALS STORNIERT MARKIEREN“ erscheint nur noch, wenn es keinen gestellten oder
+bezahlten Stornobeleg gibt; ein Stornobeleg als Entwurf ändert nichts. Der gestellte Storno
+einer Gutschrift (389) trägt jetzt wie die Stornorechnung den Hinweis, dass er endgültig ist
+und wie man einen Fehler korrigiert, in der Belegsprache (de oder en), mit Link zum Original.
+
 ### Zahlungstext folgt der Belegsprache auch beim Finalisieren (#260)
 
 Beim Finalisieren eines Entwurfs wird die Zahlungsvorgabe der falschen Sprache jetzt
