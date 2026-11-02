@@ -7,6 +7,15 @@ Klammern.
 
 ## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.0.1)
 
+### Übergabeordner der Live-Installation als Zuschaltung, nur lesend
+
+Neue Datei `docker-compose.uebergabe.yml`. Der Betreiber setzt in seiner lokalen
+Umgebungsdatei `ZEMP_UEBERGABEN` (absoluter Pfad, Pflicht, ohne Vorgabe) und
+`COMPOSE_FILE=docker-compose.yml:docker-compose.uebergabe.yml`; danach sieht die
+Live-Installation die eingehende Richtung des Übergabeordners schreibgeschützt. Die
+Gegenrichtung wird nicht eingehängt. Ohne Zuschaltung ändert sich nichts. Neubau ohne
+`down -v`; Schritte und Prüfung stehen in `docs/INTEGRATION-TESTINSTANZ.md`.
+
 ### Zahlungstext folgt der Belegsprache auch beim Finalisieren (#260)
 
 Beim Finalisieren eines Entwurfs wird die Zahlungsvorgabe der falschen Sprache jetzt
