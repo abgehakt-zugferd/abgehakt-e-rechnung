@@ -169,8 +169,7 @@ def test_mustang_meldet_die_gruppen_xml_als_valide(tmp_path):
     pfad.write_text(xml, encoding="utf-8")
 
     befund = mustang.validate(pfad)
-    mustang_befund.gueltig(befund, befund["errors"])
-    assert "XML:valid" in befund["raw"], befund["raw"]
+    mustang_befund.gueltig_mit_xml(befund, befund["errors"])
 
 
 # ------------------------------------------------ Finalisieren: Validator- und Mustang-Gate
