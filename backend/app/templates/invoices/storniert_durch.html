@@ -1,0 +1,6 @@
+{# „storniert durch <Nummer>“, abgeleitet aus dem wirksamen Stornobeleg (#269).
+   Erwartet `storno`: der Stornobeleg oder None. Der Status des Originals bleibt unberuehrt. #}
+{% if storno %}
+<span data-storniert-durch class="badge badge-cancelled">storniert durch
+    <a href="/invoices/{{ storno.id }}" style="color:inherit; text-decoration:underline;">{{ storno.invoice_number }}</a></span>
+{% endif %}

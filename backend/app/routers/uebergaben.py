@@ -122,7 +122,16 @@ def _wettlauf(db: Session, urteil: Belegurteil) -> RedirectResponse:
     wiedererkennt. Die Meldung fragt die eine Stelle fuer die Sperre, die
     nicht geglaubt wurde."""
     db.rollback()
-    schluessel = (urteil.nutzlast or {}).get("auftragsschluessel")
+    nutzlast = urteil.nutzlast or {}
+    schluessel = nutzlast.get("auftragsschluessel")
+    if schluessel is None:
+        # Abrechnungsauftrag: der Schluessel steht je Gutschrift. Genannt wird
+        # der erste, der tatsaechlich sperrt.
+        schluessel = next((
+            g["auftragsschluessel"] for g in nutzlast.get("gutschriften") or []
+            if g.get("auftragsschluessel")
+            and auftragsschluessel.dokument_zu(db, g["auftragsschluessel"])
+        ), None)
     belegt_durch = (
         auftragsschluessel.dokument_zu(db, schluessel) if schluessel else None
     )
@@ -224,9 +233,9 @@ def rechnung_anlegen(dateiname: str, db: Session = Depends(get_db)):
         entwurf = ergebnis if aus_auftrag else ergebnis[0]
         return RedirectResponse(url=f"/invoices/{entwurf.id}/vorschau", status_code=303)
 
-    return _anlegen(
-        db, urteil, roh, wirken, folgen, schluesselart=aus_auftrag,
-    )
+    # Beide Arten belegen einen Auftragsschluessel: die 380 den des Auftrags,
+    # die 389 den je Gutschrift (#264). Der Index kann also bei beiden zuschlagen.
+    return _anlegen(db, urteil, roh, wirken, folgen, schluesselart=True)
 
 
 @router.post("/{dateiname}/aufstellung-anlegen")

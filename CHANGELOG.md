@@ -15,6 +15,26 @@ den Widerspruch und den Weg: Land und USt-IdNr. beim Kunden prüfen, speichern, 
 finalisieren. Inländischer Reverse Charge mit deutscher USt-IdNr. bleibt bei der
 bisherigen Warnung. Gestellte Belege werden beim erneuten Prüfen nicht ungültig.
 
+### Stornierte Belege zeigen „storniert durch“ (#269, #267)
+
+Hat ein Beleg eine gestellte oder bezahlte Gutschrift (bei einer Gutschrift des Typs 389
+den Storno dazu), steht in Belegansicht und Liste „storniert durch“ mit
+Link auf diesen Beleg. Der Status des Originals bleibt unverändert; die Anzeige folgt
+derselben Regel wie die Kennzahlen. Ein bezahlter und stornierter Beleg zeigt beides.
+Der Knopf „ALS STORNIERT MARKIEREN“ erscheint nur noch, wenn es keinen gestellten oder
+bezahlten Stornobeleg gibt; ein Stornobeleg als Entwurf ändert nichts. Der gestellte Storno
+einer Gutschrift (389) trägt jetzt wie die Stornorechnung den Hinweis, dass er endgültig ist
+und wie man einen Fehler korrigiert, in der Belegsprache (de oder en), mit Link zum Original.
+
+### Gutschriften aus einem Abrechnungsauftrag sperren ihren Auftragsschlüssel (#264)
+
+Beim Anlegen der Entwürfe aus einem Abrechnungsauftrag wird der Auftragsschlüssel je
+Gutschrift jetzt als Nachweis und Sperre gespeichert, wie bei der Ausgangsrechnung. Ein
+zweites Einlesen desselben Auftrags meldet AUFTRAG_SCHON_GERECHNET je Gutschrift und legt
+keine doppelten Gutschriften mehr an. Verwerfen, Zurückholen, manuelles Stornieren und
+der gestellte Storno geben die Sperre frei bzw. nehmen sie wieder auf, unabhängig von der
+Belegart. Ein gleichzeitiges Einlesen endet mit einer Meldung statt mit einem Serverfehler.
+
 ### Platzhalter im Kopf- oder Fußtext sperren das Finalisieren (#270)
 
 Ein Entwurf, dessen Kopf- oder Fußtext noch einen Platzhalter zum Ersetzen trägt

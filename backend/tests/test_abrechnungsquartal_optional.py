@@ -12,6 +12,7 @@ import pytest
 
 from app.models.company import Company
 from app.models.customer import Customer
+from app.services import auftragsschluessel
 from app.services.abrechnungsauftrag_wirkung import entwuerfe_anlegen
 from app.services.uebergabe_befund import Belegurteil, Empfangslage, beleg_beurteilen
 from app.services.uebergabe_listenzeile import anzeigefelder
@@ -160,6 +161,10 @@ def test_veraendertes_abrechnungsquartal_aendert_keine_ausgabe(pg_session):
     anders = auftrag(abrechnungsquartal="2026-Q3")
 
     e1 = entwuerfe_anlegen(pg_session, _urteil_aus_nutzlast(basis, sha="1" * 64))[0]
+    # Derselbe Gutschrift-Schluessel sperrt seit #264; der erste Entwurf gibt
+    # ihn frei, damit der zweite Lauf die Ausgabe vergleichen kann.
+    auftragsschluessel.freigeben(e1)
+    pg_session.flush()
     e2 = entwuerfe_anlegen(pg_session, _urteil_aus_nutzlast(anders, sha="2" * 64))[0]
 
     assert e1.buyer_reference == e2.buyer_reference
