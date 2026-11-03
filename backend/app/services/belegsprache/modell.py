@@ -89,6 +89,9 @@ class Belegdarstellung:
     storno_gutschrift_bezug: str
     # Ersatzrechnung (docs/specs/ersatzrechnung.md), Muster mit {nummer} und {datum}
     ersatz_hinweis: str
+    # Hinweis in der Belegansicht beim gestellten Storno einer 389; {original} ist
+    # der Link zur urspruenglichen Gutschrift (Issue #267)
+    storno_endgueltig: str
 
     # Steuerhinweise PDF (E/K/O lokalisiert; AE immer zweisprachig)
     hinweis_ae: str

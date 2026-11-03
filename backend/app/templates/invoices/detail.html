@@ -27,6 +27,7 @@
                Rechnungsauftrag (#227): „Bezahlt bei Ausstellung“, nicht badge-offen. #}
             {{ invoice.status|beleg_etikett(invoice.kunde_zugestellt_am, invoice) }}
         </span>
+        {% with storno=storniert_durch %}{% include "invoices/storniert_durch.html" %}{% endwith %}
     </div>
 
     {% include "invoices/detail_zahlungshinweis.html" %}

@@ -17,11 +17,12 @@ def kunde(pg_session, name="Probe Kunde GmbH"):
     return c
 
 
-def beleg(pg_session, kunde, *, status="issued", invoice_type=None, original=None):
+def beleg(pg_session, kunde, *, status="issued", invoice_type=None, original=None,
+          sprache="de"):
     inv = Invoice(invoice_number=f"RE-ERS-{uuid.uuid4().hex[:6]}", customer_id=kunde.id,
                   issue_date=date(2026, 7, 8), due_date=date(2026, 7, 22),
                   delivery_date=date(2026, 7, 8), currency="EUR", tax_category="S",
-                  status=status, invoice_type=invoice_type,
+                  status=status, invoice_type=invoice_type, document_language=sprache,
                   original_invoice_id=original.id if original else None,
                   net_total=Decimal("100.00"), tax_total=Decimal("19.00"),
                   gross_total=Decimal("119.00"))

@@ -107,13 +107,21 @@
             </label>
             <button type="submit" class="btn-success">✓ ALS BEZAHLT MARKIEREN</button>
         </form>
-        {% if invoice.invoice_type not in ('credit_note', 'self_billing_storno') %}
+        {# Mit wirksamem Stornobeleg ist die Rechnung schon storniert (#269). #}
+        {% if invoice.invoice_type not in ('credit_note', 'self_billing_storno') and not storniert_durch %}
         <form method="post" action="/invoices/{{ invoice.id }}/status"
               onsubmit="return confirm('Rechnung als storniert markieren? (nur Status, kein Stornobeleg)')">
             <input type="hidden" name="new_status" value="cancelled">
             <button type="submit" class="btn-danger">✗ ALS STORNIERT MARKIEREN</button>
         </form>
         {% endif %}
+        {% endif %}
+
+        {% if storno_endgueltig %}
+        {# Issue #267: auch der gestellte Storno einer 389 ist endgueltig; Text in der Belegsprache. #}
+        <div data-hinweis="gutschrift-endgueltig" style="flex-basis:100%; padding:10px 14px; border:2px solid var(--border); font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+            {{ storno_endgueltig }}
+        </div>
         {% endif %}
 
         {% if invoice.invoice_type == 'credit_note' and invoice.status in ('issued', 'paid') %}
