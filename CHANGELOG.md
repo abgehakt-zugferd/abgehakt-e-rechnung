@@ -16,6 +16,25 @@ keine doppelten Gutschriften mehr an. Verwerfen, Zurückholen, manuelles Stornie
 der gestellte Storno geben die Sperre frei bzw. nehmen sie wieder auf, unabhängig von der
 Belegart. Ein gleichzeitiges Einlesen endet mit einer Meldung statt mit einem Serverfehler.
 
+### Platzhalter im Kopf- oder Fußtext sperren das Finalisieren (#270)
+
+Ein Entwurf, dessen Kopf- oder Fußtext noch einen Platzhalter zum Ersetzen trägt
+(`<M>`, `<MM/JJJJ>`, `<nr>`), wird beim Finalisieren mit einer Meldung abgelehnt, die
+Feld und Platzhalter nennt, zum Beispiel „Kopftext enthält noch den Platzhalter <M>“.
+Der Entwurf bleibt unverändert, Speichern geht weiter. Erkannt wird eine spitze Klammer
+auf, 1 bis 16 Zeichen ohne Klammern (das erste kein Leerraum) und eine spitze Klammer
+zu. „Menge < 5“, „a < b > c“ und „weniger als <10 €“ sperren nicht. Hinweis: auch ein
+Text wie `<name@beispiel.de>` im Kopf- oder Fußtext sperrt, weil er dem Muster entspricht.
+
+### Übergabeordner der Live-Installation als Zuschaltung, nur lesend
+
+Neue Datei `docker-compose.uebergabe.yml`. Der Betreiber setzt in seiner lokalen
+Umgebungsdatei `ZEMP_UEBERGABEN` (absoluter Pfad, Pflicht, ohne Vorgabe) und
+`COMPOSE_FILE=docker-compose.yml:docker-compose.uebergabe.yml`; danach sieht die
+Live-Installation die eingehende Richtung des Übergabeordners schreibgeschützt. Die
+Gegenrichtung wird nicht eingehängt. Ohne Zuschaltung ändert sich nichts. Neubau ohne
+`down -v`; Schritte und Prüfung stehen in `docs/INTEGRATION-TESTINSTANZ.md`.
+
 ### Zahlungstext folgt der Belegsprache auch beim Finalisieren (#260)
 
 Beim Finalisieren eines Entwurfs wird die Zahlungsvorgabe der falschen Sprache jetzt
@@ -25,6 +44,14 @@ Zahlungshinweis des Kunden Vorrang vor der Firmenvorgabe, ebenso bei leerem Feld
 bleibt unverändert. Fehlt die englische Vorgabe und gibt es keinen Kundenhinweis, wird
 das Finalisieren mit der Meldung des Speicherns blockiert, der Entwurf bleibt wie er war.
 Rechnungsaufträge und Gutschriften behalten ihren Weg.
+
+### Testsuite läuft parallel (Mutationsprüfung)
+
+Nur für Entwickler: Mehrere pytest-Prozesse gegen denselben Postgres löschen sich nicht
+mehr gegenseitig die Test-Datenbank. `ABGEHAKT_TEST_DB` setzt ihren Namen,
+`ABGEHAKT_TEST_DB_JE_PROZESS=1` gibt jedem Prozess eine eigene. Die Provisionierung der
+App-Rolle wird beim Start per Advisory-Sperre serialisiert; bei einem einzelnen Start
+ändert sich nichts. Am Verhalten der Anwendung ändert sich nichts.
 
 ### Umsatz je Steuerkategorie auf der Übersicht (#256)
 

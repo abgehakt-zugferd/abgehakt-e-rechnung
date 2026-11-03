@@ -26,12 +26,13 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 
 from app.config import get_settings
+from tests.helpers.testdb import je_prozess
 from app.db.roles import ensure_owner_role
 
 # Eigene Namen, die mit nichts kollidieren: der Test legt eine echte Rolle im
 # Cluster an und muss sie hinterher restlos wieder los sein.
-TESTROLLE = "abgehakt_ownertest"
-TEST_DB = "abgehakt_ownertest_db"
+TESTROLLE = je_prozess("abgehakt_ownertest")
+TEST_DB = je_prozess("abgehakt_ownertest_db")
 TEST_PASSWORT = "owner-testpasswort-nur-fuer-den-testlauf"
 
 

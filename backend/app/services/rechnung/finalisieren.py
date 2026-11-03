@@ -14,6 +14,7 @@ from app.services.archive_frist import berechne_archive_until
 from app.services.belegart import ist_storno
 from app.services.belegsprache.zahlungshinweis import zahlungstext_vor_finalisieren
 from app.services.rechnung.fehler import RechnungFehler
+from app.services.rechnung import platzhaltersperre
 from app.services.rechnung.firma import get_company
 from app.zeit import heute
 
@@ -115,11 +116,14 @@ def rechtskonform_pruefen(invoice: Invoice, company: Company) -> None:
     # Positionen, falsche Summen) darf NICHT finalisiert und archiviert werden —
     # sonst wanderte ein rechtswidriger Beleg unveränderlich ins GoBD-Archiv.
     errors, _ = validator.validate_invoice(invoice, company)
-    if errors:
+    # Ein Platzhalter im Kopf- oder Fußtext (#270) stünde wörtlich in PDF und XML;
+    # Heilung ginge nur per Storno. Der Entwurf bleibt unverändert, Speichern geht.
+    meldungen = [e.message for e in errors] + platzhaltersperre.platzhalter_befunde(invoice)
+    if meldungen:
         raise RechnungFehler(
             400,
             "Rechnung ist nicht rechtskonform und kann nicht finalisiert werden: "
-            + "; ".join(e.message for e in errors),
+            + "; ".join(meldungen),
         )
 
 

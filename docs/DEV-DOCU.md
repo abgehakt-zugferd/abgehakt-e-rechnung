@@ -1170,6 +1170,21 @@ Merkmal zur Abgrenzung von einer echten Regression: `OperationalError` (Verbindu
 statt fachlicher Assertions, und die Trefferliste ist quer über unzusammenhängende Module
 verteilt.
 
+**Parallele Läufe bewusst ermöglichen (Mutationsprüfung).** Zwei Umgebungsvariablen
+steuern den Namen der Test-Datenbank (`backend/tests/helpers/testdb.py`):
+
+- `ABGEHAKT_TEST_DB` setzt den Namen (Standard `abgehakt_test`). Erlaubt sind nur einfache,
+  kleingeschriebene Bezeichner (a bis z, 0 bis 9, Unterstrich, höchstens 63 Zeichen); alles
+  andere bricht den Lauf laut ab, weil der Name per f-String in SQL geht.
+- `ABGEHAKT_TEST_DB_JE_PROZESS=1` hängt `_<pid>` an. Dann hat jeder pytest-Prozess seine
+  eigene Datenbank und löscht keine fremde. Dasselbe gilt für die übrigen Wegwerf-Datenbanken
+  und Wegwerf-Rollen der Tests.
+
+Die Rolle `abgehakt_app` gehört dem ganzen Cluster, nicht einer Datenbank. `ensure_app_role`
+serialisiert sich deshalb per `pg_advisory_xact_lock`. Advisory-Sperren gelten aber nur
+innerhalb **einer** Datenbank; über getrennte Test-Datenbanken hinweg trägt die Sperre aus
+`tests/helpers/rollensperre.py` (auf der gemeinsamen Datenbank aus `DATABASE_URL`).
+
 ### Remote-Branch nach Merge löschen: `git push --delete` hängt, `gh api` nutzen
 
 `git push origin --delete <branch>` **hängt** in dieser Umgebung (git-Transport fragt
