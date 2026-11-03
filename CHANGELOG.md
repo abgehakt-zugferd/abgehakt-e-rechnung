@@ -7,6 +7,18 @@ Klammern.
 
 ## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.0.1)
 
+### VIES-Prüfung verwirft keine ungespeicherten Eingaben mehr (#274)
+
+Der Dialog „Jetzt bei VIES prüfen“ in der Kundenbearbeitung und in den Firmeneinstellungen
+schickte bisher nur USt-IdNr. und Name ab und lud die Seite aus der Datenbank neu: Land,
+Anschrift und alle übrigen ungespeicherten Eingaben waren still verloren. Jetzt speichert
+die Bestätigung („Einverstanden, speichern und prüfen“) zuerst das ganze Formular, mit
+denselben Prüfungen und Fehlermeldungen wie beim normalen Speichern, und prüft danach bei
+VIES. Scheitert das Speichern an einer Formularprüfung, gibt es keine Abfrage und die
+Eingaben bleiben im Formular. Ohne Einwilligung entsteht keine Verbindung, und es wird auch
+nichts gespeichert. Die Wege `/customers/{id}/ust-id-pruefen` und `/settings/ust-id-pruefen`
+entfallen; die Prüfung läuft über die Speicherwege mit dem Feld `danach_vies=1`.
+
 ### Platzhalter im Kopf- oder Fußtext sperren das Finalisieren (#270)
 
 Ein Entwurf, dessen Kopf- oder Fußtext noch einen Platzhalter zum Ersetzen trägt

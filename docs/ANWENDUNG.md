@@ -358,8 +358,10 @@ nicht automatisch vor jeder Rechnung.
 3. Der Dialog zeigt die **Ziel-URL** der EU-Schnittstelle und genau, was übertragen wird:
    Ländercode und Nummer der zu prüfenden USt-IdNr., der Name für den Abgleich und optional
    Ihre eigene USt-IdNr. als Anfragender.
-4. Mit **Einverstanden, jetzt prüfen** starten Sie die Abfrage. **Abbrechen** baut keine
-   Verbindung auf.
+4. Mit **Einverstanden, speichern und prüfen** wird zuerst das ganze Formular gespeichert
+   (mit denselben Prüfungen wie beim normalen Speichern) und danach die Abfrage gestartet.
+   Scheitert das Speichern an einer Formularprüfung, findet keine Abfrage statt und Ihre
+   Eingaben bleiben im Formular. **Abbrechen** baut keine Verbindung auf und speichert nichts.
 5. Nach der Antwort bleiben Sie auf der Bearbeiten-Seite. Der Status unter der USt-IdNr. wird
    aktualisiert (gültig, ungültig, nicht erreichbar, Name stimmt / weicht ab / unbekannt).
 

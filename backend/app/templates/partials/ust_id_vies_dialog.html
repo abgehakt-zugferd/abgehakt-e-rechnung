@@ -24,11 +24,11 @@
     <p style="margin-bottom:0;">Sichtbar wird fuer die Gegenseite der Abruf selbst, also die <strong>IP-Adresse</strong> dieses Anschlusses.</p>
   </div>
   <p style="margin-bottom:16px;">Ohne deine Bestaetigung wird <strong>keine</strong> Internetverbindung zu VIES aufgebaut.</p>
-  <form method="post" action="{{ execute_url }}" id="vies-consent-form" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+  <form method="post" action="{{ execute_url }}" id="vies-consent-form" data-haupt-form="{{ haupt_form | default('') }}" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
     <input type="hidden" name="bestaetigt" value="1">
     <input type="hidden" name="check_vat_id" id="vies-check-vat-id">
     <input type="hidden" name="check_name" id="vies-check-name">
-    <button type="submit" class="btn-primary">Einverstanden, jetzt pruefen</button>
+    <button type="submit" class="btn-primary">Einverstanden, speichern und pruefen</button>
     <button type="button" class="btn-secondary js-vies-consent-close">Abbrechen</button>
   </form>
 </div>
@@ -61,6 +61,26 @@
     dialog.hidden = false;
     backdrop.hidden = false;
   }
+
+  // Das ganze Formular wird gespeichert und danach geprueft (#274): der Dialog schickt
+  // nichts selbst ab, sondern setzt Einwilligung und Folgeschritt ins Hauptformular.
+  form.addEventListener('submit', function (e) {
+    var haupt = form.dataset.hauptForm ? document.getElementById(form.dataset.hauptForm) : null;
+    if (!haupt) return;
+    e.preventDefault();
+    ['bestaetigt', 'danach_vies'].forEach(function (name) {
+      var feld = haupt.querySelector('input[type="hidden"][name="' + name + '"]');
+      if (!feld) {
+        feld = document.createElement('input');
+        feld.type = 'hidden';
+        feld.name = name;
+        haupt.appendChild(feld);
+      }
+      feld.value = '1';
+    });
+    schliessen();
+    haupt.requestSubmit();
+  });
 
   document.querySelectorAll('.js-vies-consent-open').forEach(function (btn) {
     btn.addEventListener('click', function () { oeffnen(btn); });
