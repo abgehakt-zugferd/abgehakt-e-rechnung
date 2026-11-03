@@ -7,6 +7,15 @@ Klammern.
 
 ## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.0.1)
 
+### Gutschriften aus einem Abrechnungsauftrag sperren ihren Auftragsschlüssel (#264)
+
+Beim Anlegen der Entwürfe aus einem Abrechnungsauftrag wird der Auftragsschlüssel je
+Gutschrift jetzt als Nachweis und Sperre gespeichert, wie bei der Ausgangsrechnung. Ein
+zweites Einlesen desselben Auftrags meldet AUFTRAG_SCHON_GERECHNET je Gutschrift und legt
+keine doppelten Gutschriften mehr an. Verwerfen, Zurückholen, manuelles Stornieren und
+der gestellte Storno geben die Sperre frei bzw. nehmen sie wieder auf, unabhängig von der
+Belegart. Ein gleichzeitiges Einlesen endet mit einer Meldung statt mit einem Serverfehler.
+
 ### Platzhalter im Kopf- oder Fußtext sperren das Finalisieren (#270)
 
 Ein Entwurf, dessen Kopf- oder Fußtext noch einen Platzhalter zum Ersetzen trägt
