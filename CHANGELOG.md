@@ -7,6 +7,14 @@ Klammern.
 
 ## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.0.1)
 
+### Reverse Charge an einen Kunden in Deutschland mit ausländischer USt-IdNr. sperrt das Finalisieren (#275)
+
+Ein Entwurf mit Steuerkategorie AE, dessen Kunde das Land DE und eine USt-IdNr. mit
+einem anderen Ländercode trägt, lässt sich nicht mehr finalisieren. Die Meldung nennt
+den Widerspruch und den Weg: Land und USt-IdNr. beim Kunden prüfen, speichern, neu
+finalisieren. Inländischer Reverse Charge mit deutscher USt-IdNr. bleibt bei der
+bisherigen Warnung. Gestellte Belege werden beim erneuten Prüfen nicht ungültig.
+
 ### Platzhalter im Kopf- oder Fußtext sperren das Finalisieren (#270)
 
 Ein Entwurf, dessen Kopf- oder Fußtext noch einen Platzhalter zum Ersetzen trägt
