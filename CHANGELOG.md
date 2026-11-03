@@ -18,6 +18,34 @@ bezahlten Stornobeleg gibt; ein Stornobeleg als Entwurf ändert nichts. Der gest
 einer Gutschrift (389) trägt jetzt wie die Stornorechnung den Hinweis, dass er endgültig ist
 und wie man einen Fehler korrigiert, in der Belegsprache (de oder en), mit Link zum Original.
 
+### Gutschriften aus einem Abrechnungsauftrag sperren ihren Auftragsschlüssel (#264)
+
+Beim Anlegen der Entwürfe aus einem Abrechnungsauftrag wird der Auftragsschlüssel je
+Gutschrift jetzt als Nachweis und Sperre gespeichert, wie bei der Ausgangsrechnung. Ein
+zweites Einlesen desselben Auftrags meldet AUFTRAG_SCHON_GERECHNET je Gutschrift und legt
+keine doppelten Gutschriften mehr an. Verwerfen, Zurückholen, manuelles Stornieren und
+der gestellte Storno geben die Sperre frei bzw. nehmen sie wieder auf, unabhängig von der
+Belegart. Ein gleichzeitiges Einlesen endet mit einer Meldung statt mit einem Serverfehler.
+
+### Platzhalter im Kopf- oder Fußtext sperren das Finalisieren (#270)
+
+Ein Entwurf, dessen Kopf- oder Fußtext noch einen Platzhalter zum Ersetzen trägt
+(`<M>`, `<MM/JJJJ>`, `<nr>`), wird beim Finalisieren mit einer Meldung abgelehnt, die
+Feld und Platzhalter nennt, zum Beispiel „Kopftext enthält noch den Platzhalter <M>“.
+Der Entwurf bleibt unverändert, Speichern geht weiter. Erkannt wird eine spitze Klammer
+auf, 1 bis 16 Zeichen ohne Klammern (das erste kein Leerraum) und eine spitze Klammer
+zu. „Menge < 5“, „a < b > c“ und „weniger als <10 €“ sperren nicht. Hinweis: auch ein
+Text wie `<name@beispiel.de>` im Kopf- oder Fußtext sperrt, weil er dem Muster entspricht.
+
+### Übergabeordner der Live-Installation als Zuschaltung, nur lesend
+
+Neue Datei `docker-compose.uebergabe.yml`. Der Betreiber setzt in seiner lokalen
+Umgebungsdatei `ZEMP_UEBERGABEN` (absoluter Pfad, Pflicht, ohne Vorgabe) und
+`COMPOSE_FILE=docker-compose.yml:docker-compose.uebergabe.yml`; danach sieht die
+Live-Installation die eingehende Richtung des Übergabeordners schreibgeschützt. Die
+Gegenrichtung wird nicht eingehängt. Ohne Zuschaltung ändert sich nichts. Neubau ohne
+`down -v`; Schritte und Prüfung stehen in `docs/INTEGRATION-TESTINSTANZ.md`.
+
 ### Zahlungstext folgt der Belegsprache auch beim Finalisieren (#260)
 
 Beim Finalisieren eines Entwurfs wird die Zahlungsvorgabe der falschen Sprache jetzt
