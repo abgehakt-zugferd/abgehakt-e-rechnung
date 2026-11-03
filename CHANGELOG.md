@@ -7,6 +7,16 @@ Klammern.
 
 ## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.0.1)
 
+### Zahlungsdatum: vor dem Rechnungsdatum bei Rechnungsaufträgen, protokollierte Korrektur (#278)
+
+Bei einem Beleg aus einem Rechnungsauftrag darf das Zahlungsdatum vor dem Rechnungsdatum
+liegen, aber nicht vor dem Beginn des Leistungszeitraums (ohne Zeitraum: Leistungsdatum;
+fehlt beides: Rechnungsdatum) und nicht in der Zukunft. Alle anderen Belege behalten die
+Untergrenze Rechnungsdatum. Das Datumsfeld auf der Belegseite folgt derselben Regel.
+An einem bezahlten Beleg gibt es neu **Zahlungsdatum korrigieren** (neues Datum und Grund,
+beide Pflicht). Die Korrektur steht im Änderungsprotokoll mit altem und neuem Datum, Grund
+und Zeitpunkt; jede andere Änderung des Zahlungsdatums bleibt gesperrt. Keine Migration.
+
 ### Gutschriften aus einem Abrechnungsauftrag sperren ihren Auftragsschlüssel (#264)
 
 Beim Anlegen der Entwürfe aus einem Abrechnungsauftrag wird der Auftragsschlüssel je

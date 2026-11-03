@@ -94,6 +94,22 @@
         <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--green);">
             bezahlt am {{ invoice.bezahlt_am.strftime('%d.%m.%Y') }}
         </p>
+        <details style="flex-basis:100%; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+            <summary style="cursor:pointer;">Zahlungsdatum korrigieren</summary>
+            <form method="post" action="/invoices/{{ invoice.id }}/zahlungsdatum-korrigieren" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">
+                <label>neues Datum
+                    <input type="date" name="bezahlt_am" required value="{{ invoice.bezahlt_am.isoformat() }}"
+                           min="{{ fruehestes_zahlungsdatum.isoformat() }}" max="{{ heute.isoformat() }}"
+                           style="margin-left:6px; font-family:'VT323',monospace; font-size:var(--fs-text); background:var(--bg); color:var(--text-hi); border:1px solid var(--border); padding:4px 6px;">
+                </label>
+                <label>Grund
+                    <input type="text" name="grund" required maxlength="300" placeholder="z. B. Tippfehler beim Erfassen"
+                           style="margin-left:6px; min-width:260px; font-family:'VT323',monospace; font-size:var(--fs-text); background:var(--bg); color:var(--text-hi); border:1px solid var(--border); padding:4px 6px;">
+                </label>
+                <button type="submit" class="btn-secondary">KORRIGIEREN</button>
+                <span>Die Änderung steht mit altem Wert und Grund im Änderungsprotokoll.</span>
+            </form>
+        </details>
         {% endif %}
 
         {% if invoice.status == 'issued' %}
@@ -102,7 +118,7 @@
             <label style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
                 bezahlt am
                 <input type="date" name="bezahlt_am" value="{{ heute.isoformat() }}"
-                       min="{{ invoice.issue_date.isoformat() }}" max="{{ heute.isoformat() }}"
+                       min="{{ fruehestes_zahlungsdatum.isoformat() }}" max="{{ heute.isoformat() }}"
                        style="margin-left:6px; font-family:'VT323',monospace; font-size:var(--fs-text); background:var(--bg); color:var(--text-hi); border:1px solid var(--border); padding:4px 6px;">
             </label>
             <button type="submit" class="btn-success">✓ ALS BEZAHLT MARKIEREN</button>

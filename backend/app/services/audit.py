@@ -16,6 +16,7 @@ from app.models.aufstellung import Aufstellung, AufstellungAnlage
 from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import AuditLog, Invoice
+from app.services.zahlungsdatum_durchlass import GRUND_FELD, grund_fuer
 
 
 def to_jsonable(value):
@@ -101,6 +102,11 @@ def _before_flush(session: Session, flush_context, instances) -> None:
         if isinstance(obj, AUDITED_MODELS) and session.is_modified(obj, include_collections=False):
             old, new = _changed_columns(obj, session)
             if new:
+                grund = grund_fuer(session, obj.id) if isinstance(obj, Invoice) else None
+                if grund and "bezahlt_am" in new:
+                    # Korrektur des Zahlungsdatums (#278): der Grund gehoert in
+                    # dieselbe Zeile wie alter und neuer Wert.
+                    new[GRUND_FELD] = grund
                 pending.append(("update", obj, old, new))
     for obj in session.deleted:
         if isinstance(obj, AUDITED_MODELS):
