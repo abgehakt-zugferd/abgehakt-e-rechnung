@@ -16,10 +16,13 @@
         (function () {
             var t = 'abgehakt';
             try { t = localStorage.getItem('abgehakt-theme') || 'abgehakt'; } catch (e) {}
-            if (t !== 'pixel' && t !== 'abgehakt') { t = 'abgehakt'; }
+            if (t !== 'pixel' && t !== 'abgehakt' && t !== 'terminal') { t = 'abgehakt'; }
             document.documentElement.setAttribute('data-theme', t);
         })();
     </script>
+
+    <!-- Token des Terminal-Themes liegen in eigener Datei, lokal aus dem Image. -->
+    <link rel="stylesheet" href="/static/css/terminal.css">
 
     <style>
         /* ============================================================
@@ -76,11 +79,32 @@
             src: url(/static/fonts/staatliches-latin-ext-400-normal.woff2) format('woff2');
             unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
         }
+        @font-face {
+            font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 400; font-display: swap;
+            src: url(/static/fonts/ibm-plex-mono-latin-400-normal.woff2) format('woff2');
+            unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+        }
+        @font-face {
+            font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 600; font-display: swap;
+            src: url(/static/fonts/ibm-plex-mono-latin-600-normal.woff2) format('woff2');
+            unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+        }
+        @font-face {
+            font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 400; font-display: swap;
+            src: url(/static/fonts/ibm-plex-mono-latin-ext-400-normal.woff2) format('woff2');
+            unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+        }
+        @font-face {
+            font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 600; font-display: swap;
+            src: url(/static/fonts/ibm-plex-mono-latin-ext-600-normal.woff2) format('woff2');
+            unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+        }
 
         /* ============================================================
-           Zwei umschaltbare Themes über html[data-theme]:
+           Drei umschaltbare Themes über html[data-theme]:
              • abgehakt  – Behördenformular-Design (Default, Homepage-Look)
              • pixel     – Pixel-RPG-Theme
+             • terminal  – Terminal-Theme (Pastell dunkel, Token in terminal.css)
            Alle Komponenten-Regeln lesen Tokens (Farben, Fonts, Schatten,
            Größen). Ein Theme = ein :root-Token-Satz. Rein struktuelle
            Pixel-Effekte (Scanlines, Raster, Ecken-Ticks) sind unter
@@ -192,6 +216,59 @@
             --glow-h1:            none;
         }
 
+        /* ---------- TERMINAL THEME (Pastell dunkel; --t-*-Token kommen aus terminal.css) ---------- */
+        html[data-theme="terminal"] {
+            --void:        var(--t-grund);
+            --panel:       var(--t-tafel);
+            --surface:     var(--t-flaeche);
+            --surface2:    var(--t-flaeche);
+            --border:      var(--t-linie);
+            --border-hi:   var(--t-rahmen);
+            --gold:        var(--t-akzent);
+            --gold-hi:     var(--t-akzent);
+            --gold-dim:    color-mix(in srgb, var(--t-akzent) 45%, transparent);
+            --gold-glow:   color-mix(in srgb, var(--t-akzent) 10%, transparent);
+            --cyan:        var(--t-info);
+            --cyan-dim:    color-mix(in srgb, var(--t-info) 14%, transparent);
+            --pink:        var(--t-fehler);
+            --green:       var(--t-ok);
+            --green-hi:    var(--t-ok);
+            --amber:       var(--t-warnung);
+            --red:         var(--t-fehler);
+            --text:        var(--t-text);
+            --text-hi:     var(--t-text-hell);
+            --text-dim:    var(--t-text-matt);
+            --text-faint:  var(--t-text-matt);
+
+            --font-display: var(--t-schrift-anzeige);
+            --font-body:    var(--t-schrift-text);
+            --font-label:   var(--t-schrift-anzeige);
+            --font-num:     var(--t-schrift-text);
+            --body-size:    var(--t-groesse-basis);
+
+            --fs-h1: var(--t-groesse-h1);  --fs-h2: var(--t-groesse-h2);  --fs-h3: var(--t-groesse-h3);
+            --fs-3xl: 30px;  --fs-2xl: 24px;  --fs-lg: 20px;
+            --fs-btn: 15px;  --fs-label: 15px;  --fs-badge: 15px;
+            --fs-nav: 17px;  --fs-table: var(--t-groesse-tabelle);
+            --fs-wordmark: 32px;  --fs-wordmark-sub: 15px;
+            --fs-kpi: var(--t-groesse-zahl-gross);  --fs-kpi-einheit: 20px;
+            --fs-mikro: var(--t-groesse-klein);  --fs-klein: var(--t-groesse-klein);
+            --fs-text: var(--t-groesse-basis);  --fs-gross: 20px;
+            --lh-head: 1.2;  --lh-ctl: 1.4;
+            --ls-label: 0.06em;
+
+            --card-border-width: 1.5px;
+            --input-bg: var(--t-tafel);
+            --shadow-card:        none;
+            --shadow-card-hover:  none;
+            --shadow-btn:         none;
+            --shadow-btn-hover:   none;
+            --shadow-btn-active:  none;
+            --shadow-sidebar:     none;
+            --shadow-nav-active:  none;
+            --glow-h1:            0 0 8px color-mix(in srgb, var(--t-akzent) 40%, transparent);
+        }
+
         /* Abgehakt: inline gesetzte Pixel-Fonts einzelner Seiten
            neutralisieren, ohne jede Seite anzufassen (Feinschliff später). */
         /* Beschriftungen, Knopftexte und Aufklapper trugen inline 'Press Start 2P'.
@@ -211,6 +288,14 @@
         html[data-theme="abgehakt"] [style*="text-shadow"] { text-shadow: none !important; }
         html[data-theme="abgehakt"] [style*="letter-spacing:2px"],
         html[data-theme="abgehakt"] [style*="letter-spacing:3px"] { letter-spacing: 0.06em !important; }
+
+        /* Terminal: dieselben vier Gruppen — inline gesetzte Pixel-Schriften,
+           Schatten und Laufweiten greifen auch auf dunklem Grund nicht. */
+        html[data-theme="terminal"] [style*="Press Start 2P"] { font-family: var(--font-label) !important; }
+        html[data-theme="terminal"] [style*="VT323"]          { font-family: var(--font-body) !important; }
+        html[data-theme="terminal"] [style*="text-shadow"] { text-shadow: none !important; }
+        html[data-theme="terminal"] [style*="letter-spacing:2px"],
+        html[data-theme="terminal"] [style*="letter-spacing:3px"] { letter-spacing: 0.06em !important; }
 
         /* Kennzahl-Kachel — aufgebaut wie ein Formularfeld: Beschriftung oben,
            Eintrag darunter in Schreibmaschinenziffern. Die Ziffern stehen in
@@ -238,8 +323,6 @@
             color: var(--text-dim);
             margin-left: 0.2em;
         }
-        html[data-theme="retro"] .kpi__wert { color: var(--gold); }
-
         [x-cloak] { display: none !important; }
         *, *::before, *::after { box-sizing: border-box; }
 
@@ -821,22 +904,24 @@
                 {% endif %}
             </div>
 
-            <!-- Theme umschalten (Pixel ⇄ Abgehakt), Auswahl bleibt gespeichert -->
+            <!-- Theme umschalten (Abgehakt → Pixel → Terminal → Abgehakt), Auswahl bleibt gespeichert -->
             <button type="button" class="theme-toggle" onclick="
                 (function () {
                     var h = document.documentElement;
-                    var next = h.getAttribute('data-theme') === 'pixel' ? 'abgehakt' : 'pixel';
+                    var reihe = ['abgehakt', 'pixel', 'terminal'];
+                    var i = reihe.indexOf(h.getAttribute('data-theme'));
+                    var next = reihe[(i + 1) % reihe.length];
                     h.setAttribute('data-theme', next);
                     try { localStorage.setItem('abgehakt-theme', next); } catch (e) {}
                     var l = document.getElementById('theme-toggle-label');
-                    if (l) l.textContent = (next === 'pixel' ? 'Pixel' : 'Abgehakt');
+                    if (l) l.textContent = ({ abgehakt: 'Abgehakt', pixel: 'Pixel', terminal: 'Terminal' })[next];
                 })();
             ">Design: <span id="theme-toggle-label">Abgehakt</span> ⇄</button>
             <script>
                 (function () {
                     var t = document.documentElement.getAttribute('data-theme');
                     var l = document.getElementById('theme-toggle-label');
-                    if (l) l.textContent = (t === 'pixel' ? 'Pixel' : 'Abgehakt');
+                    if (l) l.textContent = ({ abgehakt: 'Abgehakt', pixel: 'Pixel', terminal: 'Terminal' })[t] || 'Abgehakt';
                 })();
             </script>
 

@@ -51,8 +51,8 @@ FREMDE_HOSTS = [
     "cdnjs.cloudflare.com",
 ]
 
-# Die vier Schnitte, die die beiden Themes in `--font-*` benennen.
-FAMILIEN = ["Press Start 2P", "VT323", "Share Tech Mono", "Staatliches"]
+# Die Schnitte, die die Themes in `--font-*` benennen.
+FAMILIEN = ["Press Start 2P", "VT323", "Share Tech Mono", "Staatliches", "IBM Plex Mono"]
 
 
 def _alle_vorlagen():
