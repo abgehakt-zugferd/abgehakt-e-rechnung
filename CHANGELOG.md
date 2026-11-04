@@ -7,6 +7,20 @@ Klammern.
 
 ## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.0.1)
 
+### Drittes Design: Terminal
+
+Der Knopf „Design“ unten in der Seitenleiste schaltet jetzt reihum zwischen
+Abgehakt, Pixel und Terminal. Terminal ist ein dunkles Design mit gedämpften
+Pastellfarben auf Schiefergrund. Lavendel steht für Text, Mint für Akzente und
+Bezahltes, Pfirsich für Offenes, Rosé für Fehler. Fließtext, Beträge und Beschriftungen
+stehen in IBM Plex Mono, Überschriften und Kennzahlen in VT323. Keine Schrift ist
+kleiner als 15 px, jede Textfarbe erreicht auf jeder Fläche einen Kontrast von
+mindestens 6:1 (WCAG verlangt 4,5:1). Der Gesamtbetrag ist in der Rechnungsansicht die größte Zahl.
+
+Die Auswahl gilt je Browser und bleibt gespeichert. Vorgabe bleibt Abgehakt, PDF und
+E-Rechnung sehen in jedem Design gleich aus. Beide Schriften liegen im Image, nichts
+wird aus dem Netz nachgeladen.
+
 ### Reverse Charge an einen Kunden in Deutschland mit ausländischer USt-IdNr. sperrt das Finalisieren (#275)
 
 Ein Entwurf mit Steuerkategorie AE, dessen Kunde das Land DE und eine USt-IdNr. mit
