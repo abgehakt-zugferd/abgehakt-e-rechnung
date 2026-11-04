@@ -480,3 +480,44 @@ def test_terminal_keine_feste_schrift_unter_15(terminal_css):
         f"{len(luecken)} font-size-Fundstellen unter 15px ohne Override in terminal.css: "
         + "; ".join(f"{f['ort']} ({f['decl']} = {f['px']}px)" for f in luecken)
     )
+
+
+# ---------------------------------------------------------------------------
+# Zustandslampen: jede .t-lampe--<name>-Regel in terminal.css muss eine
+# Zustandfarbe tragen — Schmuckfarben wie --t-linie reichen auf --t-grund
+# nicht (Kontrast dort nur ~1,7:1, Pflicht mindestens 4,5:1).
+# ---------------------------------------------------------------------------
+
+_ERLAUBTE_LAMPENFARBEN = [
+    "var(--t-ok)",
+    "var(--t-warnung)",
+    "var(--t-fehler)",
+    "var(--t-info)",
+    "var(--t-text-matt)",
+]
+_ERWARTETE_LAMPEN = {"ok", "warnung", "fehler", "info", "aus"}
+
+
+def _lampen_farben(terminal_css: str):
+    """Name -> Farbe jeder terminal-gescopten .t-lampe--<name>-Regel."""
+    lampen = {}
+    for _, sel, body in _css_regeln(terminal_css):
+        for teil in sel.split(","):
+            m = re.fullmatch(r'html\[data-theme="terminal"\]\s+\.t-lampe--([a-z]+)', teil.strip())
+            if m:
+                farbe = re.search(r"color\s*:\s*([^;]+);", body)
+                lampen[m.group(1)] = farbe.group(1).strip() if farbe else ""
+    return lampen
+
+
+@pytest.mark.parametrize("name", sorted(_ERWARTETE_LAMPEN))
+def test_lampen_farben_sind_zustandsfarben(terminal_css, name):
+    """Je Lampe ein Parametrisierungsfall: die Menge der .t-lampe--<name>-Regeln
+    in terminal.css ist genau {ok, warnung, fehler, info, aus}, und jede Farbe
+    ist eine der Zustandsfarben (--t-ok/--t-warnung/--t-fehler/--t-info/--t-text-matt)."""
+    lampen = _lampen_farben(terminal_css)
+    assert set(lampen) == _ERWARTETE_LAMPEN, \
+        f"gefundene Lampen {sorted(lampen)} != {sorted(_ERWARTETE_LAMPEN)}"
+    farbe = lampen.get(name)
+    assert farbe in _ERLAUBTE_LAMPENFARBEN, \
+        f".t-lampe--{name} traegt {farbe!r} — keine Zustandsfarbe aus {_ERLAUBTE_LAMPENFARBEN}"
