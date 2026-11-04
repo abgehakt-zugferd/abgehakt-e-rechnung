@@ -1035,9 +1035,11 @@ geprueft (`app/services/ust_id_pruefung.py`, Endpoint in `VIES_ENDPOINT`). **Kei
 Hintergrundabruf und kein Abruf beim Speichern**; nur nach Klick auf „Jetzt bei VIES
 pruefen" und Bestaetigung im **Modal-Dialog** auf derselben Seite (`partials/
 ust_id_vies_dialog.html`, ausserhalb des Speicher-Formulars; Button `js-vies-consent-open`
-in `ust_id_vies_status.html` ist `type="button"`). POST mit `bestaetigt=1` an
-`/customers/{id}/ust-id-pruefen` bzw. Einstellungen; Router lesen USt-IdNr. und Name aus
-den Formularfeldern (`eingaben_fuer_pruefung`).
+in `ust_id_vies_status.html` ist `type="button"`). Der Dialog sendet das
+Hauptformular (JS setzt `bestaetigt=1` und `danach_vies=1`, dann `requestSubmit`) an
+`/customers/{id}/bearbeiten` bzw. `/settings/firma` (#274): erst speichern mit allen
+Formularpruefungen, dann VIES mit der gespeicherten USt-IdNr. und dem gespeicherten Namen.
+Ohne `bestaetigt=1` bei `danach_vies=1` gibt es 400 und nichts wird gespeichert.
 
 Die Vorlage `ust_id_vies/consent.html` ist eine eigenstaendige Einwilligungsseite (gleicher
 Text); der produktive Weg ist der Dialog. Nutzer-Doku: `docs/ANWENDUNG.md` (Abschnitt

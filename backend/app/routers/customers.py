@@ -13,7 +13,6 @@ from app.services.customer_number import next_customer_number
 from app.services import empfaenger
 from app.services import kundenformular as kform
 from app.services.ust_id_pruefung import (
-    eingaben_fuer_pruefung,
     normalisiere_ust_id,
     pruefe_ust_id_format,
     pruefe_ust_id_vies,
@@ -209,7 +208,8 @@ def edit_customer_form(customer_id: uuid.UUID, request: Request, db: Session = D
     )
 
 
-def _kunde_aktualisieren(request, db, customer, *, number, bank, stamm, steuer, vorgaben, vat_id):
+def _kunde_aktualisieren(request, db, customer, *, number, bank, stamm, steuer, vorgaben, vat_id,
+                         danach_vies=False):
     bank_felder, bank_fehler = bank
     if bank_fehler:
         return _render_form(request, customer, "", bank_felder, bank_fehler)
@@ -240,7 +240,25 @@ def _kunde_aktualisieren(request, db, customer, *, number, bank, stamm, steuer, 
         db.refresh(customer)
         return _render_form(request, customer, "", {},
                             f"Kundennummer bereits vergeben: {number}")
+    if danach_vies:
+        return _vies_nach_speichern(db, customer)
     return RedirectResponse(url="/customers", status_code=303)
+
+
+def _vies_nach_speichern(db, customer):
+    """Erst nach erfolgreichem Speichern und bestaetigter Einwilligung (#274)."""
+    ziel = f"/customers/{customer.id}/bearbeiten"
+    if not customer.vat_id:
+        return RedirectResponse(
+            url=f"{ziel}?vies_error={quote('Keine USt-IdNr. zum Pruefen.')}", status_code=303,
+        )
+    company = _get_company(db)
+    ergebnis = pruefe_ust_id_vies(
+        customer.vat_id, customer.name, company.vat_id if company else None,
+    )
+    ust_speichern(customer, ergebnis)
+    db.commit()
+    return RedirectResponse(url=ziel, status_code=303)
 
 
 @router.post("/{customer_id}/bearbeiten")
@@ -257,10 +275,13 @@ def update_customer(
     auftrag_steuer: str = Form(""), kopftext: str = Form(""),
     fusstext: str = Form(""), zahlungshinweis: str = Form(""),
     belegsprache_vorgabe: str = Form(""),
+    danach_vies: str = Form(""), bestaetigt: str = Form(""),
 ):
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(404, "Kunde nicht gefunden")
+    if danach_vies == "1" and bestaetigt != "1":
+        raise HTTPException(400, "Einwilligung erforderlich")
     stamm = dict(
         name=name, address_line1=address_line1, address_line2=address_line2,
         zip_code=zip_code, city=city, country=country, email=email,
@@ -279,43 +300,8 @@ def update_customer(
         number=customer_number.strip() or customer.customer_number,
         bank=kform.bank_felder(bank_iban, bank_bic, bank_name),
         stamm=stamm, steuer=steuer, vorgaben=vorgaben, vat_id=vat_id,
+        danach_vies=danach_vies == "1",
     )
-
-
-@router.post("/{customer_id}/ust-id-pruefen")
-def pruefe_customer_ust_id(
-    request: Request,
-    customer_id: uuid.UUID,
-    bestaetigt: str = Form(default=""),
-    check_vat_id: str = Form(default=""),
-    check_name: str = Form(default=""),
-    db: Session = Depends(get_db),
-):
-    customer = db.query(Customer).filter(Customer.id == customer_id).first()
-    if not customer:
-        raise HTTPException(404, "Kunde nicht gefunden")
-    if bestaetigt != "1":
-        raise HTTPException(400, "Einwilligung erforderlich")
-    vat, name, fehler = eingaben_fuer_pruefung(
-        check_vat_id, customer.vat_id, check_name, customer.name,
-    )
-    if fehler:
-        return RedirectResponse(
-            url=f"/customers/{customer_id}/bearbeiten?vies_error={quote(fehler)}",
-            status_code=303,
-        )
-    if vat != customer.vat_id:
-        ust_zuruecksetzen(customer)
-        customer.vat_id = vat
-    company = _get_company(db)
-    ergebnis = pruefe_ust_id_vies(
-        vat,
-        name,
-        company.vat_id if company else None,
-    )
-    ust_speichern(customer, ergebnis)
-    db.commit()
-    return RedirectResponse(url=f"/customers/{customer_id}/bearbeiten", status_code=303)
 
 
 @router.post("/{customer_id}/loeschen")

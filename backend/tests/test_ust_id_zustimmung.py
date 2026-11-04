@@ -101,12 +101,6 @@ def test_speichern_ruft_vies_nicht_auf(client, pg_session, monkeypatch):
     assert kunde.vat_id_checked_at is None
 
 
-def test_post_ohne_einwilligung_wird_abgelehnt(client, pg_session):
-    kunde = _kunde_mit_ust(pg_session)
-    r = client.post(f"/customers/{kunde.id}/ust-id-pruefen")
-    assert r.status_code == 400
-
-
 def test_knoepfe_im_dialog_sind_als_knopf_erkennbar(client, pg_session):
     kunde = _kunde_mit_ust(pg_session)
     inhalt = _bearbeiten_seite(client, kunde.id)
@@ -116,34 +110,11 @@ def test_knoepfe_im_dialog_sind_als_knopf_erkennbar(client, pg_session):
         assert "btn-" in k
 
 
-def test_mit_bestaetigung_wird_vies_gerufen(client, pg_session, monkeypatch):
+
+
+def test_dialog_sendet_das_hauptformular_statt_eines_eigenen_posts(client, pg_session):
+    """#274: der Dialog nimmt das Kundenformular mit, sonst gehen Eingaben verloren."""
     kunde = _kunde_mit_ust(pg_session)
-    gesehen = {}
-
-    def fake_vies(ust_id, trader_name, requester=None, **kw):
-        gesehen["ust_id"] = ust_id
-        gesehen["trader_name"] = trader_name
-        from app.services.ust_id_pruefung import UstIdPruefungErgebnis
-        return UstIdPruefungErgebnis(
-            verfuegbar=True,
-            gueltig=True,
-            registrierter_name="Test",
-            registrierte_adresse=None,
-            name_abgleich="stimmt",
-            fehlercode=None,
-            geprueft_am=datetime.now(timezone.utc),
-        )
-
-    monkeypatch.setattr("app.routers.customers.pruefe_ust_id_vies", fake_vies)
-    r = client.post(
-        f"/customers/{kunde.id}/ust-id-pruefen",
-        data={
-            "bestaetigt": "1",
-            "check_vat_id": UST_DE_PROBE,
-            "check_name": kunde.name,
-        },
-    )
-    assert r.status_code == 303
-    assert gesehen["ust_id"] == UST_DE_PROBE
-    pg_session.refresh(kunde)
-    assert kunde.vat_id_check_valid is True
+    inhalt = _bearbeiten_seite(client, kunde.id)
+    assert 'data-haupt-form="kunde-bearbeiten"' in inhalt
+    assert "ust-id-pruefen" not in client.get(f"/customers/{kunde.id}/bearbeiten").text
