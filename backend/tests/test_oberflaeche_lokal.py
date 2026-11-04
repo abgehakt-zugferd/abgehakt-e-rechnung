@@ -52,7 +52,7 @@ FREMDE_HOSTS = [
 ]
 
 # Die Schnitte, die die Themes in `--font-*` benennen.
-FAMILIEN = ["Press Start 2P", "VT323", "Share Tech Mono", "Staatliches", "IBM Plex Mono"]
+FAMILIEN = ["Press Start 2P", "VT323", "Share Tech Mono", "Staatliches", "IBM Plex Mono", "Saira Condensed"]
 
 
 def _alle_vorlagen():

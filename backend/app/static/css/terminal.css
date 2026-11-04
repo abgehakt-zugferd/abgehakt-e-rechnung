@@ -15,8 +15,10 @@ html[data-theme="terminal"] {
     --t-info:#9fd3ff;
     --t-rahmen:#7a72b0;
     --t-linie:#3a3a55;
+    --t-chrom:#c8ced1;
     --t-schrift-anzeige:'VT323',monospace;
     --t-schrift-text:'IBM Plex Mono',monospace;
+    --t-schrift-marke:'Saira Condensed', sans-serif;
     --t-groesse-basis:18px;
     --t-groesse-tabelle:17px;
     --t-groesse-klein:15px;
@@ -24,6 +26,7 @@ html[data-theme="terminal"] {
     --t-groesse-h2:30px;
     --t-groesse-h3:24px;
     --t-groesse-zahl-gross:48px;
+    --t-groesse-kpi:58px;
 }
 
 /* Zustandslampen: Farbe des Zustands; die Form (● ▲ ■ ◆ ○) steht als Text im Markup.
@@ -35,8 +38,23 @@ html[data-theme="terminal"] .t-lampe--fehler { color: var(--t-fehler); }
 html[data-theme="terminal"] .t-lampe--info { color: var(--t-info); }
 html[data-theme="terminal"] .t-lampe--aus { color: var(--t-text-matt); }
 
-/* Primärknopf: dunkle Schrift auf Akzent-Grund (Kontrast auf der hellen Akzentfarbe). */
-html[data-theme="terminal"] .btn-primary { color: var(--t-auf-akzent) !important; }
+/* Primärknopf: senkrechter Verlauf aus der Akzentfarbe (hell oben, satt in der
+   Mitte, leicht abgedunkelt unten), dunkle Schrift darauf, Rundung 8px. */
+html[data-theme="terminal"] .btn-primary {
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--t-akzent) 65%, white) 0%,
+        var(--t-akzent) 55%,
+        color-mix(in srgb, var(--t-akzent) 72%, black) 100%) !important;
+    color: var(--t-auf-akzent) !important;
+    border-color: color-mix(in srgb, var(--t-akzent) 80%, white) !important;
+    border-radius: 8px !important;
+}
+
+/* Sekundärknopf: Rundung 8px, Rahmen in der Textfarbe. */
+html[data-theme="terminal"] .btn-secondary {
+    border-radius: 8px !important;
+    border-color: var(--t-text) !important;
+}
 
 /* Fokus-Umriss auf Knöpfen und Feldern. */
 html[data-theme="terminal"] button:focus-visible,
@@ -78,7 +96,11 @@ html[data-theme="terminal"] pre {
     font-size: var(--t-groesse-klein) !important;
 }
 
-html[data-theme="terminal"] .kpi__wert { font-family: var(--t-schrift-anzeige) !important; }
+html[data-theme="terminal"] .kpi__wert {
+    font-family: var(--t-schrift-anzeige) !important;
+    font-size: var(--t-groesse-kpi) !important;
+    color: var(--t-text-hell) !important;
+}
 
 /* Tabellen (z. B. Belegliste): Zellen in Tabellengröße mit kompakteren
    Abständen, Badges ohne Wortumbruch — sonst schneidet der overflow-Container
@@ -98,14 +120,16 @@ html[data-theme="terminal"] .summe__gesamt {
     font-variant-numeric: tabular-nums;
 }
 
-/* Kartenüberschriften: preflight setzt h1-h6 auf font-size:inherit — wirksam ist
-   die geerbte Körpergröße (18px, in VT323 optisch ~15px). h2 in Karten unter 24px
-   nehmen IBM Plex Mono 600 in --t-groesse-klein und --t-akzent. h1 bleibt VT323. */
+/* Kartenüberschriften: Saira Condensed 800 kursiv in --t-groesse-h2 (30px),
+   hell wie --t-text-hell. Die Seitenüberschrift (main h1) bekommt die Marke
+   mit Chromverlauf — siehe main h1 weiter unten. */
 html[data-theme="terminal"] .card h2 {
-    font-family: var(--t-schrift-text) !important;
-    font-weight: 600 !important;
-    font-size: var(--t-groesse-klein) !important;
-    color: var(--t-akzent) !important;
+    font-family: var(--t-schrift-marke) !important;
+    font-weight: 800 !important;
+    font-style: italic !important;
+    font-size: var(--t-groesse-h2) !important;
+    color: var(--t-text-hell) !important;
+    letter-spacing: 1px !important;
 }
 
 /* Belegliste: Aktions-Link (letzte Spalte) in Plex in Tabellengröße; die
@@ -123,3 +147,213 @@ html[data-theme="terminal"] .overflow-x-auto table td:nth-last-child(2) {
 /* Storno-Badge: als Flex-Item verschwindet das Leerzeichen vor der Belegnummer —
    der Abstand kommt per margin-left am Link, nicht über den Text. */
 html[data-theme="terminal"] .badge[data-storniert-durch] a { margin-left: 6px; }
+
+/* ---------------------------------------------------------------------------
+   Runde 2: Stahlleiste, Glas, Bühne, Marke, Zustandsformen, Kennzahlen.
+   Alles nur unter html[data-theme="terminal"]; kein Raster (keine Scanlines).
+   --------------------------------------------------------------------------- */
+
+/* A2: Kopfleiste oben — im Terminal-Theme die Stahlleiste über die ganze Breite.
+   Sie trägt lg:hidden (nur schmales Fenster), das Terminal-Theme zeigt sie
+   auf dem Desktop garantiert an. */
+html[data-theme="terminal"] header[data-kopfleiste].lg\:hidden { display: flex !important; }
+
+html[data-theme="terminal"] header[data-kopfleiste] {
+    position: relative !important;
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--t-chrom) 88%, white) 0%,
+        color-mix(in srgb, var(--t-chrom) 60%, black) 18%,
+        color-mix(in srgb, var(--t-chrom) 32%, black) 48%,
+        color-mix(in srgb, var(--t-chrom) 18%, black) 52%,
+        color-mix(in srgb, var(--t-chrom) 48%, black) 80%,
+        color-mix(in srgb, var(--t-chrom) 80%, white) 100%) !important;
+    border-bottom: none !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 6px 18px rgba(0,0,0,0.6) !important;
+}
+
+/* A2: je eine Niete links und rechts in der Stahlleiste (als Flex-Iteme außen). */
+html[data-theme="terminal"] header[data-kopfleiste]::before,
+html[data-theme="terminal"] header[data-kopfleiste]::after {
+    content: '';
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: radial-gradient(circle at 35% 30%,
+        rgba(255,255,255,1) 0%,
+        color-mix(in srgb, var(--t-chrom) 75%, white) 35%,
+        color-mix(in srgb, var(--t-chrom) 40%, black) 100%);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
+/* A2: die Wortmarke in der Leiste trägt den Chromverlauf in der Schrift —
+   Saira Condensed 800 kursiv, background-clip:text. */
+html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke] {
+    font-family: var(--t-schrift-marke) !important;
+    font-weight: 800 !important;
+    font-style: italic !important;
+    font-size: 48px !important;
+    line-height: 0.95 !important;
+    letter-spacing: 1px !important;
+    text-shadow: none !important;
+    background: linear-gradient(180deg,
+        rgba(255,255,255,1) 0%,
+        var(--t-chrom) 30%,
+        color-mix(in srgb, var(--t-chrom) 55%, black) 52%,
+        color-mix(in srgb, var(--t-chrom) 22%, black) 56%,
+        var(--t-chrom) 80%,
+        color-mix(in srgb, var(--t-warnung) 55%, white) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent !important;
+}
+html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke] span { color: inherit !important; }
+
+/* A3: die Tagzeile steht als Text in der Stahlleiste, dunkel wie der Stahl. */
+html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke]::after {
+    content: 'RECHNUNGEN · GOBD · DATEV';
+    font-family: var(--t-schrift-text) !important;
+    font-style: normal !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    letter-spacing: 3px !important;
+    color: var(--t-grund) !important;
+    background: none !important;
+    -webkit-background-clip: border-box !important;
+    background-clip: border-box !important;
+    text-shadow: none !important;
+    margin-left: 16px;
+}
+
+/* A3: der Wortmarken-Block oben in der Seitenleiste ist im Terminal-Theme aus. */
+html[data-theme="terminal"] [data-seitenleiste-marke] { display: none !important; }
+
+/* A4: Seitentitel — erste Überschrift im Hauptbereich — in Saira Condensed 800
+   kursiv, 46px, Chromverlauf in der Schrift. h1 außerhalb von main bleibt VT323. */
+html[data-theme="terminal"] main h1 {
+    font-family: var(--t-schrift-marke) !important;
+    font-weight: 800 !important;
+    font-style: italic !important;
+    font-size: 46px !important;
+    line-height: 1 !important;
+    letter-spacing: 1px !important;
+    text-shadow: none !important;
+    background: linear-gradient(180deg,
+        rgba(255,255,255,1) 0%,
+        var(--t-chrom) 30%,
+        color-mix(in srgb, var(--t-chrom) 55%, black) 52%,
+        color-mix(in srgb, var(--t-chrom) 22%, black) 56%,
+        var(--t-chrom) 80%,
+        color-mix(in srgb, var(--t-warnung) 55%, white) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent !important;
+}
+
+/* A5: Glas-Karten. base.html belegt .card::before/::after nur unter pixel —
+   hier sind die Pseudoklassen frei. Kein Hex außer Weiß/Schwarz-Transparenz. */
+html[data-theme="terminal"] .card {
+    border-radius: 14px !important;
+    background: linear-gradient(160deg,
+        color-mix(in srgb, var(--t-rahmen) 55%, transparent) 0%,
+        color-mix(in srgb, var(--t-tafel) 85%, transparent) 60%) !important;
+    border: 1px solid color-mix(in srgb, var(--t-chrom) 35%, transparent) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12),
+        inset 0 0 40px rgba(0,0,0,0.6),
+        0 10px 30px rgba(0,0,0,0.5) !important;
+}
+html[data-theme="terminal"] .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 14px;
+    pointer-events: none;
+    background: linear-gradient(115deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 35%);
+}
+
+/* A6: Bühne — Lichtkegel von oben (Rosé höchstens 18%) über radialem Verlauf
+   aus --t-flaeche, --t-tafel und --t-grund. Fließtext ohne Sperrung. */
+html[data-theme="terminal"] body {
+    background-image:
+        radial-gradient(ellipse 70% 45% at 50% 0%, color-mix(in srgb, var(--t-fehler) 18%, transparent) 0%, transparent 70%),
+        radial-gradient(ellipse at 50% 30%, var(--t-flaeche) 0%, var(--t-tafel) 60%, var(--t-grund) 100%);
+    letter-spacing: normal;
+}
+
+/* A7: aktiver Menüpunkt gefüllt in Mint. */
+html[data-theme="terminal"] .nav-link.active {
+    background: var(--t-akzent) !important;
+    color: var(--t-auf-akzent) !important;
+    border-color: var(--t-akzent) !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+}
+
+/* A8: Badges ohne Kasten — weder Rahmen noch Hintergrund; die Form steht als
+   ::before-content davor, die Farbe in der Zustandsfarbe. Storno ist kein Fehler. */
+html[data-theme="terminal"] .badge {
+    border: none !important;
+    background: none !important;
+}
+html[data-theme="terminal"] .badge-paid,
+html[data-theme="terminal"] .badge-sent { color: var(--t-ok) !important; }
+html[data-theme="terminal"] .badge-issued,
+html[data-theme="terminal"] .badge-offen { color: var(--t-warnung) !important; }
+html[data-theme="terminal"] .badge-ueberfaellig { color: var(--t-fehler) !important; }
+html[data-theme="terminal"] .badge-draft { color: var(--t-info) !important; }
+html[data-theme="terminal"] .badge-cancelled,
+html[data-theme="terminal"] .badge-discarded { color: var(--t-text-matt) !important; }
+
+html[data-theme="terminal"] .badge-paid::before,
+html[data-theme="terminal"] .badge-sent::before { content: '●'; margin-right: 6px; }
+html[data-theme="terminal"] .badge-issued::before,
+html[data-theme="terminal"] .badge-offen::before { content: '▲'; margin-right: 6px; }
+html[data-theme="terminal"] .badge-ueberfaellig::before { content: '■'; margin-right: 6px; }
+html[data-theme="terminal"] .badge-draft::before { content: '◆'; margin-right: 6px; }
+html[data-theme="terminal"] .badge-cancelled::before,
+html[data-theme="terminal"] .badge-discarded::before { content: '○'; margin-right: 6px; }
+
+/* A9: Fließtext und Tabellenzellen in --t-text; Labels in --t-text-matt mit
+   2px Laufweite; kleine gold-farbene Überschriften werden matt. */
+html[data-theme="terminal"] table td { color: var(--t-text); }
+html[data-theme="terminal"] .label,
+html[data-theme="terminal"] .kpi__beschriftung,
+html[data-theme="terminal"] .table-header {
+    color: var(--t-text-matt) !important;
+    letter-spacing: 2px !important;
+}
+html[data-theme="terminal"] [style*="color:var(--gold)"][style*="var(--fs-klein)"],
+html[data-theme="terminal"] [style*="color:var(--gold)"][style*="var(--fs-mikro)"] {
+    color: var(--t-text-matt) !important;
+}
+html[data-theme="terminal"] .mitteilung__marke { color: var(--t-text-matt) !important; }
+
+/* A9: Hinweiskasten (z. B. „n gestellte Rechnungen ohne Zustellung“) in --t-text. */
+html[data-theme="terminal"] [data-kpi="hinweis-versand"] { color: var(--t-text) !important; }
+
+/* A10: farbige Symbolkästen rechts in den Kennzahl-Karten ausblenden. */
+html[data-theme="terminal"] .card div[style*="width:40px"][style*="height:40px"] { display: none !important; }
+
+/* A10: Kachel mit Zustand — Zahl in der Zustandsfarbe, Rahmen derselben Farbe
+   mit 70% Deckkraft. (Nach der allgemeinen .kpi__wert-Regel, gewinnt bei !important.) */
+html[data-theme="terminal"] [data-kpi="offen"] .kpi__wert { color: var(--t-warnung) !important; }
+html[data-theme="terminal"] [data-kpi="ueberfaellig"] .kpi__wert { color: var(--t-fehler) !important; }
+html[data-theme="terminal"] .card[data-kpi="offen"] {
+    border-color: color-mix(in srgb, var(--t-warnung) 70%, transparent) !important;
+}
+html[data-theme="terminal"] .card[data-kpi="ueberfaellig"] {
+    border-color: color-mix(in srgb, var(--t-fehler) 70%, transparent) !important;
+}
+
+/* A11: Tabellen — Kopf mit 1px-Unterlinie in Chrom 35%, Zeilenlinien in
+   --t-rahmen 40%, Beträge rechtsbündig mit tabular-nums in --t-text-hell. */
+html[data-theme="terminal"] table th {
+    border-bottom: 1px solid color-mix(in srgb, var(--t-chrom) 35%, transparent) !important;
+}
+html[data-theme="terminal"] table td {
+    border-bottom: 1px solid color-mix(in srgb, var(--t-rahmen) 40%, transparent) !important;
+}
+html[data-theme="terminal"] table td[style*="text-align:right"] {
+    text-align: right !important;
+    font-variant-numeric: tabular-nums;
+    color: var(--t-text-hell) !important;
+}
