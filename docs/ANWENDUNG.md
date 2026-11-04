@@ -835,21 +835,24 @@ greifen und für bezahlte stillschweigend nicht, also in genau der Hälfte der F
 Regel, die manchmal wirkt, ist schlimmer als keine, weil niemand ihr ansieht, wann sie
 gewirkt hat.
 
-Statt die Zustandsregeln aufzuweichen, bleibt der Schritt bei Ihnen. Solange Sie ihn nicht
-tun, steht die stornierte Rechnung weiterhin als **gestellt** in der Liste. Auf der Übersicht
-zählt sie aber nicht mehr, sobald die Gutschrift gestellt ist: eine gestellte oder bezahlte
-Gutschrift nimmt ihr Original aus den offenen und aus den überfälligen Forderungen
-(services/storno_wirkung.py, `WIRKSAM_STORNIERT`). Liste und Kennzahlen können also
-auseinanderfallen, und das ist Absicht: die Liste zeigt den Beleg, die Kennzahlen zeigen das
-Geld.
+Statt die Zustandsregeln aufzuweichen, bleibt der Status des Originals, wie er ist. Sichtbar
+wird die Stornierung trotzdem: sobald die Gutschrift gestellt oder bezahlt ist, zeigen
+Belegansicht und Liste am Original **storniert durch** mit der Nummer der Gutschrift als
+Link. Das ist abgeleitet, nicht gesetzt, nach derselben Regel wie auf der Übersicht
+(services/storno_wirkung.py, `WIRKSAM_STORNIERT`): eine gestellte oder bezahlte Gutschrift
+nimmt ihr Original aus den offenen und aus den überfälligen Forderungen. Der Zahlungsstand
+bleibt ein eigenes Feld, eine bezahlte und stornierte Rechnung zeigt beides. Den Knopf
+**ALS STORNIERT MARKIEREN** gibt es dann nicht mehr. Ihn brauchen Sie nur noch für den
+Fall ohne Stornobeleg, etwa wenn ein Beleg nur im Status geführt werden soll. Ein
+Stornobeleg, der noch Entwurf ist, ändert nichts an der Anzeige.
 
 ### Der Sonderfall: die Rechnung war schon bezahlt
 
 Eine bezahlte Rechnung lässt sich stornieren, ihr Status bleibt danach aber auf **bezahlt**
 stehen. Aus dem Endzustand bezahlt führt kein Übergang mehr heraus. Die Gutschrift ist der
 Beleg für die Aufhebung, und die Buchhaltung liest die Kombination aus beiden Belegen
-richtig. Wenn Sie in der Liste dennoch sehen wollen, dass hier etwas rückgängig gemacht
-wurde: die Gutschrift steht direkt darunter und verweist auf die Nummer des Originals.
+richtig. In Liste und Belegansicht steht am Original zusätzlich **storniert durch**, mit
+Link auf die Gutschrift.
 
 ### Was das Programm nicht kann
 

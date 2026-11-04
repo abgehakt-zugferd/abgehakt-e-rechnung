@@ -29,11 +29,38 @@ _Gutschrift = aliased(Invoice)
 # Sie korreliert fest auf die Basistabelle `Invoice`. Eine Abfrage, deren aeussere
 # Entitaet ein `aliased(Invoice)` ist, bekaeme ein unkorreliertes EXISTS (wahr,
 # sobald irgendeine Gutschrift existiert); dort die Bedingung neu bilden.
-WIRKSAM_STORNIERT = exists().where(
-    _Gutschrift.original_invoice_id == Invoice.id,
+# Die Regel selbst, einmal: eine Gutschrift (oder Storno einer 389) im Status GESTELLT.
+# EXISTS-Bedingung und `stornobelege_zu` bauen beide darauf auf (Issue #269).
+_WIRKSAME_GUTSCHRIFT = (
     belegart_filter(_Gutschrift.invoice_type, "credit_note", "self_billing_storno"),
     _Gutschrift.status.in_(GESTELLT),
 )
+
+WIRKSAM_STORNIERT = exists().where(
+    _Gutschrift.original_invoice_id == Invoice.id,
+    *_WIRKSAME_GUTSCHRIFT,
+)
+
+
+def stornobelege_zu(db: Session, original_ids) -> dict:
+    """{Original-ID: wirksamer Stornobeleg} fuer die angegebenen Originale.
+
+    Eine Abfrage fuer beliebig viele Originale (Liste ohne N+1). Gleiche Regel wie
+    `WIRKSAM_STORNIERT`; bei mehreren wirksamen Stornobelegen gilt der aelteste.
+    Der Status des Originals fliesst nicht ein: die Stornierung ist abgeleitet,
+    nicht gesetzt.
+    """
+    ids = list(original_ids)
+    if not ids:
+        return {}
+    belege = (
+        db.query(_Gutschrift)
+        .filter(_Gutschrift.original_invoice_id.in_(ids), *_WIRKSAME_GUTSCHRIFT)
+        .order_by(_Gutschrift.issue_date.desc(), _Gutschrift.invoice_number.desc())
+        .all()
+    )
+    # absteigend sortiert: der spaeteste Treffer je Original ueberschreibt, der aelteste bleibt
+    return {b.original_invoice_id: b for b in belege}
 
 
 def _topf_filter(original, topf: str | tuple | None):

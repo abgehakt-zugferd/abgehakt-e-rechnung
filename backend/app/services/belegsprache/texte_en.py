@@ -50,6 +50,10 @@ DARSTELLUNG_EN = {
     "storno_bemerkung": "Cancellation of invoice {nummer} dated {datum}.",
     "storno_gutschrift_bezug": "Cancellation of self-billed invoice {nummer} of {datum}.",
     "ersatz_hinweis": "Replaces invoice {nummer} dated {datum}.",
+    "storno_endgueltig": (
+        "This cancellation is final. If it was wrong, issue a new credit note "
+        "for the original credit note {original}."
+    ),
     "hinweis_ae": AE_HINWEIS,
     "hinweis_e": (
         "No VAT charged as the supplier is a small business under "
