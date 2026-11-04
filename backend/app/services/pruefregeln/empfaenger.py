@@ -5,7 +5,10 @@ from app.services.kunde_zuordenbar import Zuordnung, meldung_fuer, zuordnung_von
 from app.services.pruefregeln.befund import Issue
 from app.services.pruefregeln.kontext import Pruefkontext
 from app.services.pruefregeln.ust_id import ust_id_befunde
-from app.services.steuerkategorie_land import kategorie_passt_zum_land
+from app.services.steuerkategorie_land import (
+    ae_inland_mit_fremder_ust_id,
+    kategorie_passt_zum_land,
+)
 
 
 def pruefe_leistungsempfaenger(kontext: Pruefkontext) -> list[Issue]:
@@ -26,6 +29,14 @@ def pruefe_leistungsempfaenger(kontext: Pruefkontext) -> list[Issue]:
                 "BUYER_NOT_ASSIGNABLE", "error", meldung_fuer(lage), "customer_id",
             )]
     befunde: list[Issue] = []
+    # AE an DE mit fremder USt-IdNr. (#275): nur am Entwurf, gestellte Belege
+    # werden beim erneuten Pruefen nicht ungueltig (wie die Zuordnung oben).
+    if getattr(invoice, "status", None) == "draft":
+        widerspruch = ae_inland_mit_fremder_ust_id(
+            tax_category, customer.country, customer.vat_id)
+        if widerspruch:
+            befunde.append(Issue(
+                "AE_DOMESTIC_FOREIGN_VAT_ID", "error", widerspruch, "customer.country"))
     if not customer.name or not customer.name.strip():
         befunde.append(Issue("BUYER_NAME_MISSING", "error", "Name des Kunden fehlt.", "customer.name"))
     if not customer.address_line1 or not customer.zip_code or not customer.city:
