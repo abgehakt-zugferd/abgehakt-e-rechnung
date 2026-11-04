@@ -114,6 +114,7 @@
                                Der zweite Parameter ist die KUNDENZUSTELLUNG (Bauschritt
                                5b): „Nicht versendet“ meint den Kunden. #}
                             <span class="badge badge-{{ inv.status|beleg_badge(inv.kunde_zugestellt_am, inv) }}">{{ inv.status|beleg_etikett(inv.kunde_zugestellt_am, inv) }}</span>
+                            {% with storno=storniert_durch.get(inv.id) %}{% include "invoices/storniert_durch.html" %}{% endwith %}
                         </td>
                         <td style="padding:10px 14px;">
                             {% if inv.datev_sent_at %}

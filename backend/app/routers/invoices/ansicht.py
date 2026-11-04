@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from markupsafe import Markup
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -20,7 +21,9 @@ from app.services.belegart import UnknownInvoiceTypeError, belegart
 from app.services.bezahlt_am import fruehestes_zahlungsdatum
 from app.services.einheiten import UnknownUnitError
 from app.services.ersatzrechnung import ErsatzNichtMoeglich, pruefe_ersetzbar
+from app.services.belegsprache import darstellung
 from app.services.rechnung.pruefung import run_validation
+from app.services.storno_wirkung import stornobelege_zu
 from app.zeit import heute, kalendertag
 
 router = APIRouter()
@@ -97,6 +100,21 @@ def _ersetzbarkeit(db: Session, invoice: Invoice) -> tuple[bool, bool]:
     return ersetzbar, original_ersetzbar
 
 
+def _storno_endgueltig_hinweis(invoice: Invoice) -> Markup | None:
+    """Hinweistext beim gestellten Storno einer 389, in der Belegsprache (#267)."""
+    try:
+        ist_storno_389 = belegart(invoice.invoice_type).intern == "self_billing_storno"
+    except UnknownInvoiceTypeError:
+        return None
+    if not ist_storno_389 or invoice.status not in ("issued", "paid"):
+        return None
+    original = invoice.original_invoice
+    link = (Markup('<a href="/invoices/{}" style="color:var(--gold); text-decoration:underline;">{}</a>')
+            .format(original.id, original.invoice_number) if original else "")
+    text = darstellung(invoice.document_language or "de").storno_endgueltig
+    return Markup(text).format(original=link)
+
+
 def _detail_kontext(db: Session, invoice: Invoice) -> dict:
     """Alles, was `invoices/detail.html` neben `request` braucht."""
     company = db.query(Company).filter(Company.id == 1).first()
@@ -129,6 +147,8 @@ def _detail_kontext(db: Session, invoice: Invoice) -> dict:
         "original_ersetzbar": original_ersetzbar,
         "kunde_zustellung_am": kunde_zustellung_am,
         "kunde_weg": kunde_weg,
+        "storniert_durch": stornobelege_zu(db, [invoice.id]).get(invoice.id),
+        "storno_endgueltig": _storno_endgueltig_hinweis(invoice),
     }
 
 

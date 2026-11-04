@@ -11,7 +11,6 @@ from app.routers.settings_zeilen import get_or_create_app_config, get_or_create_
 from app.services.bankverbindung import normalisiere_bic, normalisiere_iban, pruefe_bic, pruefe_iban
 from app.services.invoice_number import pruefe_praefix
 from app.services.ust_id_pruefung import (
-    eingaben_fuer_pruefung,
     normalisiere_ust_id,
     pruefe_ust_id_format,
     pruefe_ust_id_vies,
@@ -116,8 +115,12 @@ def save_company(
     kst_satz_percent: str = Form("15"),
     soli_auf_kst_percent: str = Form("5.5"),
     gewerbe_hebesatz: str = Form("400"),
+    danach_vies: str = Form(""),
+    bestaetigt: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    if danach_vies == "1" and bestaetigt != "1":
+        raise HTTPException(400, "Einwilligung erforderlich")
     # ZUERST prüfen, dann erst etwas setzen: der Präfix wird Teil des Dateinamens
     # im GoBD-Archiv (`storage/pdfs/{nummer}.pdf`). Ein Wert mit `/` oder `..`
     # schöbe den Beleg aus dem Archiv heraus, während die Datenbank „gestellt"
@@ -185,29 +188,16 @@ def save_company(
     company.gewerbe_hebesatz = int(gewerbe_hebesatz.strip())
     einrichtung_nachziehen(company)
     db.commit()
+    if danach_vies == "1":
+        return _vies_nach_speichern(request, db, company)
     return RedirectResponse(url="/settings?saved=true", status_code=303)
 
 
-@router.post("/ust-id-pruefen")
-def pruefe_company_ust_id(
-    request: Request,
-    bestaetigt: str = Form(default=""),
-    check_vat_id: str = Form(default=""),
-    check_name: str = Form(default=""),
-    db: Session = Depends(get_db),
-):
-    company = get_or_create_company(db)
-    if bestaetigt != "1":
-        raise HTTPException(400, "Einwilligung erforderlich")
-    vat, name, fehler = eingaben_fuer_pruefung(
-        check_vat_id, company.vat_id, check_name, company.name,
-    )
-    if fehler:
-        return settings_page(request, db, saved=False, error=fehler)
-    if vat != company.vat_id:
-        ust_zuruecksetzen(company)
-        company.vat_id = vat
-    ergebnis = pruefe_ust_id_vies(vat, name)
+def _vies_nach_speichern(request, db, company):
+    """Erst nach erfolgreichem Speichern und bestaetigter Einwilligung (#274)."""
+    if not company.vat_id:
+        return settings_page(request, db, saved=True, error="Keine USt-IdNr. zum Pruefen.")
+    ergebnis = pruefe_ust_id_vies(company.vat_id, company.name)
     ust_speichern(company, ergebnis)
     db.commit()
     return RedirectResponse(url="/settings", status_code=303)

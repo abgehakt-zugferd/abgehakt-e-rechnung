@@ -7,6 +7,7 @@ from app.models.customer import Customer
 from app.models.invoice import Invoice
 from app.routers.invoices.vorlagen import templates
 from app.services.rechnungsliste_filter import filtere_rechnungsliste
+from app.services.storno_wirkung import stornobelege_zu
 
 router = APIRouter()
 
@@ -51,7 +52,8 @@ def list_invoices(
                 .limit(SEITENGROESSE)
                 .all())
     return templates.TemplateResponse("invoices/list.html", {
-        "request": request, "invoices": invoices, "status_filter": status, "q": q,
+        "request": request, "invoices": invoices,
+        "storniert_durch": stornobelege_zu(db, [i.id for i in invoices]), "status_filter": status, "q": q,
         "art": filtern.art, "faellig": filtern.faellig, "versand": filtern.versand,
         "storno": filtern.storno, "forderung": filtern.forderung,
         "seite": seite, "seiten": seiten, "gesamt": gesamt,

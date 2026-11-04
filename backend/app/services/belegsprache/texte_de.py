@@ -50,6 +50,10 @@ DARSTELLUNG_DE = {
     "storno_bemerkung": "Storno zur Rechnung {nummer} vom {datum}.",
     "storno_gutschrift_bezug": "Storno zur Gutschrift {nummer} vom {datum}.",
     "ersatz_hinweis": "Ersetzt Rechnung {nummer} vom {datum}.",
+    "storno_endgueltig": (
+        "Dieser Storno ist endgültig. War er falsch, stelle zur ursprünglichen "
+        "Gutschrift {original} eine neue Gutschrift."
+    ),
     "hinweis_ae": AE_HINWEIS,
     "hinweis_e": "Kein Ausweis von Umsatzsteuer, da Kleinunternehmer gemäß § 19 UStG.",
     "hinweis_k": (

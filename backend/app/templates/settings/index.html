@@ -101,7 +101,7 @@
                     <div>
                         <label class="label">USt-IdNr.</label>
                         <input type="text" name="vat_id" value="{{ company.vat_id or '' }}" placeholder="DE und neun Ziffern" class="input font-mono">
-                        {% with entity=company, pruefen_url='/settings/ust-id-pruefen', form_root='settings-firma' %}
+                        {% with entity=company, pruefen_url='/settings/firma',form_root='settings-firma' %}
                         {% include "partials/ust_id_vies_status.html" %}
                         {% endwith %}
                     </div>
@@ -199,7 +199,7 @@
         <button type="submit" class="btn-primary">FIRMENDATEN SPEICHERN</button>
     </form>
 
-    {% with execute_url='/settings/ust-id-pruefen' %}
+    {% with execute_url='/settings/firma', haupt_form='settings-firma' %}
     {% include "partials/ust_id_vies_dialog.html" %}
     {% endwith %}
 
