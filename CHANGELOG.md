@@ -5,7 +5,11 @@ dem Blick dessen, der Abgehakt betreibt: Was ist neu, was muss ich vor dem
 Wechsel tun, was sieht danach anders aus. Die einzelnen Pull Requests stehen in
 Klammern.
 
-## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.0.1)
+## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.1.0)
+
+Noch keine Änderungen.
+
+## v1.1.0 (2026-11-04)
 
 ### Drittes Design: Terminal
 

@@ -198,11 +198,11 @@ stattdessen und wechselt auf den Versionsstand:
 
 ```bash
 git clone https://github.com/abgehakt-zugferd/abgehakt-e-rechnung.git
-cd abgehakt-e-rechnung && git checkout v1.0.1
+cd abgehakt-e-rechnung && git checkout v1.1.0
 ```
 
-Die zuletzt veröffentlichte Fassung ist **v1.0.1** (`backend/VERSION`, Abschnitt
-`v1.0.1` im CHANGELOG). Der Funktionsumfang dieses README und der Abschnitt
+Die zuletzt veröffentlichte Fassung ist **v1.1.0** (`backend/VERSION`, Abschnitt
+`v1.1.0` im CHANGELOG). Der Funktionsumfang dieses README und der Abschnitt
 *Nächste Fassung* im CHANGELOG beschreiben dagegen den aktuellen Stand des
 Hauptzweigs, der noch nicht als Fassung veröffentlicht ist. Ohne Release-Archiv und
 ohne Tag bekommt man diesen Zwischenstand: Er kann Fehler enthalten, die in keiner
