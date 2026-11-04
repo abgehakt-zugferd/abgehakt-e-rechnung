@@ -143,7 +143,7 @@
                 <input type="text" name="vat_id" value="{{ (customer.vat_id if customer else values.get('vat_id','')) or '' }}" placeholder="DE und neun Ziffern" class="input font-mono">
                 <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Bei B2B-Rechnungen ueber 10.000 EUR wird die Angabe empfohlen. Existenz und Gueltigkeit nur per Button „Jetzt bei VIES pruefen" (mit Einwilligung, keine Verbindung beim Speichern).</p>
                 {% if customer %}
-                {% with entity=customer, pruefen_url='/customers/' ~ customer.id ~ '/ust-id-pruefen', form_root='kunde-bearbeiten' %}
+                {% with entity=customer, pruefen_url='/customers/' ~ customer.id ~ '/bearbeiten', form_root='kunde-bearbeiten' %}
                 {% include "partials/ust_id_vies_status.html" %}
                 {% endwith %}
                 {% endif %}
@@ -262,7 +262,7 @@
     </form>
 
     {% if customer %}
-    {% with execute_url='/customers/' ~ customer.id ~ '/ust-id-pruefen', requester_vat=company_vat_id %}
+    {% with execute_url='/customers/' ~ customer.id ~ '/bearbeiten', haupt_form='kunde-bearbeiten', requester_vat=company_vat_id %}
     {% include "partials/ust_id_vies_dialog.html" %}
     {% endwith %}
     {% endif %}
