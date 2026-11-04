@@ -146,6 +146,22 @@ alle dieselbe Frage: Hat der Kunde den Beleg?
 
 ---
 
+## Zahlungsdatum und seine Korrektur
+
+Beim Markieren als bezahlt darf das Zahlungsdatum nicht in der Zukunft und nicht vor dem
+Rechnungsdatum liegen. Bei einem Beleg aus einem Rechnungsauftrag entsteht die Rechnung erst
+nach dem Geldeingang; dort darf das Datum vor dem Rechnungsdatum liegen, aber nicht vor dem
+Beginn des Leistungszeitraums (ohne Zeitraum: nicht vor dem Leistungsdatum). Fehlt beides,
+gilt das Rechnungsdatum. Das Datumsfeld auf der Belegseite folgt derselben Regel.
+
+Ein einmal gesetztes Zahlungsdatum ändert sich nicht mehr, außer auf einem Weg: An einem
+bezahlten Beleg öffnet **Zahlungsdatum korrigieren** ein kleines Formular mit neuem Datum und
+Grund (beide Pflicht). Das neue Datum folgt denselben Regeln. Das Änderungsprotokoll zeigt
+die Korrektur mit altem Datum, neuem Datum, Grund und Zeitpunkt; Status, PDF, XML und Archiv
+bleiben unberührt.
+
+---
+
 ## Stammdaten: Kunden und Firma
 
 ### Kunden

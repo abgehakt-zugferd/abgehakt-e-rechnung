@@ -13,11 +13,12 @@ ist wesentlich — ein Ereignis zu verschweigen wäre falsch, ein Ereignis doppe
 zeigen aber auch. Siehe `protokoll_fuer`.
 """
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy.orm import Session
 
 from app.models.invoice import AuditLog
+from app.services.zahlungsdatum_durchlass import GRUND_FELD
 
 # Wie viele Einträge die Detailseite höchstens lädt. Das Protokoll wächst nur und
 # wird nie aufgeräumt; ohne Grenze würde eine alte Rechnung die Seite ausbremsen.
@@ -73,6 +74,12 @@ class Protokollzeile:
     zeitpunkt: datetime
     vorgang: str
     felder: list[str] = field(default_factory=list)
+    detail: str = ""
+
+
+def _tag(iso: str | None) -> str:
+    """ISO-Datum aus dem Protokoll als TT.MM.JJJJ."""
+    return date.fromisoformat(iso).strftime("%d.%m.%Y") if iso else "leer"
 
 
 def _geaenderte_felder(alt: dict | None, neu: dict | None) -> list[str]:
@@ -106,6 +113,13 @@ def _beschreibe(eintrag: AuditLog) -> Protokollzeile:
 
     if neu.get("datev_sent_at") and not alt.get("datev_sent_at"):
         return Protokollzeile(eintrag.changed_at, "An DATEV gesendet")
+
+    if neu.get(GRUND_FELD):
+        return Protokollzeile(
+            eintrag.changed_at, "Zahlungsdatum korrigiert",
+            detail=f"{_tag(alt.get('bezahlt_am'))} → {_tag(neu.get('bezahlt_am'))}, "
+                   f"Grund: {neu[GRUND_FELD]}",
+        )
 
     felder = _geaenderte_felder(alt, neu)
     return Protokollzeile(eintrag.changed_at, "Bearbeitet", felder)

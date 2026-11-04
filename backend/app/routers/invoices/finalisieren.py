@@ -13,6 +13,10 @@ from app.services.bezahlt_am import (
     BezahltTrotzGutschrift,
     vorbereiten_bezahlt,
 )
+from app.services.zahlungsdatum_korrektur import (
+    ZahlungsdatumKorrekturFehler,
+    korrigieren as zahlungsdatum_korrigieren,
+)
 from app.services.rechnung.fehler import RechnungFehler
 from app.services.rechnung.finalisieren import ausfuehren, entwurf_sperren
 from app.services.storno import GutschriftNichtStornierbar, pruefe_stornierbar
@@ -84,6 +88,26 @@ def _statuswechsel_pruefen(db: Session, invoice: Invoice, new_status: str,
             pruefe_stornierbar(invoice)
         except GutschriftNichtStornierbar as exc:
             raise HTTPException(400, str(exc)) from exc
+
+
+@status_router.post("/{invoice_id}/zahlungsdatum-korrigieren")
+def zahlungsdatum_korrigieren_route(
+    invoice_id: uuid.UUID,
+    bezahlt_am: str | None = Form(None),
+    grund: str | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Korrektur des Zahlungsdatums an einem bezahlten Beleg (#278)."""
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(404)
+    try:
+        zahlungsdatum_korrigieren(db, invoice, bezahlt_am, grund, heute=heute())
+    except ZahlungsdatumKorrekturFehler as exc:
+        db.rollback()
+        raise HTTPException(400, str(exc)) from exc
+    db.commit()
+    return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
 
 
 @status_router.post("/{invoice_id}/status")

@@ -26,12 +26,14 @@ html[data-theme="terminal"] {
     --t-groesse-zahl-gross:48px;
 }
 
-/* Zustandslampen: Farbe des Zustands; die Form (● ▲ ■ ◆ ○) steht als Text im Markup. */
+/* Zustandslampen: Farbe des Zustands; die Form (● ▲ ■ ◆ ○) steht als Text im Markup.
+   "aus" steht in --t-text-matt: --t-linie hat auf --t-grund nur ~1,7:1 —
+   ein Zustand braucht mindestens 4,5:1. */
 html[data-theme="terminal"] .t-lampe--ok { color: var(--t-ok); }
 html[data-theme="terminal"] .t-lampe--warnung { color: var(--t-warnung); }
 html[data-theme="terminal"] .t-lampe--fehler { color: var(--t-fehler); }
 html[data-theme="terminal"] .t-lampe--info { color: var(--t-info); }
-html[data-theme="terminal"] .t-lampe--aus { color: var(--t-linie); }
+html[data-theme="terminal"] .t-lampe--aus { color: var(--t-text-matt); }
 
 /* Primärknopf: dunkle Schrift auf Akzent-Grund (Kontrast auf der hellen Akzentfarbe). */
 html[data-theme="terminal"] .btn-primary { color: var(--t-auf-akzent) !important; }
@@ -60,6 +62,22 @@ html[data-theme="terminal"] .mitteilung__marke,
 html[data-theme="terminal"] header [style*="var(--font-display)"] {
     font-family: var(--t-schrift-text) !important;
 }
+
+/* Mindestgröße 15px: .mitteilung__marke (0.75rem = 12px) und .mitteilung--inline
+   (0.875rem = 14px) aus base.html liegen unter der Grenze. Die Spezifität
+   0-2-1 schlägt die Basisregel 0-1-0, daher ohne !important. */
+html[data-theme="terminal"] .mitteilung__marke,
+html[data-theme="terminal"] .mitteilung--inline {
+    font-size: var(--t-groesse-klein);
+}
+
+/* <pre>-Blöcke der Zustimmungsseiten (updates/consent.html, ust_id_vies/consent.html,
+   partials/ust_id_vies_dialog.html) tragen inline font-size:0.8125rem (13px) —
+   gegen ein Inline-Style gewinnt nur !important. */
+html[data-theme="terminal"] pre {
+    font-size: var(--t-groesse-klein) !important;
+}
+
 html[data-theme="terminal"] .kpi__wert { font-family: var(--t-schrift-anzeige) !important; }
 
 /* Tabellen (z. B. Belegliste): Zellen in Tabellengröße mit kompakteren
