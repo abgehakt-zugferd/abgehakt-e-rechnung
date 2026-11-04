@@ -99,6 +99,16 @@
             src: url(/static/fonts/ibm-plex-mono-latin-ext-600-normal.woff2) format('woff2');
             unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
         }
+        @font-face {
+            font-family: 'Saira Condensed'; font-style: normal; font-weight: 800; font-display: swap;
+            src: url(/static/fonts/saira-condensed-latin-800-normal.woff2) format('woff2');
+            unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+        }
+        @font-face {
+            font-family: 'Saira Condensed'; font-style: normal; font-weight: 800; font-display: swap;
+            src: url(/static/fonts/saira-condensed-latin-ext-800-normal.woff2) format('woff2');
+            unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+        }
 
         /* ============================================================
            Drei umschaltbare Themes über html[data-theme]:
@@ -807,7 +817,7 @@
 </head>
 <body x-data="{ sidebarOpen: window.innerWidth >= 1024 }">
 
-<div class="flex h-screen overflow-hidden">
+<div class="flex h-screen overflow-hidden" data-rumpf>
 
     <!-- Mobile overlay -->
     <div x-show="sidebarOpen"
@@ -824,7 +834,7 @@
         <!-- Logo -->
         <div style="padding:20px 16px 16px; border-bottom:2px solid var(--border-hi); background:var(--gold-glow); flex-shrink:0;">
             <div class="flex items-center justify-between">
-                <div>
+                <div data-seitenleiste-marke>
                     <div style="font-family:var(--font-display); font-size:var(--fs-wordmark); color:var(--gold); text-shadow:var(--glow-h1); letter-spacing:0.02em; line-height:1; display:flex; align-items:center; gap:8px;">
                         ABGEHAKT <span style="color:var(--green);">✓</span>
                     </div>
@@ -932,20 +942,20 @@
     <!-- Main content -->
     <main class="flex-1 flex flex-col overflow-hidden" style="background:var(--void); min-width:0;">
         <!-- Mobile header -->
-        <header class="lg:hidden" style="background:var(--panel); border-bottom:2px solid var(--border-hi); padding:12px 16px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+        <header class="lg:hidden" data-kopfleiste style="background:var(--panel); border-bottom:2px solid var(--border-hi); padding:12px 16px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
             <button @click="sidebarOpen = !sidebarOpen" class="sidebar-toggle">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                 </svg>
             </button>
-            <div style="font-family:var(--font-display); font-size:1.25rem; color:var(--gold); text-shadow:var(--glow-h1); letter-spacing:0.02em; display:flex; align-items:center; gap:6px;">
+            <div data-kopf-marke style="font-family:var(--font-display); font-size:1.25rem; color:var(--gold); text-shadow:var(--glow-h1); letter-spacing:0.02em; display:flex; align-items:center; gap:6px;">
                 {% if is_testinstanz() %}
                 <span style="color:var(--red, #c00);">TESTINSTANZ</span>
                 {% else %}
                 ABGEHAKT <span style="color:var(--green);">✓</span>
                 {% endif %}
             </div>
-            <div style="width:40px;"></div>
+            <div style="width:40px;" data-kopf-spacer></div>
         </header>
 
         <!-- Page content -->

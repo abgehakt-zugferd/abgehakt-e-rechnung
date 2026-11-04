@@ -301,21 +301,19 @@ def test_terminal_summe_gesamt_ist_groesste_zahl(terminal_block, terminal_css):
         "Summenzeilen in form.html tragen nicht die Klasse summe__gesamt"
 
 
-def test_terminal_karten_h2_plex_600_klein_akzent(terminal_css):
-    """Karten-h2: preflight (tailwind-play hängt sein Style ans Ende des head)
-    setzt h1-h6 auf font-size:inherit — wirksam ist die geerbte Körpergröße
-    (18px, in VT323 optisch ~15px). h2 unter 24px nimmt Plex 600 in
-    --t-groesse-klein und --t-akzent. Die Seitenüberschrift h1 bleibt VT323."""
+def test_terminal_karten_h2_saira_30_hell(terminal_css):
+    """Runde 2 (A4): Kartenüberschriften stehen in Saira Condensed 800 kursiv in
+    --t-groesse-h2 (30px) und --t-text-hell. Begründet angepasster Nachfolger des
+    bisherigen Tests (Plex 600 / --t-groesse-klein / --t-akzent), nicht gelöscht."""
     regel = _terminal_regel(terminal_css, r'\.card h2')
-    assert re.search(r'font-family:\s*var\(--t-schrift-text\) !important', regel), \
-        "Karten-h2 nicht in IBM Plex Mono"
-    assert re.search(r'font-weight:\s*600 !important', regel), "Karten-h2 ohne Gewicht 600"
-    assert re.search(r'font-size:\s*var\(--t-groesse-klein\) !important', regel), \
-        "Karten-h2 nicht in --t-groesse-klein"
-    assert re.search(r'color:\s*var\(--t-akzent\) !important', regel), \
-        "Karten-h2 nicht in --t-akzent"
-    assert not re.search(r'html\[data-theme="terminal"\][^{]*\bh1\b[^{]*\{', terminal_css), \
-        "h1 darf im Terminal-Theme nicht umgestellt werden"
+    assert re.search(r'font-family:\s*var\(--t-schrift-marke\) !important', regel), \
+        "Karten-h2 nicht in Saira Condensed (--t-schrift-marke)"
+    assert re.search(r'font-weight:\s*800 !important', regel), "Karten-h2 ohne Gewicht 800"
+    assert re.search(r'font-style:\s*italic !important', regel), "Karten-h2 nicht kursiv"
+    assert re.search(r'font-size:\s*var\(--t-groesse-h2\) !important', regel), \
+        "Karten-h2 nicht in --t-groesse-h2 (30px)"
+    assert re.search(r'color:\s*var\(--t-text-hell\) !important', regel), \
+        "Karten-h2 nicht in --t-text-hell"
 
 
 def test_terminal_aktionsspalte_link_plex_tabelle(terminal_css):
@@ -521,3 +519,755 @@ def test_lampen_farben_sind_zustandsfarben(terminal_css, name):
     farbe = lampen.get(name)
     assert farbe in _ERLAUBTE_LAMPENFARBEN, \
         f".t-lampe--{name} traegt {farbe!r} — keine Zustandsfarbe aus {_ERLAUBTE_LAMPENFARBEN}"
+
+
+# ---------------------------------------------------------------------------
+# Runde 2: Stahlleiste mit Nieten und Wortmarke, Glas-Karten, Bühne,
+# Saira Condensed als dritte Schrift, Zustandsformen an Badges, Kennzahlen
+# in Zustandsfarben. Jede Zeile der Abnahmeliste A1-A12 hat hier mindestens
+# einen Test; alle Regeln liegen nur unter html[data-theme="terminal"].
+# ---------------------------------------------------------------------------
+
+def _teil_bodies(css: str, teil_exakt: str):
+    """Bodies aller Regelteile (Selektor nach Komma gesplittet), die exakt
+    `teil_exakt` lauten — so lassen sich gruppierte Selektoren prüfen."""
+    bodies = []
+    for _, sel, body in _css_regeln(css):
+        for teil in sel.split(","):
+            if teil.strip() == teil_exakt:
+                bodies.append(body)
+    return bodies
+
+
+SAIRA_DATEIEN = [
+    "/static/fonts/saira-condensed-latin-800-normal.woff2",
+    "/static/fonts/saira-condensed-latin-ext-800-normal.woff2",
+]
+
+
+def test_a1_saira_condensed_font_face_paare(basis_html):
+    """A1: zwei @font-face für Saira Condensed, weight 800, latin + latin-ext mit
+    dem unicode-range der vorhandenen latin-/latin-ext-Paare; Dateien im Image.
+    Die Kursive wird synthetisch erzeugt (font-style: italic ohne Italic-Schnitt)."""
+    faces = re.findall(r"@font-face\s*\{([^}]*)\}", basis_html)
+    saira = [f for f in faces if "font-family: 'Saira Condensed'" in f]
+    assert len(saira) == 2, f"erwartet 2 @font-face für Saira Condensed, gefunden {len(saira)}"
+    for f in saira:
+        assert "font-weight: 800" in f, "Saira Condensed ohne weight 800"
+        assert "font-style: normal" in f, "Saira-@font-face nicht normal — Kursiv ist synthetisch"
+    srcs = sorted(re.search(r"url\(([^)]+)\)", f).group(1) for f in saira)
+    assert srcs == sorted(SAIRA_DATEIEN), f"Quellen falsch: {srcs}"
+    ur_saira = sorted(re.search(r"unicode-range:\s*([^;]+);", f).group(1).strip() for f in saira)
+    vt = [f for f in faces if "font-family: 'VT323'" in f]
+    assert len(vt) == 2, "die VT323-Vergleichspaare wurden nicht gefunden"
+    ur_vt = sorted(re.search(r"unicode-range:\s*([^;]+);", f).group(1).strip() for f in vt)
+    assert ur_saira == ur_vt, "unicode-range der Saira-Paare weicht von den VT323-Paaren ab"
+    for quelle in SAIRA_DATEIEN:
+        pfad = Path("app") / quelle.lstrip("/")
+        assert pfad.is_file(), f"{quelle} fehlt im Image"
+        assert pfad.read_bytes()[:4] == b"wOF2", f"{quelle} ist keine WOFF2-Datei"
+
+
+def test_a1_token_schrift_marke(terminal_css):
+    """A1: neues Token --t-schrift-marke in terminal.css."""
+    assert re.search(r"--t-schrift-marke\s*:\s*'Saira Condensed',\s*sans-serif\s*;", terminal_css), \
+        "--t-schrift-marke fehlt in terminal.css"
+
+
+def test_a2_kopfleiste_traegt_daten_attribute(basis_html):
+    assert re.search(r'<header[^>]*\bdata-kopfleiste\b', basis_html), \
+        "die Kopfleiste (☰ + Wortmarke) trägt kein data-kopfleiste"
+    assert re.search(r'\bdata-kopf-marke\b', basis_html), \
+        "die Wortmarke in der Kopfleiste trägt kein data-kopf-marke"
+
+
+def test_a2_stahlleiste_chromverlauf_und_nieten(terminal_css):
+    """A2: die Kopfleiste wird zur Stahlleiste — senkrechter Chromverlauf,
+    je eine Niete links und rechts per ::before/::after."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste]')
+    assert bodies, "keine Stahlleisten-Regel für die Kopfleiste"
+    regel = " ".join(bodies)
+    assert re.search(r"background:\s*linear-gradient\(180deg", regel), \
+        "kein senkrechter Chromverlauf auf der Stahlleiste"
+    for pseudo in ("::before", "::after"):
+        niete = _teil_bodies(terminal_css, f'html[data-theme="terminal"] header[data-kopfleiste]{pseudo}')
+        assert niete, f"keine Niete per {pseudo}"
+        n = " ".join(niete)
+        assert re.search(r"content:\s*['\"]", n), f"Niete {pseudo} ohne content"
+        assert re.search(r"border-radius:\s*50%", n), f"Niete {pseudo} nicht rund"
+        assert re.search(r"radial-gradient", n), f"Niete {pseudo} ohne radialen Chromverlauf"
+
+
+def test_a2_marke_in_der_stahlleiste(terminal_css):
+    """A2: die Wortmarke in der Leiste bekommt den Chromverlauf in der Schrift —
+    background-clip:text, Saira Condensed 800 kursiv, 40-54px."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke]')
+    assert bodies, "keine Marke-Regel in der Kopfleiste"
+    regel = " ".join(bodies)
+    assert re.search(r"font-family:\s*var\(--t-schrift-marke\)\s*!important", regel)
+    assert re.search(r"font-weight:\s*800\s*!important", regel)
+    assert re.search(r"font-style:\s*italic\s*!important", regel)
+    m = re.search(r"font-size:\s*(\d+)px\s*!important", regel)
+    assert m and 40 <= int(m.group(1)) <= 54, f"Marke nicht in 40-54px: {m.group(0) if m else '?' }"
+    assert re.search(r"background:\s*linear-gradient\(180deg", regel), "kein Chromverlauf in der Schrift"
+    assert re.search(r"background-clip:\s*text", regel), "kein background-clip:text"
+    assert re.search(r"color:\s*transparent\s*!important", regel), "Schriftfarbe nicht transparent"
+
+
+def test_a2_stahlleiste_auch_bei_breitem_fenster_sichtbar(basis_html, terminal_css):
+    """A2: die Kopfleiste trägt lg:hidden — im Terminal-Theme muss sie auch bei
+    breitem Fenster (Desktop) als Stahlleiste sichtbar bleiben."""
+    assert re.search(r'<header[^>]*class="[^"]*lg:hidden[^"]*"', basis_html), \
+        "die Kopfleiste mit lg:hidden wurde in base.html nicht gefunden"
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste].lg\\:hidden')
+    assert bodies, "keine Regel, die lg:hidden der Kopfleiste im Terminal-Theme aufhebt"
+    assert any(re.search(r"display:\s*flex\s*!important", b) for b in bodies), \
+        "Kopfleiste im Terminal-Theme nicht per display:flex !important sichtbar"
+
+
+def test_a2_tagzeile_in_der_stahlleiste(terminal_css):
+    """A3: die Zeile RECHNUNGEN · GOBD · DATEV steht als Text in der Stahlleiste,
+    dunkel wie auf dem Stahl (--t-auf-stahl, Kontrast siehe Runde 3)."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke]::after')
+    assert bodies, "die Tagzeile steht nirgends in der Stahlleiste"
+    regel = " ".join(bodies)
+    assert "RECHNUNGEN · GOBD · DATEV" in regel, "Tagzeile fehlt im content"
+    assert re.search(r"color:\s*var\(--t-auf-stahl\)", regel), "Tagzeile nicht in --t-auf-stahl"
+
+
+def test_a3_seitenleisten_marke_wird_ausgeblendet(basis_html, terminal_css):
+    """A3: der Wortmarken-Block oben in der Seitenleiste ist im Terminal-Theme aus."""
+    assert re.search(r'\bdata-seitenleiste-marke\b', basis_html), \
+        "Wortmarken-Block in der Seitenleiste ohne data-Attribut"
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] [data-seitenleiste-marke]')
+    assert bodies and any(re.search(r"display:\s*none\s*!important", b) for b in bodies), \
+        "Seitenleisten-Wortmarke im Terminal-Theme nicht ausgeblendet"
+
+
+def test_a4_seitentitel_h1_saira_kursiv_chrom(terminal_css):
+    """A4: die erste Überschrift im Hauptbereich (main h1) in Saira Condensed
+    800 kursiv, 44-48px, mit Chromverlauf in der Schrift."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] main h1')
+    assert bodies, "keine Regel für die erste Überschrift im Hauptbereich (main h1)"
+    regel = " ".join(bodies)
+    assert re.search(r"font-family:\s*var\(--t-schrift-marke\)\s*!important", regel)
+    assert re.search(r"font-weight:\s*800\s*!important", regel)
+    assert re.search(r"font-style:\s*italic\s*!important", regel)
+    m = re.search(r"font-size:\s*(\d+)px\s*!important", regel)
+    assert m and 44 <= int(m.group(1)) <= 48, f"Seitentitel nicht in 44-48px: {m.group(0) if m else '?'}"
+    assert re.search(r"background:\s*linear-gradient\(180deg", regel), "kein Chromverlauf"
+    assert re.search(r"background-clip:\s*text", regel), "kein background-clip:text"
+    assert re.search(r"color:\s*transparent\s*!important", regel), "Schriftfarbe nicht transparent"
+    # h1 bleibt global unangetastet — nur innerhalb von main bekommt sie die Marke:
+    assert not re.search(r'html\[data-theme="terminal"\]\s+h1\b', terminal_css), \
+        "h1 darf nur innerhalb von main umgestellt werden"
+
+
+def test_a5_card_glas(terminal_css):
+    """A5: .card wird Glas — Rundung 14px, Verlauf aus Token per color-mix (kein Hex
+    außer Weiß/Schwarz-Transparenz), 1px Rahmen in Chrom 35%, Glanz-::before oben
+    links in Weiß höchstens 8%, weicher Schatten nach unten."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] .card')
+    assert bodies, "keine .card-Regel im Terminal-Theme"
+    regel = " ".join(bodies)
+    assert re.search(r"border-radius:\s*14px\s*!important", regel), "Rundung nicht 14px"
+    bg = re.search(r"background:\s*([^;]+);", regel)
+    assert bg and "linear-gradient" in bg.group(1), "kein Verlauf auf der Karte"
+    assert "color-mix" in bg.group(1), "Glas-Verlauf nicht aus Token per color-mix gebaut"
+    assert not re.findall(r"#[0-9a-fA-F]{3,8}\b", bg.group(1)), \
+        "Hex im Glas-Verlauf — nur Weiß/Schwarz-Transparenz ist erlaubt"
+    assert re.search(r"border:\s*1px solid\s+color-mix\(in srgb,\s*var\(--t-chrom\)\s+35%", regel), \
+        "Rahmen nicht 1px Chrom mit 35% Deckkraft"
+    schatten = re.search(r"box-shadow:\s*([^;]+);", regel)
+    assert schatten and re.search(r"0\s+10px\s+30px\s+rgba\(0,0,0,", schatten.group(1)), \
+        "kein weicher Schatten nach unten"
+    glanz = _teil_bodies(terminal_css, 'html[data-theme="terminal"] .card::before')
+    assert glanz, "kein Glanz-::before auf der Karte"
+    g = " ".join(glanz)
+    assert re.search(r"content:", g), "Glanz-::before ohne content"
+    m = re.search(r"rgba\(255,255,255,\s*0?\.(\d+)\)", g)
+    assert m and int(m.group(1)) <= 8, f"Glanz über 8% Deckkraft: {m.group(0) if m else 'nichts gefunden'}"
+    assert re.search(r"linear-gradient\(115deg", g), "Glanz nicht oben links (115deg)"
+
+
+def test_a5_card_pseudo_ueberlappt_nicht_mit_pixel(basis_html):
+    """A5: base.html nutzt .card::before/::after nur pixel-gescoped — im
+    Terminal-Theme belegen die Glas-Regeln die Pseudoklassen frei."""
+    basis_style = "".join(re.findall(r"<style[^>]*>(.*?)</style>", basis_html, re.S))
+    treffer = [sel for _, sel, _ in _css_regeln(basis_style)
+               if ".card::before" in sel or ".card::after" in sel]
+    assert treffer, "die .card::before/::after-Regeln in base.html wurden nicht gefunden"
+    for sel in treffer:
+        assert all(p.strip().startswith('html[data-theme="pixel"]') for p in sel.split(",")), \
+            f"card-Pseudo nicht pixel-only: {sel!r}"
+
+
+def test_a6_buehne_lichtkegel_von_oben(terminal_css):
+    """A6: Seitenhintergrund mit Lichtkegel von oben — Rosé höchstens 18% Deckkraft
+    über radialem Verlauf aus --t-flaeche, --t-tafel, --t-grund. Fließtext ohne Sperrung."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] body')
+    assert bodies, "keine body-Regel im Terminal-Theme"
+    regel = " ".join(bodies)
+    bg = re.search(r"background(?:-image)?:\s*([^;]+);", regel)
+    assert bg and "radial-gradient" in bg.group(1), "kein radialer Verlauf auf der Bühne"
+    rose = re.search(r"color-mix\(in srgb,\s*var\(--t-[a-z-]+\)\s+(\d+)%", bg.group(1))
+    assert rose and int(rose.group(1)) <= 18, "Lichtkegel Rosé über 18% oder nicht aus Token gebaut"
+    for tok in ("--t-flaeche", "--t-tafel", "--t-grund"):
+        assert f"var({tok})" in bg.group(1), f"{tok} fehlt im Bühnenverlauf"
+    assert re.search(r"letter-spacing:\s*normal", regel), "Fließtext trägt Sperrung"
+
+
+def test_a7_nav_active_gefuellt_mint(terminal_css):
+    """A7: aktiver Navigationspunkt gefüllt mit --t-akzent, Schrift --t-auf-akzent, Rundung 8px."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] .nav-link.active')
+    assert bodies, "keine .nav-link.active-Regel im Terminal-Theme"
+    regel = " ".join(bodies)
+    assert re.search(r"background:\s*var\(--t-akzent\)", regel), "active nicht gefüllt mit --t-akzent"
+    assert re.search(r"color:\s*var\(--t-auf-akzent\)", regel), "Schrift nicht --t-auf-akzent"
+    assert re.search(r"border-radius:\s*8px", regel), "Rundung nicht 8px"
+
+
+def test_a7_primaerknopf_verlauf_sekundaer_rahmen(terminal_css):
+    """A7: Primärknopf mit senkrechtem Verlauf aus --t-akzent auf --t-auf-akzent,
+    Rundung 8px; Sekundärknopf Rundung 8px mit Rahmen in --t-text."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] .btn-primary')
+    assert bodies, "keine .btn-primary-Regel im Terminal-Theme"
+    regel = " ".join(bodies)
+    assert re.search(r"background:\s*linear-gradient\(180deg", regel), "Primärknopf ohne senkrechten Verlauf"
+    assert "var(--t-akzent)" in regel, "Verlauf nicht aus --t-akzent gebaut"
+    assert re.search(r"color:\s*var\(--t-auf-akzent\)\s*!important", regel)
+    assert re.search(r"border-radius:\s*8px", regel)
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] .btn-secondary')
+    assert bodies, "keine .btn-secondary-Regel im Terminal-Theme"
+    regel = " ".join(bodies)
+    assert re.search(r"border-radius:\s*8px", regel), "Sekundärknopf nicht gerundet 8px"
+    assert re.search(r"border-color:\s*var\(--t-text\)", regel), "Sekundärknopf-Rahmen nicht in --t-text"
+
+
+# A8: Klasse -> Zustand -> Farbe -> Form. Jede badge-*-Klasse, die in den
+# Vorlagen vorkommt, muss in dieser Tabelle zugeordnet sein (Scan unten).
+# Storno ist KEIN Fehler: cancelled/○ in --t-text-matt.
+BADGE_ZUSTAENDE = [
+    ("badge-paid", "ok", "var(--t-ok)", "●"),
+    ("badge-sent", "ok", "var(--t-ok)", "●"),
+    ("badge-issued", "warnung", "var(--t-warnung)", "▲"),
+    ("badge-offen", "warnung", "var(--t-warnung)", "▲"),
+    ("badge-ueberfaellig", "fehler", "var(--t-fehler)", "■"),
+    ("badge-draft", "info", "var(--t-info)", "◆"),
+    ("badge-cancelled", "text-matt", "var(--t-text-matt)", "○"),
+    ("badge-discarded", "text-matt", "var(--t-text-matt)", "○"),
+]
+
+
+@pytest.mark.parametrize("klasse,zustand,farbe,form", BADGE_ZUSTAENDE)
+def test_a8_badge_klasse_zustand_farbe_form(terminal_css, klasse, zustand, farbe, form):
+    """A8: je Klasse ein Fall — Farbe in der Zustandsfarbe, Form per ::before-content."""
+    farben = _teil_bodies(terminal_css, f'html[data-theme="terminal"] .{klasse}')
+    assert farben and any(re.search(rf"color:\s*{re.escape(farbe)}\s*!important", b) for b in farben), \
+        f".{klasse} nicht in {farbe} (Zustand {zustand})"
+    formen = _teil_bodies(terminal_css, f'html[data-theme="terminal"] .{klasse}::before')
+    assert formen and any(re.search(rf"content:\s*'{re.escape(form)}'", b) for b in formen), \
+        f".{klasse}::before ohne content '{form}'"
+
+
+def test_a8_jede_badge_klasse_der_vorlagen_ist_zugeordnet():
+    """A8: jede badge-*-Klasse, die in irgendeiner Vorlage vorkommt, ist in der
+    Tabelle BADGE_ZUSTAENDE zugeordnet. Der Vorlagen-Scan ist die eine Quelle."""
+    klassen = set()
+    for pfad in sorted(VORLAGEN.rglob("*.html")):
+        klassen |= {"badge-" + m for m in re.findall(r"badge-([a-z]+)", pfad.read_text(encoding="utf-8"))}
+    assert klassen, "keine badge-Klassen in den Vorlagen gefunden — scannt der Test noch?"
+    tabelliert = {k for k, *_ in BADGE_ZUSTAENDE}
+    assert klassen <= tabelliert, \
+        f"badge-Klassen ohne Zuordnung: {sorted(klassen - tabelliert)}"
+
+
+def test_a8_badges_ohne_rahmen_und_hintergrund(terminal_css):
+    """A8: Badges im Terminal-Theme ohne Rahmen und ohne Hintergrund — die Form
+    kommt allein aus ::before und Farbe."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] .badge')
+    assert bodies, "keine .badge-Regel im Terminal-Theme"
+    assert any(re.search(r"border:\s*none\s*!important", b) for b in bodies), "Badges noch mit Rahmen"
+    assert any(re.search(r"background:\s*(none|transparent)\s*!important", b) for b in bodies), \
+        "Badges noch mit Hintergrund"
+
+
+def test_a9_fliesstext_und_tabellenzellen_in_text(terminal_css):
+    """A9: Fließtext und Tabellenzellen in --t-text."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] table td')
+    assert bodies, "keine table-td-Regel im Terminal-Theme"
+    assert any(re.search(r"color:\s*var\(--t-text\)(\s*!important)?;", b) for b in bodies), \
+        "Tabellenzellen nicht in --t-text"
+
+
+def test_a9_labels_matt_mit_2px_laufweite(terminal_css):
+    """A9: .label, .kpi__beschriftung und Tabellenköpfe in --t-text-matt mit 2px Laufweite."""
+    for teil in ('html[data-theme="terminal"] .label',
+                 'html[data-theme="terminal"] .kpi__beschriftung',
+                 'html[data-theme="terminal"] .table-header'):
+        bodies = _teil_bodies(terminal_css, teil)
+        assert bodies, f"{teil} nicht gestylt"
+        assert any(re.search(r"color:\s*var\(--t-text-matt\)", b) for b in bodies), \
+            f"{teil} nicht in --t-text-matt"
+        assert any(re.search(r"letter-spacing:\s*2px", b) for b in bodies), \
+            f"{teil} ohne 2px Laufweite"
+
+
+def test_a9_kpi_wert_in_text_hell(terminal_css):
+    """A9: Beträge und große Zahlen (.kpi__wert) in --t-text-hell (Zustände in A10)."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] .kpi__wert')
+    assert bodies and any(re.search(r"color:\s*var\(--t-text-hell\)", b) for b in bodies), \
+        "große Zahlen nicht in --t-text-hell"
+
+
+def test_a9_kleine_gold_ueberschriften_werden_matt(terminal_css):
+    """A9: kleine Überschriften, die heute inline in --gold/Akzent stehen, nehmen
+    --t-text-matt (Mint-Labels fallen weg)."""
+    regel = _terminal_regel(terminal_css, r'\[style\*="color:var\(--gold\)"\]')
+    assert regel, "keine Regel für kleine gold-farbene Überschriften"
+    assert re.search(r"color:\s*var\(--t-text-matt\)\s*!important", regel), \
+        "kleine Gold-Überschriften nicht in --t-text-matt"
+
+
+def test_a9_hinweiskasten_in_text_nicht_pfirsich(terminal_css):
+    """A9: Hinweiskasten (z. B. „n gestellte Rechnungen ohne Zustellung“,
+    data-kpi=hinweis-versand): Fließtext in --t-text, nicht in Pfirsich."""
+    regel = _terminal_regel(terminal_css, r'\[data-kpi="hinweis-versand"\]')
+    assert regel, "Hinweiskasten (data-kpi=hinweis-versand) nicht gefasst"
+    assert re.search(r"color:\s*var\(--t-text\)\s*!important", regel), \
+        "Hinweiskasten-Fließtext nicht in --t-text"
+
+
+def test_a10_symbolkaesten_der_kpi_karten_ausgeblendet(terminal_css):
+    """A10: die farbigen Symbolkästen rechts in den Kennzahl-Karten (40px-Boxen
+    im .card) werden im Terminal-Theme ausgeblendet."""
+    regel = _terminal_regel(terminal_css, r'\.card\s+div\[style\*="width:40px"\]')
+    assert regel and re.search(r"display:\s*none\s*!important", regel), \
+        "Symbolkästen der Kennzahl-Karten nicht ausgeblendet"
+
+
+def test_a10_kpi_wert_vt323_58px(terminal_css):
+    """A10: .kpi__wert in VT323, etwa 58px (--t-groesse-kpi)."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] .kpi__wert')
+    assert any(re.search(r"font-family:\s*var\(--t-schrift-anzeige\)", b) for b in bodies), \
+        ".kpi__wert nicht in VT323"
+    assert any(re.search(r"font-size:\s*var\(--t-groesse-kpi\)", b) for b in bodies), \
+        ".kpi__wert nicht in --t-groesse-kpi"
+    token_map = dict(re.findall(r"(--t-[a-z0-9-]+)\s*:\s*([^;]+);", terminal_css))
+    assert "--t-groesse-kpi" in token_map, "--t-groesse-kpi fehlt in terminal.css"
+    m = re.fullmatch(r"([\d.]+)px", token_map["--t-groesse-kpi"].strip())
+    assert m and 56 <= float(m.group(1)) <= 60, \
+        f"--t-groesse-kpi nicht etwa 58px: {token_map.get('--t-groesse-kpi')!r}"
+
+
+def test_a10_kpi_zustandsfarben_und_rahmen(terminal_css):
+    """A10: Kachel mit Zustand — Zahl in der Zustandsfarbe, Rahmen derselben Farbe
+    mit 70%. offen -> warnung, ueberfaellig -> fehler."""
+    for kpi, farbe in (("offen", "var(--t-warnung)"), ("ueberfaellig", "var(--t-fehler)")):
+        wert = _teil_bodies(terminal_css, f'html[data-theme="terminal"] [data-kpi="{kpi}"] .kpi__wert')
+        assert wert and any(re.search(rf"color:\s*{re.escape(farbe)}\s*!important", b) for b in wert), \
+            f"KPI {kpi}: Zahl nicht in {farbe}"
+        rahmen = _teil_bodies(terminal_css, f'html[data-theme="terminal"] .card[data-kpi="{kpi}"]')
+        assert rahmen and any(
+            re.search(rf"border-color:[^;]*color-mix\(in srgb,\s*{re.escape(farbe)}\s+70%", b) for b in rahmen), \
+            f"KPI {kpi}: Rahmen nicht in {farbe} mit 70% Deckkraft"
+
+
+def test_a11_tabellenkopf_chrom_zeilenlinien(terminal_css):
+    """A11: Tabellenkopf mit 1px-Unterlinie in --t-chrom 35%, Zeilenlinien in
+    --t-rahmen 40% (wie im Entwurf)."""
+    kopf = _teil_bodies(terminal_css, 'html[data-theme="terminal"] table th')
+    assert kopf and any(
+        re.search(r"border-bottom:\s*1px solid\s+color-mix\(in srgb,\s*var\(--t-chrom\)\s+35%", b) for b in kopf), \
+        "Tabellenkopf ohne 1px-Unterlinie in --t-chrom 35%"
+    zeilen = _teil_bodies(terminal_css, 'html[data-theme="terminal"] table td')
+    assert zeilen and any(
+        re.search(r"border-bottom:\s*1px solid\s+color-mix\(in srgb,\s*var\(--t-rahmen\)\s+40%", b) for b in zeilen), \
+        "Zeilenlinien nicht in --t-rahmen 40%"
+
+
+def test_a11_betraege_rechts_tabular_hell(terminal_css):
+    """A11: Beträge rechtsbündig, tabular-nums, in --t-text-hell."""
+    regel = _terminal_regel(terminal_css, r'td\[style\*="text-align:right"\]')
+    assert regel, "Betrags-Zellen (inline text-align:right) nicht gefasst"
+    assert re.search(r"text-align:\s*right", regel), "Beträge nicht rechtsbündig"
+    assert re.search(r"font-variant-numeric:\s*tabular-nums", regel), "keine tabular-nums"
+    assert re.search(r"color:\s*var\(--t-text-hell\)", regel), "Beträge nicht in --t-text-hell"
+
+
+def test_a12_keine_scanlines_im_terminal_theme(terminal_css):
+    """A12: Rasterlinien (Scanlines) bleiben aus — kein repeating-linear-gradient
+    im Terminal-Theme."""
+    assert "repeating-linear-gradient" not in terminal_css, \
+        "Scanlines (repeating-linear-gradient) im Terminal-Theme gefunden"
+
+
+# ---------------------------------------------------------------------------
+# Runde 3 (Abgleich 1440x1180):
+#   R1  Stahlleiste über die GANZE Breite (fixed, --t-kopfhoehe), Seitenleiste
+#       und Hauptbereich beginnen darunter; Alpine-Overlay bleibt funktionsfähig.
+#   R2  Leiste von links: Niete, ☰-Chromtaste, Wortmarke (lowercase), Tagzeile
+#       RECHNUNGEN · GOBD · DATEV in --t-auf-stahl, rechts die Niete.
+#       WCAG: Kontrast der Tagzeile gegen hellste/dunkelste Stelle des
+#       Verlaufs hinter dem Text (Formel unten), mindestens 4,5:1.
+#   R3  Seitenleiste (aside) bekommt den Glas-Verlauf der Karten plus eine
+#       1px-Linie rechts in --t-chrom 35%.
+# ---------------------------------------------------------------------------
+
+def _token_map(terminal_css: str):
+    # Kommentare vorher neutralisieren: der Lampen-Kommentar enthält
+    # "--t-text-matt:" im Fließtext und würde sonst den echten Tokenwert
+    # überschreiben (findall baut das dict, spätere Treffer gewinnen).
+    return dict(re.findall(
+        r"(--t-[a-z0-9-]+)\s*:\s*([^;]+);", _kommentare_neutral(terminal_css)))
+
+
+def _hex_rgb(wert: str):
+    h = wert.strip().lstrip("#")
+    assert re.fullmatch(r"[0-9a-fA-F]{6}", h), f"kein 6-stelliger Hexwert: {wert!r}"
+    return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+
+
+def _srgb_lin(c: float) -> float:
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def _luminanz(rgb) -> float:
+    r, g, b = rgb
+    return 0.2126 * _srgb_lin(r) + 0.7152 * _srgb_lin(g) + 0.0722 * _srgb_lin(b)
+
+
+def _kontrast(rgb1, rgb2) -> float:
+    """WCAG-Kontrastverhältnis zweier sRGB-Farben (relative luminance, 1,0-21)."""
+    l1, l2 = _luminanz(rgb1), _luminanz(rgb2)
+    hi, lo = max(l1, l2), min(l1, l2)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _mische(base, ziel, prozent):
+    """color-mix(in srgb, base prozent%, ziel) — Kanäle linear in sRGB gemischt."""
+    p = prozent / 100.0
+    return tuple(p * a + (1 - p) * b for a, b in zip(base, ziel))
+
+
+def _verlauf_stops(regel: str):
+    """(position%, farbe) aller Stops eines linear-gradient(180deg, …) in der Regel.
+    Nur color-mix(in srgb, var(--t-…), N%, white|black)-Stops — der Verlauf der
+    Stahlleiste ist ausschließlich so gebaut."""
+    bg = re.search(r"background:\s*linear-gradient\(180deg,(.*?)\)\s*!important", regel, re.S)
+    assert bg, "kein senkrechter Verlauf (linear-gradient 180deg) in der Regel"
+    stops = re.findall(
+        r"color-mix\(in srgb,\s*var\((--t-[a-z0-9-]+)\)\s+([\d.]+)%,\s*(white|black)\)\s+([\d.]+)%",
+        bg.group(1))
+    assert len(stops) >= 4, f"zu wenige color-mix-Stops im Verlauf: {len(stops)}"
+    return stops, bg.group(1)
+
+
+def test_r1_kopfhoehe_token(terminal_css):
+    """R1: neues Token --t-kopfhoehe in terminal.css, etwa 72px (68-76px)."""
+    token = _token_map(terminal_css)
+    assert "--t-kopfhoehe" in token, "--t-kopfhoehe fehlt in terminal.css"
+    m = re.fullmatch(r"([\d.]+)px", token["--t-kopfhoehe"].strip())
+    assert m and 68 <= float(m.group(1)) <= 76, \
+        f"--t-kopfhoehe nicht etwa 72px: {token['--t-kopfhoehe']!r}"
+
+
+def test_r1_stahlleiste_fixed_ueber_ganze_breite(basis_html, terminal_css):
+    """R1: die Kopfleiste liegt im Terminal-Theme fixed über der ganzen Breite
+    (top/left/right 0, z-index über Seitenleiste z-50 und Overlay z-40) mit der
+    festen Höhe var(--t-kopfhoehe). Seitenleiste und Hauptbereich beginnen
+    darunter: Rumpf (data-rumpf) per padding-top, die fixed Seitenleiste per top."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste]')
+    assert bodies, "keine Regel für die Kopfleiste"
+    regel = " ".join(bodies)
+    assert re.search(r"position:\s*fixed\s*!important", regel), "Kopfleiste nicht fixed"
+    for prop in ("top", "left", "right"):
+        assert re.search(rf"{prop}:\s*0\s*!important", regel), f"{prop}:0 fehlt"
+    zi = re.search(r"z-index:\s*(\d+)\s*!important", regel)
+    assert zi and int(zi.group(1)) > 50, \
+        "z-index der Leiste muss über der Seitenleiste (z-50) liegen"
+    assert re.search(r"height:\s*var\(--t-kopfhoehe\)\s*!important", regel), \
+        "feste Höhe var(--t-kopfhoehe) fehlt"
+
+    # Rumpf trägt das data-Attribut und rückt per padding-top unter die Leiste:
+    assert re.search(r'<div class="flex h-screen overflow-hidden"[^>]*\bdata-rumpf\b', basis_html), \
+        "der Rumpf (flex h-screen overflow-hidden) trägt kein data-rumpf"
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] [data-rumpf]')
+    assert bodies and any(re.search(r"padding-top:\s*var\(--t-kopfhoehe\)", b) for b in bodies), \
+        "Rumpf ohne padding-top: var(--t-kopfhoehe)"
+
+    # die fixed Seitenleiste (schmales Fenster) startet ebenfalls unter der Leiste:
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] aside')
+    assert bodies and any(re.search(r"top:\s*var\(--t-kopfhoehe\)", b) for b in bodies), \
+        "aside ohne top: var(--t-kopfhoehe) — im Overlay-Modus bliebe sie unter der Leiste kleben"
+
+    # Aufklappen der Seitenleiste (Alpine sidebarOpen) bleibt unangetastet:
+    assert 'x-show="sidebarOpen"' in basis_html, "mobiles Overlay (sidebarOpen) fehlt"
+    assert "'-translate-x-full': !sidebarOpen" in basis_html, \
+        "die -translate-x-full-Bindung der Seitenleiste fehlt"
+
+
+def test_r1_leiste_reihenfolge_niete_hamburger_marke_rechts_niete(basis_html, terminal_css):
+    """R2: in der Leiste von links nach rechts Niete (::before), ☰-Knopf, Wortmarke,
+    rechts die Niete (::after). DOM-Reihenfolge Knopf vor Marke, Leiste auf
+    flex-start (nicht mehr space-between/mittig), rechter Niete per margin-left:auto
+    am Spacer ganz rechts."""
+    header = re.search(r"<header[^>]*data-kopfleiste.*?</header>", basis_html, re.S)
+    assert header, "Kopfleiste in base.html nicht gefunden"
+    h = header.group(0)
+    i_btn = h.find("sidebar-toggle")
+    i_marke = h.find("data-kopf-marke")
+    assert 0 < i_btn < i_marke, "☰-Knopf steht nicht vor der Wortmarke in der Leiste"
+    assert "data-kopf-spacer" in h, "der rechte Spacer in der Leiste trägt kein data-kopf-spacer"
+
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste]')
+    assert any(re.search(r"justify-content:\s*flex-start\s*!important", b) for b in bodies), \
+        "Leiste nicht auf flex-start — die Marke stünde weiter mittig statt links"
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-spacer]')
+    assert bodies and any(re.search(r"margin-left:\s*auto", b) for b in bodies), \
+        "rechter Niete nicht per margin-left:auto am rechten Rand"
+
+
+def test_r2_wortmarke_klein_geschrieben(basis_html, terminal_css):
+    """R2: die Wortmarke in der Leiste trägt text-transform: lowercase („abgehakt“),
+    der Haken ✓ bleibt im Markup. Die Tagzeile (::after) ist davon ausgenommen und
+    bleibt RECHNUNGEN · GOBD · DATEV."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke]')
+    assert bodies and any(re.search(r"text-transform:\s*lowercase\s*!important", b) for b in bodies), \
+        "Wortmarke nicht lowercase"
+    assert "✓" in basis_html, "der Haken ✓ fehlt im Markup"
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke]::after')
+    assert bodies and any(re.search(r"text-transform:\s*none\s*!important", b) for b in bodies), \
+        "Tagzeile würde von lowercase mitgezogen — text-transform:none fehlt am ::after"
+    assert any("RECHNUNGEN · GOBD · DATEV" in b for b in bodies), "Tagzeile-Text fehlt"
+
+
+def test_r2_tagzeile_auf_stahl_15px_600_3px_und_wcag_kontrast(terminal_css):
+    """R2: die Tagzeile steht in --t-auf-stahl (#1a1c1e), 15px, weight 600,
+    Laufweite 3px. WCAG: Kontrast der Textfarbe gegen die hellste und die
+    dunkelste Stelle des Stahlverlaufs hinter dem Text (vertikal mittig in der
+    Leiste, Zeilenhöhe bis 22px) — überall mindestens 4,5:1. Liegt der dunkelste
+    Stop hinter dem Text, wäre der Text auf dunklem Grund: dann muss die Lage von
+    Text oder Verlauf geändert werden (hier: dunkle Rille des Stahls unter die
+    Textzeile verschoben)."""
+    token = _token_map(terminal_css)
+    assert token.get("--t-auf-stahl", "").strip().lower() == "#1a1c1e", \
+        f"--t-auf-stahl fehlt oder ist nicht #1a1c1e: {token.get('--t-auf-stahl')!r}"
+
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke]::after')
+    assert bodies, "keine Tagzeilen-Regel"
+    regel = " ".join(bodies)
+    assert re.search(r"color:\s*var\(--t-auf-stahl\)", regel), "Tagzeile nicht in --t-auf-stahl"
+    assert re.search(r"font-size:\s*15px", regel), "Tagzeile nicht 15px"
+    assert re.search(r"font-weight:\s*600", regel), "Tagzeile nicht weight 600"
+    assert re.search(r"letter-spacing:\s*3px", regel), "Tagzeile ohne Laufweite 3px"
+
+    # Verlauf der Stahlleiste aus der Kopfleisten-Regel auslesen:
+    kopf = " ".join(_teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste]'))
+    stops, _ = _verlauf_stops(kopf)
+    chrom = _hex_rgb(token["--t-chrom"].strip())
+    weiss, schwarz = (1.0, 1.0, 1.0), (0.0, 0.0, 0.0)
+    parsed = []
+    for tok, pct, ziel, pos in stops:
+        assert tok in token, f"{tok} fehlt in terminal.css"
+        base = _hex_rgb(token[tok].strip())
+        parsed.append((float(pos), _mische(base, weiss if ziel == "white" else schwarz, float(pct))))
+    parsed.sort()
+    text = _hex_rgb(token["--t-auf-stahl"].strip())
+
+    def farbe_an(pos):
+        if pos <= parsed[0][0]:
+            return parsed[0][1]
+        if pos >= parsed[-1][0]:
+            return parsed[-1][1]
+        for (p0, c0), (p1, c1) in zip(parsed, parsed[1:]):
+            if p0 <= pos <= p1:
+                t = 0.0 if p1 == p0 else (pos - p0) / (p1 - p0)
+                return tuple(c0[i] + t * (c1[i] - c0[i]) for i in range(3))
+
+    # vertikaler Bereich hinter dem Text: Leiste ist --t-kopfhoehe hoch, der Text
+    # (15px, Zeilenhöhe bis 22px) sitzt mittig:
+    hoehe = float(re.fullmatch(r"([\d.]+)px", token["--t-kopfhoehe"].strip()).group(1))
+    span_lo = (hoehe - 22.0) / 2 / hoehe * 100
+    span_hi = (hoehe + 22.0) / 2 / hoehe * 100
+
+    # hellste und dunkelste Stelle des ganzen Verlaufs:
+    hell = max(parsed, key=lambda s: _luminanz(s[1]))
+    dunkel = min(parsed, key=lambda s: _luminanz(s[1]))
+    k_hell = _kontrast(text, hell[1])
+    assert k_hell >= 4.5, f"gegen die hellste Stelle ({hell[0]:.0f}%) nur {k_hell:.2f}:1"
+    # jede Stelle hinter dem Text muss hell genug sein (dunkler Mittelteil des
+    # Verlaufs darf nicht hinter dem Text liegen):
+    samples = [p for p, _ in parsed if span_lo <= p <= span_hi] + [span_lo, span_hi]
+    assert samples, "keine Verlaufsstelle hinter dem Text gefunden — scannt der Test noch?"
+    for p in samples:
+        k = _kontrast(text, farbe_an(p))
+        assert k >= 4.5, f"Tagzeile bei {p:.1f}% des Verlaufs nur {k:.2f}:1 (< 4,5:1)"
+    assert not (span_lo <= dunkel[0] <= span_hi), \
+        f"dunkelster Stop ({dunkel[0]:.0f}%) liegt hinter der Tagzeile — Text steht auf dunklem Grund"
+
+
+def test_r2_hamburger_ist_chromtaste(terminal_css):
+    """R2: der ☰-Knopf in der Leiste wird eine kleine Chromtaste wie .taste b —
+    heller Verlauf aus --t-chrom, dunkle Schrift in --t-auf-stahl, Rundung 5px.
+    Der lila Rahmen (--border-hi = --t-rahmen) fällt weg."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste] .sidebar-toggle')
+    assert bodies, "keine Regel für den ☰-Knopf in der Leiste"
+    regel = " ".join(bodies)
+    assert re.search(r"border:\s*none\s*!important", regel), "Rahmen nicht entfernt (lila --border-hi)"
+    assert re.search(r"border-radius:\s*5px", regel), "Rundung nicht 5px"
+    assert re.search(r"color:\s*var\(--t-auf-stahl\)", regel), "Schrift nicht dunkel (--t-auf-stahl)"
+    bg = re.search(r"background:\s*linear-gradient\(180deg,([^;]+);", regel)
+    assert bg, "kein heller Verlauf auf der Taste"
+    assert "var(--t-chrom)" in bg.group(1) and "color-mix" in bg.group(1), \
+        "Verlauf nicht aus --t-chrom per color-mix gebaut"
+
+
+def test_r3_seitenleiste_aus_glas(terminal_css):
+    """R3: die Seitenleiste (aside) bekommt im Terminal-Theme denselben
+    Glas-Verlauf wie die Karten (.card) und rechts eine 1px-Linie in --t-chrom
+    mit 35% Deckkraft. Keine Abrundung nötig."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] aside')
+    assert bodies, "keine aside-Regel im Terminal-Theme"
+    regel = " ".join(bodies)
+
+    card = " ".join(_teil_bodies(terminal_css, 'html[data-theme="terminal"] .card'))
+    m_card = re.search(r"background:\s*(linear-gradient\([^;]+);", card)
+    m_aside = re.search(r"background:\s*(linear-gradient\([^;]+);", regel)
+    assert m_card, "kein Glas-Verlauf an .card gefunden"
+    assert m_aside, "kein Verlauf an der Seitenleiste"
+    norm = lambda s: re.sub(r"\s+", " ", s.group(1)).strip()
+    assert norm(m_aside) == norm(m_card), \
+        "Seitenleiste trägt nicht exakt den Glas-Verlauf der Karten"
+
+    assert re.search(
+        r"border-right:\s*1px solid\s+color-mix\(in srgb,\s*var\(--t-chrom\)\s+35%", regel), \
+        "rechte 1px-Linie in --t-chrom 35% fehlt an der Seitenleiste"
+
+
+# ---------------------------------------------------------------------------
+# Glas-Kartenecke (oben links): die hellste Stelle des Glas-Verlaufs von
+# .card und der Seitenleiste (160deg -> 0%-Stop). Die Startfarbe des Verlaufs
+# wird mit ihrer Deckkraft per Alpha-Komposition über --t-flaeche, --t-tafel
+# und --t-grund gesetzt (so wirkt color-mix mit transparent), darüber der
+# Glanz ::before (Weiß) derselben Ecke. Darauf WCAG-Kontrast: --t-text und
+# --t-text-hell mindestens 7:1, --t-text-matt und die Zustandsfarben
+# ok/warnung/fehler/info mindestens 4,5:1.
+# ---------------------------------------------------------------------------
+
+GLAS_HINTERGRUENDE = ["--t-flaeche", "--t-tafel", "--t-grund"]
+GLAS_TEXT = [
+    ("--t-text", 7.0),
+    ("--t-text-hell", 7.0),
+    ("--t-text-matt", 4.5),
+    ("--t-ok", 4.5),
+    ("--t-warnung", 4.5),
+    ("--t-fehler", 4.5),
+    ("--t-info", 4.5),
+]
+
+
+def _top_level_kommas(text: str):
+    """Kommas auf Klammer-Tiefe 0 splitten (color-mix enthält selbst Kommas)."""
+    teile, depth, aktuell = [], 0, ""
+    for zeichen in text:
+        if zeichen == "(":
+            depth += 1
+        elif zeichen == ")":
+            depth -= 1
+        if zeichen == "," and depth == 0:
+            teile.append(aktuell)
+            aktuell = ""
+        else:
+            aktuell += zeichen
+    teile.append(aktuell)
+    return [t.strip() for t in teile if t.strip()]
+
+
+def _verlauf_argumente(regel: str) -> str:
+    """Argumenttext des ersten linear-gradient( … ) bis zur schließenden Klammer."""
+    m = re.search(r"linear-gradient\(", regel)
+    assert m, "kein linear-gradient in der Regel"
+    depth = 1
+    for i in range(m.end(), len(regel)):
+        if regel[i] == "(":
+            depth += 1
+        elif regel[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return regel[m.end():i]
+    return regel[m.end():]
+
+
+def _glas_startfarbe(regel: str, token: dict):
+    """Startfarbe (erster Stop) eines Glas-Verlaufs als (rgb, alpha).
+
+    Parst var(--t-…), color-mix(in srgb, var(--t-…) N%, transparent) — Deckkraft
+    N/100 — und color-mix(… N%, white|black). Alles andere schlägt fehl: eine
+    nicht parsebare Startfarbe darf den Test nicht still bestehen lassen.
+    """
+    stops = _top_level_kommas(_verlauf_argumente(regel))
+    stops = [s for s in stops if not re.fullmatch(r"[\d.]+deg", s)]
+    assert stops, "keine Verlaufs-Stops gefunden"
+    m = re.match(r"^(.*?)\s+[\d.]+%\s*$", stops[0], re.S)
+    farbe = (m.group(1) if m else stops[0]).strip()
+    fm = re.fullmatch(r"var\((--t-[a-z0-9-]+)\)", farbe)
+    if fm:
+        assert fm.group(1) in token, f"{fm.group(1)} fehlt in terminal.css"
+        return _hex_rgb(token[fm.group(1)].strip()), 1.0
+    fm = re.fullmatch(
+        r"color-mix\(in srgb,\s*var\((--t-[a-z0-9-]+)\)\s+([\d.]+)%,\s*transparent\)", farbe)
+    if fm:
+        assert fm.group(1) in token, f"{fm.group(1)} fehlt in terminal.css"
+        return _hex_rgb(token[fm.group(1)].strip()), float(fm.group(2)) / 100.0
+    fm = re.fullmatch(
+        r"color-mix\(in srgb,\s*var\((--t-[a-z0-9-]+)\)\s+([\d.]+)%,\s*(white|black)\)", farbe)
+    if fm:
+        assert fm.group(1) in token, f"{fm.group(1)} fehlt in terminal.css"
+        ziel = (1.0, 1.0, 1.0) if fm.group(3) == "white" else (0.0, 0.0, 0.0)
+        return _mische(_hex_rgb(token[fm.group(1)].strip()), ziel, float(fm.group(2))), 1.0
+    raise AssertionError(f"Startfarbe des Glas-Verlaufs nicht parsebar: {farbe!r}")
+
+
+def _glas_glanz_alpha(terminal_css: str) -> float:
+    """Höchste Deckkraft des Glanz-::before (rgba-Weiß) — sein 0%-Stop oben links."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] .card::before')
+    if not bodies:
+        return 0.0
+    alphas = [float(a) for a in re.findall(
+        r"rgba\(255,\s*255,\s*255,\s*([01](?:\.\d+)?|\.\d+)\)", " ".join(bodies))]
+    return max(alphas) if alphas else 0.0
+
+
+def _alpha_over(fg, alpha, bg):
+    """Alpha-Komposition (source-over): fg mit Deckkraft alpha über bg —
+    genau so wirkt color-mix(in srgb, farbe N%, transparent) über einem Grund."""
+    return tuple(alpha * f + (1.0 - alpha) * b for f, b in zip(fg, bg))
+
+
+@pytest.mark.parametrize("text_token, soll", GLAS_TEXT)
+@pytest.mark.parametrize("hintergrund", GLAS_HINTERGRUENDE)
+def test_glas_kartenecke_kontrast(terminal_css, text_token, soll, hintergrund):
+    """Hellste Stelle des Glas-Verlaufs (oben links, 0%-Stop des 160deg-Verlaufs
+    von .card und aside): Startfarbe mit ihrer Deckkraft über --t-flaeche,
+    --t-tafel und --t-grund, darüber der Glanz ::before derselben Ecke.
+    WCAG-Kontrast darauf: --t-text und --t-text-hell >= 7, --t-text-matt und
+    ok/warnung/fehler/info >= 4,5. Nicht parsebare Startfarbe -> Fehlschlag."""
+    token = _token_map(terminal_css)
+    assert hintergrund in token, f"{hintergrund} fehlt in terminal.css"
+    assert text_token in token, f"{text_token} fehlt in terminal.css"
+    card = " ".join(_teil_bodies(terminal_css, 'html[data-theme="terminal"] .card'))
+    assert card, "keine .card-Regel im Terminal-Theme"
+    start = _glas_startfarbe(card, token)
+    aside = " ".join(_teil_bodies(terminal_css, 'html[data-theme="terminal"] aside'))
+    assert aside, "keine aside-Regel im Terminal-Theme"
+    assert _glas_startfarbe(aside, token) == start, \
+        "Seitenleiste beginnt nicht mit derselben Glas-Startfarbe wie die Karten"
+    glanz = _glas_glanz_alpha(terminal_css)
+    ecke = _alpha_over(start[0], start[1], _hex_rgb(token[hintergrund].strip()))
+    ecke = _alpha_over((1.0, 1.0, 1.0), glanz, ecke)
+    k = _kontrast(_hex_rgb(token[text_token].strip()), ecke)
+    assert k >= soll, (
+        f"{text_token} gegen die Kartenecke über {hintergrund} "
+        f"(Start-Deckkraft {start[1]:.2f}, Glanz {glanz:.2f}): {k:.2f}:1 < {soll}:1"
+    )
