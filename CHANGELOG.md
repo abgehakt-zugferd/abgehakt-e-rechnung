@@ -11,15 +11,24 @@ Klammern.
 
 Der Knopf „Design“ unten in der Seitenleiste schaltet jetzt reihum zwischen
 Abgehakt, Pixel und Terminal. Terminal ist ein dunkles Design mit gedämpften
-Pastellfarben auf Schiefergrund. Lavendel steht für Text, Mint für Akzente und
-Bezahltes, Pfirsich für Offenes, Rosé für Fehler. Fließtext, Beträge und Beschriftungen
-stehen in IBM Plex Mono, Überschriften und Kennzahlen in VT323. Keine Schrift ist
-kleiner als 15 px, jede Textfarbe erreicht auf jeder Fläche einen Kontrast von
-mindestens 6:1 (WCAG verlangt 4,5:1). Der Gesamtbetrag ist in der Rechnungsansicht die größte Zahl.
+Pastellfarben. Oben liegt eine Stahlleiste mit der Wortmarke in Chromschrift. Karten
+und Seitenleiste wirken wie Glas, mit leichter Rundung und weichem Glanz.
 
-Die Auswahl gilt je Browser und bleibt gespeichert. Vorgabe bleibt Abgehakt, PDF und
-E-Rechnung sehen in jedem Design gleich aus. Beide Schriften liegen im Image, nichts
-wird aus dem Netz nachgeladen.
+Lavendel steht für Text, Mint für Akzente und die aktive Auswahl. Zustände stehen als
+Form und Wort in eigener Farbe:
+- ● bezahlt in Mint
+- ▲ gestellt oder offen in Pfirsich
+- ■ überfällig in Rosé
+- ◆ Entwurf in Hellblau
+- ○ storniert in gedämpftem Lavendel
+
+Überschriften stehen in Saira Condensed, Kennzahlen in VT323, Fließtext, Beträge und
+Beschriftungen in IBM Plex Mono. Keine Schrift ist kleiner als 15 px. Jede Textfarbe
+erreicht auf den dunklen Flächen einen Kontrast von mindestens 6:1, die Schrift auf der Stahlleiste mindestens 4,5:1.
+
+Die Auswahl gilt je Browser und bleibt gespeichert. Vorgabe bleibt Abgehakt. PDF und
+E-Rechnung sehen in jedem Design gleich aus. Alle Schriften liegen im Image, nichts wird
+aus dem Netz nachgeladen.
 
 ### Zahlungsdatum: vor dem Rechnungsdatum bei Rechnungsaufträgen, protokollierte Korrektur (#278)
 

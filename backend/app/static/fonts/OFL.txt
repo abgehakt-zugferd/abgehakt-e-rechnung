@@ -22,7 +22,12 @@ IBM Plex Mono
   Copyright 2017 IBM Corp.
   Bezogen ueber das npm-Paket @fontsource/ibm-plex-mono 5.3.0.
 
-Der Lizenztext gilt fuer alle fuenf gleichermassen und folgt einmal:
+Saira Condensed
+  Copyright 2016 The Saira Project Authors (omnibus.type@gmail.com),
+  with Reserved Font Name "Saira".
+  Bezogen ueber das npm-Paket @fontsource/saira-condensed 5.3.0.
+
+Der Lizenztext gilt fuer alle sechs gleichermassen und folgt einmal:
 
 -----------------------------------------------------------
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
