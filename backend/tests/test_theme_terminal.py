@@ -299,3 +299,52 @@ def test_terminal_summe_gesamt_ist_groesste_zahl(terminal_block, terminal_css):
               if "formatEur(grossTotal)" in z or "formatEur(bruttoNachAbzug)" in z]
     assert len(zeilen) >= 2 and all("summe__gesamt" in z for z in zeilen), \
         "Summenzeilen in form.html tragen nicht die Klasse summe__gesamt"
+
+
+def test_terminal_karten_h2_plex_600_klein_akzent(terminal_css):
+    """Karten-h2: preflight (tailwind-play hängt sein Style ans Ende des head)
+    setzt h1-h6 auf font-size:inherit — wirksam ist die geerbte Körpergröße
+    (18px, in VT323 optisch ~15px). h2 unter 24px nimmt Plex 600 in
+    --t-groesse-klein und --t-akzent. Die Seitenüberschrift h1 bleibt VT323."""
+    regel = _terminal_regel(terminal_css, r'\.card h2')
+    assert re.search(r'font-family:\s*var\(--t-schrift-text\) !important', regel), \
+        "Karten-h2 nicht in IBM Plex Mono"
+    assert re.search(r'font-weight:\s*600 !important', regel), "Karten-h2 ohne Gewicht 600"
+    assert re.search(r'font-size:\s*var\(--t-groesse-klein\) !important', regel), \
+        "Karten-h2 nicht in --t-groesse-klein"
+    assert re.search(r'color:\s*var\(--t-akzent\) !important', regel), \
+        "Karten-h2 nicht in --t-akzent"
+    assert not re.search(r'html\[data-theme="terminal"\][^{]*\bh1\b[^{]*\{', terminal_css), \
+        "h1 darf im Terminal-Theme nicht umgestellt werden"
+
+
+def test_terminal_aktionsspalte_link_plex_tabelle(terminal_css):
+    """Belegliste Aktionsspalte: der „bearbeiten“-Link (letzte Spalte) bekommt im
+    Terminal-Theme Plex in --t-groesse-tabelle; die VERSAND-Spalte davor wird
+    kompakt (nowrap, kleineres padding), damit die Tabelle bei 1440px passt."""
+    regel = _terminal_regel(terminal_css, r'td:last-child a')
+    assert re.search(r'font-family:\s*var\(--t-schrift-text\) !important', regel), \
+        "Aktions-Link nicht in IBM Plex Mono"
+    assert re.search(r'font-size:\s*var\(--t-groesse-tabelle\) !important', regel), \
+        "Aktions-Link nicht in --t-groesse-tabelle"
+    regel = _terminal_regel(terminal_css, r'td:nth-last-child\(2\)')
+    assert re.search(r'white-space:\s*nowrap', regel), "VERSAND-Spalte nicht nowrap"
+    assert re.search(r'padding:\s*[^;]+ !important', regel), \
+        "VERSAND-Spalte ohne kompakteres padding"
+
+
+def test_terminal_storno_badge_abstand_am_link(terminal_css):
+    """Storno-Badge: als Flex-Item verschwindet das Leerzeichen vor der Belegnummer
+    („DURCHRE-2026-007“) — der Abstand kommt per margin-left am Link, nicht im Text."""
+    regel = _terminal_regel(terminal_css, r'\[data-storniert-durch\] a')
+    assert re.search(r'margin-left:\s*[^;]+', regel), \
+        "kein margin-left am Link im Storno-Badge"
+
+
+def test_terminal_summe_gesamt_in_h2_groesse(terminal_css):
+    """Gesamtbetrag: .summe__gesamt in --t-groesse-h2 (30px) — bleibt die größte
+    Zahl im Summenblock (mindestens --fs-gross = 20px)."""
+    m = re.search(r'html\[data-theme="terminal"\][^{]*\.summe__gesamt[^{]*\{([^}]*)\}', terminal_css)
+    assert m, "keine .summe__gesamt-Regel in terminal.css"
+    assert re.search(r'font-size:\s*var\(--t-groesse-h2\) !important', m.group(1)), \
+        ".summe__gesamt nicht in --t-groesse-h2 (30px)"

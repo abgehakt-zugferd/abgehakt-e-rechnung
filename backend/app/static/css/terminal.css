@@ -75,7 +75,33 @@ html[data-theme="terminal"] .badge { white-space: nowrap !important; }
 /* Gesamtbetrag: größte Zahl im Summenblock, helle Schrift, tabellarische Ziffern. */
 html[data-theme="terminal"] .summe__gesamt {
     font-family: var(--t-schrift-text) !important;
-    font-size: var(--t-groesse-zahl-gross) !important;
+    font-size: var(--t-groesse-h2) !important;
     color: var(--t-text-hell) !important;
     font-variant-numeric: tabular-nums;
 }
+
+/* Kartenüberschriften: preflight setzt h1-h6 auf font-size:inherit — wirksam ist
+   die geerbte Körpergröße (18px, in VT323 optisch ~15px). h2 in Karten unter 24px
+   nehmen IBM Plex Mono 600 in --t-groesse-klein und --t-akzent. h1 bleibt VT323. */
+html[data-theme="terminal"] .card h2 {
+    font-family: var(--t-schrift-text) !important;
+    font-weight: 600 !important;
+    font-size: var(--t-groesse-klein) !important;
+    color: var(--t-akzent) !important;
+}
+
+/* Belegliste: Aktions-Link (letzte Spalte) in Plex in Tabellengröße; die
+   VERSAND-Spalte davor kompakt, damit die Tabelle bei 1440px in den
+   overflow-x-auto-Container passt. */
+html[data-theme="terminal"] .overflow-x-auto table td:last-child a {
+    font-family: var(--t-schrift-text) !important;
+    font-size: var(--t-groesse-tabelle) !important;
+}
+html[data-theme="terminal"] .overflow-x-auto table td:nth-last-child(2) {
+    white-space: nowrap;
+    padding: 8px 6px !important;
+}
+
+/* Storno-Badge: als Flex-Item verschwindet das Leerzeichen vor der Belegnummer —
+   der Abstand kommt per margin-left am Link, nicht über den Text. */
+html[data-theme="terminal"] .badge[data-storniert-durch] a { margin-left: 6px; }
