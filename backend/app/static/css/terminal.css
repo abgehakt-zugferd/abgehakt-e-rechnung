@@ -16,6 +16,8 @@ html[data-theme="terminal"] {
     --t-rahmen:#7a72b0;
     --t-linie:#3a3a55;
     --t-chrom:#c8ced1;
+    --t-auf-stahl:#1a1c1e;
+    --t-kopfhoehe:72px;
     --t-schrift-anzeige:'VT323',monospace;
     --t-schrift-text:'IBM Plex Mono',monospace;
     --t-schrift-marke:'Saira Condensed', sans-serif;
@@ -153,19 +155,35 @@ html[data-theme="terminal"] .badge[data-storniert-durch] a { margin-left: 6px; }
    Alles nur unter html[data-theme="terminal"]; kein Raster (keine Scanlines).
    --------------------------------------------------------------------------- */
 
-/* A2: Kopfleiste oben — im Terminal-Theme die Stahlleiste über die ganze Breite.
-   Sie trägt lg:hidden (nur schmales Fenster), das Terminal-Theme zeigt sie
-   auf dem Desktop garantiert an. */
+/* A2 + R1: Kopfleiste oben — im Terminal-Theme die Stahlleiste über die GANZE
+   Breite: fixed über Seitenleiste und Hauptbereich, feste Höhe --t-kopfhoehe,
+   z-index über Seitenleiste (z-50) und Overlay (z-40). Sie trägt lg:hidden
+   (nur schmales Fenster), das Terminal-Theme zeigt sie auf dem Desktop
+   garantiert an (Regel direkt darüber). Rumpf und fixed Seitenleiste beginnen
+   darunter — siehe [data-rumpf] und aside in der Runde 3 weiter unten. */
 html[data-theme="terminal"] header[data-kopfleiste].lg\:hidden { display: flex !important; }
 
 html[data-theme="terminal"] header[data-kopfleiste] {
-    position: relative !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 60 !important;
+    height: var(--t-kopfhoehe) !important;
+    justify-content: flex-start !important;
+    gap: 14px !important;
+    /* R2: Verlauf so gelegt, dass die mittig stehende Tagzeile auf dem hellen
+       Teil des Stahls steht — Kontrast --t-auf-stahl gegen jede Stelle hinter
+       dem Text mindestens 4,5:1 (WCAG, gerechnet in test_r2_..._wcag_kontrast).
+       Die dunkle Rille liegt deshalb unterhalb der Textzeile (88-94%), nicht
+       in der Mitte des Balkens. */
     background: linear-gradient(180deg,
         color-mix(in srgb, var(--t-chrom) 88%, white) 0%,
-        color-mix(in srgb, var(--t-chrom) 60%, black) 18%,
-        color-mix(in srgb, var(--t-chrom) 32%, black) 48%,
-        color-mix(in srgb, var(--t-chrom) 18%, black) 52%,
-        color-mix(in srgb, var(--t-chrom) 48%, black) 80%,
+        color-mix(in srgb, var(--t-chrom) 70%, white) 45%,
+        color-mix(in srgb, var(--t-chrom) 55%, white) 70%,
+        color-mix(in srgb, var(--t-chrom) 40%, white) 82%,
+        color-mix(in srgb, var(--t-chrom) 32%, black) 88%,
+        color-mix(in srgb, var(--t-chrom) 18%, black) 94%,
         color-mix(in srgb, var(--t-chrom) 80%, white) 100%) !important;
     border-bottom: none !important;
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 6px 18px rgba(0,0,0,0.6) !important;
@@ -185,8 +203,10 @@ html[data-theme="terminal"] header[data-kopfleiste]::after {
     box-shadow: 0 1px 2px rgba(0,0,0,0.8);
 }
 
-/* A2: die Wortmarke in der Leiste trägt den Chromverlauf in der Schrift —
-   Saira Condensed 800 kursiv, background-clip:text. */
+/* A2 + R2: die Wortmarke in der Leiste trägt den Chromverlauf in der Schrift —
+   Saira Condensed 800 kursiv, background-clip:text. R2: klein geschrieben wie
+   im Entwurf („abgehakt“); der Haken ✓ im Markup bleibt stehen. Die Tagzeile
+   (::after darunter) ist per text-transform:none davon ausgenommen. */
 html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke] {
     font-family: var(--t-schrift-marke) !important;
     font-weight: 800 !important;
@@ -194,6 +214,7 @@ html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke] {
     font-size: 48px !important;
     line-height: 0.95 !important;
     letter-spacing: 1px !important;
+    text-transform: lowercase !important;
     text-shadow: none !important;
     background: linear-gradient(180deg,
         rgba(255,255,255,1) 0%,
@@ -208,7 +229,10 @@ html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke] {
 }
 html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke] span { color: inherit !important; }
 
-/* A3: die Tagzeile steht als Text in der Stahlleiste, dunkel wie der Stahl. */
+/* A3 + R2: die Tagzeile steht als Text in der Stahlleiste, dunkel auf dem hellen
+   Stahl in --t-auf-stahl (#1a1c1e), 15px, weight 600, Laufweite 3px. Sie steht
+   im Verlauf hinter hellem Grund (WCAG >= 4,5:1, siehe test_r2_..._wcag_kontrast)
+   und wird von text-transform:lowercase der Marke nicht mitgezogen. */
 html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke]::after {
     content: 'RECHNUNGEN · GOBD · DATEV';
     font-family: var(--t-schrift-text) !important;
@@ -216,7 +240,8 @@ html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke]::after {
     font-weight: 600 !important;
     font-size: 15px !important;
     letter-spacing: 3px !important;
-    color: var(--t-grund) !important;
+    text-transform: none !important;
+    color: var(--t-auf-stahl) !important;
     background: none !important;
     -webkit-background-clip: border-box !important;
     background-clip: border-box !important;
@@ -356,4 +381,45 @@ html[data-theme="terminal"] table td[style*="text-align:right"] {
     text-align: right !important;
     font-variant-numeric: tabular-nums;
     color: var(--t-text-hell) !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Runde 3 (Abgleich 1440x1180): Stahlleiste über die ganze Breite, Rumpf und
+   Seitenleiste beginnen darunter; Leiste von links Niete, ☰-Chromtaste,
+   Wortmarke (klein), Tagzeile, rechts die Niete; Seitenleiste aus Glas.
+   Alles nur unter html[data-theme="terminal"].
+   --------------------------------------------------------------------------- */
+
+/* R1: der Rumpf (Seitenleiste + Hauptbereich) beginnt unter der fixed Leiste. */
+html[data-theme="terminal"] [data-rumpf] {
+    padding-top: var(--t-kopfhoehe) !important;
+}
+
+/* R1 + R3: die Seitenleiste. Auf dem Desktop (lg:static) schiebt das padding-top
+   des Rumpfes sie unter die Leiste; im Overlay-Modus (fixed, schmales Fenster)
+   greift top. R3: Glas-Verlauf exakt wie die Karten (.card) und rechts eine
+   1px-Linie in --t-chrom mit 35% Deckkraft — nicht abgerundet. */
+html[data-theme="terminal"] aside {
+    top: var(--t-kopfhoehe) !important;
+    background: linear-gradient(160deg,
+        color-mix(in srgb, var(--t-rahmen) 55%, transparent) 0%,
+        color-mix(in srgb, var(--t-tafel) 85%, transparent) 60%) !important;
+    border-right: 1px solid color-mix(in srgb, var(--t-chrom) 35%, transparent) !important;
+}
+
+/* R2: der rechte Niete (::after der Leiste) schiebt sich ganz nach rechts. */
+html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-spacer] {
+    margin-left: auto !important;
+}
+
+/* R2: der ☰-Knopf in der Leiste wird eine kleine Chromtaste wie .taste b im
+   Entwurf — heller Chromverlauf, dunkle Schrift in --t-auf-stahl, Rundung 5px.
+   Der lila Rahmen (--border-hi = --t-rahmen) entfällt. */
+html[data-theme="terminal"] header[data-kopfleiste] .sidebar-toggle {
+    border: none !important;
+    border-radius: 5px !important;
+    color: var(--t-auf-stahl) !important;
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--t-chrom) 92%, white) 0%,
+        color-mix(in srgb, var(--t-chrom) 80%, black) 100%) !important;
 }

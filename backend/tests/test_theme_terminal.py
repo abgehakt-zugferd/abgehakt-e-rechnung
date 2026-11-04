@@ -627,12 +627,12 @@ def test_a2_stahlleiste_auch_bei_breitem_fenster_sichtbar(basis_html, terminal_c
 
 def test_a2_tagzeile_in_der_stahlleiste(terminal_css):
     """A3: die Zeile RECHNUNGEN · GOBD · DATEV steht als Text in der Stahlleiste,
-    dunkel wie auf dem Stahl."""
+    dunkel wie auf dem Stahl (--t-auf-stahl, Kontrast siehe Runde 3)."""
     bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke]::after')
     assert bodies, "die Tagzeile steht nirgends in der Stahlleiste"
     regel = " ".join(bodies)
     assert "RECHNUNGEN · GOBD · DATEV" in regel, "Tagzeile fehlt im content"
-    assert re.search(r"color:\s*var\(--t-grund\)", regel), "Tagzeile nicht dunkel"
+    assert re.search(r"color:\s*var\(--t-auf-stahl\)", regel), "Tagzeile nicht in --t-auf-stahl"
 
 
 def test_a3_seitenleisten_marke_wird_ausgeblendet(basis_html, terminal_css):
@@ -900,3 +900,242 @@ def test_a12_keine_scanlines_im_terminal_theme(terminal_css):
     im Terminal-Theme."""
     assert "repeating-linear-gradient" not in terminal_css, \
         "Scanlines (repeating-linear-gradient) im Terminal-Theme gefunden"
+
+
+# ---------------------------------------------------------------------------
+# Runde 3 (Abgleich 1440x1180):
+#   R1  Stahlleiste über die GANZE Breite (fixed, --t-kopfhoehe), Seitenleiste
+#       und Hauptbereich beginnen darunter; Alpine-Overlay bleibt funktionsfähig.
+#   R2  Leiste von links: Niete, ☰-Chromtaste, Wortmarke (lowercase), Tagzeile
+#       RECHNUNGEN · GOBD · DATEV in --t-auf-stahl, rechts die Niete.
+#       WCAG: Kontrast der Tagzeile gegen hellste/dunkelste Stelle des
+#       Verlaufs hinter dem Text (Formel unten), mindestens 4,5:1.
+#   R3  Seitenleiste (aside) bekommt den Glas-Verlauf der Karten plus eine
+#       1px-Linie rechts in --t-chrom 35%.
+# ---------------------------------------------------------------------------
+
+def _token_map(terminal_css: str):
+    return dict(re.findall(r"(--t-[a-z0-9-]+)\s*:\s*([^;]+);", terminal_css))
+
+
+def _hex_rgb(wert: str):
+    h = wert.strip().lstrip("#")
+    assert re.fullmatch(r"[0-9a-fA-F]{6}", h), f"kein 6-stelliger Hexwert: {wert!r}"
+    return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+
+
+def _srgb_lin(c: float) -> float:
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def _luminanz(rgb) -> float:
+    r, g, b = rgb
+    return 0.2126 * _srgb_lin(r) + 0.7152 * _srgb_lin(g) + 0.0722 * _srgb_lin(b)
+
+
+def _kontrast(rgb1, rgb2) -> float:
+    """WCAG-Kontrastverhältnis zweier sRGB-Farben (relative luminance, 1,0-21)."""
+    l1, l2 = _luminanz(rgb1), _luminanz(rgb2)
+    hi, lo = max(l1, l2), min(l1, l2)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _mische(base, ziel, prozent):
+    """color-mix(in srgb, base prozent%, ziel) — Kanäle linear in sRGB gemischt."""
+    p = prozent / 100.0
+    return tuple(p * a + (1 - p) * b for a, b in zip(base, ziel))
+
+
+def _verlauf_stops(regel: str):
+    """(position%, farbe) aller Stops eines linear-gradient(180deg, …) in der Regel.
+    Nur color-mix(in srgb, var(--t-…), N%, white|black)-Stops — der Verlauf der
+    Stahlleiste ist ausschließlich so gebaut."""
+    bg = re.search(r"background:\s*linear-gradient\(180deg,(.*?)\)\s*!important", regel, re.S)
+    assert bg, "kein senkrechter Verlauf (linear-gradient 180deg) in der Regel"
+    stops = re.findall(
+        r"color-mix\(in srgb,\s*var\((--t-[a-z0-9-]+)\)\s+([\d.]+)%,\s*(white|black)\)\s+([\d.]+)%",
+        bg.group(1))
+    assert len(stops) >= 4, f"zu wenige color-mix-Stops im Verlauf: {len(stops)}"
+    return stops, bg.group(1)
+
+
+def test_r1_kopfhoehe_token(terminal_css):
+    """R1: neues Token --t-kopfhoehe in terminal.css, etwa 72px (68-76px)."""
+    token = _token_map(terminal_css)
+    assert "--t-kopfhoehe" in token, "--t-kopfhoehe fehlt in terminal.css"
+    m = re.fullmatch(r"([\d.]+)px", token["--t-kopfhoehe"].strip())
+    assert m and 68 <= float(m.group(1)) <= 76, \
+        f"--t-kopfhoehe nicht etwa 72px: {token['--t-kopfhoehe']!r}"
+
+
+def test_r1_stahlleiste_fixed_ueber_ganze_breite(basis_html, terminal_css):
+    """R1: die Kopfleiste liegt im Terminal-Theme fixed über der ganzen Breite
+    (top/left/right 0, z-index über Seitenleiste z-50 und Overlay z-40) mit der
+    festen Höhe var(--t-kopfhoehe). Seitenleiste und Hauptbereich beginnen
+    darunter: Rumpf (data-rumpf) per padding-top, die fixed Seitenleiste per top."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste]')
+    assert bodies, "keine Regel für die Kopfleiste"
+    regel = " ".join(bodies)
+    assert re.search(r"position:\s*fixed\s*!important", regel), "Kopfleiste nicht fixed"
+    for prop in ("top", "left", "right"):
+        assert re.search(rf"{prop}:\s*0\s*!important", regel), f"{prop}:0 fehlt"
+    zi = re.search(r"z-index:\s*(\d+)\s*!important", regel)
+    assert zi and int(zi.group(1)) > 50, \
+        "z-index der Leiste muss über der Seitenleiste (z-50) liegen"
+    assert re.search(r"height:\s*var\(--t-kopfhoehe\)\s*!important", regel), \
+        "feste Höhe var(--t-kopfhoehe) fehlt"
+
+    # Rumpf trägt das data-Attribut und rückt per padding-top unter die Leiste:
+    assert re.search(r'<div class="flex h-screen overflow-hidden"[^>]*\bdata-rumpf\b', basis_html), \
+        "der Rumpf (flex h-screen overflow-hidden) trägt kein data-rumpf"
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] [data-rumpf]')
+    assert bodies and any(re.search(r"padding-top:\s*var\(--t-kopfhoehe\)", b) for b in bodies), \
+        "Rumpf ohne padding-top: var(--t-kopfhoehe)"
+
+    # die fixed Seitenleiste (schmales Fenster) startet ebenfalls unter der Leiste:
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] aside')
+    assert bodies and any(re.search(r"top:\s*var\(--t-kopfhoehe\)", b) for b in bodies), \
+        "aside ohne top: var(--t-kopfhoehe) — im Overlay-Modus bliebe sie unter der Leiste kleben"
+
+    # Aufklappen der Seitenleiste (Alpine sidebarOpen) bleibt unangetastet:
+    assert 'x-show="sidebarOpen"' in basis_html, "mobiles Overlay (sidebarOpen) fehlt"
+    assert "'-translate-x-full': !sidebarOpen" in basis_html, \
+        "die -translate-x-full-Bindung der Seitenleiste fehlt"
+
+
+def test_r1_leiste_reihenfolge_niete_hamburger_marke_rechts_niete(basis_html, terminal_css):
+    """R2: in der Leiste von links nach rechts Niete (::before), ☰-Knopf, Wortmarke,
+    rechts die Niete (::after). DOM-Reihenfolge Knopf vor Marke, Leiste auf
+    flex-start (nicht mehr space-between/mittig), rechter Niete per margin-left:auto
+    am Spacer ganz rechts."""
+    header = re.search(r"<header[^>]*data-kopfleiste.*?</header>", basis_html, re.S)
+    assert header, "Kopfleiste in base.html nicht gefunden"
+    h = header.group(0)
+    i_btn = h.find("sidebar-toggle")
+    i_marke = h.find("data-kopf-marke")
+    assert 0 < i_btn < i_marke, "☰-Knopf steht nicht vor der Wortmarke in der Leiste"
+    assert "data-kopf-spacer" in h, "der rechte Spacer in der Leiste trägt kein data-kopf-spacer"
+
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste]')
+    assert any(re.search(r"justify-content:\s*flex-start\s*!important", b) for b in bodies), \
+        "Leiste nicht auf flex-start — die Marke stünde weiter mittig statt links"
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-spacer]')
+    assert bodies and any(re.search(r"margin-left:\s*auto", b) for b in bodies), \
+        "rechter Niete nicht per margin-left:auto am rechten Rand"
+
+
+def test_r2_wortmarke_klein_geschrieben(basis_html, terminal_css):
+    """R2: die Wortmarke in der Leiste trägt text-transform: lowercase („abgehakt“),
+    der Haken ✓ bleibt im Markup. Die Tagzeile (::after) ist davon ausgenommen und
+    bleibt RECHNUNGEN · GOBD · DATEV."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke]')
+    assert bodies and any(re.search(r"text-transform:\s*lowercase\s*!important", b) for b in bodies), \
+        "Wortmarke nicht lowercase"
+    assert "✓" in basis_html, "der Haken ✓ fehlt im Markup"
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke]::after')
+    assert bodies and any(re.search(r"text-transform:\s*none\s*!important", b) for b in bodies), \
+        "Tagzeile würde von lowercase mitgezogen — text-transform:none fehlt am ::after"
+    assert any("RECHNUNGEN · GOBD · DATEV" in b for b in bodies), "Tagzeile-Text fehlt"
+
+
+def test_r2_tagzeile_auf_stahl_15px_600_3px_und_wcag_kontrast(terminal_css):
+    """R2: die Tagzeile steht in --t-auf-stahl (#1a1c1e), 15px, weight 600,
+    Laufweite 3px. WCAG: Kontrast der Textfarbe gegen die hellste und die
+    dunkelste Stelle des Stahlverlaufs hinter dem Text (vertikal mittig in der
+    Leiste, Zeilenhöhe bis 22px) — überall mindestens 4,5:1. Liegt der dunkelste
+    Stop hinter dem Text, wäre der Text auf dunklem Grund: dann muss die Lage von
+    Text oder Verlauf geändert werden (hier: dunkle Rille des Stahls unter die
+    Textzeile verschoben)."""
+    token = _token_map(terminal_css)
+    assert token.get("--t-auf-stahl", "").strip().lower() == "#1a1c1e", \
+        f"--t-auf-stahl fehlt oder ist nicht #1a1c1e: {token.get('--t-auf-stahl')!r}"
+
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke]::after')
+    assert bodies, "keine Tagzeilen-Regel"
+    regel = " ".join(bodies)
+    assert re.search(r"color:\s*var\(--t-auf-stahl\)", regel), "Tagzeile nicht in --t-auf-stahl"
+    assert re.search(r"font-size:\s*15px", regel), "Tagzeile nicht 15px"
+    assert re.search(r"font-weight:\s*600", regel), "Tagzeile nicht weight 600"
+    assert re.search(r"letter-spacing:\s*3px", regel), "Tagzeile ohne Laufweite 3px"
+
+    # Verlauf der Stahlleiste aus der Kopfleisten-Regel auslesen:
+    kopf = " ".join(_teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste]'))
+    stops, _ = _verlauf_stops(kopf)
+    chrom = _hex_rgb(token["--t-chrom"].strip())
+    weiss, schwarz = (1.0, 1.0, 1.0), (0.0, 0.0, 0.0)
+    parsed = []
+    for tok, pct, ziel, pos in stops:
+        assert tok in token, f"{tok} fehlt in terminal.css"
+        base = _hex_rgb(token[tok].strip())
+        parsed.append((float(pos), _mische(base, weiss if ziel == "white" else schwarz, float(pct))))
+    parsed.sort()
+    text = _hex_rgb(token["--t-auf-stahl"].strip())
+
+    def farbe_an(pos):
+        if pos <= parsed[0][0]:
+            return parsed[0][1]
+        if pos >= parsed[-1][0]:
+            return parsed[-1][1]
+        for (p0, c0), (p1, c1) in zip(parsed, parsed[1:]):
+            if p0 <= pos <= p1:
+                t = 0.0 if p1 == p0 else (pos - p0) / (p1 - p0)
+                return tuple(c0[i] + t * (c1[i] - c0[i]) for i in range(3))
+
+    # vertikaler Bereich hinter dem Text: Leiste ist --t-kopfhoehe hoch, der Text
+    # (15px, Zeilenhöhe bis 22px) sitzt mittig:
+    hoehe = float(re.fullmatch(r"([\d.]+)px", token["--t-kopfhoehe"].strip()).group(1))
+    span_lo = (hoehe - 22.0) / 2 / hoehe * 100
+    span_hi = (hoehe + 22.0) / 2 / hoehe * 100
+
+    # hellste und dunkelste Stelle des ganzen Verlaufs:
+    hell = max(parsed, key=lambda s: _luminanz(s[1]))
+    dunkel = min(parsed, key=lambda s: _luminanz(s[1]))
+    k_hell = _kontrast(text, hell[1])
+    assert k_hell >= 4.5, f"gegen die hellste Stelle ({hell[0]:.0f}%) nur {k_hell:.2f}:1"
+    # jede Stelle hinter dem Text muss hell genug sein (dunkler Mittelteil des
+    # Verlaufs darf nicht hinter dem Text liegen):
+    samples = [p for p, _ in parsed if span_lo <= p <= span_hi] + [span_lo, span_hi]
+    assert samples, "keine Verlaufsstelle hinter dem Text gefunden — scannt der Test noch?"
+    for p in samples:
+        k = _kontrast(text, farbe_an(p))
+        assert k >= 4.5, f"Tagzeile bei {p:.1f}% des Verlaufs nur {k:.2f}:1 (< 4,5:1)"
+    assert not (span_lo <= dunkel[0] <= span_hi), \
+        f"dunkelster Stop ({dunkel[0]:.0f}%) liegt hinter der Tagzeile — Text steht auf dunklem Grund"
+
+
+def test_r2_hamburger_ist_chromtaste(terminal_css):
+    """R2: der ☰-Knopf in der Leiste wird eine kleine Chromtaste wie .taste b —
+    heller Verlauf aus --t-chrom, dunkle Schrift in --t-auf-stahl, Rundung 5px.
+    Der lila Rahmen (--border-hi = --t-rahmen) fällt weg."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] header[data-kopfleiste] .sidebar-toggle')
+    assert bodies, "keine Regel für den ☰-Knopf in der Leiste"
+    regel = " ".join(bodies)
+    assert re.search(r"border:\s*none\s*!important", regel), "Rahmen nicht entfernt (lila --border-hi)"
+    assert re.search(r"border-radius:\s*5px", regel), "Rundung nicht 5px"
+    assert re.search(r"color:\s*var\(--t-auf-stahl\)", regel), "Schrift nicht dunkel (--t-auf-stahl)"
+    bg = re.search(r"background:\s*linear-gradient\(180deg,([^;]+);", regel)
+    assert bg, "kein heller Verlauf auf der Taste"
+    assert "var(--t-chrom)" in bg.group(1) and "color-mix" in bg.group(1), \
+        "Verlauf nicht aus --t-chrom per color-mix gebaut"
+
+
+def test_r3_seitenleiste_aus_glas(terminal_css):
+    """R3: die Seitenleiste (aside) bekommt im Terminal-Theme denselben
+    Glas-Verlauf wie die Karten (.card) und rechts eine 1px-Linie in --t-chrom
+    mit 35% Deckkraft. Keine Abrundung nötig."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] aside')
+    assert bodies, "keine aside-Regel im Terminal-Theme"
+    regel = " ".join(bodies)
+
+    card = " ".join(_teil_bodies(terminal_css, 'html[data-theme="terminal"] .card'))
+    m_card = re.search(r"background:\s*(linear-gradient\([^;]+);", card)
+    m_aside = re.search(r"background:\s*(linear-gradient\([^;]+);", regel)
+    assert m_card, "kein Glas-Verlauf an .card gefunden"
+    assert m_aside, "kein Verlauf an der Seitenleiste"
+    norm = lambda s: re.sub(r"\s+", " ", s.group(1)).strip()
+    assert norm(m_aside) == norm(m_card), \
+        "Seitenleiste trägt nicht exakt den Glas-Verlauf der Karten"
+
+    assert re.search(
+        r"border-right:\s*1px solid\s+color-mix\(in srgb,\s*var\(--t-chrom\)\s+35%", regel), \
+        "rechte 1px-Linie in --t-chrom 35% fehlt an der Seitenleiste"

@@ -817,7 +817,7 @@
 </head>
 <body x-data="{ sidebarOpen: window.innerWidth >= 1024 }">
 
-<div class="flex h-screen overflow-hidden">
+<div class="flex h-screen overflow-hidden" data-rumpf>
 
     <!-- Mobile overlay -->
     <div x-show="sidebarOpen"
@@ -955,7 +955,7 @@
                 ABGEHAKT <span style="color:var(--green);">✓</span>
                 {% endif %}
             </div>
-            <div style="width:40px;"></div>
+            <div style="width:40px;" data-kopf-spacer></div>
         </header>
 
         <!-- Page content -->
