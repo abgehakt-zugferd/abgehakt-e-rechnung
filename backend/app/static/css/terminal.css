@@ -60,6 +60,22 @@ html[data-theme="terminal"] .mitteilung__marke,
 html[data-theme="terminal"] header [style*="var(--font-display)"] {
     font-family: var(--t-schrift-text) !important;
 }
+
+/* Mindestgröße 15px: .mitteilung__marke (0.75rem = 12px) und .mitteilung--inline
+   (0.875rem = 14px) aus base.html liegen unter der Grenze. Die Spezifität
+   0-2-1 schlägt die Basisregel 0-1-0, daher ohne !important. */
+html[data-theme="terminal"] .mitteilung__marke,
+html[data-theme="terminal"] .mitteilung--inline {
+    font-size: var(--t-groesse-klein);
+}
+
+/* <pre>-Blöcke der Zustimmungsseiten (updates/consent.html, ust_id_vies/consent.html,
+   partials/ust_id_vies_dialog.html) tragen inline font-size:0.8125rem (13px) —
+   gegen ein Inline-Style gewinnt nur !important. */
+html[data-theme="terminal"] pre {
+    font-size: var(--t-groesse-klein) !important;
+}
+
 html[data-theme="terminal"] .kpi__wert { font-family: var(--t-schrift-anzeige) !important; }
 
 /* Tabellen (z. B. Belegliste): Zellen in Tabellengröße mit kompakteren

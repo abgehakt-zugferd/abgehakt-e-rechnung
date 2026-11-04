@@ -348,3 +348,135 @@ def test_terminal_summe_gesamt_in_h2_groesse(terminal_css):
     assert m, "keine .summe__gesamt-Regel in terminal.css"
     assert re.search(r'font-size:\s*var\(--t-groesse-h2\) !important', m.group(1)), \
         ".summe__gesamt nicht in --t-groesse-h2 (30px)"
+
+
+# ---------------------------------------------------------------------------
+# Feste Schriftgrößen unter 15px: jede font-size-Angabe in px/rem aus dem
+# base.html-<style> und aus allen Inline-Styles der Vorlagen muss im
+# Terminal-Theme von terminal.css überschrieben werden (rem mal 16).
+# ---------------------------------------------------------------------------
+
+_GRENZE_PX = 15.0
+_TERMINAL_SCOPE = 'html[data-theme="terminal"]'
+_PIXEL_SCOPE = 'html[data-theme="pixel"]'
+
+
+def _kommentare_neutral(css: str) -> str:
+    """CSS-Kommentare durch Leerzeichen ersetzt (Zeilenumbrueche bleiben) —
+    Offsets/Zeilennummern bleiben exakt, Klammern in Kommentaren stoeren nicht."""
+    return re.sub(r"/\*.*?\*/", lambda m: re.sub(r"[^\n]", " ", m.group(0)), css, flags=re.S)
+
+
+def _css_regeln(css: str):
+    """Flache Regeln (Start-Offset, Selektor, Body) eines CSS-Texts."""
+    css = _kommentare_neutral(css)
+    for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+        yield m.start(), m.group(1).strip(), m.group(2)
+
+
+def _px(wert: str, einheit: str) -> float:
+    return float(wert) * (16.0 if einheit in ("rem", "em") else 1.0)
+
+
+def _fundstellen_unter_15():
+    """Alle font-size-Literale (px/rem) unter 15px: Regeln im <style>-Block von
+    base.html plus Inline-Styles (style="…") aller Vorlagen unter app/templates."""
+    fundstellen = []
+    basis = BASE_HTML.read_text(encoding="utf-8")
+    for sm in re.finditer(r"<style[^>]*>(.*?)</style>", basis, re.S):
+        for start, sel, body in _css_regeln(sm.group(1)):
+            for fm in re.finditer(r"font-size\s*:\s*([\d.]+)\s*(px|rem)\b", body):
+                px = _px(fm.group(1), fm.group(2))
+                if px < _GRENZE_PX - 1e-9:
+                    zeile = basis.count("\n", 0, sm.start(1) + start) + 1
+                    fundstellen.append({
+                        "art": "regel",
+                        "ort": f"base.html:{zeile} <style>, Selektor {sel!r}",
+                        "selektor": sel,
+                        "decl": fm.group(0).strip(),
+                        "px": px,
+                    })
+    for pfad in sorted(VORLAGEN.rglob("*.html")):
+        text = pfad.read_text(encoding="utf-8")
+        for m in re.finditer(r'<(\w+)([^>]*?)style="([^"]*)"', text, re.S):
+            tag, style = m.group(1), m.group(3)
+            zeile = text.count("\n", 0, m.start()) + 1
+            for decl in style.split(";"):
+                fm = re.match(r"\s*font-size\s*:\s*([\d.]+)\s*(px|rem)\s*$", decl)
+                if fm:
+                    px = _px(fm.group(1), fm.group(2))
+                    if px < _GRENZE_PX - 1e-9:
+                        fundstellen.append({
+                            "art": "inline",
+                            "ort": f"{pfad}:{zeile} <{tag} style=…>",
+                            "tag": tag,
+                            "decl": decl.strip(),
+                            "px": px,
+                        })
+    return fundstellen
+
+
+def _ist_pixel_only(f) -> bool:
+    """Pixel-only-Regel: Selektor beginnt mit html[data-theme=\"pixel\"] —
+    die greift unter data-theme=\"terminal\" nie."""
+    return f["art"] == "regel" and all(
+        p.strip().startswith(_PIXEL_SCOPE) for p in f["selektor"].split(",")
+    )
+
+
+def _terminal_ueberschreibt(terminal_css: str, f) -> bool:
+    """Beleg je Fundstelle: terminal.css hat eine Regel, die unter
+    html[data-theme=\"terminal\"] genau diesen Selektor (bei <style>-Regeln)
+    bzw. blanket dieses Tag (bei Inline-Styles, dort mit !important gegen das
+    Inline-Style) auf font-size: var(--t-groesse-klein) setzt."""
+    for _, sel, body in _css_regeln(terminal_css):
+        teile = [p.strip() for p in sel.split(",")]
+        if f["art"] == "regel":
+            for s in f["selektor"].split(","):
+                s = s.strip()
+                if s and any(t.startswith(_TERMINAL_SCOPE) and s in t for t in teile) \
+                        and re.search(r"font-size\s*:\s*var\(--t-groesse-klein\)", body):
+                    return True
+        else:
+            if any(t == f"{_TERMINAL_SCOPE} {f['tag']}" for t in teile) \
+                    and re.search(r"font-size\s*:\s*var\(--t-groesse-klein\)\s*!important", body):
+                return True
+    return False
+
+
+def test_terminal_keine_feste_schrift_unter_15(terminal_css):
+    """Keine feste Schrift unter 15px im Terminal-Theme: JEDE font-size-Angabe
+    in px/rem (rem mal 16) unter 15px aus dem base.html-<style> und aus allen
+    Vorlagen-Inline-Styles muss terminal.css im Terminal-Theme auf mindestens
+    var(--t-groesse-klein) heben.
+
+    Ausgenommen sind ausdrücklich Pixel-only-Regeln (Selektor beginnt mit
+    html[data-theme=\"pixel\"]): der 8px-Pfeil der Pixel-Navigation
+    (content:'▶' in html[data-theme=\"pixel\"] .nav-link.active::before) steht
+    nur in der pixel-gescopten Regel — unter data-theme=\"terminal\" bekommt
+    das ::before kein content und rendert nichts, die 8px erscheinen dort nie.
+    """
+    token_map = dict(re.findall(r"(--t-[a-z0-9-]+)\s*:\s*([^;]+);", terminal_css))
+    assert "--t-groesse-klein" in token_map, "--t-groesse-klein fehlt in terminal.css"
+    m = re.fullmatch(r"([\d.]+)px", token_map["--t-groesse-klein"].strip())
+    assert m and float(m.group(1)) >= _GRENZE_PX, \
+        f"--t-groesse-klein = {token_map['--t-groesse-klein']!r} ist unter 15px"
+
+    fundstellen = _fundstellen_unter_15()
+    assert fundstellen, "keine Fundstelle unter 15px gefunden — scannt der Test noch?"
+
+    basis = BASE_HTML.read_text(encoding="utf-8")
+    basis_style = "".join(re.findall(r"<style[^>]*>(.*?)</style>", basis, re.S))
+    pfeil = [sel for _, sel, _ in _css_regeln(basis_style) if "nav-link" in sel and "::before" in sel]
+    assert pfeil, "die ::before-Regel am nav-link wurde nicht gefunden"
+    assert all(sel.startswith(_PIXEL_SCOPE) for sel in pfeil), \
+        "ein ::before am nav-link ist nicht pixel-only — dann muesste terminal.css es ueberschreiben"
+
+    pixel_only = [f for f in fundstellen if _ist_pixel_only(f)]
+    assert pixel_only, "die pixel-only Fundstelle (8px-▶) wurde nicht als solche erkannt"
+    luecken = [f for f in fundstellen
+               if not _ist_pixel_only(f) and not _terminal_ueberschreibt(terminal_css, f)]
+    assert not luecken, (
+        f"{len(luecken)} font-size-Fundstellen unter 15px ohne Override in terminal.css: "
+        + "; ".join(f"{f['ort']} ({f['decl']} = {f['px']}px)" for f in luecken)
+    )
