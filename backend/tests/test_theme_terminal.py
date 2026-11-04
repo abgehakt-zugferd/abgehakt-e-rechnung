@@ -915,7 +915,11 @@ def test_a12_keine_scanlines_im_terminal_theme(terminal_css):
 # ---------------------------------------------------------------------------
 
 def _token_map(terminal_css: str):
-    return dict(re.findall(r"(--t-[a-z0-9-]+)\s*:\s*([^;]+);", terminal_css))
+    # Kommentare vorher neutralisieren: der Lampen-Kommentar enthält
+    # "--t-text-matt:" im Fließtext und würde sonst den echten Tokenwert
+    # überschreiben (findall baut das dict, spätere Treffer gewinnen).
+    return dict(re.findall(
+        r"(--t-[a-z0-9-]+)\s*:\s*([^;]+);", _kommentare_neutral(terminal_css)))
 
 
 def _hex_rgb(wert: str):
@@ -1139,3 +1143,131 @@ def test_r3_seitenleiste_aus_glas(terminal_css):
     assert re.search(
         r"border-right:\s*1px solid\s+color-mix\(in srgb,\s*var\(--t-chrom\)\s+35%", regel), \
         "rechte 1px-Linie in --t-chrom 35% fehlt an der Seitenleiste"
+
+
+# ---------------------------------------------------------------------------
+# Glas-Kartenecke (oben links): die hellste Stelle des Glas-Verlaufs von
+# .card und der Seitenleiste (160deg -> 0%-Stop). Die Startfarbe des Verlaufs
+# wird mit ihrer Deckkraft per Alpha-Komposition über --t-flaeche, --t-tafel
+# und --t-grund gesetzt (so wirkt color-mix mit transparent), darüber der
+# Glanz ::before (Weiß) derselben Ecke. Darauf WCAG-Kontrast: --t-text und
+# --t-text-hell mindestens 7:1, --t-text-matt und die Zustandsfarben
+# ok/warnung/fehler/info mindestens 4,5:1.
+# ---------------------------------------------------------------------------
+
+GLAS_HINTERGRUENDE = ["--t-flaeche", "--t-tafel", "--t-grund"]
+GLAS_TEXT = [
+    ("--t-text", 7.0),
+    ("--t-text-hell", 7.0),
+    ("--t-text-matt", 4.5),
+    ("--t-ok", 4.5),
+    ("--t-warnung", 4.5),
+    ("--t-fehler", 4.5),
+    ("--t-info", 4.5),
+]
+
+
+def _top_level_kommas(text: str):
+    """Kommas auf Klammer-Tiefe 0 splitten (color-mix enthält selbst Kommas)."""
+    teile, depth, aktuell = [], 0, ""
+    for zeichen in text:
+        if zeichen == "(":
+            depth += 1
+        elif zeichen == ")":
+            depth -= 1
+        if zeichen == "," and depth == 0:
+            teile.append(aktuell)
+            aktuell = ""
+        else:
+            aktuell += zeichen
+    teile.append(aktuell)
+    return [t.strip() for t in teile if t.strip()]
+
+
+def _verlauf_argumente(regel: str) -> str:
+    """Argumenttext des ersten linear-gradient( … ) bis zur schließenden Klammer."""
+    m = re.search(r"linear-gradient\(", regel)
+    assert m, "kein linear-gradient in der Regel"
+    depth = 1
+    for i in range(m.end(), len(regel)):
+        if regel[i] == "(":
+            depth += 1
+        elif regel[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return regel[m.end():i]
+    return regel[m.end():]
+
+
+def _glas_startfarbe(regel: str, token: dict):
+    """Startfarbe (erster Stop) eines Glas-Verlaufs als (rgb, alpha).
+
+    Parst var(--t-…), color-mix(in srgb, var(--t-…) N%, transparent) — Deckkraft
+    N/100 — und color-mix(… N%, white|black). Alles andere schlägt fehl: eine
+    nicht parsebare Startfarbe darf den Test nicht still bestehen lassen.
+    """
+    stops = _top_level_kommas(_verlauf_argumente(regel))
+    stops = [s for s in stops if not re.fullmatch(r"[\d.]+deg", s)]
+    assert stops, "keine Verlaufs-Stops gefunden"
+    m = re.match(r"^(.*?)\s+[\d.]+%\s*$", stops[0], re.S)
+    farbe = (m.group(1) if m else stops[0]).strip()
+    fm = re.fullmatch(r"var\((--t-[a-z0-9-]+)\)", farbe)
+    if fm:
+        assert fm.group(1) in token, f"{fm.group(1)} fehlt in terminal.css"
+        return _hex_rgb(token[fm.group(1)].strip()), 1.0
+    fm = re.fullmatch(
+        r"color-mix\(in srgb,\s*var\((--t-[a-z0-9-]+)\)\s+([\d.]+)%,\s*transparent\)", farbe)
+    if fm:
+        assert fm.group(1) in token, f"{fm.group(1)} fehlt in terminal.css"
+        return _hex_rgb(token[fm.group(1)].strip()), float(fm.group(2)) / 100.0
+    fm = re.fullmatch(
+        r"color-mix\(in srgb,\s*var\((--t-[a-z0-9-]+)\)\s+([\d.]+)%,\s*(white|black)\)", farbe)
+    if fm:
+        assert fm.group(1) in token, f"{fm.group(1)} fehlt in terminal.css"
+        ziel = (1.0, 1.0, 1.0) if fm.group(3) == "white" else (0.0, 0.0, 0.0)
+        return _mische(_hex_rgb(token[fm.group(1)].strip()), ziel, float(fm.group(2))), 1.0
+    raise AssertionError(f"Startfarbe des Glas-Verlaufs nicht parsebar: {farbe!r}")
+
+
+def _glas_glanz_alpha(terminal_css: str) -> float:
+    """Höchste Deckkraft des Glanz-::before (rgba-Weiß) — sein 0%-Stop oben links."""
+    bodies = _teil_bodies(terminal_css, 'html[data-theme="terminal"] .card::before')
+    if not bodies:
+        return 0.0
+    alphas = [float(a) for a in re.findall(
+        r"rgba\(255,\s*255,\s*255,\s*([01](?:\.\d+)?|\.\d+)\)", " ".join(bodies))]
+    return max(alphas) if alphas else 0.0
+
+
+def _alpha_over(fg, alpha, bg):
+    """Alpha-Komposition (source-over): fg mit Deckkraft alpha über bg —
+    genau so wirkt color-mix(in srgb, farbe N%, transparent) über einem Grund."""
+    return tuple(alpha * f + (1.0 - alpha) * b for f, b in zip(fg, bg))
+
+
+@pytest.mark.parametrize("text_token, soll", GLAS_TEXT)
+@pytest.mark.parametrize("hintergrund", GLAS_HINTERGRUENDE)
+def test_glas_kartenecke_kontrast(terminal_css, text_token, soll, hintergrund):
+    """Hellste Stelle des Glas-Verlaufs (oben links, 0%-Stop des 160deg-Verlaufs
+    von .card und aside): Startfarbe mit ihrer Deckkraft über --t-flaeche,
+    --t-tafel und --t-grund, darüber der Glanz ::before derselben Ecke.
+    WCAG-Kontrast darauf: --t-text und --t-text-hell >= 7, --t-text-matt und
+    ok/warnung/fehler/info >= 4,5. Nicht parsebare Startfarbe -> Fehlschlag."""
+    token = _token_map(terminal_css)
+    assert hintergrund in token, f"{hintergrund} fehlt in terminal.css"
+    assert text_token in token, f"{text_token} fehlt in terminal.css"
+    card = " ".join(_teil_bodies(terminal_css, 'html[data-theme="terminal"] .card'))
+    assert card, "keine .card-Regel im Terminal-Theme"
+    start = _glas_startfarbe(card, token)
+    aside = " ".join(_teil_bodies(terminal_css, 'html[data-theme="terminal"] aside'))
+    assert aside, "keine aside-Regel im Terminal-Theme"
+    assert _glas_startfarbe(aside, token) == start, \
+        "Seitenleiste beginnt nicht mit derselben Glas-Startfarbe wie die Karten"
+    glanz = _glas_glanz_alpha(terminal_css)
+    ecke = _alpha_over(start[0], start[1], _hex_rgb(token[hintergrund].strip()))
+    ecke = _alpha_over((1.0, 1.0, 1.0), glanz, ecke)
+    k = _kontrast(_hex_rgb(token[text_token].strip()), ecke)
+    assert k >= soll, (
+        f"{text_token} gegen die Kartenecke über {hintergrund} "
+        f"(Start-Deckkraft {start[1]:.2f}, Glanz {glanz:.2f}): {k:.2f}:1 < {soll}:1"
+    )
