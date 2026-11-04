@@ -1053,9 +1053,13 @@ nicht erhalten.
 
 **Abgehakt** ist das helle Formular-Design, **Pixel** das verspielte Retro-Design.
 **Terminal** ist dunkel, mit gedämpften Pastellfarben und hohem Kontrast, gedacht für
-langes Arbeiten. Keine Schrift ist dort kleiner als 15 px, auch nicht in Hinweisen und
-Codeblöcken. PDF und E-Rechnung sehen in jedem
-Design gleich aus. Die Designwahl verändert nur die Oberfläche.
+langes Arbeiten. Oben liegt eine Stahlleiste mit der Wortmarke, Karten und Seitenleiste
+wirken wie Glas. Zustände stehen als Form und Wort in eigener Farbe: ● bezahlt,
+▲ gestellt oder offen, ■ überfällig, ◆ Entwurf, ○ storniert. Keine Schrift ist dort
+kleiner als 15 px, auch nicht in Hinweisen und Codeblöcken.
+
+PDF und E-Rechnung sehen in jedem Design gleich aus. Die Designwahl verändert nur die
+Oberfläche.
 
 ![Übersicht im hellen Design Abgehakt mit Forderungen und Kennzahlen](bilder/abgehakt-uebersicht.png)
 
