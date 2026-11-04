@@ -18,6 +18,7 @@ from app.routers.invoices.vorlagen import templates
 from app.services import aenderungsprotokoll, datev_email, pdf_generator, zugferd_xml
 from app.services.auftragszahlung import hinweis_fehlt
 from app.services.belegart import UnknownInvoiceTypeError, belegart
+from app.services.bezahlt_am import fruehestes_zahlungsdatum
 from app.services.einheiten import UnknownUnitError
 from app.services.ersatzrechnung import ErsatzNichtMoeglich, pruefe_ersetzbar
 from app.services.belegsprache import darstellung
@@ -141,6 +142,7 @@ def _detail_kontext(db: Session, invoice: Invoice) -> dict:
         "cc_herkunft": cc_herkunft,
         "protokoll": aenderungsprotokoll.protokoll_fuer(db, invoice.id),
         "heute": heute(),
+        "fruehestes_zahlungsdatum": fruehestes_zahlungsdatum(invoice),
         "ersetzbar": ersetzbar,
         "original_ersetzbar": original_ersetzbar,
         "kunde_zustellung_am": kunde_zustellung_am,

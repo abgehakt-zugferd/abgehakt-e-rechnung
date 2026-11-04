@@ -276,7 +276,7 @@
                     <div style="display:flex; gap:12px; padding:6px 0; border-bottom:1px solid var(--border);">
                         <span style="color:var(--text-dim); white-space:nowrap;">{{ zeile.zeitpunkt.strftime('%d.%m.%Y %H:%M') }}</span>
                         <span style="color:var(--text-hi);">
-                            {{ zeile.vorgang }}{% if zeile.felder %}<span style="color:var(--text-dim);">: {{ zeile.felder | join(', ') }}</span>{% endif %}
+                            {{ zeile.vorgang }}{% if zeile.felder %}<span style="color:var(--text-dim);">: {{ zeile.felder | join(', ') }}</span>{% endif %}{% if zeile.detail %}<span style="color:var(--text-dim);">: {{ zeile.detail }}</span>{% endif %}
                         </span>
                     </div>
                     {% endfor %}
