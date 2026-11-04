@@ -1,0 +1,125 @@
+/* Quelle: Terminal-Werkzeug, Palette pastell_dunkel (Stand 2026-11-04). Wird durch die Kopie aus dem Werkzeug ersetzt. */
+html[data-theme="terminal"] {
+    color-scheme: dark;
+    --t-grund:#14151c;
+    --t-tafel:#1c1d2a;
+    --t-flaeche:#262838;
+    --t-text:#cdc6f5;
+    --t-text-hell:#f6f3ff;
+    --t-text-matt:#aaa3d8;
+    --t-akzent:#a8e6cf;
+    --t-auf-akzent:#12261e;
+    --t-ok:#a8e6cf;
+    --t-warnung:#ffd3a5;
+    --t-fehler:#ff9aa2;
+    --t-info:#9fd3ff;
+    --t-rahmen:#7a72b0;
+    --t-linie:#3a3a55;
+    --t-schrift-anzeige:'VT323',monospace;
+    --t-schrift-text:'IBM Plex Mono',monospace;
+    --t-groesse-basis:18px;
+    --t-groesse-tabelle:17px;
+    --t-groesse-klein:15px;
+    --t-groesse-h1:40px;
+    --t-groesse-h2:30px;
+    --t-groesse-h3:24px;
+    --t-groesse-zahl-gross:48px;
+}
+
+/* Zustandslampen: Farbe des Zustands; die Form (● ▲ ■ ◆ ○) steht als Text im Markup.
+   "aus" steht in --t-text-matt: --t-linie hat auf --t-grund nur ~1,7:1 —
+   ein Zustand braucht mindestens 4,5:1. */
+html[data-theme="terminal"] .t-lampe--ok { color: var(--t-ok); }
+html[data-theme="terminal"] .t-lampe--warnung { color: var(--t-warnung); }
+html[data-theme="terminal"] .t-lampe--fehler { color: var(--t-fehler); }
+html[data-theme="terminal"] .t-lampe--info { color: var(--t-info); }
+html[data-theme="terminal"] .t-lampe--aus { color: var(--t-text-matt); }
+
+/* Primärknopf: dunkle Schrift auf Akzent-Grund (Kontrast auf der hellen Akzentfarbe). */
+html[data-theme="terminal"] .btn-primary { color: var(--t-auf-akzent) !important; }
+
+/* Fokus-Umriss auf Knöpfen und Feldern. */
+html[data-theme="terminal"] button:focus-visible,
+html[data-theme="terminal"] .input:focus {
+    outline: 3px solid var(--t-akzent) !important;
+    outline-offset: 1px;
+}
+
+/* Gegenstück zu den Pixel-Regeln in base.html: auf dunklem Grund braucht die
+   dezente Amber-Fläche die Terminal-Farbe statt des papiernen Hartwerts. */
+html[data-theme="terminal"] .bg-amber-50\/80 {
+    background-color: color-mix(in srgb, var(--t-warnung) 10%, transparent) !important;
+}
+
+/* Beschriftungen in IBM Plex Mono mit Gewicht 600 — VT323 wäre bei 15px
+   optisch nur etwa 10px groß und unlesbar. */
+html[data-theme="terminal"] .label { font-weight: 600 !important; }
+
+/* VT323 bleibt Überschriften (h1-h3), der Wortmarke und großen Kennzahlen
+   vorbehalten; alles unter 24px fällt auf IBM Plex Mono zurück. */
+html[data-theme="terminal"] .text-lg,
+html[data-theme="terminal"] .mitteilung__marke,
+html[data-theme="terminal"] header [style*="var(--font-display)"] {
+    font-family: var(--t-schrift-text) !important;
+}
+
+/* Mindestgröße 15px: .mitteilung__marke (0.75rem = 12px) und .mitteilung--inline
+   (0.875rem = 14px) aus base.html liegen unter der Grenze. Die Spezifität
+   0-2-1 schlägt die Basisregel 0-1-0, daher ohne !important. */
+html[data-theme="terminal"] .mitteilung__marke,
+html[data-theme="terminal"] .mitteilung--inline {
+    font-size: var(--t-groesse-klein);
+}
+
+/* <pre>-Blöcke der Zustimmungsseiten (updates/consent.html, ust_id_vies/consent.html,
+   partials/ust_id_vies_dialog.html) tragen inline font-size:0.8125rem (13px) —
+   gegen ein Inline-Style gewinnt nur !important. */
+html[data-theme="terminal"] pre {
+    font-size: var(--t-groesse-klein) !important;
+}
+
+html[data-theme="terminal"] .kpi__wert { font-family: var(--t-schrift-anzeige) !important; }
+
+/* Tabellen (z. B. Belegliste): Zellen in Tabellengröße mit kompakteren
+   Abständen, Badges ohne Wortumbruch — sonst schneidet der overflow-Container
+   bei 1440px die rechte Aktionsspalte ab. */
+html[data-theme="terminal"] table th,
+html[data-theme="terminal"] table td {
+    font-size: var(--t-groesse-tabelle);
+    padding: 8px 10px !important;
+}
+html[data-theme="terminal"] .badge { white-space: nowrap !important; }
+
+/* Gesamtbetrag: größte Zahl im Summenblock, helle Schrift, tabellarische Ziffern. */
+html[data-theme="terminal"] .summe__gesamt {
+    font-family: var(--t-schrift-text) !important;
+    font-size: var(--t-groesse-h2) !important;
+    color: var(--t-text-hell) !important;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Kartenüberschriften: preflight setzt h1-h6 auf font-size:inherit — wirksam ist
+   die geerbte Körpergröße (18px, in VT323 optisch ~15px). h2 in Karten unter 24px
+   nehmen IBM Plex Mono 600 in --t-groesse-klein und --t-akzent. h1 bleibt VT323. */
+html[data-theme="terminal"] .card h2 {
+    font-family: var(--t-schrift-text) !important;
+    font-weight: 600 !important;
+    font-size: var(--t-groesse-klein) !important;
+    color: var(--t-akzent) !important;
+}
+
+/* Belegliste: Aktions-Link (letzte Spalte) in Plex in Tabellengröße; die
+   VERSAND-Spalte davor kompakt, damit die Tabelle bei 1440px in den
+   overflow-x-auto-Container passt. */
+html[data-theme="terminal"] .overflow-x-auto table td:last-child a {
+    font-family: var(--t-schrift-text) !important;
+    font-size: var(--t-groesse-tabelle) !important;
+}
+html[data-theme="terminal"] .overflow-x-auto table td:nth-last-child(2) {
+    white-space: nowrap;
+    padding: 8px 6px !important;
+}
+
+/* Storno-Badge: als Flex-Item verschwindet das Leerzeichen vor der Belegnummer —
+   der Abstand kommt per margin-left am Link, nicht über den Text. */
+html[data-theme="terminal"] .badge[data-storniert-durch] a { margin-left: 6px; }
