@@ -1,5 +1,6 @@
 /* Quelle: Terminal-Werkzeug, Palette pastell_dunkel (Stand 2026-11-04). Wird durch die Kopie aus dem Werkzeug ersetzt. */
 html[data-theme="terminal"] {
+    color-scheme: dark;
     --t-grund:#14151c;
     --t-tafel:#1c1d2a;
     --t-flaeche:#262838;
@@ -46,4 +47,35 @@ html[data-theme="terminal"] .input:focus {
    dezente Amber-Fläche die Terminal-Farbe statt des papiernen Hartwerts. */
 html[data-theme="terminal"] .bg-amber-50\/80 {
     background-color: color-mix(in srgb, var(--t-warnung) 10%, transparent) !important;
+}
+
+/* Beschriftungen in IBM Plex Mono mit Gewicht 600 — VT323 wäre bei 15px
+   optisch nur etwa 10px groß und unlesbar. */
+html[data-theme="terminal"] .label { font-weight: 600 !important; }
+
+/* VT323 bleibt Überschriften (h1-h3), der Wortmarke und großen Kennzahlen
+   vorbehalten; alles unter 24px fällt auf IBM Plex Mono zurück. */
+html[data-theme="terminal"] .text-lg,
+html[data-theme="terminal"] .mitteilung__marke,
+html[data-theme="terminal"] header [style*="var(--font-display)"] {
+    font-family: var(--t-schrift-text) !important;
+}
+html[data-theme="terminal"] .kpi__wert { font-family: var(--t-schrift-anzeige) !important; }
+
+/* Tabellen (z. B. Belegliste): Zellen in Tabellengröße mit kompakteren
+   Abständen, Badges ohne Wortumbruch — sonst schneidet der overflow-Container
+   bei 1440px die rechte Aktionsspalte ab. */
+html[data-theme="terminal"] table th,
+html[data-theme="terminal"] table td {
+    font-size: var(--t-groesse-tabelle);
+    padding: 8px 10px !important;
+}
+html[data-theme="terminal"] .badge { white-space: nowrap !important; }
+
+/* Gesamtbetrag: größte Zahl im Summenblock, helle Schrift, tabellarische Ziffern. */
+html[data-theme="terminal"] .summe__gesamt {
+    font-family: var(--t-schrift-text) !important;
+    font-size: var(--t-groesse-zahl-gross) !important;
+    color: var(--t-text-hell) !important;
+    font-variant-numeric: tabular-nums;
 }

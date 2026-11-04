@@ -44,7 +44,11 @@ ABBILDUNG = [
     ("--text-dim", "--t-text-matt"),
     ("--text-faint", "--t-text-matt"),
     ("--font-display", "--t-schrift-anzeige"),
-    ("--font-label", "--t-schrift-anzeige"),
+    # --font-label auf Plex statt VT323: VT323 hat bei 15px eine optische
+    # Größe von etwa 10px — Beschriftungen, Knöpfe, Navigation, Badges und
+    # Tabellenköpfe sind darin unlesbar. VT323 bleibt h1-h3, der Wortmarke
+    # und .kpi__wert vorbehalten (alles >= 24px).
+    ("--font-label", "--t-schrift-text"),
     ("--font-body", "--t-schrift-text"),
     ("--font-num", "--t-schrift-text"),
 ]
@@ -206,3 +210,92 @@ def test_terminal_neutralisiert_inline_schatten_und_laufweite(basis_html):
 def test_retro_regel_entfernt(basis_html):
     """Die tote Regel html[data-theme="retro"] .kpi__wert ist aus base.html raus."""
     assert 'data-theme="retro"' not in basis_html
+
+
+@pytest.fixture(scope="module")
+def terminal_css():
+    return TERMINAL_CSS.read_text(encoding="utf-8") if TERMINAL_CSS.is_file() else ""
+
+
+def _terminal_regel(css: str, selektor: str) -> str:
+    """Body der ersten Regel, deren Selektor das Muster trifft (terminal-gescoped)."""
+    m = re.search(r'html\[data-theme="terminal"\][^{]*' + selektor + r'[^{]*\{([^}]*)\}', css)
+    return m.group(1) if m else ""
+
+
+def test_terminal_kleine_display_schriften_werden_plex(terminal_css):
+    """VT323 nur noch ab 24px: .text-lg (20px), .mitteilung__marke (12px) und die
+    Wortmarke im mobilen Header (1.25rem = 20px) fallen auf IBM Plex Mono."""
+    for selektor in [r'\.text-lg', r'\.mitteilung__marke', r'header \[style\*="var\(--font-display\)"\]']:
+        regel = _terminal_regel(terminal_css, selektor)
+        assert re.search(r'font-family:\s*var\(--t-schrift-text\) !important', regel), \
+            f"{selektor} wird im Terminal-Theme nicht auf Plex umgestellt"
+
+
+def test_terminal_kpi_wert_in_vt323(terminal_css):
+    """Große Kennzahlen (.kpi__wert, 48px) sind VT323 — die eine Ausnahme neben
+    h1-h3 und Wortmarke."""
+    regel = _terminal_regel(terminal_css, r'\.kpi__wert')
+    assert re.search(r'font-family:\s*var\(--t-schrift-anzeige\) !important', regel), \
+        ".kpi__wert ist im Terminal-Theme nicht VT323"
+
+
+def test_terminal_label_semi_fett(terminal_css):
+    """Labels in IBM Plex Mono tragen Gewicht 600, damit sie bei 15px nicht zu dünn wirken."""
+    regel = _terminal_regel(terminal_css, r'\.label')
+    assert re.search(r'font-weight:\s*600 !important', regel), \
+        "kein font-weight: 600 für .label im Terminal-Theme"
+
+
+def test_terminal_color_scheme_dark(client, terminal_css):
+    """Native Bedienelemente (Checkbox, Datum, Select, Scrollleiste) müssen dunkel rendern."""
+    antwort = client.get("/static/css/terminal.css")
+    assert antwort.status_code == 200
+    block = _block(antwort.text, "terminal")
+    assert block, 'kein html[data-theme="terminal"]-Block in der ausgelieferten terminal.css'
+    assert re.search(r'color-scheme:\s*dark', block), "color-scheme: dark fehlt im Terminal-Block"
+    assert re.search(r'color-scheme:\s*dark', terminal_css)
+
+
+def test_terminal_tabellenzellen_17px_badges_ohne_umbruch(terminal_css):
+    """Belegliste: Zellen in --t-groesse-tabelle (17px) mit kompakteren Abständen,
+    Badges ohne Wortumbruch — sonst wird die Aktionsspalte bei 1440px abgeschnitten."""
+    regel = _terminal_regel(terminal_css, r'\btable\b[^{]*\btd\b')
+    assert re.search(r'font-size:\s*var\(--t-groesse-tabelle\)', regel), \
+        "Tabellenzellen sind nicht auf --t-groesse-tabelle (17px) gesetzt"
+    assert re.search(r'padding:\s*[^;]+ !important', regel), \
+        "Zellenabstände (inline 10px 14px) werden nicht kompakter überschrieben"
+    regel = _terminal_regel(terminal_css, r'\.badge')
+    assert re.search(r'white-space:\s*nowrap !important', regel), \
+        "Badges dürfen im Terminal-Theme nicht mitten im Wort umbrechen"
+
+
+def test_terminal_summe_gesamt_ist_groesste_zahl(terminal_block, terminal_css):
+    """GESAMTBETRAG / RECHNUNGSBETRAG (BRUTTO): Wert trägt die Klasse .summe__gesamt
+    und ist im Terminal-Theme die größte Zahl im Summenblock (mindestens --fs-gross),
+    in --t-text-hell mit tabular-nums."""
+    m = re.search(r'html\[data-theme="terminal"\][^{]*\.summe__gesamt[^{]*\{([^}]*)\}', terminal_css)
+    assert m, "keine .summe__gesamt-Regel in terminal.css"
+    regel = m.group(1)
+    assert re.search(r'color:\s*var\(--t-text-hell\) !important', regel), \
+        "Summenwert nicht in --t-text-hell"
+    assert re.search(r'font-variant-numeric:\s*tabular-nums', regel), \
+        "Summenwert ohne tabular-nums"
+    fs = re.search(r'font-size:\s*var\((--t-[a-z0-9-]+)\)', regel)
+    assert fs, "Summenwert ohne Token-Schriftgröße"
+    token_map = dict(re.findall(r'(--t-[a-z0-9-]+)\s*:\s*([^;]+);', terminal_css))
+    px = float(re.fullmatch(r'([\d.]+)px', token_map[fs.group(1)].strip()).group(1))
+    gross = re.search(r'--fs-gross:\s*([\d.]+)px', terminal_block)
+    assert gross, "--fs-gross im Terminal-Block nicht in px"
+    assert px >= float(gross.group(1)), \
+        f"Summenwert {px}px < --fs-gross ({gross.group(1)}px) — nicht die größte Zahl im Summenblock"
+
+    det = (VORLAGEN / "invoices" / "detail_positionen.html").read_text(encoding="utf-8")
+    zeile = [z for z in det.splitlines() if "gross_total|euro" in z]
+    assert zeile and all("summe__gesamt" in z for z in zeile), \
+        "Gesamtbetrag-Wert in detail_positionen.html trägt nicht die Klasse summe__gesamt"
+    form = (VORLAGEN / "invoices" / "form.html").read_text(encoding="utf-8")
+    zeilen = [z for z in form.splitlines()
+              if "formatEur(grossTotal)" in z or "formatEur(bruttoNachAbzug)" in z]
+    assert len(zeilen) >= 2 and all("summe__gesamt" in z for z in zeilen), \
+        "Summenzeilen in form.html tragen nicht die Klasse summe__gesamt"
