@@ -90,6 +90,30 @@ geändert hat; lesen Sie ihn, bevor Sie auf eine neue Fassung wechseln.
 
 Weitere Abläufe (Entwurf, Finalisieren, Storno): [docs/ANWENDUNG.md](docs/ANWENDUNG.md).
 
+## So sieht es aus
+
+![Übersicht mit offenen Forderungen, Umsatz und Steuerkennzahlen](docs/bilder/abgehakt-uebersicht.png)
+
+Die Übersicht zeigt den Stand der Belege, offene Forderungen und die wichtigsten Kennzahlen.
+
+![Rechnungsansicht mit EU-Reverse-Charge, Positionen und Versandstand](docs/bilder/abgehakt-rechnung-reverse-charge.png)
+
+Die Rechnungsansicht zeigt Steuerkategorie, Leistungsdaten, Positionen und Zustellung des Belegs.
+
+![Rechnungsliste mit Suche, Filtern, Beträgen und Status](docs/bilder/abgehakt-belegliste.png)
+
+In der Rechnungsliste lassen sich Belege suchen und nach Status, Art, Frist und Versand filtern.
+
+![Formular für eine neue Rechnung mit Kundenauswahl, Positionen und Rechnungsdaten](docs/bilder/abgehakt-rechnung-formular.png)
+
+Im Formular entstehen neue Entwürfe mit Positionen, Belegsprache und Belegart.
+
+Alle Daten in den Bildern sind erfunden.
+
+Drei Designs stehen zur Wahl: das helle Formular-Design Abgehakt, das verspielte
+Retro-Design Pixel und das dunkle Terminal mit Pastellfarben. Wie Sie umschalten,
+zeigt [Design wählen](docs/ANWENDUNG.md#design-waehlen).
+
 ## Warum es das gibt
 
 Mein Steuerberater hat mir von der E-Rechnungspflicht erzählt. Ich habe daraufhin nach einem

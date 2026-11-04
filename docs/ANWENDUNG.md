@@ -21,17 +21,30 @@ Der Übergang vom Entwurf zum gestellten Beleg heißt **Finalisieren** und ist d
 Schritt, der sich nicht zurücknehmen lässt. Alles davor ist Arbeitsstand, alles danach ist
 aufbewahrungspflichtig.
 
+Auch ein doppelter Klick auf **FINALISIEREN** erzeugt nur einen Beleg.
 Finalisieren gelingt entweder ganz oder gar nicht. Lässt sich die E-Rechnungs-XML nicht
 prüffähig ins PDF einbetten, bleibt die Rechnung Entwurf, und es entsteht keine Datei. Ein
 PDF ohne eingebettete XML ist seit 2025 keine gültige Rechnung, und das Programm legt
 lieber nichts ab als etwas Unbrauchbares.
 
 Bei einem manuell angelegten Entwurf können Sie unter **Belegart** zwischen
-**Standardrechnung** und **Anzahlungsrechnung** wählen. Gutschriften, Korrekturen und
-Abrechnungsgutschriften entstehen auf ihren eigenen Wegen; bei ihnen zeigt das Formular
+**Standardrechnung**, **Anzahlungsrechnung** und **Honorargutschrift** (389) wählen.
+Stornobelege entstehen auf ihrem eigenen Weg; bei ihnen zeigt das Formular
 dieses Feld nicht, und ein mitgeschickter Wert wird abgelehnt. Die **Belegsprache**, Deutsch
 oder Englisch, wählen Sie bei jedem Entwurf. Beides wird mit dem Entwurf gespeichert. Nach
 dem Finalisieren sind Art und Sprache wie der übrige Beleginhalt nicht mehr änderbar.
+
+---
+
+## Kopf- und Fußtext vor dem Finalisieren
+
+Ersetzen Sie Platzhalter wie `<M>`, `<MM/JJJJ>` oder `<nr>` im Kopf- und Fußtext durch
+den fertigen Text. Solange ein solcher Platzhalter vorkommt, sperrt das Programm das
+Finalisieren und nennt Feld und Fundstelle. Der Entwurf bleibt unverändert; Speichern
+ist weiterhin möglich. Erkannt werden 1 bis 16 Zeichen zwischen spitzen Klammern,
+ohne weitere Klammern und ohne Leerraum als erstes Zeichen. Auch andere Texte in
+solchen Klammern können deshalb sperren. Vergleiche wie `Menge < 5` oder `a < b > c`
+sperren nicht.
 
 ---
 
@@ -52,6 +65,16 @@ XML-Vorschau funktioniert auch ohne Kunden.
 
 Ein finalisierter Beleg hat keine Vorschau mehr. Für ihn bietet die Detailseite
 **PDF LADEN**: das ZUGFeRD-PDF aus dem Archiv, wie es auch versendet wird.
+
+---
+
+## Darstellung im Rechnungs-PDF
+
+Das PDF zeigt eine Absenderzeile, einen Zahlungsblock und rechtsbündige Summen.
+Fuß und Seitenzahl erscheinen auf jeder Seite; die Positionstabelle passt ihre
+Spaltenbreiten an den Inhalt an. Der EPC-QR-Code im Zahlungsblock übernimmt die
+Bankverbindung des Zahlungsempfängers, sofern sie hinterlegt ist (siehe
+[Gutschriften und Auszahlung](#gutschriften-auszahlung)).
 
 ---
 
@@ -80,10 +103,11 @@ mit gültig eingebetteter E-Rechnungs-XML geht raus (Route `POST
 Aufforderung, die Rechnung erneut zu finalisieren; steht das Prüfwerkzeug nicht bereit,
 bricht der Versand ab, statt etwas Ungeprüftes zu schicken.
 
-Erst wenn all das steht, wird gesendet, und ein Eintrag im **Versandprotokoll** auf der
-Detailseite wird geschrieben: Datum, Ziel der Zeile, Empfänger, Kopien, ob die Buchhaltung
-Blindkopie war, und der Ausgang. Schlägt der Versand fehl, steht die Meldung des Servers
-dort; blieb der Ausgang offen, heißt es: „AUSGANG UNBEKANNT: der Versand wurde begonnen, das
+Vor dem Senden wird der Versuch im **Versandprotokoll** gespeichert; danach wird sein
+Ausgang nachgetragen. Auf der Detailseite stehen Datum, Ziel der Zeile, Empfänger,
+Kopien, ob die Buchhaltung Blindkopie war, und der Ausgang. Schlägt der Versand fehl, steht die Meldung des Servers
+dort; die Verbindung zum Mailserver hat eine Zeitgrenze von 30 Sekunden. Blieb der
+Ausgang offen, heißt es: „AUSGANG UNBEKANNT: der Versand wurde begonnen, das
 Ergebnis kam nicht mehr an. Bitte im Postausgang nachsehen, bevor erneut gesendet wird."
 
 Buchhaltung und Kunde erhalten einen Beleg getrennt voneinander. Es gibt drei Wege:
@@ -128,7 +152,9 @@ alle dieselbe Frage: Hat der Kunde den Beleg?
 
 Jeder Kunde hat eine **Kundennummer** (bei leerer Eingabe automatisch vergeben), einen Namen
 und eine Pflichtanschrift; optional sind E-Mail,
-Telefon, Steuernummer und USt-IdNr. Zusätzlich können Sie pro Kunde **CC-Adressen** hinterlegen: diese
+Telefon, Steuernummer und USt-IdNr. Für das Kundenland stehen 47 Länder zur Auswahl,
+für das Land der Firma die vollständige ISO-Länderliste. Zusätzlich können Sie pro Kunde
+**CC-Adressen** hinterlegen: diese
 erhalten jede Rechnung an diesen Kunden in Kopie und überlagern die Voreinstellung aus den
 Einstellungen.
 
@@ -246,7 +272,7 @@ Zeitzone des Servers.
 | Überfällige Forderungen | Davon jene (ohne wirksam stornierte), deren Fälligkeitsdatum vor heute liegt, mit Anzahl, Bruttosumme und dem Alter der ältesten in Tagen. |
 | Nicht versendete Belege | Anzahl der gestellten Standard- und Anzahlungsrechnungen ohne Zustellung an den Kunden (Feld `kunde_zugestellt_am`); ein Beleg, der nur an die Buchhaltung ging, zählt mit. Diese Zahl wird in der Datenbank gezählt, nicht im Speicher. |
 | Umsatzvergleich | Dem Umsatz des laufenden Jahres stellt die Übersicht den Umsatz zum selben Kalendertag des Vorjahres gegenüber und nennt die Abweichung in Prozent. Fehlt ein Vergleichswert, weil der Vorjahreswert null ist, entfällt die Prozentangabe. |
-| Umsatz je Steuerkategorie | Unter den Kacheln trennt eine Tabelle den Umsatz des laufenden Quartals nach Steuerkategorie und Steuersatz (Netto und USt), etwa Reverse Charge, innergemeinschaftliche Lieferung, nicht steuerbar, steuerfrei. Sie nimmt dieselben Belege und dieselbe Zeitlogik wie die Kacheln; die Zeilen in EUR ergeben Nettoumsatz und schuldige USt des Quartals. Gutschriften mindern die Zeile ihrer Kategorie. Hat ein Beleg mehrere Sätze, kommt die Aufteilung aus den Positionen. Belege in anderer Währung stehen getrennt und werden nicht umgerechnet; die Kacheln addieren Währungen weiterhin ohne Umrechnung. Eine Zuordnung zu amtlichen Kennziffern oder einen Export gibt es nicht. |
+| Umsatz je Steuerkategorie | Unter den Kacheln trennt eine Tabelle den Umsatz des laufenden Quartals nach Steuerkategorie und Steuersatz (Netto und USt), etwa Reverse Charge, innergemeinschaftliche Lieferung, nicht steuerbar, steuerfrei. Es zählen gestellte und bezahlte Standardrechnungen nach Rechnungsdatum, Anzahlungsrechnungen erst nach Zahlung und nach Zahlungsdatum, jeweils ab Quartalsanfang. Damit folgt die Tabelle der schuldigen USt, nicht dem ausschließlich bezahlten Jahresumsatz. Gutschriften mindern die Zeile ihrer Kategorie. Hat ein Beleg mehrere Sätze, kommt die Aufteilung aus den Positionen. Belege in anderer Währung stehen getrennt und werden nicht umgerechnet; die Kacheln addieren Währungen weiterhin ohne Umrechnung. Eine Zuordnung zu amtlichen Kennziffern oder einen Export gibt es nicht. |
 | Letzte Rechnungen | Unter den Kacheln listet die Seite die zehn neuesten Belege mit Nummer, Kunde, Datum, Betrag und Status; der Verweis **ALLE RECHNUNGEN** führt in die Liste. |
 
 Die Belegzahlen je Status und die Forderungen sind Verweise; die Gesamtzahl ist kein Verweis.
@@ -288,6 +314,24 @@ auf der angezeigten Seite, und bei mehreren Seiten blättern Sie mit **ZURÜCK**
 
 ---
 
+## Hinweise beim Aktualisieren
+
+Sichern Sie vor dem Wechsel Datenbank und Belege nach der Anleitung im
+[README](../README.md#sicherung-und-rücksicherung). Der Start führt Schemaänderungen aus.
+Beim Wechsel aus älteren Fassungen sind insbesondere diese Bestandsänderungen zu beachten:
+
+- Die Rechtsform muss unter **Einstellungen** nachgetragen werden, bevor Sie wieder
+  finalisieren können (Migration 019).
+- Der Steuerstatus bestehender Kunden wird auf **ungeklärt** gesetzt. Vor einer
+  Honorargutschrift müssen Sie ihn bewusst festlegen. Kunden mit bereits angelegter
+  Honorargutschrift werden als Gutschriftempfänger markiert (Migration 017).
+- Mehrere nicht verworfene Stornogutschriften zu einem Original halten den Start an.
+  Die Fehlermeldung nennt die betroffenen Belege. Klären Sie den Bestand, bevor Sie
+  erneut starten; die Migration löscht oder korrigiert nichts automatisch (Migration 013).
+- Bereits bezahlte Belege erhalten als Zahlungsdatum näherungsweise den Tag ihrer
+  letzten Änderung. Dadurch können sich die Umsatzkennzahlen zeitlich verschieben
+  (Migration 018).
+
 <a id="migration-aus-altem-abgehakt"></a>
 
 ## Migration aus altem Abgehakt
@@ -305,7 +349,8 @@ docker exec abgehakt_app python scripts/beleg_aus_xml_einspielen.py Z-2026-002 Z
 ```
 
 Mit `--alt-system` werden nach dem Einspielen automatisch **Versand** und **Bezahlt** aus dem
-alten System nachgezogen (siehe unten). Der Kunde muss bereits im Stamm stehen (Abgleich über
+alten System nachgezogen (siehe unten). Die Belegart wird aus dem TypeCode der XML
+übernommen. Der Kunde muss bereits im Stamm stehen (Abgleich über
 die USt-IdNr. aus der XML).
 
 ### Nachziehen bei bereits importierten Belegen
@@ -360,8 +405,10 @@ nicht automatisch vor jeder Rechnung.
    Ihre eigene USt-IdNr. als Anfragender.
 4. Mit **Einverstanden, speichern und prüfen** wird zuerst das ganze Formular gespeichert
    (mit denselben Prüfungen wie beim normalen Speichern) und danach die Abfrage gestartet.
-   Scheitert das Speichern an einer Formularprüfung, findet keine Abfrage statt und Ihre
-   Eingaben bleiben im Formular. **Abbrechen** baut keine Verbindung auf und speichert nichts.
+   Scheitert das Speichern an einer Formularprüfung, findet keine Abfrage statt. Prüfen
+   Sie danach alle Felder: Je nach Fehler werden wieder gespeicherte Werte angezeigt,
+   ungespeicherte Eingaben bleiben nicht durchgehend erhalten. **Abbrechen** baut keine
+   Verbindung auf und speichert nichts.
 5. Nach der Antwort bleiben Sie auf der Bearbeiten-Seite. Der Status unter der USt-IdNr. wird
    aktualisiert (gültig, ungültig, nicht erreichbar, Name stimmt / weicht ab / unbekannt).
 
@@ -416,6 +463,22 @@ Ohne Kunden-IBAN entsteht die Gutschrift ohne QR-Code; beim Finalisieren erschei
 **Warnung**, dass keine Bankverbindung des Kunden hinterlegt ist. Die Gutschrift ist dennoch
 möglich, wenn alle Pflichtangaben stimmen.
 
+### Honorargutschrift anlegen und stornieren
+
+Wählen Sie bei einer neuen Rechnung die Belegart **Honorargutschrift** (389), wenn Sie
+über eine empfangene Leistung abrechnen. Das PDF trägt die Pflichtangabe **Gutschrift**;
+Kunde und Firma tauschen gegenüber einer Ausgangsrechnung ihre Rollen. Eine Herleitung
+je Position aus Basisbetrag und Anteil bleibt beim Bearbeiten erhalten und erscheint
+im PDF getrennt vom Umsatzsteuersatz. In der Rechnungsliste gibt es einen eigenen
+Belegartfilter; die Übersicht nennt **Offene Auszahlungen** und berücksichtigt die Vorsteuer.
+
+**STORNO ERSTELLEN** erzeugt zur Honorargutschrift einen eigenen Storno mit Bezug zum
+Original. Seine Belegart in der XML ist vorläufig 261; die steuerliche Prüfung dieser
+Stornoform steht noch aus. Sobald er gestellt oder bezahlt ist, zeigt auch die
+Honorargutschrift **storniert durch** mit Link auf den Storno. Dessen Detailseite erklärt
+in der Belegsprache, dass er endgültig ist, verlinkt das Original und verweist bei einem
+Fehler auf eine neue Gutschrift zur ursprünglichen Leistung.
+
 ---
 
 ## Einheiten in Positionen
@@ -427,6 +490,7 @@ Plural und die englische Schreibweise können dieselbe fachliche Einheit meinen.
 bestimmt den sichtbaren Text der Position, der technische Einheitencode der E-Rechnung wird
 aus dem Katalog bestimmt.
 
+Mengen erscheinen im Formular als gewöhnliche Dezimalzahlen, etwa `60` statt `6E+1`.
 Für eine neue Position ist **Stück** vorausgewählt. Eigene Bezeichnungen oder frei
 eingegebene Codes bietet das Programm nicht an. Einen leeren oder unbekannten Einheitenwert
 weist es beim Speichern zurück, bevor eine Rechnungsnummer vergeben oder eine Position
@@ -523,6 +587,11 @@ keine Seite. Eingeschaltet erscheinen im Menü die Punkte **BELEGE** und **AUFST
    Anwendungsabbild (`Dockerfile` kopiert den Build-Kontext); ohne Neubau sieht die
    laufende Installation neue Schlüssel nicht.
 
+Für eine Live-Installation kann `docker-compose.uebergabe.yml` den eingehenden
+Übergabeordner schreibgeschützt einhängen. Die Gegenrichtung wird nicht eingebunden;
+ohne Zuschaltung bleibt der Standardstart unverändert. Einrichtung und Prüfung stehen
+unter [Übergabeordner in der Live-Installation](INTEGRATION-TESTINSTANZ.md#übergabeordner-in-der-live-installation).
+
 ### Was die Seite zeigt
 
 Die Seite BELEGE liest den Belegordner vor, mehr nicht. Ansehen hat keine Wirkung: kein
@@ -550,6 +619,14 @@ Nichts wird automatisch finalisiert, nichts automatisch versendet. Mit demselben
 bewahrt dieses Programm den Beleg unverändert als eigene Kopie unter `storage/uebergaben/`
 auf, acht Jahre wie die Rechnungen; scheitert die Kopie, wird der Beleg nicht angenommen
 und kein Entwurf angelegt.
+
+Jede Gutschrift mit Auftragsschlüssel speichert diesen als Herkunftsnachweis und sperrt
+seine erneute Verwendung. Ein weiterer Auftrag mit bereits belegtem Schlüssel meldet
+`AUFTRAG_SCHON_GERECHNET`, statt eine doppelte Gutschrift anzulegen; auch gleichzeitiges
+Einlesen wird mit einer Konfliktmeldung abgefangen. Verwerfen, manuelles Stornieren oder
+das Finalisieren des Stornos geben den Schlüssel frei. Zurückholen belegt ihn erneut
+und ist nur möglich, wenn er inzwischen nicht anderweitig verwendet wird. Der
+Herkunftsnachweis bleibt erhalten.
 
 Am Entwurf steht ein Teil des Inhalts aus dem signierten Beleg fest und lässt sich nicht
 mehr ändern (services/belegsperre.py, `GESPERRTE_FELDER`): der Beteiligte, der
@@ -611,7 +688,7 @@ behandelt wird. Zur Auswahl stehen fünf Kategorien (services/validator.py,
 | S | Inland (MwSt. 19 % / 7 %) | Regelbesteuerung: Sie weisen Umsatzsteuer aus, 19 oder 7 Prozent. |
 | E | Kleinunternehmer (§ 19 UStG) | Sie weisen keine Steuer aus, der Steuersatz steht auf 0 Prozent. |
 | AE | EU B2B: Reverse Charge (Art. 196 MwStSystRL) | Der Empfänger schuldet die Steuer; Steuersatz 0 Prozent, Ihre wie seine USt-IdNr. sind Pflicht. |
-| K | EU: Innergemeinschaftliche Lieferung | Steuerfrei mit USt-IdNr. beider Seiten; der Leistungszeitpunkt ist hier auch bei Kleinbeträgen Pflicht. |
+| K | EU: Innergemeinschaftliche Lieferung | Steuerfrei mit USt-IdNr. beider Seiten; der Leistungszeitpunkt ist hier auch bei Kleinbeträgen Pflicht. Die XML nennt § 4 Nr. 1b in Verbindung mit § 6a UStG. |
 | O | Drittland / nicht steuerbar | Der Umsatz ist nicht im Inland steuerbar (§ 3a Abs. 2 UStG); dafür verlangt das Programm Ihre Steuernummer. |
 
 In den Kategorien AE, K, O und E darf keine Position Steuer tragen; trägt eine trotzdem
@@ -619,6 +696,18 @@ einen Steuersatz über 0 Prozent, weist das Programm das Finalisieren ab. Einem
 Kleinunternehmer (E), der trotzdem Steuer ausweist, schuldet sie nach § 14c Abs. 2 UStG
 trotzdem, deshalb nennt der Fehler dort einen eigenen Text. Die Kategorie steht in der
 E-Rechnung und im GoBD-Export; die Detailseite zeigt sie als Etikett am Kopf, außer bei S.
+
+### Passt die Steuerkategorie zum Kundenland?
+
+Das Programm warnt bei AE, K oder O für Kunden in Deutschland, bei O für Kunden in
+anderen EU-Staaten und bei AE oder K für Kunden außerhalb der EU. Prüfen Sie dann die
+Steuerkategorie und die Stammdaten.
+
+Eine Kombination sperrt das Finalisieren: **Reverse Charge (AE)**, Kundenland **DE**
+und eine USt-IdNr. mit ausländischem Ländercode. Prüfen und speichern Sie Land und
+USt-IdNr. beim Kunden, danach finalisieren Sie erneut. Bei DE mit deutscher USt-IdNr.
+bleibt es bei der Länderwarnung. Bereits gestellte Belege werden durch diese neue
+Sperre beim erneuten Prüfen nicht ungültig.
 
 ---
 
@@ -670,11 +759,17 @@ Beschriftungen, Zahlen und Datumsformate sowie die vom Programm erzeugten Hinwei
 Beschriftungen der Pflichtangaben des Geschäftsbriefs stehen in der E-Rechnungs-XML unter
 BT-33. Sie übersetzt weder Positionsbeschreibungen noch selbst eingegebene Zahlungsbedingungen.
 Codes, Datumsformate und Beträge in der XML bleiben sprachunabhängig; eine eigene
-Sprachkennzeichnung wird nicht geschrieben. Bleiben die Zahlungsbedingungen leer, übernimmt
-das Programm jedoch die Standard-Zahlungsbedingungen der gewählten Sprache und schreibt diesen
-Text auch in die XML. Wählen Sie eine englische Rechnung ohne eigene Zahlungsbedingungen,
-braucht die Firma in den Einstellungen englische Standard-Zahlungsbedingungen; fehlen sie,
-weist das Programm das Speichern zurück.
+Sprachkennzeichnung wird nicht geschrieben. Die Steuerbefreiungstexte für E, K und O
+bleiben sprachunabhängig; der Reverse-Charge-Hinweis erscheint zweisprachig.
+
+Beim Speichern eines leeren Zahlungsbedingungen-Feldes hat der Zahlungshinweis des
+Kunden Vorrang vor der Firmenvorgabe der Belegsprache. Steht genau die Firmenvorgabe
+der anderen Sprache im Feld, wird sie beim Speichern und auch beim Finalisieren
+ersetzt, wiederum mit Vorrang für den Kundenhinweis. Eigener Freitext bleibt erhalten.
+Fehlt die benötigte englische Firmenvorgabe und gibt es keinen Kundenhinweis, wird der
+Schritt abgelehnt; beim Finalisieren bleibt der Entwurf unverändert. Der gespeicherte
+Text erscheint in PDF und XML (BT-20). Rechnungsaufträge und Gutschriften haben ihre
+eigenen Zahlungstexte.
 
 Nach dem Finalisieren ist die Sprache unveränderlich. Ein fremder oder manipulierter
 Sprachwert wird ebenfalls vor der Nummernvergabe zurückgewiesen, statt still auf Deutsch
@@ -760,7 +855,7 @@ neutralisiert. Beide Belege bleiben erhalten, und beide gehen an die Buchhaltung
 ### Schritt für Schritt
 
 1. Öffnen Sie die gestellte Rechnung.
-2. Wählen Sie **GUTSCHRIFT ERSTELLEN**. Es entsteht ein Entwurf einer Gutschrift, der die
+2. Wählen Sie **STORNO ERSTELLEN**. Es entsteht ein Entwurf einer Gutschrift, der die
    Beträge, Positionen und den Abzug des Originals unverändert übernimmt. Rechnungs- und
    Fälligkeitsdatum der Gutschrift stehen auf heute; Zahlungsbedingungen und Bemerkung
    ersetzt das Programm durch feste Texte in der Belegsprache des Originals
@@ -771,8 +866,8 @@ neutralisiert. Beide Belege bleiben erhalten, und beide gehen an die Buchhaltung
    Gutschrift.
 4. Senden Sie die Gutschrift an Ihre Kundin oder Ihren Kunden und an die Buchhaltung, so wie
    Sie es mit der Originalrechnung getan haben.
-5. Setzen Sie das **Original** auf **storniert**. Dieser Schritt bleibt Ihnen überlassen,
-   siehe unten.
+5. Am **Original** erscheint jetzt **storniert durch** mit Link auf die Gutschrift.
+   Ein manueller Statuswechsel ist dafür nicht nötig; der bisherige Status bleibt erhalten.
 6. Schreiben Sie, falls nötig, eine neue, korrekte Rechnung. Der vorgesehene Weg ist die
    **Ersatzrechnung** im nächsten Abschnitt: sie verweist auf die stornierte Rechnung und
    übernimmt Positionen, Abzug und Belegart des Originals.
@@ -930,11 +1025,48 @@ Ersatzrechnung stehen oder die Gutschrift kann fehlen.
 
 ---
 
+<a id="design-waehlen"></a>
+
+## Design wählen
+
+Der Knopf **Design: …** unten in der Seitenleiste schaltet reihum
+**Abgehakt → Pixel → Terminal → Abgehakt**. Die Wahl gilt je Browser und bleibt
+im Browserspeicher gespeichert. Vorgabe ist **Abgehakt**. Wenn der Browser das
+Speichern verhindert oder Sie seine gespeicherten Daten löschen, bleibt die Wahl
+nicht erhalten.
+
+**Abgehakt** ist das helle Formular-Design, **Pixel** das verspielte Retro-Design.
+**Terminal** ist dunkel, mit gedämpften Pastellfarben und hohem Kontrast, gedacht für
+langes Arbeiten. Die regulären Schriftgrößen beginnen bei 15 px; einzelne zusätzliche
+Hinweise verwenden derzeit noch kleinere Schrift. PDF und E-Rechnung sehen in jedem
+Design gleich aus. Die Designwahl verändert nur die Oberfläche.
+
+![Übersicht im hellen Design Abgehakt mit Forderungen und Kennzahlen](bilder/abgehakt-uebersicht.png)
+
+Abgehakt zeigt die Übersicht auf hellem Grund mit klar abgegrenzten Formularflächen.
+
+![Dieselbe Übersicht im Retro-Design Pixel](bilder/pixel-uebersicht.png)
+
+Pixel stellt dieselben Kennzahlen mit Pixelschrift und kräftigen Farbakzenten dar.
+
+![Dieselbe Übersicht im dunklen Design Terminal mit Pastellfarben](bilder/terminal-uebersicht.png)
+
+Terminal zeigt Forderungen und Kennzahlen mit heller Schrift auf dunklen Flächen.
+
+![Bezahlte Rechnung im Design Terminal mit Zahlungsdatum, Positionen und Versandstand](bilder/terminal-rechnung-bezahlt.png)
+
+Die bezahlte Rechnung zeigt Zahlungsdatum, Positionen und den getrennten Zustellungsstand.
+
+Alle Daten in den Bildern sind erfunden.
+
+---
+
 ## Archiv
 
 Unter **ARCHIV** liegen die abgelegten Dateien jedes finalisierten Belegs: das ZUGFeRD-PDF
 und die E-Rechnungs-XML, dazu die PDFs der Abrechnungsaufstellungen, alles acht Jahre
-aufbewahrungspflichtig. Die Seite zeigt drei Bereiche, **PDF**, **XML** und
+aufbewahrungspflichtig. Die Frist endet am 31. Dezember des Ausstellungsjahres plus
+acht Jahre. Die Seite zeigt drei Bereiche, **PDF**, **XML** und
 **Aufstellungen**, je als Tabelle mit Dateiname, Änderungszeitpunkt, Größe und einem Link
 **laden** je Datei (`routers/archive.py`, `BEREICHE` mit `pdfs`, `xml`, `aufstellungen`).
 
