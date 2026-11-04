@@ -1053,8 +1053,8 @@ nicht erhalten.
 
 **Abgehakt** ist das helle Formular-Design, **Pixel** das verspielte Retro-Design.
 **Terminal** ist dunkel, mit gedämpften Pastellfarben und hohem Kontrast, gedacht für
-langes Arbeiten. Die regulären Schriftgrößen beginnen bei 15 px; einzelne zusätzliche
-Hinweise verwenden derzeit noch kleinere Schrift. PDF und E-Rechnung sehen in jedem
+langes Arbeiten. Keine Schrift ist dort kleiner als 15 px, auch nicht in Hinweisen und
+Codeblöcken. PDF und E-Rechnung sehen in jedem
 Design gleich aus. Die Designwahl verändert nur die Oberfläche.
 
 ![Übersicht im hellen Design Abgehakt mit Forderungen und Kennzahlen](bilder/abgehakt-uebersicht.png)
