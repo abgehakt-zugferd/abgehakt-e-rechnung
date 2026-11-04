@@ -29,7 +29,9 @@ from app.services.bezahlt_am import (
     BezahltAmFehler,
     BezahltTrotzGutschrift,
     absichern_bezahlt,
+    parse_bezahlt_am,
 )
+from app.services.zahlungsdatum_durchlass import grund_fuer
 from app.zeit import heute
 
 FINALIZED: set[str] = {"issued", "paid", "cancelled"}
@@ -241,7 +243,20 @@ def _before_flush(session: Session, flush_context, instances) -> None:
                 .where(Invoice.__table__.c.id == obj.id)
             ).scalar()
             new_ba = ba_hist.added[0] if ba_hist.added else None
-            if old_ba is not None and new_ba != old_ba:
+            korrektur = (
+                old_ba is not None and new_ba is not None
+                and obj.status == "paid" and not status_hist.has_changes()
+                and grund_fuer(session, obj.id) is not None
+            )
+            if korrektur:
+                # Der einzige Durchlass (#278): protokollierte Korrektur mit Grund.
+                # Dieselbe Datumsregel wie beim Setzen; die Gutschrift-Sperre
+                # gehoert zum Wechsel nach paid, nicht zur Korrektur.
+                try:
+                    parse_bezahlt_am(new_ba.isoformat(), heute=heute(), invoice=obj)
+                except BezahltAmFehler as exc:
+                    raise InvoiceStateError(str(exc)) from exc
+            elif old_ba is not None and new_ba != old_ba:
                 raise InvoiceStateError(
                     "bezahlt_am (Zahlungsdatum) ist nach dem Setzen unveränderlich "
                     "(GoBD) — weder Löschen noch Umdatieren erlaubt."

@@ -6,6 +6,7 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.models.invoice import Invoice
+from app.services.auftragszahlung import ist_rechnungsauftrag
 
 
 class BezahltAmFehler(ValueError):
@@ -16,13 +17,28 @@ class BezahltTrotzGutschrift(ValueError):
     """Original mit aktiver Gutschrift darf nicht als bezahlt gelten (#15)."""
 
 
+def fruehestes_zahlungsdatum(invoice: Invoice) -> date:
+    """Untergrenze des Zahlungsdatums; die einzige Stelle dieser Regel (#278).
+
+    Normaler Beleg: das Rechnungsdatum. Beleg aus einem Rechnungsauftrag: die
+    Rechnung entsteht nach dem Geldeingang, deshalb zaehlt der Beginn der
+    Leistung (Leistungszeitraum, sonst Leistungsdatum). Fehlt beides, bleibt es
+    beim Rechnungsdatum. Route, Guard und Formular-Minimum rufen diese Funktion.
+    """
+    if ist_rechnungsauftrag(invoice):
+        beginn = invoice.service_period_start or invoice.delivery_date
+        if beginn is not None:
+            return min(beginn, invoice.issue_date)
+    return invoice.issue_date
+
+
 def parse_bezahlt_am(
     roh: str | None,
     *,
     heute: date,
-    issue_date: date,
+    invoice: Invoice,
 ) -> date:
-    """Liest ISO-Datum oder heute; lehnt Zukunft, Vor-Rechnung und Unlesbares ab."""
+    """Liest ISO-Datum oder heute; lehnt Zukunft, zu frueh und Unlesbares ab."""
     if roh is None or not str(roh).strip():
         wert = heute
     else:
@@ -36,9 +52,12 @@ def parse_bezahlt_am(
         raise BezahltAmFehler(
             "Das Zahlungsdatum darf nicht in der Zukunft liegen."
         )
-    if wert < issue_date:
+    untergrenze = fruehestes_zahlungsdatum(invoice)
+    if wert < untergrenze:
         raise BezahltAmFehler(
             "Das Zahlungsdatum darf nicht vor dem Rechnungsdatum liegen."
+            if untergrenze == invoice.issue_date
+            else "Das Zahlungsdatum darf nicht vor dem Beginn der Leistung liegen."
         )
     return wert
 
@@ -90,7 +109,7 @@ def absichern_bezahlt(db: Session, invoice: Invoice, *, heute: date) -> None:
     parse_bezahlt_am(
         invoice.bezahlt_am.isoformat(),
         heute=heute,
-        issue_date=invoice.issue_date,
+        invoice=invoice,
     )
 
 
@@ -104,5 +123,5 @@ def vorbereiten_bezahlt(
     """Prueft Gutschrift-Sperre und setzt bezahlt_am am Beleg."""
     _sperre_bei_gutschrift(db, invoice)
     invoice.bezahlt_am = parse_bezahlt_am(
-        roh_bezahlt_am, heute=heute, issue_date=invoice.issue_date,
+        roh_bezahlt_am, heute=heute, invoice=invoice,
     )

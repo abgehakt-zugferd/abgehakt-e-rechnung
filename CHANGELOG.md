@@ -21,6 +21,15 @@ Die Auswahl gilt je Browser und bleibt gespeichert. Vorgabe bleibt Abgehakt, PDF
 E-Rechnung sehen in jedem Design gleich aus. Beide Schriften liegen im Image, nichts
 wird aus dem Netz nachgeladen.
 
+### Zahlungsdatum: vor dem Rechnungsdatum bei Rechnungsaufträgen, protokollierte Korrektur (#278)
+
+Bei einem Beleg aus einem Rechnungsauftrag darf das Zahlungsdatum vor dem Rechnungsdatum
+liegen, aber nicht vor dem Beginn des Leistungszeitraums (ohne Zeitraum: Leistungsdatum;
+fehlt beides: Rechnungsdatum) und nicht in der Zukunft. Alle anderen Belege behalten die
+Untergrenze Rechnungsdatum. Das Datumsfeld auf der Belegseite folgt derselben Regel.
+An einem bezahlten Beleg gibt es neu **Zahlungsdatum korrigieren** (neues Datum und Grund,
+beide Pflicht). Die Korrektur steht im Änderungsprotokoll mit altem und neuem Datum, Grund
+und Zeitpunkt; jede andere Änderung des Zahlungsdatums bleibt gesperrt. Keine Migration.
 ### VIES-Prüfung verwirft keine ungespeicherten Eingaben mehr (#274)
 
 Der Dialog „Jetzt bei VIES prüfen“ in der Kundenbearbeitung und in den Firmeneinstellungen
