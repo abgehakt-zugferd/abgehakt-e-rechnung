@@ -179,3 +179,32 @@ def test_einspielen_prueft_den_satz_jeder_position(pg_session, capsys):
     pg_session.expire_all()
     assert pg_session.query(Invoice).filter(Invoice.invoice_number == nummer).count() == 0
     assert "UST_STATUS_STEUER_MISMATCH" in out
+
+
+def test_einspielen_weist_doctype_entity_kaskade_ab(pg_session, capsys):
+    """XML mit DOCTYPE und Entity-Kaskade (kleines Billion Laughs) wird abgewiesen.
+
+    Fremde XML darf nie mit xml.etree geparsed werden: Entities im DTD werden
+    sonst expandiert. defusedxml wirft EntitiesForbidden (ValueError-Subklasse),
+    das Skript uebersetzt das in seine FEHLER-Meldung.
+    """
+    nummer = "RE-EIN-006"
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        "<!DOCTYPE beleg [\n"
+        '  <!ENTITY stufe1 "probe ">\n'
+        '  <!ENTITY stufe2 "&stufe1;&stufe1;&stufe1;&stufe1;&stufe1;&stufe1;&stufe1;&stufe1;">\n'
+        '  <!ENTITY stufe3 "&stufe2;&stufe2;&stufe2;&stufe2;&stufe2;&stufe2;&stufe2;&stufe2;">\n'
+        '  <!ENTITY stufe4 "&stufe3;&stufe3;&stufe3;&stufe3;&stufe3;&stufe3;&stufe3;&stufe3;">\n'
+        "]>\n"
+        "<beleg>&stufe4;</beleg>\n"
+    )
+    _lege_xml_und_pdf(nummer, xml)
+
+    einspielen([nummer], db=pg_session)
+
+    out = capsys.readouterr().out
+    pg_session.expire_all()
+    assert pg_session.query(Invoice).filter(Invoice.invoice_number == nummer).count() == 0
+    assert "FEHLER" in out
+    assert "EntitiesForbidden" in out

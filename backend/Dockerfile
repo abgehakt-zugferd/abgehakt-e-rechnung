@@ -13,8 +13,8 @@ WORKDIR /app
 # Mustang CLI vor den Dependencies — aendert sich seltener als pyproject/uv.lock.
 # SHA-256 ist Trust-on-First-Use: Maven Central publiziert fuer dieses Artefakt nur
 # .sha1/.md5 (.sha256 -> HTTP 404). Einmalige Gegenkontrolle per GPG ist erfolgt.
-ARG MUSTANG_VERSION=2.24.0
-ARG MUSTANG_SHA256=e4904ffa0afdce3f5836dceb927c440a05ed5d60386fdd37e17a4b2f7652edbf
+ARG MUSTANG_VERSION=2.26.0
+ARG MUSTANG_SHA256=42d7868cb68264874a7b8cab4c3587b03b23ccc7cd72373da917f66758bb9736
 RUN mkdir -p /app/lib && \
     curl -fsSL "https://repo1.maven.org/maven2/org/mustangproject/Mustang-CLI/${MUSTANG_VERSION}/Mustang-CLI-${MUSTANG_VERSION}.jar" \
         -o /app/lib/Mustang-CLI.jar && \
