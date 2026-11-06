@@ -34,6 +34,8 @@ DARSTELLUNG_EN = {
     "label_bereits_gezahlt": "Already paid",
     "label_offener_betrag": "Amount due",
     "steuerzeile_muster": "plus {satz} VAT on {basis}",
+    "anzahlungzeile_muster": "less advance payment, invoice {nummer} dated {datum}",
+    "label_anzahlung_netto": "Net",
     "label_verwendungszweck": "Reference:",
     "label_scan_to_pay": "Scan to pay",
     "label_ust_id": "VAT ID:",

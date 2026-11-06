@@ -14,6 +14,7 @@ from decimal import Decimal
 
 from app.models.company import Company
 from app.models.invoice import Invoice
+from app.services import anzahlungen
 from app.services.belegart import UnknownInvoiceTypeError, belegart
 from app.services.ersatzrechnung import pruefe_finalisierbar
 from app.services.pruefregeln import (
@@ -54,6 +55,9 @@ def validate_invoice(invoice: Invoice, company: Company) -> tuple[list[Issue], l
 
     # Ersatzrechnung (docs/specs/ersatzrechnung.md): Regeln im eigenen Modul.
     befunde.extend(pruefe_finalisierbar(invoice))
+
+    # Schlussrechnung (#259): verrechnete Anzahlung, Regeln in services/anzahlungen.
+    befunde.extend(anzahlungen.pruefe(invoice))
 
     befunde.extend(empfehlungen.pruefe_empfehlungen(kontext))
 

@@ -2,7 +2,7 @@ import uuid
 from datetime import timedelta
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -34,7 +34,10 @@ from app.routers.invoices.formular_schreiben import (
     waehlbare_kunden,
 )
 from app.routers.invoices.vorlagen import templates
+from app.services import anzahlungen
+from app.services.belegsprache import darstellung
 from app.services.invoice_number import generate_next_invoice_number
+from app.services.rechnung.fehler import RechnungFehler
 from app.services.leistungszeit import parse_leistungszeit_from_form
 from app.services.rechnung.pruefung import run_validation
 from app.zeit import heute
@@ -66,6 +69,8 @@ def _neues_formular(request: Request, customers, company, today, delivery_defaul
         "error": zustand.error,
         "kunde_hinweis": zustand.kunde_hinweis,
         "ersetzt": zustand.ersetzt_beleg,
+        "anzahlung_gewaehlt": [],
+        "anzahlung_fuer": None,
     }, status_code=(400 if ersetzt_angefragt else 404) if zustand.error else 200)
 
 
@@ -113,6 +118,18 @@ def new_invoice_form(
     return response
 
 
+@router.get("/anzahlungen")
+def anzahlungen_angebot(customer_id: uuid.UUID | None = None,
+                        fuer: uuid.UUID | None = None, db: Session = Depends(get_db)):
+    """Verrechenbare Anzahlungen des Kunden fuer die Auswahl im Formular (#259)."""
+    d = darstellung("de")
+    return [
+        {"id": str(a.id), "nummer": a.invoice_number,
+         "datum": d.format_datum(a.issue_date), "brutto": d.format_betrag(a.gross_total, a.currency)}
+        for a in anzahlungen.verrechenbare(db, customer_id, fuer)
+    ]
+
+
 @router.post("/neu")
 async def create_invoice(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
@@ -135,9 +152,18 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
 
     positionen_ersetzen(db, invoice, positionen)
     summen_schreiben(invoice, summen, abzug_betrag, abzug_grund)
+    _anzahlung_verknuepfen(db, invoice, form)
 
     db.commit()
     return RedirectResponse(url=f"/invoices/{invoice.id}", status_code=303)
+
+
+def _anzahlung_verknuepfen(db: Session, invoice: Invoice, form) -> None:
+    try:
+        anzahlungen.verknuepfen(db, invoice, form.getlist("anzahlung_ids"))
+    except RechnungFehler as fehler:
+        db.rollback()
+        raise HTTPException(fehler.status_code, fehler.detail) from fehler
 
 
 def _bearbeiten_antwort(request: Request, db: Session, invoice: Invoice,
@@ -154,6 +180,8 @@ def _bearbeiten_antwort(request: Request, db: Session, invoice: Invoice,
         "delivery_default": heute().isoformat(),
         "belegart_waehlbar": belegart_waehlbar(invoice),
         "error": meldung,
+        "anzahlung_gewaehlt": anzahlungen.gewaehlte_ids(invoice),
+        "anzahlung_fuer": str(invoice.id),
     }, **antwort)
 
 
@@ -197,6 +225,7 @@ async def update_invoice(invoice_id: uuid.UUID, request: Request, db: Session = 
 
     positionen_ersetzen(db, invoice, positionen)
     summen_schreiben(invoice, summen, abzug_betrag, abzug_grund)
+    _anzahlung_verknuepfen(db, invoice, form)
 
     # Nachprüfen mit den NEUEN Positionen: `positionen_ersetzen` hat sie erst in die Session
     # gelegt, die geladene `items`-Beziehung zeigt sonst noch den alten Stand.

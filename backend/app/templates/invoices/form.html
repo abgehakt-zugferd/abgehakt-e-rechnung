@@ -134,6 +134,28 @@
                     </div>
                 </div>
 
+                <!-- Anzahlung (#259): nur fuer Standardrechnungen, Angebot je Kunde -->
+                <script type="application/json" id="anzahlung-vorgaben">{{ {"gewaehlt": anzahlung_gewaehlt, "fuer": anzahlung_fuer} | tojson }}</script>
+                <div class="card space-y-4" x-data="anzahlungsauswahl()" x-init="laden()"
+                     @change.window="if ($event.target.name === 'customer_id') laden()"
+                     x-show="invoiceType === 'standard' && liste.length > 0" x-cloak>
+                    <h2>ANZAHLUNG VERRECHNEN</h2>
+                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5; margin:0;">
+                        Bezahlte Anzahlungen dieses Kunden. Gewählt wird die Anzahlung, die
+                        diese Rechnung abzieht; Betrag und Steuer stehen auf dem Beleg.
+                    </p>
+                    <template x-if="invoiceType === 'standard'">
+                        <div class="space-y-2">
+                            <template x-for="a in liste" :key="a.id">
+                                <label style="display:flex; gap:8px; align-items:center;">
+                                    <input type="checkbox" name="anzahlung_ids" :value="a.id" x-model="gewaehlt">
+                                    <span x-text="`${a.nummer} vom ${a.datum}, ${a.brutto}`"></span>
+                                </label>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+
                 <!-- Line items -->
                 <div class="card space-y-4">
                     <h2>POSITIONEN</h2>
@@ -493,6 +515,28 @@
 </div>
 
 <script>
+
+function anzahlungsauswahl() {
+    const vorgaben = JSON.parse(document.getElementById('anzahlung-vorgaben').textContent);
+    return {
+        liste: [],
+        gewaehlt: vorgaben.gewaehlt || [],
+        async laden() {
+            const feld = document.querySelector('select[name="customer_id"]');
+            const kunde = feld ? feld.value : '';
+            this.liste = [];
+            if (kunde) {
+                try {
+                    const fuer = vorgaben.fuer ? '&fuer=' + encodeURIComponent(vorgaben.fuer) : '';
+                    const r = await fetch('/invoices/anzahlungen?customer_id=' + encodeURIComponent(kunde) + fuer);
+                    this.liste = r.ok ? await r.json() : [];
+                } catch (e) { this.liste = []; }
+            }
+            const ids = this.liste.map(a => a.id);
+            this.gewaehlt = this.gewaehlt.filter(id => ids.includes(id));
+        },
+    };
+}
 
 function invoiceForm() {
     return {

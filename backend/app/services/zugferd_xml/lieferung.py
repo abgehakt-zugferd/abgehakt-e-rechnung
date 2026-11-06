@@ -1,5 +1,6 @@
 """Lieferung (HeaderTradeDelivery) und Belegreferenzen (BG-3)."""
 from app.models.invoice import Invoice
+from app.services import anzahlungen
 
 from app.services.zugferd_xml.format import esc, fmt_date
 
@@ -70,14 +71,16 @@ def reference_xml(invoice: Invoice) -> str:
     # Folgebeleg (381/384/389) oder Ersatzrechnung (380/386, docs/specs/ersatzrechnung.md):
     # beide verweisen per BT-25 auf genau eine vorausgegangene Rechnung.
     if invoice.original_invoice_id:
-        original = invoice.original_invoice
+        originale = [invoice.original_invoice]
     elif getattr(invoice, "ersetzt_invoice_id", None):
-        original = invoice.ersetzte_rechnung
+        originale = [invoice.ersetzte_rechnung]
     else:
-        return ""
-    if not original:
-        return ""
+        # Schlussrechnung (#259): je verrechnete Anzahlung eine vorausgegangene Rechnung.
+        originale = anzahlungen.verrechnete(invoice)
+    return "".join(_vorausgegangene_xml(o) for o in originale if o)
 
+
+def _vorausgegangene_xml(original: Invoice) -> str:
     return f"""
             <ram:InvoiceReferencedDocument>
                 <ram:IssuerAssignedID>{esc(original.invoice_number)}</ram:IssuerAssignedID>

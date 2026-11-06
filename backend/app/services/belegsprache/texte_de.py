@@ -34,6 +34,8 @@ DARSTELLUNG_DE = {
     "label_bereits_gezahlt": "Bereits gezahlt",
     "label_offener_betrag": "Offener Betrag",
     "steuerzeile_muster": "zzgl. {satz} MwSt. auf {basis}",
+    "anzahlungzeile_muster": "abzüglich Anzahlung, Rechnung {nummer} vom {datum}",
+    "label_anzahlung_netto": "Netto",
     "label_verwendungszweck": "Verwendungszweck:",
     "label_scan_to_pay": "Zum Überweisen scannen.",
     "label_ust_id": "USt-IdNr.:",
