@@ -9,6 +9,7 @@ from reportlab.lib.units import cm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.platypus import Paragraph, Table, TableStyle
 
+from app.services import anzahlungen
 from app.services.auftragszahlung import ist_rechnungsauftrag
 from app.services.belegart import belegart
 from app.services.belegsummen import belegsummen
@@ -23,13 +24,13 @@ SUMMEN_BREITE = 8 * cm
 def append_steuer_und_summenblock(story, invoice, d, styles: Styles, body_font, bold_font):
     tax_groups = _tax_groups(invoice.items)
     summen = belegsummen(invoice.items, getattr(invoice, "abzug_betrag", None))
-    rows, endbetrag = _totals_data(invoice, d, styles, tax_groups, summen)
+    rows, endbetrag, rechnungsbetrag_zeile = _totals_data(invoice, d, styles, tax_groups, summen)
     betrag_breite = _betrag_breite(invoice, summen, tax_groups, endbetrag, styles, d, body_font, bold_font)
     totals_table = Table(rows, colWidths=[SUMMEN_BREITE * 0.6, max(SUMMEN_BREITE * 0.4, betrag_breite)])
     totals_table.hAlign = "RIGHT"
-    # Goldzeile: Rechnungsbetrag; bei Rechnungsauftrag liegen darunter noch
-    # „Bereits gezahlt“ und „Offener Betrag“ (letzte Zeile).
-    gold_zeile = -3 if ist_rechnungsauftrag(invoice) else -1
+    # Goldzeile: Rechnungsbetrag; darunter liegen bei Rechnungsauftrag „Bereits
+    # gezahlt“ und „Offener Betrag“, bei Schlussrechnung die Anzahlungszeilen.
+    gold_zeile = rechnungsbetrag_zeile
     totals_table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), body_font),
         ("ALIGN", (0, 0), (-1, -1), "LEFT"),
@@ -62,6 +63,8 @@ def _totals_data(invoice, d, styles, tax_groups, summen):
     label = d.label_gutschriftbetrag if belegart(invoice.invoice_type).intern == "self_billing" else d.label_rechnungsbetrag
     endbetrag = money(summen.brutto) if mit_abzug else money(invoice.gross_total)
     rows.append([Paragraph(f"<b>{label}</b>", styles.small_bold), Paragraph(f"<b>{endbetrag}</b>", styles.right_bold)])
+    gold_zeile = len(rows) - 1
+    rows.extend(_anzahlung_rows(invoice, d, styles, money, summen))
     if ist_rechnungsauftrag(invoice):
         # Kein Zahlungsdatum/keine Zahlungsnummer: kommen erst mit spaeterem
         # Uebergabeformat. Nur Betrag und offener Rest (0,00).
@@ -73,7 +76,24 @@ def _totals_data(invoice, d, styles, tax_groups, summen):
             Paragraph(f"<b>{d.label_offener_betrag}</b>", styles.small_bold),
             Paragraph(f"<b>{money(Decimal('0'))}</b>", styles.right_bold),
         ])
-    return rows, endbetrag
+    return rows, endbetrag, gold_zeile
+
+
+def _anzahlung_rows(invoice, d, styles, money, summen):
+    """Schlussrechnung (#259): Abzug je Anzahlung, Netto und Steuer (§ 14 Abs. 5 Satz 2 UStG)."""
+    rows = []
+    gesamt = Decimal("0")
+    for a in anzahlungen.verrechnete(invoice):
+        gesamt += a.gross_total
+        rows.append([Paragraph(d.anzahlungzeile(a.invoice_number, a.issue_date), styles.small),
+                     Paragraph("-" + money(a.gross_total), styles.right)])
+        if a.tax_total > 0:
+            rows.append([Paragraph(d.label_anzahlung_netto, styles.small), Paragraph(money(a.net_total), styles.right)])
+            rows.append([Paragraph(d.label_mwst, styles.small), Paragraph(money(a.tax_total), styles.right)])
+    if rows:
+        rows.append([Paragraph(f"<b>{d.label_offener_betrag}</b>", styles.small_bold),
+                     Paragraph(f"<b>{money(summen.brutto - gesamt)}</b>", styles.right_bold)])
+    return rows
 
 
 def _rows_ohne_steuer(invoice, d, styles, summen, mit_abzug, money):

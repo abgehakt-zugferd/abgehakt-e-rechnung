@@ -7,9 +7,10 @@ from app.models.aufstellung_send_log import AufstellungSendLog
 from app.models.app_config import AppConfig
 from app.models.aufstellung import Aufstellung, AufstellungAnlage
 from app.models.uebergabe_eingang import UebergabeEingang
+from app.models.anzahlung_verrechnung import AnzahlungVerrechnung
 
 __all__ = [
     "Company", "Customer", "Invoice", "InvoiceItem", "ValidationResult",
     "AuditLog", "InvoiceSendLog", "AppConfig", "UebergabeEingang",
-    "Aufstellung", "AufstellungAnlage", "AufstellungSendLog",
+    "Aufstellung", "AufstellungAnlage", "AufstellungSendLog", "AnzahlungVerrechnung",
 ]

@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from app.models.company import Company
 from app.models.invoice import Invoice
+from app.services import anzahlungen
 from app.services.auftragszahlung import ist_rechnungsauftrag
 from app.services.bankverbindung import iban_fuer_ausgabe
 from app.services.belegart import belegart, zahlung_an_kunde
@@ -160,6 +161,13 @@ def monetary_summation_xml(invoice: Invoice, summen: Belegsummen) -> str:
             f"\n                <ram:TotalPrepaidAmount>{fmt_amount(summen.brutto)}</ram:TotalPrepaidAmount>"
         )
         due = fmt_amount(Decimal("0"))
+    elif (vorab := anzahlungen.vorauszahlung(invoice)) > 0:
+        # Schlussrechnung (#259): BT-112 bleibt das volle Brutto, BT-113 ist das
+        # Brutto der verrechneten Anzahlung, BT-115 die Differenz.
+        prepaid = (
+            f"\n                <ram:TotalPrepaidAmount>{fmt_amount(vorab)}</ram:TotalPrepaidAmount>"
+        )
+        due = fmt_amount(summen.brutto - vorab)
     else:
         prepaid = ""
         due = fmt_amount(summen.brutto)

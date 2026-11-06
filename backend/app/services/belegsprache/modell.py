@@ -68,6 +68,9 @@ class Belegdarstellung:
     label_bereits_gezahlt: str
     label_offener_betrag: str
     steuerzeile_muster: str  # mit {satz} und {basis}
+    # Schlussrechnung (#259): Abzugszeile mit {nummer}/{datum}, Netto der Anzahlung
+    anzahlungzeile_muster: str
+    label_anzahlung_netto: str
 
     # Zahlung / QR / Stempel
     label_verwendungszweck: str
@@ -209,6 +212,10 @@ class Belegdarstellung:
 
     def steuerzeile(self, satz: str, basis: str) -> str:
         return self.steuerzeile_muster.format(satz=satz, basis=basis)
+
+    def anzahlungzeile(self, nummer: str, datum: date) -> str:
+        return self.anzahlungzeile_muster.format(
+            nummer=nummer, datum=self.format_datum(datum))
 
     def abzugzeile(self, grund: str) -> str:
         return self.abzugzeile_muster.format(grund=grund)
