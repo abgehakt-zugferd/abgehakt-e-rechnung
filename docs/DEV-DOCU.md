@@ -68,7 +68,7 @@ Unverträglichkeit mit der funktions-scoped `pg_session`-Fixture).
 
 | Komponente | Gepinnt / Bezug | Neueste bekannt | Delta | Hinweis |
 |---|---|---|---|---|
-| **Mustang CLI** | `Dockerfile` → `ARG MUSTANG_VERSION` + `MUSTANG_SHA256` (aktuell 2.24.0) | 2.24.0 | aktuell | Upgrade = Nummer **und** SHA-256 im Dockerfile, Rebuild, volle Mustang-E2E (`test_finalize_e2e`, Schema, Storno). CLI-Flags (`--format zf`, `--version 2`, `--profile`, `--no-additional-attachments`, JVM-Start mit `-Xmx512m` und `-Dfile.encoding=UTF-8`) vorab gegen die Release notes prüfen. Rezept + Fallstricke: unten. |
+| **Mustang CLI** | `Dockerfile` → `ARG MUSTANG_VERSION` + `MUSTANG_SHA256` (aktuell 2.26.0) | 2.26.0 | aktuell | Upgrade = Nummer **und** SHA-256 im Dockerfile, Rebuild, volle Mustang-E2E (`test_finalize_e2e`, Schema, Storno). CLI-Flags (`--format zf`, `--version 2`, `--profile`, `--no-additional-attachments`, JVM-Start mit `-Xmx512m` und `-Dfile.encoding=UTF-8`) vorab gegen die Release notes prüfen. Rezept + Fallstricke: unten. |
 | Python-Basis | `python:3.11-slim` mit Digest-Pin | 3.11 weiterhin; 3.12/3.13 verfügbar | Digest hält das Basisabbild fest | Major-Python-Sprung separat entscheiden |
 | PostgreSQL | `postgres:16-alpine` | 16.x (Tag floatet) | Patch via Image-Pull | Major 17 = eigene Migration |
 | Ghostscript | apt `ghostscript=10.05.1~dfsg-1+deb13u3` | n/a | Pin | PDF/A-3-Pfad; beim nächsten Debian-Point-Release laut brechen (zusammen mit Base-Digest anheben). Am 2026-10-15 so gebrochen: `deb13u2` war aus `trixie-security` verschwunden, jeder frische Bau scheiterte mit apt-Exit 100; lokal verdeckt durch den Schichten-Cache |
@@ -168,7 +168,7 @@ Die gesamte uv/Renovate/Trivy-Kette ist PyPI-zentriert. Zwei Artefakte brauchen 
 ### Mustang-JAR bumpen: Rezept und die zwei Fallstricke (2026-07-26, 2.23.0 → 2.24.0)
 
 ```bash
-V=2.24.0; B="https://repo1.maven.org/maven2/org/mustangproject/Mustang-CLI/$V/Mustang-CLI-$V.jar"
+V=2.26.0; B="https://repo1.maven.org/maven2/org/mustangproject/Mustang-CLI/$V/Mustang-CLI-$V.jar"
 curl -fsSL "$B" -o m.jar
 shasum -a 256 m.jar          # -> ARG MUSTANG_SHA256
 shasum -a 1   m.jar          # muss sich mit "$B.sha1" decken
@@ -196,6 +196,8 @@ angekündigten Folgeversion auf. Wer künftig bumpt und einen erneuten Schlüsse
 Zweifel fragen. Der
 praktische Vertrauensanker ist ohnehin nicht die Signatur, sondern die Kontrolle über den
 Maven-Central-Namensraum `org.mustangproject` (von Sonatype verifiziert) plus unser Hash-Pin.
+
+**2.26.0 (2026-11-06):** gleicher Schlüssel `C513 CD93 … 4DB7 4319` wie seit 2.23.1, Signatur korrekt, `.sha1` deckt sich. Anlass: 2.25.0 behebt die VeraPDF-Lücken CVE-2026-54078 und CVE-2026-54079 (Mustang #1213). Auf keys.openpgp.org liegt der Schlüssel nicht (HTTP 404), der Ubuntu-Keyserver liefert ihn.
 
 ⚠️ **Keyserver-Zugriff:** `gpg --recv-keys` scheitert hier („No route to host"); über HTTPS geht
 es: `curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x<FPR>" | gpg --import`.

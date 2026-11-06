@@ -7,7 +7,9 @@ Klammern.
 
 ## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.1.0)
 
-Noch keine Änderungen.
+### Sicherheit
+
+- **Mustang 2.26.0 statt 2.24.0.** Die Prüfbibliothek für E-Rechnungen schließt damit zwei Lücken in ihrem PDF-Prüfteil (CVE-2026-54078, CVE-2026-54079) und bringt die aktuellen Prüfregeln für EN 16931 mit. Für den Betrieb heißt das: nach dem Wechsel das Abbild neu bauen, sonst läuft die alte Fassung weiter.
 
 ## v1.1.0 (2026-11-04)
 
