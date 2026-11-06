@@ -13,6 +13,7 @@ Klammern.
 
 ### Sicherheit
 
+- **Python-Pakete mit bekannten Sicherheitslücken angehoben:** fastapi 0.162.0 mit starlette 1.10.0, python-multipart 0.0.33 (Formular- und Datei-Upload), cryptography 50.0.2, jinja2 3.1.6, pillow 13.0.0, python-dotenv 1.2.4, certifi 2026.10.23 und pypdf 7.0.0 (nur von den Tests benutzt). Für den Betrieb heißt das: nach dem Wechsel das Abbild neu bauen.
 - **Mustang 2.26.0 statt 2.24.0.** Die Prüfbibliothek für E-Rechnungen schließt damit zwei Lücken in ihrem PDF-Prüfteil (CVE-2026-54078, CVE-2026-54079) und bringt die aktuellen Prüfregeln für EN 16931 mit. Für den Betrieb heißt das: nach dem Wechsel das Abbild neu bauen, sonst läuft die alte Fassung weiter.
 
 ## v1.1.0 (2026-11-04)
