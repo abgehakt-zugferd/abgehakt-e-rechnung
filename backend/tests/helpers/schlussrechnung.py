@@ -43,8 +43,9 @@ def anzahlung(pg_session, kunde, *, netto="100.00", satz="19", kategorie="S",
     return inv
 
 
-def payload(kunde, anzahlungen, *, netto="200", satz="19", kategorie="S"):
+def payload(kunde, anzahlungen, *, netto="200", satz="19", kategorie="S", extra=None):
     return {
+        **(extra or {}),
         "customer_id": str(kunde.id),
         "issue_date": "2026-08-10",
         "due_date": "2026-08-24",
