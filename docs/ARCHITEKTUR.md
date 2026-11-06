@@ -572,7 +572,5 @@ Hochgeladene oder zugesandte XML nie mit der Standardbibliothek (`xml.etree`) pa
 `import defusedxml.ElementTree as ET`, `DefusedXmlException` als fachlichen Fehler behandeln
 (fail-closed). Sonst sind XXE und „Billion Laughs" offen.
 
-**Bekannte Ausnahme, offen:** das Einspielskript `backend/scripts/beleg_aus_xml_einspielen.py`
-parst mit `xml.etree.ElementTree` statt mit `defusedxml` und verstößt damit gegen diese Regel.
-Es läuft nur im Betriebsumzug gegen XML aus dem eigenen Archiv; die Ausnahme ist bekannt,
-aber nicht behoben. Wer das Skript anfasst, behebt sie.
+**Ausnahme:** keine mehr. Das Einspielskript `backend/scripts/beleg_aus_xml_einspielen.py`
+parst inzwischen über `defusedxml` (behoben, #158).
