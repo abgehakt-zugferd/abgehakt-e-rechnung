@@ -183,7 +183,7 @@ def test_vies_name_normalisiert_ignoriert_platzhalter():
 
 def test_rechnung_unterdrueckt_name_mismatch_bei_vies_platzhalter():
     kunde = customer_stub(
-        name="Polymorph Audiobook",
+        name="Probe Hörbuch GmbH",
         vat_id=UST_DE_PROBE,
         vat_id_checked_at=datetime.now(timezone.utc),
         vat_id_check_valid=True,
@@ -194,7 +194,7 @@ def test_rechnung_unterdrueckt_name_mismatch_bei_vies_platzhalter():
     _, warnings = validate_invoice(inv, company_stub())
     assert not any(w.code == "BUYER_VAT_ID_NAME_MISMATCH" for w in warnings)
     kunde = customer_stub(
-        name="Polymorph Audiobook",
+        name="Probe Hörbuch GmbH",
         vat_id=UST_DE_PROBE,
         vat_id_checked_at=datetime.now(timezone.utc),
         vat_id_check_valid=True,

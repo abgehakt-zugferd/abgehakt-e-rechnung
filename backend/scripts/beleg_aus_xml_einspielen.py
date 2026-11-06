@@ -313,12 +313,11 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Finalisierte Belege aus XML/PDF einspielen")
-    parser.add_argument("nummern", nargs="*", help="Rechnungsnummern (z. B. Z-2026-002)")
+    parser.add_argument("nummern", nargs="+", help="Rechnungsnummern (z. B. RE-2026-001)")
     parser.add_argument(
         "--alt-system",
         action="store_true",
         help="Versand und Bezahlt aus altem Abgehakt nachziehen (Migration)",
     )
     args = parser.parse_args()
-    nums = args.nummern or ["Z-2026-002", "Z-2026-004"]
-    einspielen(nums, aus_altem_system=args.alt_system)
+    einspielen(args.nummern, aus_altem_system=args.alt_system)
