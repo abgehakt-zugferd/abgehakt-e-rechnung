@@ -60,7 +60,7 @@
                        Wert kommt und was ein Überschreiben bedeutet, entscheidet
                        darüber, ob jemand die Voreinstellung für alle Kunden ändert,
                        obwohl er nur diesen einen Versand meint. #}
-                    <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); line-height:1.4; color:var(--text-dim); margin-bottom:12px;">
+                    <p class="hilfe hilfe--gross" style="line-height:1.4; margin-bottom:12px;">
                         {% if cc_herkunft == 'kunde' %}
                         Aus dem Kundenstamm von {{ invoice.customer.name }}. Änderung gilt nur für diesen Versand.
                         {% elif cc_herkunft == 'einstellungen' %}
@@ -135,14 +135,14 @@
 
         {% if storno_endgueltig %}
         {# Issue #267: auch der gestellte Storno einer 389 ist endgueltig; Text in der Belegsprache. #}
-        <div data-hinweis="gutschrift-endgueltig" style="flex-basis:100%; padding:10px 14px; border:2px solid var(--border); font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+        <div class="hilfe" data-hilfe-voll data-hinweis="gutschrift-endgueltig" style="flex-basis:100%; padding:10px 14px; border:2px solid var(--border); line-height:1.5;">
             {{ storno_endgueltig }}
         </div>
         {% endif %}
 
         {% if invoice.invoice_type == 'credit_note' and invoice.status in ('issued', 'paid') %}
         {# Issue #142: eine gestellte Gutschrift ist endgueltig. Nicht nur sperren, den Weg zeigen. #}
-        <div data-hinweis="gutschrift-endgueltig" style="flex-basis:100%; padding:10px 14px; border:2px solid var(--border); font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+        <div class="hilfe" data-hilfe-voll data-hinweis="gutschrift-endgueltig" style="flex-basis:100%; padding:10px 14px; border:2px solid var(--border); line-height:1.5;">
             Diese Stornorechnung ist endgültig; sie ist selbst die Korrektur und lässt sich nicht stornieren.
             {% if invoice.original_invoice %}
             War sie falsch, stelle zur Rechnung

@@ -49,7 +49,7 @@
                 <div>
                     <p class="kpi__beschriftung">RECHNUNGEN GESAMT</p>
                     <p class="kpi__wert">{{ total_invoices }}</p>
-                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:6px; line-height:1.6;">
+                    <p class="hilfe" style="margin-top:6px; line-height:1.6;">
                         <a data-kpi="status-draft" href="/invoices?status=draft" style="color:var(--text-dim);">{{ belegzaehlung.entwurf }} Entwurf{{ '' if belegzaehlung.entwurf == 1 else 'e' }}</a>
                         ·
                         <a data-kpi="status-issued" href="/invoices?status=issued" style="color:var(--text-dim);">{{ belegzaehlung.gestellt }} gestellt</a>
@@ -90,7 +90,7 @@
                 <div>
                     <p class="kpi__beschriftung">ÜBERFÄLLIG</p>
                     <p class="kpi__wert"{% if ueberfaellig.anzahl %} style="color:var(--pink);"{% endif %}>{{ ueberfaellig.anzahl }}</p>
-                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:4px;">
+                    <p class="hilfe" style="margin-top:4px;">
                         {{ ueberfaellig.betrag|betrag(0) }} €
                         {% if ueberfaellig.aeltester_tage is not none %}
                         · ältester {{ ueberfaellig.aeltester_tage }} Tag{{ '' if ueberfaellig.aeltester_tage == 1 else 'e' }}
@@ -127,7 +127,7 @@
                 <div>
                     <p class="kpi__beschriftung">UMSATZ LFD. JAHR (NETTO, BEZAHLT)</p>
                     <p class="kpi__wert">{{ revenue_ytd|betrag(0) }}<span class="kpi__einheit">€</span></p>
-                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:4px;">
+                    <p class="hilfe" style="margin-top:4px;">
                         Vorjahr {{ revenue_prev_ytd|betrag(0) }} €
                         {% if revenue_yoy_pct is not none %}
                         ({{ revenue_yoy_pct|betrag(1) }} %)
@@ -167,7 +167,7 @@
                 <div>
                     <p class="kpi__beschriftung">GESCH. STEUERABGABEN</p>
                     <p class="kpi__wert">{{ estimated_tax_ytd|betrag(0) }}<span class="kpi__einheit">€</span></p>
-                    <div style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); margin-top:6px; line-height:1.5;">
+                    <div class="hilfe" style="margin-top:6px; line-height:1.5;">
                         <div>USt {{ vat_liability_ytd|betrag(0) }}&nbsp;€</div>
                         {% if vorsteuer_honorargutschriften_ytd %}<div><a href="/invoices?art=honorargutschrift">− Vorsteuer Honorargutschriften {{ vorsteuer_honorargutschriften_ytd|betrag(0) }}&nbsp;€</a></div>{% endif %}
                         <div>+ KSt/GewSt {{ steuer_ruecklage_ytd|betrag(0) }}&nbsp;€ ({{ steuer_ruecklage_anteil_prozent|betrag(1) }}&nbsp;% Netto)</div>

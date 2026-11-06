@@ -24,7 +24,7 @@
          zurückkommt (Zurück-Button). Siehe Makro am Seitenende. -->
     <div id="kunde-anlegen-verbraucht" class="card space-y-4" style="display:none;">
         <h2>KUNDE BEREITS ANGELEGT</h2>
-        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); line-height:1.5;">
+        <p class="hilfe hilfe--gross" style="line-height:1.5;">
             Dieses Formular wurde bereits abgeschickt. Der Kunde steht in der Kundenliste.
             Was hier stand, ist gespeichert und wird nicht doppelt angelegt.
         </p>
@@ -52,7 +52,7 @@
             <div>
                 <label class="label">Kundennummer</label>
                 <input type="text" name="customer_number" value="{{ customer.customer_number if customer else (values.get('customer_number') or suggested_number) }}" class="input font-mono">
-                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Schema JJJJMM + lfd. Nr. (Vorschlag), bestehende Nummer einfach überschreiben.</p>
+                <p class="hilfe" style="margin-top:6px;">Schema JJJJMM + lfd. Nr. (Vorschlag), bestehende Nummer einfach überschreiben.</p>
             </div>
             <div>
                 <label class="label">Firmen-/Kundenname *</label>
@@ -89,7 +89,7 @@
                     <option value="1" {% if is_active %}selected{% endif %}>Aktiv (in Rechnungsauswahl)</option>
                     <option value="0" {% if not is_active %}selected{% endif %}>Inaktiv (archiviert)</option>
                 </select>
-                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Inaktive Kunden erscheinen nicht mehr in der Auswahl beim Anlegen einer Rechnung.</p>
+                <p class="hilfe" style="margin-top:6px;">Inaktive Kunden erscheinen nicht mehr in der Auswahl beim Anlegen einer Rechnung.</p>
             </div>
         </div>
 
@@ -104,7 +104,7 @@
                            {% if ist_gutschrift %}checked{% endif %}>
                     Gutschriftempfänger (Honorargutschrift / § 14 Abs. 2 UStG)
                 </label>
-                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                <p class="hilfe" style="margin-top:6px;">
                     Nur wenn dieses Programm für den Beteiligten Honorargutschriften ausstellt,
                     ist der umsatzsteuerliche Status Pflicht. Speichern bleibt bei ungeklärtem
                     Status möglich; blockiert wird erst das Finalisieren einer 389.
@@ -118,14 +118,14 @@
                     <option value="regelbesteuert" {% if status == 'regelbesteuert' %}selected{% endif %}>Regelbesteuert</option>
                     <option value="kleinunternehmer" {% if status == 'kleinunternehmer' %}selected{% endif %}>Kleinunternehmer (§ 19 UStG)</option>
                 </select>
-                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                <p class="hilfe" style="margin-top:6px;">
                     Gilt für Honorargutschriften an diesen Beteiligten. Bei Kleinunternehmern
                     wird keine Umsatzsteuer ausgewiesen: ausgewiesene Steuer würde er nach
                     § 14c Abs. 2 UStG schulden, auf einem Beleg, den er selbst nicht geschrieben hat.
                 </p>
                 {% set bestaetigt = customer.ust_status_bestaetigt_am if customer else None %}
                 {% if bestaetigt %}
-                <p style="margin-top:8px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                <p class="hilfe" style="margin-top:8px;">
                     Status bestätigt am {{ bestaetigt.strftime('%d.%m.%Y') }}
                 </p>
                 {% endif %}
@@ -134,14 +134,14 @@
             <div>
                 <label class="label">Steuernummer</label>
                 <input type="text" name="tax_number" value="{{ (customer.tax_number if customer else values.get('tax_number','')) or '' }}" placeholder="z. B. 12/345/67890" class="input font-mono">
-                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Pflichtangabe nach § 14 Abs. 4 S. 1 Nr. 2 UStG auf der Honorargutschrift, wenn keine USt-IdNr. vorliegt.</p>
+                <p class="hilfe" style="margin-top:6px;">Pflichtangabe nach § 14 Abs. 4 S. 1 Nr. 2 UStG auf der Honorargutschrift, wenn keine USt-IdNr. vorliegt.</p>
             </div>
 
             <div>
 
                 <label class="label">USt-IdNr. (empfohlen für B2B)</label>
                 <input type="text" name="vat_id" value="{{ (customer.vat_id if customer else values.get('vat_id','')) or '' }}" placeholder="DE und neun Ziffern" class="input font-mono">
-                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Bei B2B-Rechnungen ueber 10.000 EUR wird die Angabe empfohlen. Existenz und Gueltigkeit nur per Button „Jetzt bei VIES pruefen" (mit Einwilligung, keine Verbindung beim Speichern).</p>
+                <p class="hilfe" style="margin-top:6px;">Bei B2B-Rechnungen ueber 10.000 EUR wird die Angabe empfohlen. Existenz und Gueltigkeit nur per Button „Jetzt bei VIES pruefen" (mit Einwilligung, keine Verbindung beim Speichern).</p>
                 {% if customer %}
                 {% with entity=customer, pruefen_url='/customers/' ~ customer.id ~ '/bearbeiten', form_root='kunde-bearbeiten' %}
                 {% include "partials/ust_id_vies_status.html" %}
@@ -161,7 +161,7 @@
             <div>
                 <label class="label">Kopie an (CC)</label>
                 <input type="email" multiple name="cc_emails" value="{{ (customer.cc_emails if customer else values.get('cc_emails','')) or '' }}" class="input" placeholder="zweite@kunde.de, dritte@kunde.de">
-                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                <p class="hilfe" style="margin-top:6px;">
                     Diese Adressen erhalten jede Rechnung an diesen Kunden in Kopie, mehrere mit Komma getrennt.
                     <strong style="color:var(--text);">Für den Kunden sichtbar</strong> (CC, nicht BCC).
                     Steht hier etwas, gilt es statt der Voreinstellung aus den Einstellungen.
@@ -175,7 +175,7 @@
 
         <div class="card space-y-4">
             <h2>BANKVERBINDUNG (AUSZAHLUNG)</h2>
-            <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.4;">
+            <p class="hilfe" style="line-height:1.4;">
                 Für Gutschriften und Abrechnungsgutschriften (389): IBAN des Beteiligten für Überweisung
                 und EPC-QR auf dem PDF. Bei normalen Rechnungen zahlt der Kunde an Ihre Firmen-IBAN
                 (Einstellungen).
@@ -186,8 +186,8 @@
                     <span x-show="gutschrift" x-cloak> (empfohlen)</span>
                 </label>
                 <input type="text" name="bank_iban" value="{{ (customer.bank_iban if customer else values.get('bank_iban','')) or '' }}" placeholder="DE00 1234 5678..." class="input font-mono">
-                <p x-show="gutschrift" x-cloak
-                   style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                <p class="hilfe" x-show="gutschrift" x-cloak
+                   style="margin-top:6px;">
                     Ohne IBAN bekommt die Honorargutschrift keinen QR-Code zum Überweisen.
                 </p>
             </div>
@@ -206,7 +206,7 @@
 
         <div class="card space-y-4">
             <h2>VORGABEN FÜR RECHNUNGEN</h2>
-            <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.4;">
+            <p class="hilfe" style="line-height:1.4;">
                 Diese Vorgaben gelten für neue Rechnungsentwürfe an diesen Kunden und werden
                 beim Anlegen übernommen. Bereits erstellte Belege bleiben unverändert.
             </p>
@@ -217,7 +217,7 @@
                     <option value="" {% if not steuer %}selected{% endif %}>Keine Vorgabe</option>
                     <option value="AE" {% if steuer == 'AE' %}selected{% endif %}>AE – Steuerschuldnerschaft des Leistungsempfängers</option>
                 </select>
-                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                <p class="hilfe" style="margin-top:6px;">
                     Steuer für Rechnungen aus Rechnungsaufträgen; AE heißt Steuerschuldnerschaft
                     des Leistungsempfängers. Verlangt eine USt-IdNr. des Kunden.
                 </p>
@@ -225,14 +225,14 @@
             <div>
                 <label class="label">Kopftext</label>
                 <textarea name="kopftext" rows="3" class="input" placeholder="Erscheint auf der Rechnung über den Positionen">{{ (customer.kopftext if customer else values.get('kopftext','')) or '' }}</textarea>
-                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                <p class="hilfe" style="margin-top:6px;">
                     Platzhalter <span class="font-mono">{leistungsmonat}</span> wird zu MM/JJJJ des Leistungszeitraums.
                 </p>
             </div>
             <div>
                 <label class="label">Fußtext</label>
                 <textarea name="fusstext" rows="3" class="input" placeholder="Erscheint auf der Rechnung unter dem Summenblock">{{ (customer.fusstext if customer else values.get('fusstext','')) or '' }}</textarea>
-                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                <p class="hilfe" style="margin-top:6px;">
                     Platzhalter <span class="font-mono">{leistungsmonat}</span> wird zu MM/JJJJ des Leistungszeitraums.
                     Den Reverse-Charge-Vermerk druckt das Programm selbst; hier nicht wiederholen.
                 </p>
@@ -240,7 +240,7 @@
             <div>
                 <label class="label">Zahlungshinweis</label>
                 <textarea name="zahlungshinweis" rows="2" class="input" placeholder="z. B. Zahlung nach Auszahlungsbericht">{{ (customer.zahlungshinweis if customer else values.get('zahlungshinweis','')) or '' }}</textarea>
-                <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">
+                <p class="hilfe" style="margin-top:6px;">
                     Setzt bei neuen Rechnungen dieses Kunden die Zahlungsbedingungen, solange dort nichts anderes eingetragen wird.
                 </p>
             </div>

@@ -56,7 +56,7 @@
          zurückkommt (Zurück-Button). Siehe Makro am Seitenende. -->
     <div id="rechnung-anlegen-verbraucht" class="card space-y-4" style="display:none;">
         <h2>ENTWURF BEREITS GESPEICHERT</h2>
-        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); line-height:1.5;">
+        <p class="hilfe hilfe--gross" style="line-height:1.5;">
             Dieses Formular wurde bereits abgeschickt. Der Entwurf liegt in der
             Rechnungsliste. Was hier stand, ist gespeichert und wird nicht doppelt angelegt.
         </p>
@@ -76,7 +76,7 @@
     {% if aus_beleg %}
     <div style="margin-bottom:16px; padding:12px 16px; background:rgba(0,229,255,0.05); border:2px solid rgba(0,229,255,0.25);">
         <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--cyan); margin-bottom:8px;">AUS EINEM SIGNIERTEN BELEG</p>
-        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); line-height:1.5;">
+        <p class="hilfe hilfe--gross" style="line-height:1.5;">
             Die mit <strong style="color:var(--cyan);">aus dem Beleg</strong> gekennzeichneten Felder
             sind übernommen und deshalb gesperrt: Beteiligter, Leistungszeitraum und die
             Netto-Beträge der Positionen. Steuer, Beschreibungen und Freitexte lassen sich ändern.
@@ -125,7 +125,7 @@
                             {{ kunde_hinweis }}: der Kunde der Vorlage fehlt in der Auswahlliste (inaktiv oder geloescht). Positionen und uebrige Felder sind trotzdem vorbelegt.
                         </p>
                         {% endif %}
-                        <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); line-height:1.5; margin-top:6px;">
+                        <p class="hilfe hilfe--gross" style="line-height:1.5; margin-top:6px;">
                             Kann nachgetragen werden. Zum Finalisieren wird der Kunde
                             gebraucht, für den Entwurf nicht. Noch nicht im Stamm?
                             Erst hier speichern, sonst ist das Getippte weg, dann
@@ -140,7 +140,7 @@
                      @change.window="if ($event.target.name === 'customer_id') laden()"
                      x-show="invoiceType === 'standard' && liste.length > 0" x-cloak>
                     <h2>ANZAHLUNG VERRECHNEN</h2>
-                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5; margin:0;">
+                    <p class="hilfe" style="line-height:1.5; margin:0;">
                         Bezahlte Anzahlungen dieses Kunden. Gewählt wird die Anzahlung, die
                         diese Rechnung abzieht; Betrag und Steuer stehen auf dem Beleg.
                     </p>
@@ -164,7 +164,7 @@
                        Ausklappmenue sehen sie aber aus wie verschiedene Einheiten, zwischen
                        denen man sich vertun koennte. Der Satz steht hier und nicht in der
                        Positionsschleife, sonst erschiene er einmal je Position. #}
-                    <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5; margin:0;">
+                    <p class="hilfe" style="line-height:1.5; margin:0;">
                         Einheiten: Singular, Plural und englische Schreibweise sind dieselbe Einheit.
                         Die Wahl bestimmt nur den Text auf dem Beleg, nicht den Code in der E-Rechnung.
                     </p>
@@ -312,7 +312,7 @@
                                        class="input" style="font-size:var(--fs-gross); padding:6px 8px;">
                             </div>
                         </div>
-                        <p style="font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5; margin:0 0 8px;">
+                        <p class="hilfe" style="line-height:1.5; margin:0 0 8px;">
                             Nur bei einheitlichem Steuersatz; z. B. Anrechnung einer bereits berechneten Leistung.
                         </p>
                         {# Mit Abzug: Abzugszeile, dann Netto/Steuer/Brutto auf der
@@ -369,14 +369,14 @@
                 <div class="card">
                     <label class="label">Kopftext</label>
                     <textarea name="kopftext" rows="2" class="input" placeholder="Erscheint auf der Rechnung über den Positionen">{{ (belegung.kopftext if belegung and belegung.kopftext else '') or '' }}</textarea>
-                    <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+                    <p class="hilfe" style="margin-top:6px; line-height:1.5;">
                         Beim Anlegen aus dem Kundenstamm vorbelegt; Platzhalter {leistungsmonat} wird zu MM/JJJJ des Leistungszeitraums. Nach dem Finalisieren unveränderlich.
                     </p>
                 </div>
                 <div class="card">
                     <label class="label">Fußtext</label>
                     <textarea name="fusstext" rows="2" class="input" placeholder="Erscheint auf der Rechnung unter dem Summenblock">{{ (belegung.fusstext if belegung and belegung.fusstext else '') or '' }}</textarea>
-                    <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+                    <p class="hilfe" style="margin-top:6px; line-height:1.5;">
                         Den Reverse-Charge-Vermerk druckt das Programm selbst; hier nicht wiederholen. Nach dem Finalisieren unveränderlich.
                     </p>
                 </div>
@@ -402,7 +402,7 @@
                             <option value="de" {% if aktuelle_sprache == 'de' %}selected{% endif %}>Deutsch</option>
                             <option value="en" {% if aktuelle_sprache == 'en' %}selected{% endif %}>Englisch</option>
                         </select>
-                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+                        <p class="hilfe" style="margin-top:6px; line-height:1.5;">
                             Steuert die Beschriftung und Zahlenformate im PDF.
                             Positionsbeschreibungen und Zahlungsbedingungen werden nicht übersetzt.
                             Nach dem Finalisieren unveränderlich.
@@ -427,7 +427,7 @@
                             <option value="{{ art.form_wert }}" {% if aktuelle_belegart == (art.intern or "standard") %}selected{% endif %}>{{ art.label }}</option>
                             {% endfor %}
                         </select>
-                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim); line-height:1.5;">
+                        <p class="hilfe" style="margin-top:6px; line-height:1.5;">
                             Anzahlungsrechnung: fordert eine Zahlung vor der Leistung an.
                             Nur für noch nicht bezahlte Vorausforderungen mit bekanntem
                             geplantem Leistungszeitraum: Leistungszeitraum von/bis wird
@@ -470,7 +470,7 @@
                     <div>
                         <label class="label">Leistungsdatum</label>
                         <input type="date" name="delivery_date" value="{{ (invoice.delivery_date.isoformat() if invoice.delivery_date else '') if invoice else delivery_default }}" class="input">
-                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Einzelner Leistungstag. Pflicht über 250 € (§ 14 Abs. 4 Nr. 6 UStG) oder als Zeitraum unten. Bis 250 € einschließlich freiwillig (§ 33 UStDV).</p>
+                        <p class="hilfe" style="margin-top:6px;">Einzelner Leistungstag. Pflicht über 250 € (§ 14 Abs. 4 Nr. 6 UStG) oder als Zeitraum unten. Bis 250 € einschließlich freiwillig (§ 33 UStDV).</p>
                         <template x-if="taxCategory === 'K'">
                             <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--amber);">Bei innergemeinschaftlicher Lieferung immer Pflicht, auch unter 250 € (EN16931, BR-IC-11).</p>
                         </template>
@@ -486,17 +486,17 @@
                         <input type="date" name="service_period_end" value="{{ belegung.service_period_end.isoformat() if belegung and belegung.service_period_end else '' }}" class="input"
                                {% if aus_beleg %}readonly title="aus dem Beleg übernommen"{% endif %}>
                         {% if aus_beleg %}<p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--cyan);">aus dem Beleg übernommen</p>{% endif %}
-                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Für Quartalsabrechnungen und Tantiemen: von und bis gemeinsam setzen. Ersetzt das Einzeldatum für die Pflichtangabe.</p>
+                        <p class="hilfe" style="margin-top:6px;">Für Quartalsabrechnungen und Tantiemen: von und bis gemeinsam setzen. Ersetzt das Einzeldatum für die Pflichtangabe.</p>
                     </div>
                     <div>
                         <label class="label">Referenz des Kunden</label>
                         <input type="text" name="buyer_reference" value="{{ (belegung.buyer_reference if belegung else '') or '' }}" class="input" maxlength="100">
-                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Leitweg-ID bei Behörden, sonst eine vom Kunden vorgegebene Referenz (BT-10)</p>
+                        <p class="hilfe" style="margin-top:6px;">Leitweg-ID bei Behörden, sonst eine vom Kunden vorgegebene Referenz (BT-10)</p>
                     </div>
                     <div>
                         <label class="label">Bestellnummer</label>
                         <input type="text" name="buyer_order_reference" value="{{ (belegung.buyer_order_reference if belegung else '') or '' }}" class="input" maxlength="100">
-                        <p style="margin-top:6px; font-family:'VT323',monospace; font-size:var(--fs-text); color:var(--text-dim);">Nummer der Bestellung / Purchase Order des Kunden (BT-13)</p>
+                        <p class="hilfe" style="margin-top:6px;">Nummer der Bestellung / Purchase Order des Kunden (BT-13)</p>
                     </div>
                 </div>
 

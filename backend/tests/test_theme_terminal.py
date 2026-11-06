@@ -301,17 +301,18 @@ def test_terminal_summe_gesamt_ist_groesste_zahl(terminal_block, terminal_css):
         "Summenzeilen in form.html tragen nicht die Klasse summe__gesamt"
 
 
-def test_terminal_karten_h2_saira_30_hell(terminal_css):
-    """Runde 2 (A4): Kartenüberschriften stehen in Saira Condensed 800 kursiv in
-    --t-groesse-h2 (30px) und --t-text-hell. Begründet angepasster Nachfolger des
-    bisherigen Tests (Plex 600 / --t-groesse-klein / --t-akzent), nicht gelöscht."""
+def test_terminal_karten_h2_saira_24_hell(terminal_css):
+    """Kartenüberschriften stehen in Saira Condensed 800 kursiv in
+    --t-groesse-h3 (24px, eine Stufe unter dem Seitentitel) und --t-text-hell.
+    Nachfolger des Tests mit --t-groesse-h2 (30px): 30px war neben dem
+    Seitentitel zu laut (Lesbarkeitsrunde 2026-11-06)."""
     regel = _terminal_regel(terminal_css, r'\.card h2')
     assert re.search(r'font-family:\s*var\(--t-schrift-marke\) !important', regel), \
         "Karten-h2 nicht in Saira Condensed (--t-schrift-marke)"
     assert re.search(r'font-weight:\s*800 !important', regel), "Karten-h2 ohne Gewicht 800"
     assert re.search(r'font-style:\s*italic !important', regel), "Karten-h2 nicht kursiv"
-    assert re.search(r'font-size:\s*var\(--t-groesse-h2\) !important', regel), \
-        "Karten-h2 nicht in --t-groesse-h2 (30px)"
+    assert re.search(r'font-size:\s*var\(--t-groesse-h3\) !important', regel), \
+        "Karten-h2 nicht in --t-groesse-h3 (24px)"
     assert re.search(r'color:\s*var\(--t-text-hell\) !important', regel), \
         "Karten-h2 nicht in --t-text-hell"
 
