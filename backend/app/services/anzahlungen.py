@@ -17,6 +17,7 @@ from decimal import Decimal
 
 from sqlalchemy import exists
 from sqlalchemy.orm import Session, object_session
+from sqlalchemy.orm.exc import UnmappedInstanceError
 
 from app.models.anzahlung_verrechnung import AnzahlungVerrechnung
 from app.models.invoice import Invoice
@@ -28,12 +29,19 @@ from app.services.storno_wirkung import WIRKSAM_STORNIERT, stornobelege_zu
 NULL = Decimal("0.00")
 
 
+def _sitzung(beleg) -> Session | None:
+    try:
+        return object_session(beleg)
+    except UnmappedInstanceError:  # Attrappe statt Invoice
+        return None
+
+
 def verrechnete(invoice: Invoice) -> list[Invoice]:
     """Die Anzahlungen, die dieser Beleg verrechnet (auch nach Freigabe als Nachweis).
 
     Ohne Session (Testattrappe, nicht gespeicherter Beleg) gibt es keine.
     """
-    db = object_session(invoice)
+    db = _sitzung(invoice)
     if db is None or invoice.id is None:
         return []
     zeilen = (
@@ -206,7 +214,7 @@ def _pruefe_anzahlung(invoice: Invoice, a: Invoice) -> str:
         return f"Die Anzahlung {nr} ist in einer anderen Währung ausgestellt."
     if a.tax_category != invoice.tax_category:
         return f"Die Anzahlung {nr} hat eine andere Steuerkategorie als diese Rechnung."
-    db = object_session(a)
+    db = _sitzung(a)
     if db is not None and stornobelege_zu(db, [a.id]):
         return f"Die Anzahlung {nr} ist storniert."
     return ""
