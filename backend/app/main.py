@@ -325,8 +325,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         .all()
     )
 
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "dashboard.html", {
         "company": company,
         "total_invoices": zaehlung.gesamt,
         "offene_auszahlungen": auszahlungen,

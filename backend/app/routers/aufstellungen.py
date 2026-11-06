@@ -41,8 +41,8 @@ def liste(request: Request, db: Session = Depends(get_db), status: str = "", sei
     zeilen = (query.options(joinedload(Aufstellung.customer))
               .order_by(Aufstellung.created_at.desc(), Aufstellung.id)
               .offset((seite - 1) * SEITENGROESSE).limit(SEITENGROESSE).all())
-    return templates.TemplateResponse("aufstellungen/list.html", {
-        "request": request, "aufstellungen": zeilen, "status_filter": status,
+    return templates.TemplateResponse(request, "aufstellungen/list.html", {
+        "aufstellungen": zeilen, "status_filter": status,
         "statusnamen": STATUS, "gesamt": gesamt, "seite": seite, "seiten": seiten,
     })
 
@@ -56,8 +56,8 @@ def detail(aufstellung_id: uuid.UUID, request: Request, db: Session = Depends(ge
     logs = db.query(AufstellungSendLog).filter(
         AufstellungSendLog.aufstellung_id == a.id,
     ).order_by(AufstellungSendLog.sent_at.desc()).all()
-    return templates.TemplateResponse("aufstellungen/detail.html", {
-        "request": request, "a": a, "stornos": stornos, "logs": logs, "statusnamen": STATUS,
+    return templates.TemplateResponse(request, "aufstellungen/detail.html", {
+        "a": a, "stornos": stornos, "logs": logs, "statusnamen": STATUS,
     })
 
 

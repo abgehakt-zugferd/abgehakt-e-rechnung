@@ -61,8 +61,7 @@ def settings_page(
     # die auch beim Versand verwendet werden, statt DB und .env inkonsistent zu mischen.
     effective = datev_email._get_effective_smtp_config(db)
     mail_werte = settings_mailtext.mail_form_werte(config, mail_werte)
-    return templates.TemplateResponse("settings/index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "settings/index.html", {
         "company": company,
         "rechtsformen": RECHTSFORMEN,
         "pflicht_hinweis": _pflicht_hinweis(company),

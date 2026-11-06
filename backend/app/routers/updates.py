@@ -74,7 +74,7 @@ def pruefen(request: Request, bestaetigt: str = Form(default=""),
 
 @router.get("/anleitung")
 def anleitung(request: Request):
-    return templates.TemplateResponse("updates/anleitung.html", {"request": request})
+    return templates.TemplateResponse(request, "updates/anleitung.html", {})
 
 
 def _sicheres_ziel(weiter: str) -> str:

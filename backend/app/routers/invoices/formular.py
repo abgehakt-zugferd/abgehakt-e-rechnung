@@ -49,8 +49,7 @@ def _neues_formular(request: Request, customers, company, today, delivery_defaul
     # Formular ist dann leer, und niemand weiss, warum.
     # Status bei Fehler: 400 wenn `?ersetzt=` gesetzt war (auch wenn der Beleg
     # nicht ladbar ist), sonst 404 — wie zuvor an `ersetzt is not None`.
-    return templates.TemplateResponse("invoices/form.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "invoices/form.html", {
         "invoice": None,
         "vorbelegung": zustand.vorbelegung,
         "items_json": zustand.items_json,
@@ -142,8 +141,7 @@ async def create_invoice(request: Request, db: Session = Depends(get_db)):
 
 def _bearbeiten_antwort(request: Request, db: Session, invoice: Invoice,
                         meldung: str | None, **antwort):
-    return templates.TemplateResponse("invoices/form.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "invoices/form.html", {
         "invoice": invoice,
         "vorbelegung": None,
         "items_json": items_as_json(invoice),

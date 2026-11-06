@@ -158,7 +158,7 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
     if not invoice:
         raise HTTPException(404, "Rechnung nicht gefunden")
     return templates.TemplateResponse(
-        "invoices/detail.html", {"request": request, **_detail_kontext(db, invoice)})
+        request, "invoices/detail.html", {**_detail_kontext(db, invoice)})
 
 
 def _get_draft_for_preview(db: Session, invoice_id: uuid.UUID) -> Invoice:
@@ -183,8 +183,7 @@ def preview_page(invoice_id: uuid.UUID, request: Request, db: Session = Depends(
         xml = zugferd_xml.generate_xml(invoice, company)
     except (UnknownUnitError, ValueError) as fehler:
         raise HTTPException(400, str(fehler)) from fehler
-    return templates.TemplateResponse("invoices/preview.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "invoices/preview.html", {
         "invoice": invoice,
         "company": company,
         # NUR ans Template — nicht an `invoice.zugferd_xml`. Die Vorschau erzeugt

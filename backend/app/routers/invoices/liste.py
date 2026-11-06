@@ -51,8 +51,8 @@ def list_invoices(
                 .offset((seite - 1) * SEITENGROESSE)
                 .limit(SEITENGROESSE)
                 .all())
-    return templates.TemplateResponse("invoices/list.html", {
-        "request": request, "invoices": invoices,
+    return templates.TemplateResponse(request, "invoices/list.html", {
+        "invoices": invoices,
         "storniert_durch": stornobelege_zu(db, [i.id for i in invoices]), "status_filter": status, "q": q,
         "art": filtern.art, "faellig": filtern.faellig, "versand": filtern.versand,
         "storno": filtern.storno, "forderung": filtern.forderung,
