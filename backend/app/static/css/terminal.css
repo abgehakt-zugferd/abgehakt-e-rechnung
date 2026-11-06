@@ -448,3 +448,12 @@ html[data-theme="terminal"] .protokoll {
     font-size: var(--t-groesse-klein) !important;
     line-height: 1.45;
 }
+
+/* Positionstabelle: Zahlenkoepfe mit kleiner Laufweite, damit sie nicht die
+   Breite der Beschreibung aufzehren. */
+html[data-theme="terminal"] .table-header.pos-zahl {
+    letter-spacing: 0.5px !important;
+}
+html[data-theme="terminal"] td.pos-zahl {
+    font-size: var(--t-groesse-klein) !important;
+}

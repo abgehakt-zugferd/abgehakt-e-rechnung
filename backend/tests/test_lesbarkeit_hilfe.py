@@ -107,3 +107,34 @@ def test_positionstabelle_gibt_beschreibung_den_rest():
     assert m and "width: 100%" in m.group(1) and "overflow-wrap" in m.group(1)
     # Zahlenspalten bleiben einzeilig und rechtsbuendig
     assert p.count("white-space:nowrap") >= 4
+
+
+def test_zahlenspalten_der_positionstabelle_sind_so_schmal_wie_ihr_inhalt():
+    """Kopf- und Datenzellen der Zahlenspalten tragen `pos-zahl` (width:1%,
+    nowrap), die Laufweite des Kopfes ist dort klein, auch im Terminal."""
+    p = _lies("invoices/detail_positionen.html")
+    kopf = re.findall(r"<th\b[^>]*>", p)
+    assert len(kopf) == 6
+    # POS., MENGE, PREIS, MWST., NETTO: alle ausser BESCHREIBUNG
+    assert sum("pos-zahl" in t for t in kopf) == 5
+    assert "pos-zahl" not in kopf[1], "Beschreibungskopf darf nicht schmal sein"
+    zeile = p.split("{% for item in invoice.items %}", 1)[1].split("{% endfor %}", 1)[0]
+    zellen = re.findall(r"<td\b[^>]*>", zeile)
+    assert len(zellen) == 6 and sum("pos-zahl" in t for t in zellen) == 5
+    css = LESBARKEIT_CSS.read_text(encoding="utf-8")
+    m = re.search(r"\.pos-zahl\s*\{([^}]*)\}", css)
+    assert m and "width: 1%" in m.group(1) and "white-space: nowrap" in m.group(1)
+    t = TERMINAL_CSS.read_text(encoding="utf-8")
+    r = re.search(r'html\[data-theme="terminal"\]\s*\.table-header\.pos-zahl[^{]*\{([^}]*)\}', t)
+    assert r, "Terminal: Laufweite der Zahlenkoepfe nicht gesenkt"
+    ls = re.search(r"letter-spacing:\s*([\d.]+)px !important", r.group(1))
+    assert ls and float(ls.group(1)) <= 1, "Laufweite im Terminal zu gross"
+
+
+def test_terminal_zahlenzellen_der_positionstabelle_in_kleingroesse():
+    """Inline stehen die Preise in --fs-text (18px); im Terminal belegen zehn
+    Zeichen Plex Mono dann ~110px je Spalte. Kleingroesse (15px) gibt der
+    Beschreibung Platz."""
+    t = TERMINAL_CSS.read_text(encoding="utf-8")
+    r = re.search(r'html\[data-theme="terminal"\]\s*td\.pos-zahl[^{]*\{([^}]*)\}', t)
+    assert r and re.search(r"font-size:\s*var\(--t-groesse-klein\) !important", r.group(1))

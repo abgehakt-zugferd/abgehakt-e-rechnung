@@ -37,3 +37,5 @@
 /* Positionstabelle der Rechnungsansicht: Zahlenspalten einzeilig, die
    Beschreibung bekommt den Rest. */
 .pos-beschreibung { width: 100%; min-width: 14ch; overflow-wrap: anywhere; }
+.pos-zahl { width: 1%; white-space: nowrap; }
+th.pos-zahl, td.pos-zahl { padding-left: 8px !important; padding-right: 8px !important; }
