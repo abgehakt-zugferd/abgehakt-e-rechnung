@@ -35,6 +35,7 @@ from app.routers.invoices.formular_schreiben import (
 )
 from app.routers.invoices.vorlagen import templates
 from app.services import anzahlungen
+from app.services.belegsprache import darstellung
 from app.services.invoice_number import generate_next_invoice_number
 from app.services.rechnung.fehler import RechnungFehler
 from app.services.leistungszeit import parse_leistungszeit_from_form
@@ -68,6 +69,8 @@ def _neues_formular(request: Request, customers, company, today, delivery_defaul
         "error": zustand.error,
         "kunde_hinweis": zustand.kunde_hinweis,
         "ersetzt": zustand.ersetzt_beleg,
+        "anzahlung_gewaehlt": [],
+        "anzahlung_fuer": None,
     }, status_code=(400 if ersetzt_angefragt else 404) if zustand.error else 200)
 
 
@@ -113,6 +116,18 @@ def new_invoice_form(
     # Zurück-Erkennung in `form.html` ab.
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@router.get("/anzahlungen")
+def anzahlungen_angebot(customer_id: uuid.UUID | None = None,
+                        fuer: uuid.UUID | None = None, db: Session = Depends(get_db)):
+    """Verrechenbare Anzahlungen des Kunden fuer die Auswahl im Formular (#259)."""
+    d = darstellung("de")
+    return [
+        {"id": str(a.id), "nummer": a.invoice_number,
+         "datum": d.format_datum(a.issue_date), "brutto": d.format_betrag(a.gross_total, a.currency)}
+        for a in anzahlungen.verrechenbare(db, customer_id, fuer)
+    ]
 
 
 @router.post("/neu")
@@ -165,6 +180,8 @@ def _bearbeiten_antwort(request: Request, db: Session, invoice: Invoice,
         "delivery_default": heute().isoformat(),
         "belegart_waehlbar": belegart_waehlbar(invoice),
         "error": meldung,
+        "anzahlung_gewaehlt": anzahlungen.gewaehlte_ids(invoice),
+        "anzahlung_fuer": str(invoice.id),
     }, **antwort)
 
 

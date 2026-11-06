@@ -3,12 +3,12 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.config import get_settings
 from app.models.company import Company
 from app.models.invoice import Invoice
-from app.services import auftragsschluessel, mustang, pdf_generator, pdfa, validator, zugferd_xml
+from app.services import anzahlungen, auftragsschluessel, mustang, pdf_generator, pdfa, validator, zugferd_xml
 from app.services.auftragszahlung import finalisierung_pruefen
 from app.services.archive_frist import berechne_archive_until
 from app.services.belegart import ist_storno
@@ -238,6 +238,8 @@ def als_gestellt_markieren(invoice: Invoice, zugferd_pdf: Path) -> None:
         original = invoice.original_invoice
         if original is not None:
             auftragsschluessel.freigeben(original)
+            # #259: hob die Gutschrift eine Schlussrechnung auf, ist deren Anzahlung frei.
+            anzahlungen.freigeben(object_session(invoice), original)
 
 
 def archivieren_und_committen(db: Session, zugferd_pdf: Path, xml_path: Path) -> None:

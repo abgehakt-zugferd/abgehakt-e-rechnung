@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import get_db
 from app.models.invoice import Invoice
-from app.services import auftragsschluessel, auftragszahlung
+from app.services import anzahlungen, auftragsschluessel, auftragszahlung
 from app.services.bezahlt_am import (
     BezahltAmFehler,
     BezahltTrotzGutschrift,
@@ -128,5 +128,6 @@ def update_status(
         # Auftragsschluessel nicht weiter; der Nachweis bleibt. (Bezahlen
         # gibt nichts frei — der Beleg besteht ja weiter.)
         auftragsschluessel.freigeben(invoice)
+        anzahlungen.freigeben(db, invoice)
     db.commit()
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)

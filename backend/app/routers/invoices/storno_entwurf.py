@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.invoice import Invoice
-from app.services import auftragsschluessel
+from app.services import anzahlungen, auftragsschluessel
 from app.services.ersatzrechnung import ErsatzNichtMoeglich, pruefe_ersetzbar
 from app.services.rechnung.fehler import RechnungFehler
 from app.services.rechnung.storno import (
@@ -40,6 +40,8 @@ def discard_draft(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
     # bleibt stehen — das Zurueckholen nimmt die Sperre wieder auf, wenn
     # zwischenzeitlich kein anderer Beleg sie gezogen hat.
     auftragsschluessel.freigeben(invoice)
+    # #259: die verrechnete Anzahlung ist wieder frei.
+    anzahlungen.freigeben(db, invoice)
     db.commit()
     return RedirectResponse(url="/invoices", status_code=303)
 
@@ -103,6 +105,7 @@ def restore_draft(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
             pruefe_zurueckholbar(db, invoice)
         _ersatzbezug_pruefen(db, invoice)
         _auftragssperre_zurueckholen(db, invoice)
+        anzahlungen.wieder_binden(db, invoice)
         invoice.status = "draft"
         _zurueckholen_committen(db, invoice)
     except RechnungFehler as e:
