@@ -27,8 +27,7 @@ registriere_darstellungsfilter(templates)
 @router.get("/", response_class=HTMLResponse)
 def export_page(request: Request):
     today = heute()
-    return templates.TemplateResponse("export/index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "export/index.html", {
         "default_von": date(today.year, 1, 1).isoformat(),
         "default_bis": today.isoformat(),
     })

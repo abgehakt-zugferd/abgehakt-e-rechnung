@@ -188,10 +188,10 @@ def test_neuanlage_und_vorbefuellen_rendern_dieselbe_vorlage(pg_session):
     gerendert: list[str] = []
     echt = invoices_router.templates.TemplateResponse
 
-    def aufzeichnen(name, *args, **kwargs):
+    def aufzeichnen(request, name, *args, **kwargs):
         if isinstance(name, str):
             gerendert.append(name)
-        return echt(name, *args, **kwargs)
+        return echt(request, name, *args, **kwargs)
 
     invoices_router.templates.TemplateResponse = aufzeichnen
     try:

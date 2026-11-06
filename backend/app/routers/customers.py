@@ -33,8 +33,7 @@ registriere_laender_globals(templates)
 
 def _render_form(request: Request, customer, suggested_number: str, values: dict, error: str | None,
                  company_vat_id: str | None = None):
-    return templates.TemplateResponse("customers/form.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "customers/form.html", {
         "customer": customer,
         "suggested_number": suggested_number,
         "values": values,
@@ -100,8 +99,8 @@ def list_customers(request: Request, db: Session = Depends(get_db), q: str = "")
     if q:
         query = query.filter(Customer.name.ilike(f"%{q}%"))
     customers = query.order_by(Customer.name).all()
-    return templates.TemplateResponse("customers/list.html", {
-        "request": request, "customers": customers, "q": q
+    return templates.TemplateResponse(request, "customers/list.html", {
+        "customers": customers, "q": q
     })
 
 

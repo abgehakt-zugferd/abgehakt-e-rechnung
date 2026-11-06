@@ -156,8 +156,7 @@ def belegliste(request: Request, db: Session = Depends(get_db), hinweis: str = "
             anlagen_ordner_fuer=_anlagen_ordner,
         )
 
-    return templates.TemplateResponse("uebergaben/index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "uebergaben/index.html", {
         "ordner": str(ordner) if ordner else "",
         "zeilen": zeilen,
         "hinweis": hinweis,

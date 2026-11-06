@@ -42,8 +42,7 @@ def _company(db: Session) -> Company | None:
 
 @router.get("", response_class=HTMLResponse)
 def formular(request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse("setup/index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "setup/index.html", {
         "company": _company(db),
         "rechtsformen": RECHTSFORMEN,
         "fehler": None,
@@ -91,8 +90,7 @@ async def speichern(request: Request, db: Session = Depends(get_db)):
 
 def _mit_fehler(request: Request, db: Session, werte: dict, meldung: str):
     """400 statt Redirect: die Einrichtung bleibt offen, die Eingaben stehen noch da."""
-    return templates.TemplateResponse("setup/index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "setup/index.html", {
         "company": _company(db),
         "werte": werte,
         "rechtsformen": RECHTSFORMEN,

@@ -109,8 +109,7 @@ def _dateien(bereich: str, erlaubt: set[str], q: str = "", seite: int = 1) -> Da
 @router.get("/archiv", response_class=HTMLResponse)
 def archive_page(request: Request, db: Session = Depends(get_db), q: str = "", seite: int = 1):
     bekannt = _alle_bekannten_dateien(db)
-    return templates.TemplateResponse("archive/index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "archive/index.html", {
         "q": q,
         "bereiche": [
             {"schluessel": schluessel, "titel": titel,
