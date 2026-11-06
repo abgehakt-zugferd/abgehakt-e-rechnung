@@ -685,11 +685,37 @@ Leistungszeitraum**, auf Englisch **Expected period of supply**; er behauptet da
 bereits erbrachte Leistung. Die Detailseite im Programm schreibt unabhängig von der Belegart
 **Leistungszeitraum**.
 
-Die Belegart ist eine Kennzeichnung, keine Rechenhilfe. Das Programm halbiert keine Preise,
-berechnet keine Raten und zieht eine Anzahlung nicht von einer späteren Schlussrechnung ab.
-Es führt dafür auch keinen Zahlungsabzug in der E-Rechnung. Gutschriften, Korrekturen und
-Abrechnungsgutschriften entstehen auf ihren jeweiligen eigenen Wegen und lassen sich nicht
-über diese Auswahl erzeugen.
+Die Belegart ist eine Kennzeichnung, keine Rechenhilfe. Das Programm halbiert keine Preise
+und berechnet keine Raten. Gutschriften, Korrekturen und Abrechnungsgutschriften entstehen auf
+ihren jeweiligen eigenen Wegen und lassen sich nicht über diese Auswahl erzeugen.
+
+### Anzahlung in der Schlussrechnung verrechnen
+
+Eine Standardrechnung kann eine gestellte und bezahlte Anzahlungsrechnung desselben Kunden
+abziehen (#259). Wählen Sie im Rechnungsformular den Kunden; unter **ANZAHLUNG VERRECHNEN**
+erscheinen dann die Anzahlungen, die dafür in Frage kommen: bezahlt, nicht storniert und in
+keiner anderen Rechnung verrechnet. Die Positionen der Schlussrechnung tragen das volle
+Entgelt.
+
+- **E-Rechnung:** Der Gesamtbetrag bleibt das volle Brutto, die Anzahlung steht als
+  Vorauszahlung (BT-113), der Zahlbetrag (BT-115) ist der Rest. Die Anzahlungsrechnung steht
+  mit Nummer und Datum als vorausgegangene Rechnung im Beleg.
+- **PDF:** Unter der Summe folgt die Zeile „abzüglich Anzahlung, Rechnung … vom …“, bei
+  englischer Belegsprache „less advance payment, invoice … dated …“. Trägt die Anzahlung
+  Umsatzsteuer, nennt die Zeile auch deren Netto und Steuer. Danach steht der offene Betrag.
+- **Sperren beim Finalisieren:** Die Anzahlung muss bezahlt sein und zum selben Kunden, zur
+  selben Währung und zur selben Steuerkategorie gehören. Sie darf nicht storniert und nicht
+  höher als die Rechnung sein; ein Zahlbetrag von 0,00 ist zulässig. Ein Abzug auf
+  Belegebene, eine Ersatzrechnung oder ein Folgebeleg lassen sich damit nicht kombinieren.
+- **Freigabe:** Verwerfen Sie den Entwurf, setzen Sie die Rechnung auf storniert oder
+  stellen Sie eine Gutschrift dazu, ist die Anzahlung wieder frei. Holen Sie einen
+  verworfenen Entwurf zurück, wird sie wieder gebunden, sofern sie noch frei ist.
+
+Vorerst gilt: genau eine Anzahlung je Rechnung. Eine früher als Standardrechnung gestellte
+Anzahlung lässt sich nicht verrechnen. **Die Kennzahlen der Übersicht und die Tabelle je
+Steuerkategorie ziehen die verrechnete Anzahlung noch nicht ab**: die Anzahlung zählt bei
+ihrer Zahlung, die Schlussrechnung mit ihrem vollen Entgelt. Beides folgt in einem zweiten
+Schritt.
 
 ---
 
