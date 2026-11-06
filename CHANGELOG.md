@@ -7,6 +7,10 @@ Klammern.
 
 ## Nächste Fassung (noch nicht veröffentlicht, Stand seit v1.1.0)
 
+### Neu
+
+- **Schlussrechnung verrechnet eine Anzahlung (#259, erster Teil).** Im Rechnungsformular lässt sich eine bezahlte Anzahlungsrechnung desselben Kunden auswählen. Die E-Rechnung führt sie als Vorauszahlung (BT-113) mit Verweis auf die Anzahlungsrechnung, das PDF zieht sie unter der Summe ab. Prüfungen vor dem Finalisieren verhindern doppelte, fremde oder unbezahlte Anzahlungen. Noch nicht enthalten: mehrere Anzahlungen je Rechnung und der Abzug in den Kennzahlen der Übersicht.
+
 ### Sicherheit
 
 - **Mustang 2.26.0 statt 2.24.0.** Die Prüfbibliothek für E-Rechnungen schließt damit zwei Lücken in ihrem PDF-Prüfteil (CVE-2026-54078, CVE-2026-54079) und bringt die aktuellen Prüfregeln für EN 16931 mit. Für den Betrieb heißt das: nach dem Wechsel das Abbild neu bauen, sonst läuft die alte Fassung weiter.
