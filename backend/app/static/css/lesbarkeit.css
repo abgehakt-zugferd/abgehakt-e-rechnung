@@ -1,0 +1,41 @@
+/* Lesbarkeit, gilt in allen Designs. Nur Token, keine Hex-Werte.
+   Ein Mechanismus fuer alle gedaempften Hilfetexte: Klasse `hilfe` am Absatz,
+   hilfe-1.0.0.js kuerzt auf zwei Zeilen und setzt dafuer `hilfe--gekuerzt`.
+   Ohne JavaScript bleibt der volle Text stehen. */
+.hilfe {
+    font-family: var(--font-body);
+    font-size: var(--fs-text);
+    color: var(--text-dim);
+}
+.hilfe--gross { font-size: var(--fs-gross); }
+.hilfe--gekuerzt {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.hilfe-mehr {
+    display: inline-block;
+    margin: 2px 0 6px;
+    padding: 0 2px;
+    background: none;
+    border: 0;
+    border-bottom: 1px dotted currentColor;
+    font-family: var(--font-label);
+    font-size: var(--fs-klein);
+    color: var(--cyan);
+    cursor: pointer;
+}
+.hilfe-mehr:hover { color: var(--text-hi); }
+
+/* Aenderungsprotokoll: der rechte Teil darf schrumpfen und umbrechen,
+   sonst laeuft ein langer Eintrag aus der Karte. */
+.protokoll__zeile { display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.protokoll__zeit { white-space: nowrap; color: var(--text-dim); }
+.protokoll__text { min-width: 0; overflow-wrap: anywhere; color: var(--text-hi); }
+
+/* Positionstabelle der Rechnungsansicht: Zahlenspalten einzeilig, die
+   Beschreibung bekommt den Rest. */
+.pos-beschreibung { width: 100%; min-width: 14ch; overflow-wrap: anywhere; }
+.pos-zahl { width: 1%; white-space: nowrap; }
+th.pos-zahl, td.pos-zahl { padding-left: 8px !important; padding-right: 8px !important; }

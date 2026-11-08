@@ -271,11 +271,11 @@
             <div class="card">
                 <h2 style="margin-bottom:8px;">ÄNDERUNGSPROTOKOLL</h2>
                 <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); line-height:1.6; color:var(--text-dim); margin-bottom:12px;">WAS MIT DIESER RECHNUNG GESCHAH</p>
-                <div style="font-family:'VT323',monospace; font-size:var(--fs-gross);">
+                <div class="protokoll" style="font-family:'VT323',monospace; font-size:var(--fs-gross);">
                     {% for zeile in protokoll %}
-                    <div style="display:flex; gap:12px; padding:6px 0; border-bottom:1px solid var(--border);">
-                        <span style="color:var(--text-dim); white-space:nowrap;">{{ zeile.zeitpunkt.strftime('%d.%m.%Y %H:%M') }}</span>
-                        <span style="color:var(--text-hi);">
+                    <div class="protokoll__zeile">
+                        <span class="protokoll__zeit">{{ zeile.zeitpunkt.strftime('%d.%m.%Y %H:%M') }}</span>
+                        <span class="protokoll__text">
                             {{ zeile.vorgang }}{% if zeile.felder %}<span style="color:var(--text-dim);">: {{ zeile.felder | join(', ') }}</span>{% endif %}{% if zeile.detail %}<span style="color:var(--text-dim);">: {{ zeile.detail }}</span>{% endif %}
                         </span>
                     </div>

@@ -122,14 +122,14 @@ html[data-theme="terminal"] .summe__gesamt {
     font-variant-numeric: tabular-nums;
 }
 
-/* Kartenüberschriften: Saira Condensed 800 kursiv in --t-groesse-h2 (30px),
+/* Kartenüberschriften: Saira Condensed 800 kursiv in --t-groesse-h3 (24px),
    hell wie --t-text-hell. Die Seitenüberschrift (main h1) bekommt die Marke
    mit Chromverlauf — siehe main h1 weiter unten. */
 html[data-theme="terminal"] .card h2 {
     font-family: var(--t-schrift-marke) !important;
     font-weight: 800 !important;
     font-style: italic !important;
-    font-size: var(--t-groesse-h2) !important;
+    font-size: var(--t-groesse-h3) !important;
     color: var(--t-text-hell) !important;
     letter-spacing: 1px !important;
 }
@@ -427,4 +427,33 @@ html[data-theme="terminal"] header[data-kopfleiste] .sidebar-toggle {
     background: linear-gradient(180deg,
         color-mix(in srgb, var(--t-chrom) 92%, white) 0%,
         color-mix(in srgb, var(--t-chrom) 80%, black) 100%) !important;
+}
+
+/* Hilfetexte: Plex Mono in Kleingroesse, gedaempft. VT323 wirkte hier riesig. */
+html[data-theme="terminal"] .hilfe {
+    font-family: var(--t-schrift-text) !important;
+    font-size: var(--t-groesse-klein) !important;
+    color: var(--t-text-matt) !important;
+    line-height: 1.45 !important;
+}
+html[data-theme="terminal"] .hilfe-mehr {
+    font-family: var(--t-schrift-text);
+    font-size: var(--t-groesse-klein);
+    color: var(--t-info);
+}
+
+/* Aenderungsprotokoll: Plex Mono in Kleingroesse statt grosser VT323. */
+html[data-theme="terminal"] .protokoll {
+    font-family: var(--t-schrift-text) !important;
+    font-size: var(--t-groesse-klein) !important;
+    line-height: 1.45;
+}
+
+/* Positionstabelle: Zahlenkoepfe mit kleiner Laufweite, damit sie nicht die
+   Breite der Beschreibung aufzehren. */
+html[data-theme="terminal"] .table-header.pos-zahl {
+    letter-spacing: 0.5px !important;
+}
+html[data-theme="terminal"] td.pos-zahl {
+    font-size: var(--t-groesse-klein) !important;
 }
