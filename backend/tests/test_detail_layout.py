@@ -77,9 +77,10 @@ def test_positionen_liegen_ausserhalb_der_linken_spalte(pg_session, client):
     beleg = _beleg(pg_session, _kunde(pg_session))
     funde = _seite(client, beleg)
     (_, bereiche, nr_pos), = _erste(funde, "POSITIONEN")
-    assert "links" not in bereiche and "rechts" not in bereiche
-    (_, _, nr_datum), = _erste(funde, "Rechnungsdatum")
-    assert nr_datum < nr_pos
+    assert "voll" in bereiche
+    (_, b_datum, nr_datum), = _erste(funde, "Rechnungsdatum")
+    assert "links" in b_datum and nr_datum < nr_pos
+    assert "rechts" in _erste(funde, "KUNDE")[0][1]
 
 
 def test_zahlungsbedingungen_folgen_den_positionen_in_voller_breite(pg_session, client):
@@ -89,7 +90,7 @@ def test_zahlungsbedingungen_folgen_den_positionen_in_voller_breite(pg_session, 
     funde = _seite(client, beleg)
     (_, bereiche, nr_zb), = _erste(funde, "Zahlungsbedingungen")
     (_, _, nr_pos), = _erste(funde, "POSITIONEN")
-    assert "links" not in bereiche and nr_zb > nr_pos
+    assert "voll" in bereiche and nr_zb > nr_pos
 
 
 def test_pruefprotokoll_mit_fehlern_steht_vor_den_rechnungsdaten(pg_session, client):
@@ -99,7 +100,7 @@ def test_pruefprotokoll_mit_fehlern_steht_vor_den_rechnungsdaten(pg_session, cli
     (_, bereiche, nr_pp), = _erste(funde, "PRÜFPROTOKOLL")
     (_, _, nr_datum), = _erste(funde, "Rechnungsdatum")
     assert nr_pp < nr_datum
-    assert "links" not in bereiche and "rechts" not in bereiche
+    assert "voll" in bereiche
 
 
 def test_pruefprotokoll_mit_warnungen_steht_ebenfalls_oben(pg_session, client):
@@ -107,7 +108,7 @@ def test_pruefprotokoll_mit_warnungen_steht_ebenfalls_oben(pg_session, client):
     _pruefung(pg_session, beleg, warnings=[{"message": "Bitte prüfen"}])
     funde = _seite(client, beleg)
     (_, bereiche, _), = _erste(funde, "PRÜFPROTOKOLL")
-    assert "links" not in bereiche and "rechts" not in bereiche
+    assert "voll" in bereiche
 
 
 def test_pruefprotokoll_ohne_fehler_bleibt_in_der_rechten_spalte(pg_session, client):
