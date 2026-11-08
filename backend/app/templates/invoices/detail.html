@@ -40,9 +40,18 @@
     </div>
     {% endif %}
 
+    {# Fehler und Warnungen zuerst und in voller Breite; ein sauberes oder
+       fehlendes Prüfprotokoll bleibt klein in der rechten Spalte. Nie beides. #}
+    {% set pruefung_oben = validation and (validation.errors or validation.warnings) %}
+    {% if pruefung_oben %}
+    <div data-bereich="voll" class="mb-5">
+        {% include "invoices/detail_pruefung.html" %}
+    </div>
+    {% endif %}
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <!-- Left column -->
-        <div class="lg:col-span-2 space-y-5">
+        <div class="lg:col-span-2 space-y-5" data-bereich="links">
 
             <!-- Meta -->
             <div class="card">
@@ -150,17 +159,10 @@
             </div>
             {% endif %}
 
-            {% include "invoices/detail_positionen.html" %}
-            {% if invoice.payment_terms %}
-            <div class="card">
-                <p class="label">Zahlungsbedingungen</p>
-                <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text);">{{ invoice.payment_terms }}</p>
-            </div>
-            {% endif %}
         </div>
 
         <!-- Right column -->
-        <div class="space-y-5">
+        <div class="space-y-5" data-bereich="rechts">
 
             <!-- Customer -->
             <div class="card">
@@ -220,7 +222,7 @@
                 {% endif %}
             </div>
 
-            {% include "invoices/detail_pruefung.html" %}
+            {% if not pruefung_oben %}{% include "invoices/detail_pruefung.html" %}{% endif %}
             <!-- Versandprotokoll (#146) -->
             {% if invoice.send_logs %}
             <div class="card">
@@ -296,6 +298,17 @@
             </div>
             {% endif %}
         </div>
+    </div>
+
+    <!-- Positionen und Zahlungsbedingungen: volle Seitenbreite -->
+    <div class="space-y-5 mt-5" data-bereich="voll">
+        {% include "invoices/detail_positionen.html" %}
+        {% if invoice.payment_terms %}
+        <div class="card">
+            <p class="label">Zahlungsbedingungen</p>
+            <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text);">{{ invoice.payment_terms }}</p>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% include "invoices/detail_skript.html" %}

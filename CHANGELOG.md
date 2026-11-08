@@ -13,6 +13,7 @@ Klammern.
 
 ### Geändert
 
+- **Rechnungsansicht: Fehler zuerst, Positionen in voller Breite.** Hat das Prüfprotokoll Fehler oder Warnungen, steht es ganz oben über die ganze Breite; ein sauberes Protokoll bleibt klein in der rechten Spalte. Positionen und Zahlungsbedingungen liegen unterhalb von Rechnungsdaten und Kundenspalte über die volle Seitenbreite.
 - **Lesbarere Formulare und Rechnungsansicht (alle Designs).** Lange Hilfetexte unter den Feldern zeigen höchstens zwei Zeilen, ein Knopf „mehr" klappt den Rest auf; ohne JavaScript bleibt der volle Text stehen. Das Änderungsprotokoll bricht lange Einträge um, statt aus der Karte zu laufen, und in der Positionstabelle bekommt die Beschreibung die verbleibende Breite. Im Design Terminal stehen Hilfetexte in Plex Mono 15 px, und Kartentitel sind eine Stufe kleiner.
 
 ### Sicherheit
