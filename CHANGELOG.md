@@ -16,6 +16,8 @@ Klammern.
 - **Rechnungsansicht: Fehler zuerst, Positionen in voller Breite.** Hat das Prüfprotokoll Fehler oder Warnungen, steht es ganz oben über die ganze Breite; ein sauberes Protokoll bleibt klein in der rechten Spalte. Positionen und Zahlungsbedingungen liegen unterhalb von Rechnungsdaten und Kundenspalte über die volle Seitenbreite.
 - **Lesbarere Formulare und Rechnungsansicht (alle Designs).** Lange Hilfetexte unter den Feldern zeigen höchstens zwei Zeilen, ein Knopf „mehr" klappt den Rest auf; ohne JavaScript bleibt der volle Text stehen. Das Änderungsprotokoll bricht lange Einträge um, statt aus der Karte zu laufen, und in der Positionstabelle bekommt die Beschreibung die verbleibende Breite. Im Design Terminal stehen Hilfetexte in Plex Mono 15 px, und Kartentitel sind eine Stufe kleiner.
 
+- **Rechnungsansicht auf dem Handy lesbar (alle Designs).** Bei schmaler Breite (bis 640 px) wird jede Position ein Block: Beschreibung oben in voller Breite, darunter Menge, Preis, MwSt. und Netto als beschriftete Zeilen, statt seitlich zu scrollen. Die Rechnungsdaten stehen untereinander, und im Design Terminal läuft die Kopfleiste nicht mehr aus dem Bild. Ab Tabletbreite bleibt alles wie bisher.
+
 ### Sicherheit
 
 - **Python-Pakete mit bekannten Sicherheitslücken angehoben:** fastapi 0.162.0 mit starlette 1.10.0, python-multipart 0.0.33 (Formular- und Datei-Upload), cryptography 50.0.2, jinja2 3.1.6, pillow 13.0.0, python-dotenv 1.2.4, certifi 2026.10.23 und pypdf 7.0.0 (nur von den Tests benutzt). Für den Betrieb heißt das: nach dem Wechsel das Abbild neu bauen.

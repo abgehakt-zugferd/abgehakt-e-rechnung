@@ -39,3 +39,39 @@
 .pos-beschreibung { width: 100%; min-width: 14ch; overflow-wrap: anywhere; }
 .pos-zahl { width: 1%; white-space: nowrap; }
 th.pos-zahl, td.pos-zahl { padding-left: 8px !important; padding-right: 8px !important; }
+
+/* Handybreite: jede Position wird ein Block. Beschreibung in voller Breite oben,
+   darunter je Zahl eine Zeile, Beschriftung links (aus data-label), Wert rechts. */
+@media (max-width: 640px) {
+    table.pos-tabelle, table.pos-tabelle tbody { display: block; width: 100%; }
+    table.pos-tabelle thead { display: none; }
+    table.pos-tabelle tr.table-row {
+        display: flex;
+        flex-direction: column;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--border);
+    }
+    table.pos-tabelle td.pos-beschreibung {
+        order: -1;
+        display: block;
+        width: 100%;
+        padding: 6px 12px !important;
+    }
+    table.pos-tabelle td.pos-zahl {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        width: auto;
+        padding: 2px 12px !important;
+    }
+    table.pos-tabelle td.pos-zahl::before {
+        content: attr(data-label);
+        font-family: var(--font-label);
+        font-size: var(--fs-klein);
+        text-transform: uppercase;
+        color: var(--text-dim);
+    }
+    .card h2 { overflow-wrap: anywhere; }
+    .summe__gesamt { white-space: nowrap; }
+}

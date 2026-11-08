@@ -457,3 +457,12 @@ html[data-theme="terminal"] .table-header.pos-zahl {
 html[data-theme="terminal"] td.pos-zahl {
     font-size: var(--t-groesse-klein) !important;
 }
+
+/* Handybreite: die Tagzeile der Kopfleiste hat neben Marke und Knopf keinen Platz
+   und lief rechts aus dem Bild; Beschriftungen bekommen kleine Laufweite, damit
+   lange Woerter (FAELLIGKEITSDATUM) nicht aneinanderstossen. */
+@media (max-width: 520px) {
+    html[data-theme="terminal"] header[data-kopfleiste] [data-kopf-marke]::after { display: none !important; }
+    html[data-theme="terminal"] .label,
+    html[data-theme="terminal"] .table-header { letter-spacing: 0.5px !important; }
+}
