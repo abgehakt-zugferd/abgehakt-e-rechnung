@@ -3,7 +3,7 @@
 `Decimal("60.0000").normalize()` ist `Decimal("6E+1")`; `str()` davon landete
 im Zahlenfeld des Formulars. Betroffen war jede durch zehn teilbare Menge, auf
 allen drei Wegen ins Formular: neu, bearbeiten, aus Vorlage. Gefunden am
-2026-09-30 an Z-2026-010 (60 Stunden). Das PDF kannte die Falle schon
+2026-09-30 an RE-2026-002 (60 Stunden). Das PDF kannte die Falle schon
 (`pdf_generator.py`), das Formular nicht.
 """
 import json

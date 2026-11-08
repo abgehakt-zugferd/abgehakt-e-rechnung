@@ -361,7 +361,7 @@ Datenbank allein reicht nicht: die Dateien sind der GoBD-Beleg.
 Im Container (Entwicklungsstack mit gemountetem `backend/scripts/`):
 
 ```bash
-docker exec abgehakt_app python scripts/beleg_aus_xml_einspielen.py Z-2026-002 Z-2026-004
+docker exec abgehakt_app python scripts/beleg_aus_xml_einspielen.py RE-2026-001 RE-2026-002
 ```
 
 Mit `--alt-system` werden nach dem Einspielen automatisch **Versand** und **Bezahlt** aus dem
@@ -375,7 +375,7 @@ Der XML-Import legt Belege nur als **gestellt** an. Wer im alten Tool schon vers
 bezahlt hat, nutzt:
 
 ```bash
-docker exec abgehakt_app python scripts/beleg_migration_nachziehen.py Z-2026-002 Z-2026-004
+docker exec abgehakt_app python scripts/beleg_migration_nachziehen.py RE-2026-001 RE-2026-002
 ```
 
 Das Skript setzt:

@@ -1,8 +1,11 @@
 """Einspielen finalisierter Belege aus XML/PDF: TypeCode und Honorargutschrift."""
 
+import subprocess
+import sys
 import uuid
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from app.config import get_settings
@@ -17,6 +20,8 @@ _NS = {
     "rsm": "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100",
     "ram": "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100",
 }
+
+BACKEND = Path(__file__).resolve().parents[1]
 
 
 def _kunde(pg_session, **over):
@@ -208,3 +213,20 @@ def test_einspielen_weist_doctype_entity_kaskade_ab(pg_session, capsys):
     assert pg_session.query(Invoice).filter(Invoice.invoice_number == nummer).count() == 0
     assert "FEHLER" in out
     assert "EntitiesForbidden" in out
+
+
+def test_skript_ohne_nummern_bricht_vor_der_datenbank_ab():
+    """Ohne Nummern-Argument MUSS das Skript abbrechen (Exit != 0).
+
+    argparse meldet das fehlende Pflichtargument auf stderr und steigt aus,
+    bevor get_settings()/SessionLocal die Datenbank anfassen. Das Skript
+    darf nie mit einer Default-Liste von allein loslaufen.
+    """
+    result = subprocess.run(
+        [sys.executable, "scripts/beleg_aus_xml_einspielen.py"],
+        cwd=str(BACKEND),
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "nummern" in result.stderr

@@ -13,7 +13,7 @@ Steuerhinweise. Die Mail, die dieses PDF transportiert, kennt die Sprache nicht.
 `build_invoice_body` in `services/datev_email.py:118` hat den deutschen Text fest verdrahtet.
 
 Die Folge ist gemessen und belegt: ein englischer Beleg an einen Kunden im Ausland wird mit
-Betreff "Rechnung Z-2026-009" und der Anrede "Sehr geehrte Damen und Herren" verschickt,
+Betreff "Rechnung RE-2026-001" und der Anrede "Sehr geehrte Damen und Herren" verschickt,
 waehrend das angehaengte PDF durchgaengig "Invoice number" schreibt. Die Mail verlaesst das
 Haus und geht ausserdem als Blindkopie an den Steuerberater; sie ist kein internes Artefakt.
 
