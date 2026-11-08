@@ -72,6 +72,19 @@ th.pos-zahl, td.pos-zahl { padding-left: 8px !important; padding-right: 8px !imp
         text-transform: uppercase;
         color: var(--text-dim);
     }
-    .card h2 { overflow-wrap: anywhere; }
     .summe__gesamt { white-space: nowrap; }
+}
+
+/* Handybreite: Kartenueberschriften in Pixel und Terminal sind zu breit fuer ihr
+   laengstes Wort (AENDERUNGSPROTOKOLL). Die Schrift richtet sich nach der
+   Fensterbreite, statt dass das Wort mitten drin bricht. */
+@media (max-width: 520px) {
+    html[data-theme="pixel"] .card h2 {
+        font-size: min(var(--fs-h2), 4vw) !important;
+        letter-spacing: 0 !important;
+    }
+    html[data-theme="terminal"] .card h2 {
+        font-size: min(var(--t-groesse-h3), 4.5vw) !important;
+        letter-spacing: 0 !important;
+    }
 }

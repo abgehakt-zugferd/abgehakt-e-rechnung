@@ -89,7 +89,16 @@ def test_rechnungsdaten_raster_ist_schmal_einspaltig(pg_session, client):
     assert "grid-cols-1" in raster and "sm:grid-cols-2" in raster
 
 
-def test_schmal_brechen_ueberschriften_um_und_der_gesamtbetrag_bleibt_einzeilig():
+def test_schmal_bleiben_kartenueberschriften_in_pixel_und_terminal_einzeilig_pro_wort():
+    """Statt Wortbruch wird die Schrift so klein, dass das längste Wort passt."""
+    text = " ".join(t for b, t in _schmal_bloecke("lesbarkeit.css") if b <= 520)
+    for design in ("pixel", "terminal"):
+        m = re.search(r'\[data-theme="%s"\] \.card h2[^{]*\{([^}]*)\}' % design, text)
+        assert m, f"keine Regel fuer .card h2 in {design} bis 520 px"
+        assert re.search(r"font-size:\s*min\([^;]*\d+(\.\d+)?vw", m.group(1)), design
+    assert "overflow-wrap" not in text and "word-break" not in text
+
+
+def test_schmal_bleibt_der_gesamtbetrag_einzeilig():
     text = " ".join(t for b, t in _schmal_bloecke("lesbarkeit.css") if 600 <= b <= 700)
-    assert re.search(r"\.card h2[^{]*\{[^}]*overflow-wrap:\s*anywhere", text)
     assert re.search(r"\.summe__gesamt[^{]*\{[^}]*white-space:\s*nowrap", text)
