@@ -84,7 +84,7 @@ def test_positionen_liegen_ausserhalb_der_linken_spalte(pg_session, client):
 
 
 def test_zahlungsbedingungen_folgen_den_positionen_in_voller_breite(pg_session, client):
-    beleg = _beleg(pg_session, _kunde(pg_session))
+    beleg = _beleg(pg_session, _kunde(pg_session), status="draft")
     beleg.payment_terms = "Zahlbar innerhalb von 14 Tagen."
     pg_session.commit()
     funde = _seite(client, beleg)
