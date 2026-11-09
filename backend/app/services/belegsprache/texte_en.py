@@ -61,6 +61,7 @@ DARSTELLUNG_EN = {
         "No VAT charged as the supplier is a small business under "
         "section 19 of the German VAT Act (UStG)."
     ),
+    "hinweis_e_gutschrift": "VAT exemption for small businesses under section 19 UStG.",
     "hinweis_k": (
         "VAT-exempt intra-Community supply under section 4 no. 1b UStG "
         "in conjunction with section 6a UStG."

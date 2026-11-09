@@ -255,3 +255,10 @@ def manuelle_belegart(form_value: str | None) -> str | None:
 def ist_honorargutschrift(invoice_type: str | None) -> bool:
     """Honorargutschrift einschließlich gespeicherter Aliase, ohne Storno."""
     return belegart(invoice_type) == _SELF_BILLING
+
+
+def im_gutschriftverfahren(invoice) -> bool:
+    """Beleg des Gutschriftverfahrens (389): Gutschrift oder deren Storno."""
+    return belegart(getattr(invoice, "invoice_type", None)).intern in {
+        "self_billing", "self_billing_storno",
+    }

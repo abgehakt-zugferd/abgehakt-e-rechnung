@@ -670,11 +670,11 @@ def test_s10_xml_identisch_zwischen_de_und_en(pg_session):
     assert c_de["desc"] and c_en["desc"]
     assert not c_de["lang_attr"] and not c_en["lang_attr"]
 
-    # E/K/O: PDF englisch, XML deutsch
+    # E/K/O: PDF und XML (BT-120) englisch (#290)
     for kat, fragment in (
-        ("E", "§ 19 UStG"),
-        ("K", "§ 4 Nr. 1b"),
-        ("O", "§ 3a Abs. 2"),
+        ("E", "section 19 of the German VAT Act"),
+        ("K", "section 4 no. 1b UStG"),
+        ("O", "section 3a (2) UStG"),
     ):
         en_kat = _entwurf(
             pg_session, kunde, document_language="en", tax_category=kat,

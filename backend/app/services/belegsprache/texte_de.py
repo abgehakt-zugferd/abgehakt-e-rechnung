@@ -58,6 +58,7 @@ DARSTELLUNG_DE = {
     ),
     "hinweis_ae": AE_HINWEIS,
     "hinweis_e": "Kein Ausweis von Umsatzsteuer, da Kleinunternehmer gemäß § 19 UStG.",
+    "hinweis_e_gutschrift": "Steuerbefreiung für Kleinunternehmer gemäß § 19 UStG.",
     "hinweis_k": (
         "Steuerfreie innergemeinschaftliche Lieferung gemäß § 4 Nr. 1b UStG "
         "i.V.m. § 6a UStG."

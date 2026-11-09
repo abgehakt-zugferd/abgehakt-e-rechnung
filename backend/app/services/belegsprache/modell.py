@@ -99,6 +99,8 @@ class Belegdarstellung:
     # Steuerhinweise PDF (E/K/O lokalisiert; AE immer zweisprachig)
     hinweis_ae: str
     hinweis_e: str
+    # Gutschriftverfahren (389): Wortlaut nach § 34a Satz 1 Nr. 5 UStDV
+    hinweis_e_gutschrift: str
     hinweis_k: str
     hinweis_o: str
 
@@ -192,10 +194,15 @@ class Belegdarstellung:
             return SELBSTABRECHNUNG_BEZEICHNUNG[self.code]
         return self.titel(art).capitalize() if self.code == "de" else self.titel(art).title()
 
-    def steuerhinweis(self, kategorie: str) -> str | None:
+    def steuerhinweis(self, kategorie: str, gutschriftverfahren: bool = False) -> str | None:
+        """Befreiungstext fuer PDF-Hinweis und XML-BT-120 (eine Quelle).
+
+        Im Gutschriftverfahren ist der Kleinunternehmer der Beteiligte, nicht
+        der Aussteller; dort gilt fuer Kategorie E der Wortlaut des § 34a.
+        """
         hinweise = {
             "AE": self.hinweis_ae,
-            "E": self.hinweis_e,
+            "E": self.hinweis_e_gutschrift if gutschriftverfahren else self.hinweis_e,
             "K": self.hinweis_k,
             "O": self.hinweis_o,
         }
