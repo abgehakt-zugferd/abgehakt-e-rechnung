@@ -18,7 +18,7 @@ from reportlab.platypus import (
 )
 
 from app.services.adresse import bereinige_adresszeile2
-from app.services.belegart import belegart
+from app.services.belegart import belegart, im_gutschriftverfahren
 from app.services.pdf_spalten import spaltenbreiten
 
 from .layout import (
@@ -126,7 +126,7 @@ def append_positionstabelle(story, invoice, d, width, body_font, bold_font):
 
 def append_hinweise(story, invoice, d, italic_font):
     tax_cat = getattr(invoice, "tax_category", "S")
-    hinweis = d.steuerhinweis(tax_cat)
+    hinweis = d.steuerhinweis(tax_cat, gutschriftverfahren=im_gutschriftverfahren(invoice))
     if hinweis:
         story.append(Paragraph(hinweis, _notice_style(italic_font)))
         story.append(Spacer(1, 0.3 * cm))

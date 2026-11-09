@@ -1,6 +1,7 @@
 """Steuerbefreiungstexte und Profil-Kennungen fuer die CII-Erzeugung."""
 from app.models.invoice import Invoice
-from app.services.belegart import belegart
+from app.services.belegart import im_gutschriftverfahren
+from app.services.belegsprache import darstellung, resolve_belegsprache
 
 PROFILE_IDS = {
     # ZUGFeRD 2.5 / Factur-X 1.09 (gültig ab 30.06.2026): EN16931-ID vereinfacht
@@ -30,18 +31,14 @@ EXEMPTION_REASONS = {
     "O": "Nicht im Steuergebiet des Ausstellers steuerbar gemäß § 3a Abs. 2 UStG.",
 }
 
-# Gutschriftverfahren (389): Kleinunternehmer ist der Beteiligte, nicht der Aussteller.
-# Wortlaut nach § 34a Satz 1 Nr. 5 UStDV (#148).
-EXEMPTION_SELF_BILLING_E = (
-    "Steuerbefreiung für Kleinunternehmer gemäß § 19 UStG."
-)
-
-
 def exemption_reason(invoice: Invoice) -> str | None:
-    """Befreiungstext passend zum Belegtyp — nicht immer identisch mit EXEMPTION_REASONS."""
+    """BT-120 in der Belegsprache; dieselbe Quelle wie der PDF-Hinweis.
+
+    Unbekannte Sprache wirft UnknownDocumentLanguageError (kein stiller Rueckfall).
+    Das Gutschriftverfahren (389) hat fuer Kategorie E einen eigenen Wortlaut (#148).
+    """
     cat = getattr(invoice, "tax_category", "S")
     if cat not in EXEMPTION_REASONS:
         return None
-    if belegart(getattr(invoice, "invoice_type", None)).intern in {"self_billing", "self_billing_storno"} and cat == "E":
-        return EXEMPTION_SELF_BILLING_E
-    return EXEMPTION_REASONS[cat]
+    sprache = resolve_belegsprache(getattr(invoice, "document_language", None) or "de")
+    return darstellung(sprache).steuerhinweis(cat, gutschriftverfahren=im_gutschriftverfahren(invoice))
