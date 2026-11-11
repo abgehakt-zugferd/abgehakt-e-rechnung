@@ -17,11 +17,13 @@ thread-sicherer Zustand und setzt voraus, dass die passende Locale im Image
 erzeugt wurde (im schlanken Debian-Basisimage ist sie es nicht). Die Regel für
 deutsche Zahlen ist zu einfach, um dafür eine Umgebungsabhängigkeit einzugehen.
 """
+from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
+from app.zeit import ZEITZONE, kalendertag
 from app.services.beleg_status import badge_klasse, etikett
 from app.services.belegsprache import darstellung as beleg_darstellung
 
@@ -63,6 +65,22 @@ def menge(wert) -> str:
     return _DE.format_menge(wert)
 
 
+def datum_de(wert) -> str:
+    """Kalendertag als TT.MM.JJJJ; ein Zeitstempel zaehlt in Europe/Berlin."""
+    if wert is None:
+        return "-"
+    if isinstance(wert, datetime):
+        wert = kalendertag(wert)
+    return wert.strftime("%d.%m.%Y")
+
+
+def zeitpunkt_de(wert) -> str:
+    """Zeitstempel als TT.MM.JJJJ HH:MM in Europe/Berlin, ohne Sekunden."""
+    if wert is None:
+        return "-"
+    return wert.astimezone(ZEITZONE).strftime("%d.%m.%Y %H:%M")
+
+
 def mit_setup_link(text: str) -> Markup:
     """Fehlertext escaped; nur der Pfad /setup wird zum Anker (#205).
 
@@ -89,3 +107,5 @@ def registriere_darstellungsfilter(templates: Jinja2Templates) -> None:
     templates.env.filters["beleg_etikett"] = etikett
     templates.env.filters["beleg_badge"] = badge_klasse
     templates.env.filters["mit_setup_link"] = mit_setup_link
+    templates.env.filters["datum_de"] = datum_de
+    templates.env.filters["zeitpunkt_de"] = zeitpunkt_de

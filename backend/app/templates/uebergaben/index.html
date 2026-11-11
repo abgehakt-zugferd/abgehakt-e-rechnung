@@ -78,7 +78,8 @@
                         {% elif urteil.angenommen %}
                         <span style="color:var(--green);">ANGENOMMEN</span>
                         {% else %}
-                        <span style="color:var(--pink);">{{ urteil.befund }}</span>
+                        {# <wbr> nach Unterstrichen: lange Codes brechen dort, nicht mitten im Wort. |e zuerst, damit nur das eigene <wbr> ungeescaped bleibt. #}
+                        <span style="color:var(--pink);">{{ (urteil.befund|e)|replace('_', '_<wbr>'|safe) }}</span>
                         <div style="color:var(--text-dim); margin-top:4px;">{{ urteil.feststellungen[0].pfad }}</div>
                         {% endif %}
                     </td>

@@ -97,3 +97,16 @@ def test_befundzelle_bricht_lange_woerter_um(client, pg_session, belegordner):
     zeile = re.search(r"<tbody>(.*?)</tr>", text, re.S).group(1)
     befund = re.findall(r"<td([^>]*)>", zeile)[4]
     assert "overflow-wrap:anywhere" in befund
+
+
+def test_befundcode_bricht_nur_nach_unterstrichen_um(client, pg_session, belegordner):
+    """Ohne bekannten Partner steht ein langer Befundcode in der Zelle; er soll
+    an den Unterstrichen umbrechen, nicht mitten im Wort."""
+    ordner, signieren = belegordner
+    _schalter(pg_session)
+    (ordner / "auftrag.json").write_bytes(beleg(signieren))
+
+    text = client.get("/uebergaben").text
+
+    assert re.search(r"[A-Z]+_<wbr>[A-Z]+", text), "Befundcode ohne Umbruchstelle"
+    assert "<wbr>" in re.search(r"<tbody>(.*?)</tbody>", text, re.S).group(1)
