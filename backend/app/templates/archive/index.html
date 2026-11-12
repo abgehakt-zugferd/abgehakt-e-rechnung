@@ -43,7 +43,7 @@
                     {% for datei in bereich.seite.dateien %}
                     <tr class="table-row">
                         <td style="padding:8px 12px; color:var(--text-hi); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text);">{{ datei.name }}</td>
-                        <td style="padding:8px 12px; color:var(--text-dim); white-space:nowrap;">{{ datei.geaendert.strftime('%d.%m.%Y %H:%M') }}</td>
+                        <td style="padding:8px 12px; color:var(--text-dim); white-space:nowrap;">{{ datei.geaendert|zeitpunkt_de }}</td>
                         <td style="padding:8px 12px; text-align:right; color:var(--text-dim); white-space:nowrap;">{{ "%.0f"|format(datei.groesse / 1024) }} KB</td>
                         <td style="padding:8px 12px; text-align:right; white-space:nowrap;">
                             <a href="/archiv/datei/{{ bereich.schluessel }}/{{ datei.name }}" target="_blank"

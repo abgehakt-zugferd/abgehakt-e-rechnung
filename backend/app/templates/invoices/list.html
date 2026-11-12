@@ -120,7 +120,7 @@
                             {% if inv.datev_sent_at %}
                             <span style="display:inline-flex; align-items:center; gap:4px; color:var(--green); font-family:'Press Start 2P',monospace; font-size:var(--fs-mikro);">
                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                {{ inv.datev_sent_at.strftime('%d.%m.%y') }}
+                                {{ inv.datev_sent_at|datum_de(kurz=True) }}
                             </span>
                             {% else %}
                             <span style="color:var(--text-dim);">–</span>

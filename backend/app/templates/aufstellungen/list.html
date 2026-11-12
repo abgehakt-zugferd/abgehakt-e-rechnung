@@ -27,7 +27,7 @@
                     <td>{{ a.netto|betrag }} {{ a.waehrung }}</td>
                     <td>{{ (a.netto if a.waehrung == 'EUR' else a.zahlbetrag_eur)|euro }}</td>
                     <td><span class="badge">{{ statusnamen[a.status] }}</span></td>
-                    <td>{{ a.datev_sent_at.strftime('%d.%m.%Y %H:%M') if a.datev_sent_at else 'Nein' }}</td>
+                    <td>{{ a.datev_sent_at|zeitpunkt_de if a.datev_sent_at else 'Nein' }}</td>
                 </tr>
             {% else %}<tr><td colspan="7">Keine Aufstellungen gefunden.</td></tr>{% endfor %}</tbody>
         </table>

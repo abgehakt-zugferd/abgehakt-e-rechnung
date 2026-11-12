@@ -17,7 +17,7 @@ thread-sicherer Zustand und setzt voraus, dass die passende Locale im Image
 erzeugt wurde (im schlanken Debian-Basisimage ist sie es nicht). Die Regel für
 deutsche Zahlen ist zu einfach, um dafür eine Umgebungsabhängigkeit einzugehen.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi.templating import Jinja2Templates
@@ -65,20 +65,35 @@ def menge(wert) -> str:
     return _DE.format_menge(wert)
 
 
-def datum_de(wert) -> str:
-    """Kalendertag als TT.MM.JJJJ; ein Zeitstempel zaehlt in Europe/Berlin."""
+def _als_utc(wert: datetime) -> datetime:
+    """Naive Zeitstempel gelten als UTC. Alle Zeitspalten der Anwendung sind
+    timestamptz (aware); ein naiver Wert kaeme nur von einer Uhr ohne Zone, und
+    astimezone() wuerde ihn sonst still als Systemzeit des Containers lesen."""
+    return wert.replace(tzinfo=timezone.utc) if wert.tzinfo is None else wert
+
+
+def datum_de(wert, kurz: bool = False) -> str:
+    """Kalendertag als TT.MM.JJJJ (kurz: TT.MM.JJ); ein Zeitstempel zaehlt in
+    Europe/Berlin, ein naiver gilt als UTC."""
     if wert is None:
         return "-"
     if isinstance(wert, datetime):
-        wert = kalendertag(wert)
-    return wert.strftime("%d.%m.%Y")
+        wert = kalendertag(_als_utc(wert))
+    return wert.strftime("%d.%m.%y" if kurz else "%d.%m.%Y")
 
 
 def zeitpunkt_de(wert) -> str:
     """Zeitstempel als TT.MM.JJJJ HH:MM in Europe/Berlin, ohne Sekunden."""
     if wert is None:
         return "-"
-    return wert.astimezone(ZEITZONE).strftime("%d.%m.%Y %H:%M")
+    return _als_utc(wert).astimezone(ZEITZONE).strftime("%d.%m.%Y %H:%M")
+
+
+def uhrzeit_de(wert) -> str:
+    """Uhrzeit HH:MM in Europe/Berlin (Zeitstempel, naiv = UTC)."""
+    if wert is None:
+        return "-"
+    return _als_utc(wert).astimezone(ZEITZONE).strftime("%H:%M")
 
 
 def mit_setup_link(text: str) -> Markup:
@@ -109,3 +124,4 @@ def registriere_darstellungsfilter(templates: Jinja2Templates) -> None:
     templates.env.filters["mit_setup_link"] = mit_setup_link
     templates.env.filters["datum_de"] = datum_de
     templates.env.filters["zeitpunkt_de"] = zeitpunkt_de
+    templates.env.filters["uhrzeit_de"] = uhrzeit_de

@@ -47,7 +47,7 @@
             <div x-show="open" x-cloak @click.outside="open = false"
                  style="position:absolute; right:0; top:calc(100% + 8px); width:320px; background:var(--surface); border:2px solid var(--border-hi); padding:20px; z-index:10; box-shadow:6px 6px 0 rgba(0,0,0,0.9), 0 0 20px var(--gold-glow);">
                 <form method="post" action="/invoices/{{ invoice.id }}/datev-senden"
-                      {% if invoice.datev_sent_at %}onsubmit="return confirm('Diese Rechnung wurde am {{ invoice.datev_sent_at.strftime('%d.%m.%Y um %H:%M') }} bereits versendet. Erneut senden?')"{% endif %}>
+                      {% if invoice.datev_sent_at %}onsubmit="return confirm('Diese Rechnung wurde am {{ invoice.datev_sent_at|datum_de }} um {{ invoice.datev_sent_at|uhrzeit_de }} bereits versendet. Erneut senden?')"{% endif %}>
                     <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--cyan); margin-bottom:12px;">E-MAIL VERSAND</p>
                     <label class="label">EMPFÄNGER</label>
                     <input type="email" name="customer_email" value="{{ invoice.customer.email if invoice.customer else '' }}" class="input" style="margin-bottom:12px;" required>
