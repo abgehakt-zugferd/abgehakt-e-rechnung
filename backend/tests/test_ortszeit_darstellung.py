@@ -135,11 +135,14 @@ def test_archiv_zeigt_aenderungszeit_in_ortszeit(dateien, pg_session, web, monke
     # Anzeige trotzdem nicht der Systemzone folgen.
     monkeypatch.setenv("TZ", "Asia/Tokyo")
     time.tzset()
-    os.utime(dateien["pdf"], (NACHTS.timestamp(), NACHTS.timestamp()))
-    text = web.get("/archiv").text
+    try:
+        os.utime(dateien["pdf"], (NACHTS.timestamp(), NACHTS.timestamp()))
+        text = web.get("/archiv").text
+    finally:
+        # Auch bei Fehlschlag zuruecksetzen, sonst laeuft der Rest der Suite in Tokio.
+        monkeypatch.undo()
+        time.tzset()
     assert "12.11.2026 00:30" in text
-    monkeypatch.undo()
-    time.tzset()
 
 
 def test_aenderungsprotokoll_zeigt_ortszeit(pg_session, web):
