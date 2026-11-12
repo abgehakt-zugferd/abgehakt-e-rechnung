@@ -138,7 +138,7 @@ def test_ein_abgelehnter_beleg_zeigt_seinen_befund(client, pg_session, belegordn
     verdreht["signatur"]["wert"] = base64.b64encode(bytes(roh)).decode("ascii")
     (ordner / "kaputt.json").write_bytes(kanonisch(verdreht))
 
-    text = client.get("/uebergaben").text
+    text = client.get("/uebergaben").text.replace("<wbr>", "")  # Umbruchstelle, kein Text
 
     assert "SIGNATUR_UNGUELTIG" in text
 
@@ -148,7 +148,7 @@ def test_ein_beleg_ohne_kunden_zeigt_partner_id_unbekannt(client, pg_session, be
     _schalter(pg_session)
     (ordner / "auftrag.json").write_bytes(beleg(signieren))
 
-    text = client.get("/uebergaben").text
+    text = client.get("/uebergaben").text.replace("<wbr>", "")  # Umbruchstelle, kein Text
 
     assert "PARTNER_ID_UNBEKANNT" in text
 
@@ -452,7 +452,7 @@ def test_eine_kaputte_datei_legt_die_belegliste_nicht_lahm(client, pg_session, b
 
     assert antwort.status_code == 200
     assert "Probeverlag" in antwort.text
-    assert "WERT_UNBRAUCHBAR" in antwort.text
+    assert "WERT_UNBRAUCHBAR" in antwort.text.replace("<wbr>", "")  # Umbruchstelle
 
 
 def test_eine_unbekannte_kaputtheit_kostet_nur_die_eine_zeile(
@@ -476,7 +476,7 @@ def test_eine_unbekannte_kaputtheit_kostet_nur_die_eine_zeile(
         antwort = client.get("/uebergaben")
 
     assert antwort.status_code == 200
-    assert "BELEG_UNLESBAR" in antwort.text
+    assert "BELEG_UNLESBAR" in antwort.text.replace("<wbr>", "")  # Umbruchstelle
     assert any("auftrag.json" in eintrag.message for eintrag in caplog.records)
 
 

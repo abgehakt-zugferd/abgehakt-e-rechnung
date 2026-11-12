@@ -111,7 +111,8 @@ def test_echter_sprung_bleibt_kette_springt_rot(
     )
     ablegen(ordner, "sprung.json", allein)
 
-    seite = client.get("/uebergaben").text
+    # <wbr> ist eine Umbruchstelle nach Unterstrichen, kein Text
+    seite = client.get("/uebergaben").text.replace("<wbr>", "")
 
     assert "wartet auf Vorgänger" not in seite
     assert "KETTE_SPRINGT" in seite

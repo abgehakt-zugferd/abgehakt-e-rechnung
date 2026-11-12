@@ -174,8 +174,7 @@ def test_unlesbarer_beleg_zeigt_gedankenstrich_in_neutralen_spalten(
 
 def test_aktionsspalte_schneidet_den_knopf_nicht_ab(client, pg_session, belegordner):
     """Der volle Knopftext steht im HTML; die Aktion-Zelle und die Tabelle
-    duerfen ihn nicht durch Quetschen abschneiden (nowrap an der Zelle,
-    Tabelle darf ueber die Kartenbreite wachsen)."""
+    duerfen ihn nicht durch Quetschen abschneiden (nowrap an der Zelle)."""
     ordner, signieren = belegordner
     _kunde_plattform(pg_session)
     _schalter(pg_session)
@@ -198,4 +197,6 @@ def test_aktionsspalte_schneidet_den_knopf_nicht_ab(client, pg_session, belegord
     )
     assert tabelle
     stil = tabelle.group(1)
-    assert "width:100%" not in stil or "max-content" in stil
+    # Seit der Spalte DATEI-Wegfall (7 statt 8 Spalten) passt die Tabelle in die
+    # Karte: width:100% ist gewollt, nowrap an der Zelle haelt den Knopf ganz.
+    assert "width:100%" in stil

@@ -877,7 +877,10 @@
                Ein Menue fuer eine Belegkette, von der ein fremder Installateur nie
                gehoert hat, ist Verwirrung und kein Angebot. #}
             {% if request.state.beleg_integration %}
-            <a href="/aufstellungen" class="nav-link {% if request.url.path.startswith('/aufstellungen') %}active{% endif %}"><span>AUFSTELLUNGEN</span></a>
+            <a href="/aufstellungen" class="nav-link {% if request.url.path.startswith('/aufstellungen') %}active{% endif %}" @click="sidebarOpen = window.innerWidth >= 1024">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4h18v16H3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 9h18M9 4v16M3 15h18M13 18h5"/></svg>
+                <span>AUFSTELLUNGEN</span>
+            </a>
             <a href="/uebergaben" class="nav-link {% if '/uebergaben' in request.url.path %}active{% endif %}" @click="sidebarOpen = window.innerWidth >= 1024">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v6H4z"/><path d="M4 14h16v6H4z"/></svg>
                 <span>BELEGE</span>

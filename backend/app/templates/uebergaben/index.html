@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Belege – {{ PRODUCT_NAME }}{% endblock %}
 {% block content %}
-<div style="max-width:1100px;">
+<div style="max-width:1400px;">
     <h1 style="margin-bottom:6px;">BELEGE</h1>
     <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text-dim); margin-bottom:24px;">
         Was im Belegordner liegt. Ansehen ändert nichts: gespeichert wird erst mit
@@ -42,15 +42,15 @@
         </p>
     </div>
     {% else %}
-    {# max-width am aeusseren Block und width:100% an der Tabelle quetschten
-       acht Spalten in 1100px: der nowrap-Knopf blieb stehen, die Aktion-Zelle
-       schnitt ihn ab, obwohl rechts neben dem Block Platz war. Neutrale
-       Spalten und max-content lassen die Tabelle wachsen; overflow-x scrollt. #}
+    {# Die Tabelle ist so breit wie die Karte; BEFUND und AKTION muessen ohne
+       Seitwaertsscrollen sichtbar sein (#207, dann Spalte DATEI aufgegeben: der
+       Dateiname steht klein unter dem Kunden). Der nowrap-Knopf behaelt seine
+       Breite, die uebrigen Zellen geben nach. Nur auf schmalen Bildschirmen
+       faengt overflow-x auf. #}
     <div class="card" style="padding:0; overflow-x:auto;">
-        <table style="width:max-content; min-width:100%; border-collapse:collapse;">
+        <table style="width:100%; border-collapse:collapse;">
             <thead>
                 <tr>
-                    <th class="table-header" style="padding:10px 14px; text-align:left;">DATEI</th>
                     <th class="table-header" style="padding:10px 14px; text-align:left;">ERZEUGT</th>
                     <th class="table-header" style="padding:10px 14px; text-align:left;">KUNDE / PROJEKT</th>
                     <th class="table-header" style="padding:10px 14px; text-align:left;">ZEITRAUM</th>
@@ -63,12 +63,14 @@
                 {% for zeile in zeilen %}
                 {% set urteil = zeile.urteil %}
                 <tr class="table-row">
-                    <td style="padding:10px 14px; color:var(--text-hi); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text); max-width:14rem; overflow:hidden; text-overflow:ellipsis;">{{ zeile.dateiname }}</td>
-                    <td style="padding:10px 14px; color:var(--text-dim); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text); white-space:nowrap;">{{ zeile.erzeugt_am or '–' }}</td>
-                    <td style="padding:10px 14px; color:var(--text);">{{ zeile.gegenstand or '–' }}</td>
-                    <td style="padding:10px 14px; color:var(--text); white-space:nowrap;">{{ zeile.zeitraum or '–' }}</td>
+                    <td style="padding:10px 14px; color:var(--text-dim); font-family:'Share Tech Mono',monospace; font-size:var(--fs-text);">{{ zeile.erzeugt_am or '–' }}</td>
+                    <td style="padding:10px 14px; color:var(--text); min-width:9rem;">
+                        {{ zeile.gegenstand or '–' }}
+                        <div style="color:var(--text-dim); font-family:'Share Tech Mono',monospace; font-size:0.8em; overflow-wrap:anywhere; margin-top:2px;">{{ zeile.dateiname }}</div>
+                    </td>
+                    <td style="padding:10px 14px; color:var(--text);">{{ zeile.zeitraum or '–' }}</td>
                     <td style="padding:10px 14px; color:var(--text); text-align:right; font-family:'Share Tech Mono',monospace; white-space:nowrap;">{{ zeile.summe or '–' }}</td>
-                    <td style="padding:10px 14px; font-family:'Share Tech Mono',monospace; font-size:var(--fs-text);">
+                    <td style="padding:10px 14px; font-family:'Share Tech Mono',monospace; font-size:var(--fs-text); overflow-wrap:anywhere;">
                         {% if zeile.befund_anzeige %}
                         <span style="color:var(--text-dim);">{{ zeile.befund_anzeige }}</span>
                         {% elif urteil.bereits_verarbeitet %}
@@ -76,7 +78,8 @@
                         {% elif urteil.angenommen %}
                         <span style="color:var(--green);">ANGENOMMEN</span>
                         {% else %}
-                        <span style="color:var(--pink);">{{ urteil.befund }}</span>
+                        {# <wbr> nach Unterstrichen: lange Codes brechen dort, nicht mitten im Wort. |e zuerst, damit nur das eigene <wbr> ungeescaped bleibt. #}
+                        <span style="color:var(--pink);">{{ (urteil.befund|e)|replace('_', '_<wbr>'|safe) }}</span>
                         <div style="color:var(--text-dim); margin-top:4px;">{{ urteil.feststellungen[0].pfad }}</div>
                         {% endif %}
                     </td>
