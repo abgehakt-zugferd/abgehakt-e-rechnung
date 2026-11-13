@@ -124,7 +124,7 @@
                            Buchhaltung vorliegt, als erledigt zeigen. #}
                         <p class="label">Buchhaltung</p>
                         <p style="color:{% if invoice.datev_sent_at %}var(--green){% else %}var(--text-dim){% endif %};">
-                            {% if invoice.datev_sent_at %}Buchhaltung: versendet am {{ invoice.datev_sent_at.strftime('%d.%m.%Y') }}{% else %}Buchhaltung: nicht versendet{% endif %}
+                            {% if invoice.datev_sent_at %}Buchhaltung: versendet am {{ invoice.datev_sent_at|datum_de }}{% else %}Buchhaltung: nicht versendet{% endif %}
                         </p>
                         <p class="label" style="margin-top:10px;">Kunde</p>
                         <p style="color:{% if kunde_zustellung_am %}var(--green){% else %}var(--text-dim){% endif %};">
@@ -237,7 +237,7 @@
                             {% else %}
                             <span style="color:{% if log.success %}var(--green){% else %}var(--pink){% endif %};">{{ '✓' if log.success else '✗' }}</span>
                             {% endif %}
-                            <span style="color:var(--text-hi);">{{ log.sent_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                            <span style="color:var(--text-hi);">{{ log.sent_at|zeitpunkt_de }}</span>
                         </div>
                         {# Das Ziel jeder Zeile (Bauschritt 5a/5b): Ein Beleg kann der
                            Buchhaltung vorliegen, ohne dass der Kunde ihn hat — ohne
@@ -276,7 +276,7 @@
                 <div class="protokoll" style="font-family:'VT323',monospace; font-size:var(--fs-gross);">
                     {% for zeile in protokoll %}
                     <div class="protokoll__zeile">
-                        <span class="protokoll__zeit">{{ zeile.zeitpunkt.strftime('%d.%m.%Y %H:%M') }}</span>
+                        <span class="protokoll__zeit">{{ zeile.zeitpunkt|zeitpunkt_de }}</span>
                         <span class="protokoll__text">
                             {{ zeile.vorgang }}{% if zeile.felder %}<span style="color:var(--text-dim);">: {{ zeile.felder | join(', ') }}</span>{% endif %}{% if zeile.detail %}<span style="color:var(--text-dim);">: {{ zeile.detail }}</span>{% endif %}
                         </span>

@@ -9,7 +9,7 @@ Zwischendateien) und `imports/` (fremde Uploads) sind kein Archiv.
 """
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -95,7 +95,7 @@ def _dateien(bereich: str, erlaubt: set[str], q: str = "", seite: int = 1) -> Da
             treffer.append({
                 "name": eintrag.name,
                 "groesse": stat.st_size,
-                "geaendert": datetime.fromtimestamp(stat.st_mtime),
+                "geaendert": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
             })
     treffer.sort(key=lambda d: d["geaendert"], reverse=True)
 

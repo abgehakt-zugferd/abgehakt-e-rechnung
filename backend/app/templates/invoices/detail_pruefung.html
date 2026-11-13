@@ -5,7 +5,7 @@
                     <h2 style="margin-bottom:0;">PRÜFPROTOKOLL</h2>
                     <span class="badge badge-{{ 'paid' if validation.is_valid else 'cancelled' }}">{{ '✓ OK' if validation.is_valid else '✗ FEHLER' }}</span>
                 </div>
-                <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); line-height:1.6; color:var(--text-dim); margin-bottom:12px;">{{ validation.validated_at.strftime('%d.%m.%Y %H:%M') }}</p>
+                <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); line-height:1.6; color:var(--text-dim); margin-bottom:12px;">{{ validation.validated_at|zeitpunkt_de }}</p>
 
                 {% if validation.errors %}
                 <div style="margin-bottom:12px;">

@@ -16,7 +16,8 @@
         {% elif a.status == 'issued' %}
         {# Schon versendet: der Knopf bleibt (erneuter Versand ist erlaubt), wird aber
            zurueckhaltend, damit er nicht wie "noch zu tun" aussieht. #}
-        <form method="post" action="/aufstellungen/{{ a.id }}/an-buchhaltung">
+        <form method="post" action="/aufstellungen/{{ a.id }}/an-buchhaltung"
+              {% if a.datev_sent_at %}onsubmit="return confirm('Diese Aufstellung wurde am {{ a.datev_sent_at|datum_de }} um {{ a.datev_sent_at|uhrzeit_de }} bereits versendet. Erneut senden?')"{% endif %}>
             {% if a.datev_sent_at %}<button class="btn-secondary">ERNEUT AN BUCHHALTUNG SENDEN</button>
             {% else %}<button class="btn-primary">AN BUCHHALTUNG SENDEN</button>{% endif %}
         </form>
