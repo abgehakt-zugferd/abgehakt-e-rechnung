@@ -37,13 +37,21 @@ def delivery_xml(invoice: Invoice) -> str:
     # verlangt <ram:ApplicableHeaderTradeDelivery> zwischen Agreement und
     # Settlement. Fehlte er, war die Datei schon am Schema unzulässig, nicht erst
     # an einer Geschäftsregel. Getroffen hat das die Kleinbetragsrechnung ohne
-    # Leistungsdatum, die § 33 UStDV ausdrücklich erlaubt (#47).
+    # Leistungsdatum, die § 33 UStDV ausdrücklich erlaubt (#47). Genau dieser Fall
+    # (weder Leistungsdatum noch Leistungszeitraum) bleibt ein leerer Block; Mustang
+    # meldet dazu PEPPOL-EN16931-R008 als Warnung, und der Fall wird nicht aufgefüllt,
+    # weil es kein Datum gibt, das stimmen könnte.
+    #
+    # Hat die Rechnung nur einen Leistungszeitraum, steht dessen Ende als
+    # Lieferdatum im Block (#299), sonst bliebe er leer. Das betrifft nur das XML:
+    # `invoice.delivery_date` bleibt unverändert.
+    lieferdatum = invoice.delivery_date or invoice.service_period_end
     delivery_event = ""
-    if invoice.delivery_date:
+    if lieferdatum:
         delivery_event = f"""
             <ram:ActualDeliverySupplyChainEvent>
                 <ram:OccurrenceDateTime>
-                    <udt:DateTimeString format="102">{fmt_date(invoice.delivery_date)}</udt:DateTimeString>
+                    <udt:DateTimeString format="102">{fmt_date(lieferdatum)}</udt:DateTimeString>
                 </ram:OccurrenceDateTime>
             </ram:ActualDeliverySupplyChainEvent>"""
     return f"""

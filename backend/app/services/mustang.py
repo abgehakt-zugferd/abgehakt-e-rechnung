@@ -2,6 +2,7 @@
 Wrapper für die Mustang CLI. Ruft die JAR über subprocess auf.
 Version + SHA-256 stehen im `backend/Dockerfile` — hier bewusst keine Nummer.
 """
+import html
 import subprocess
 import json
 import re
@@ -145,5 +146,13 @@ def _no_errors(output: str) -> bool:
 
 
 def _extract_issues(output: str, severity: str) -> list[str]:
-    pattern = re.compile(rf"\[{severity}\].*", re.IGNORECASE)
-    return [m.group() for m in pattern.finditer(output)]
+    """Meldungen einer Schwere aus dem Prüfbericht.
+
+    Mustang 2.26 schreibt sie als XML-Elemente (`<warning ...>[REGEL]-Text</warning>`,
+    ebenso `<error ...>`); die Zeilen „[warning] ...“ gibt es dort nicht. Beides wird
+    gelesen, XML zuerst. Die Wertung `is_valid` hängt nicht an dieser Liste.
+    """
+    elemente = re.compile(rf"<{severity}\b[^>]*>(.*?)</{severity}>", re.DOTALL)
+    aus_xml = [html.unescape(m.group(1)).strip() for m in elemente.finditer(output)]
+    zeilen = re.compile(rf"\[{severity}\].*", re.IGNORECASE)
+    return aus_xml + [m.group() for m in zeilen.finditer(output)]

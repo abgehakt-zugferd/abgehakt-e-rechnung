@@ -22,6 +22,10 @@ Klammern.
 
 - **Rechnungsansicht auf dem Handy lesbar (alle Designs).** Bei schmaler Breite (bis 640 px) wird jede Position ein Block: Beschreibung oben in voller Breite, darunter Menge, Preis, MwSt. und Netto als beschriftete Zeilen, statt seitlich zu scrollen. Die Rechnungsdaten stehen untereinander, und im Design Terminal läuft die Kopfleiste nicht mehr aus dem Bild. Ab Tabletbreite bleibt alles wie bisher.
 
+### Behoben
+
+- **Kein leerer Lieferblock mehr in der E-Rechnung (#299).** Eine Rechnung mit Leistungszeitraum, aber ohne Leistungsdatum enthielt einen leeren Lieferabschnitt; Prüfwerkzeuge meldeten dazu die Warnung PEPPOL-EN16931-R008, und die Buchhaltungssoftware zeigte die Rechnung als „E-Rechnung mit Formatfehlern“. Jetzt steht das Ende des Leistungszeitraums als Lieferdatum im XML; das gespeicherte Leistungsdatum der Rechnung bleibt unverändert. Warnungen des Prüfwerkzeugs erscheinen außerdem im Prüfprotokoll (sie waren bisher immer leer), ohne das Finalisieren zu sperren. Rechnungen ganz ohne Leistungsdatum und Zeitraum (Kleinbetragsrechnungen) bleiben wie bisher.
+
 ### Sicherheit
 
 - **Python-Pakete mit bekannten Sicherheitslücken angehoben:** fastapi 0.162.0 mit starlette 1.10.0, python-multipart 0.0.33 (Formular- und Datei-Upload), cryptography 50.0.2, jinja2 3.1.6, pillow 13.0.0, python-dotenv 1.2.4, certifi 2026.10.23 und pypdf 7.0.0 (nur von den Tests benutzt). Für den Betrieb heißt das: nach dem Wechsel das Abbild neu bauen.
