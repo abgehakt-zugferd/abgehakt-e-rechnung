@@ -75,6 +75,9 @@ db_ports=$(awk '/^  db:/{d=1;next} /^  [a-z]/{d=0} d&&/^    ports:/{print}' "$co
 [ -z "$db_ports" ]
 ergebnis db_hat_keinen_host_port $? "db-Dienst hat noch ports:"
 
+grep -qF 'http://localhost:3000/gesundheit' "$compose"
+ergebnis healthcheck_ruft_gesundheit $? "Healthcheck ruft nicht /gesundheit"
+
 grep -q '"${DB_BIND:-127.0.0.1}:${DB_PORT:-5432}:5432"' "$zusatz" 2>/dev/null
 ergebnis zusatzdatei_oeffnet_db_port_nur_loopback $? "docker-compose.db-port.yml fehlt oder falsch"
 

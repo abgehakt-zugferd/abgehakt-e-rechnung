@@ -8,9 +8,9 @@ deshalb eine eigene Ausnahme, die nur hier als 303 beantwortet wird.
 
 Ausnahmen (ohne Einrichtung erreichbar): Setup, Einstellungen (dort wird die
 Einrichtung seit #205 ebenfalls abgeschlossen), Archiv, GoBD-Export, Updates,
-statische Dateien und `/`. Der Compose-Healthcheck trifft `/dashboard`
-(docker-compose.yml); dort bleibt die 303-Umleitung, und `curl -f` wertet 3xx
-nicht als Fehler.
+statische Dateien, `/` und `/gesundheit`. Der Compose-Healthcheck trifft
+`/gesundheit`: die Route fragt die Datenbank selbst und darf weder umgeleitet werden
+noch am Tor scheitern, wenn die Datenbank nicht antwortet.
 
 Kunden: mitgeschuetzt. Stammdaten tragen keine Verkaeuferangaben, stehen aber
 nicht auf der Ausnahmeliste des Auftrags; das Tor soll zur Einrichtung fuehren.
@@ -35,6 +35,7 @@ _AUSNAHMEN = (
     "/export",
     "/updates",
     "/static",
+    "/gesundheit",
 )
 
 
