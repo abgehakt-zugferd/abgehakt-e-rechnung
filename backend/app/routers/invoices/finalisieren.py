@@ -1,4 +1,5 @@
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -32,10 +33,11 @@ settings = get_settings()
 
 
 @router.post("/{invoice_id}/finalisieren")
-def finalize_invoice(invoice_id: uuid.UUID, request: Request,
-                     bestaetigt: list[str] = Form(default=[]), db: Session = Depends(get_db)):
+def finalize_invoice(invoice_id: uuid.UUID, request: Request = None,
+                     bestaetigt: Annotated[list[str] | None, Form()] = None,
+                     db: Session = Depends(get_db)):
     try:
-        ausfuehren(db, invoice_id, bestaetigt)
+        ausfuehren(db, invoice_id, bestaetigt or [])
     except FinalisierungWarnung as w:
         # Nichts finalisiert (Rollback erfolgt): die Rechnungsseite zeigt die Warnungen
         # mit der Wahl „trotz Warnung finalisieren“ oder abbrechen.
