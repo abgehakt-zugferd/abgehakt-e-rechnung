@@ -1,7 +1,7 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Form, HTTPException
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -17,7 +17,9 @@ from app.services.zahlungsdatum_korrektur import (
     ZahlungsdatumKorrekturFehler,
     korrigieren as zahlungsdatum_korrigieren,
 )
-from app.services.rechnung.fehler import RechnungFehler
+from app.routers.invoices.ansicht import detail_kontext
+from app.routers.invoices.vorlagen import templates
+from app.services.rechnung.fehler import FinalisierungWarnung, RechnungFehler
 from app.services.rechnung.finalisieren import ausfuehren, entwurf_sperren
 from app.services.storno import GutschriftNichtStornierbar, pruefe_stornierbar
 from app.zeit import heute
@@ -30,9 +32,19 @@ settings = get_settings()
 
 
 @router.post("/{invoice_id}/finalisieren")
-def finalize_invoice(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
+def finalize_invoice(invoice_id: uuid.UUID, request: Request,
+                     bestaetigt: list[str] = Form(default=[]), db: Session = Depends(get_db)):
     try:
-        ausfuehren(db, invoice_id)
+        ausfuehren(db, invoice_id, bestaetigt)
+    except FinalisierungWarnung as w:
+        # Nichts finalisiert (Rollback erfolgt): die Rechnungsseite zeigt die Warnungen
+        # mit der Wahl „trotz Warnung finalisieren“ oder abbrechen.
+        invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+        return templates.TemplateResponse(
+            request, "invoices/detail.html",
+            {**detail_kontext(db, invoice), "finalisierung_warnungen": w.warnungen,
+             "finalisierung_schluessel": w.schluessel},
+            status_code=409)
     except RechnungFehler as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail) from e
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)

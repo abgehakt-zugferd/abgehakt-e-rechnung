@@ -1,0 +1,22 @@
+{# Mustang meldet beim Finalisieren Warnungen: nichts ist finalisiert, die Rechnung
+   bleibt Entwurf. Der Nutzer sieht die Warnungen und entscheidet. #}
+{% if finalisierung_warnungen %}
+<div data-finalisierung-warnung style="margin-bottom:16px; padding:14px 16px; border:2px solid var(--amber);">
+    <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); color:var(--amber); margin-bottom:10px;">⚠ NICHT FINALISIERT: DIE PRÜFUNG MELDET WARNUNGEN</p>
+    <p style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--text); margin-bottom:10px;">
+        Die Rechnung ist weiter ein Entwurf, es wurde nichts verbraucht. Sie kann trotz Warnung finalisiert werden
+        oder bleibt Entwurf, bis eine Lösung gefunden ist.
+    </p>
+    {% for w in finalisierung_warnungen %}
+    <div style="font-family:'VT323',monospace; font-size:var(--fs-gross); color:var(--amber); margin-bottom:6px;">
+        {% if w.regel %}<strong data-warnung-regel="{{ w.regel }}">{{ w.regel }}</strong>: {% endif %}{{ w.text }}
+    </div>
+    {% endfor %}
+    <form method="post" action="/invoices/{{ invoice.id }}/finalisieren" style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;"
+          onsubmit="return confirm('Trotz Warnung finalisieren? Danach keine Änderung mehr möglich.')">
+        {% for k in finalisierung_schluessel %}<input type="hidden" name="bestaetigt" value="{{ k }}">{% endfor %}
+        <button type="submit" class="btn-primary">TROTZ WARNUNG FINALISIEREN</button>
+        <a href="/invoices/{{ invoice.id }}" class="btn-secondary">ABBRECHEN (BLEIBT ENTWURF)</a>
+    </form>
+</div>
+{% endif %}

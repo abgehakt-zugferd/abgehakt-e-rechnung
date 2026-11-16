@@ -22,7 +22,7 @@ from app.services.bezahlt_am import fruehestes_zahlungsdatum
 from app.services.einheiten import UnknownUnitError
 from app.services.ersatzrechnung import ErsatzNichtMoeglich, pruefe_ersetzbar
 from app.services.belegsprache import darstellung
-from app.services.rechnung.pruefung import run_validation
+from app.services.rechnung.pruefung import run_validation, xml_hash
 from app.services.storno_wirkung import stornobelege_zu
 from app.zeit import heute, kalendertag
 
@@ -115,7 +115,7 @@ def _storno_endgueltig_hinweis(invoice: Invoice) -> Markup | None:
     return Markup(text).format(original=link)
 
 
-def _detail_kontext(db: Session, invoice: Invoice) -> dict:
+def detail_kontext(db: Session, invoice: Invoice) -> dict:
     """Alles, was `invoices/detail.html` neben `request` braucht."""
     company = db.query(Company).filter(Company.id == 1).first()
     latest_validation = (
@@ -132,6 +132,7 @@ def _detail_kontext(db: Session, invoice: Invoice) -> dict:
     ersetzbar, original_ersetzbar = _ersetzbarkeit(db, invoice)
     kunde_zustellung_am, kunde_weg = _kunde_zustellung_fuer_detail(invoice)
     return {
+        "xml_hash_aktuell": xml_hash(invoice.zugferd_xml),
         "zahlungshinweis_fehlt": hinweis_fehlt(invoice),
         "invoice": invoice,
         "company": company,
@@ -158,7 +159,7 @@ def invoice_detail(invoice_id: uuid.UUID, request: Request, db: Session = Depend
     if not invoice:
         raise HTTPException(404, "Rechnung nicht gefunden")
     return templates.TemplateResponse(
-        request, "invoices/detail.html", {**_detail_kontext(db, invoice)})
+        request, "invoices/detail.html", {**detail_kontext(db, invoice)})
 
 
 def _get_draft_for_preview(db: Session, invoice_id: uuid.UUID) -> Invoice:

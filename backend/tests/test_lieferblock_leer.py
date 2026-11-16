@@ -204,9 +204,7 @@ def _pruefen(mustang_ergebnis):
 
 def test_mustang_warnung_steht_im_pruefergebnis_und_sperrt_nichts():
     gemessen = {"is_valid": True, "nicht_ausfuehrbar": False, "grund": "", "errors": [],
-                "raw": "XML:valid", "warnings": [
-                    f"[{R008}]-Document MUST not contain empty elements. (still status warning) "
-                    f"[ID {R008}] from /xslt/ZF_250/FACTUR-X_EN16931.xslt)"]}
+                "warnings": [], "raw": BERICHT_WARNUNG}
 
     vr = _pruefen(gemessen)
 
@@ -219,8 +217,10 @@ def test_mustang_warnung_steht_im_pruefergebnis_und_sperrt_nichts():
 
 
 def test_mustang_warnung_ohne_regelkennung_bekommt_allgemeinen_code():
+    roh = ('<warning type="10">Arithmetical issue:Payable total is off</warning>\n'
+           "Parsed PDF:absent XML:valid\n")
     gemessen = {"is_valid": True, "nicht_ausfuehrbar": False, "grund": "", "errors": [],
-                "raw": "XML:valid", "warnings": ["Arithmetical issue:Payable total is off"]}
+                "warnings": [], "raw": roh}
 
     vr = _pruefen(gemessen)
 

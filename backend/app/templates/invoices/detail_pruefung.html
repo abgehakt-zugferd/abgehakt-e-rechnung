@@ -5,7 +5,13 @@
                     <h2 style="margin-bottom:0;">PRÜFPROTOKOLL</h2>
                     <span class="badge badge-{{ 'paid' if validation.is_valid else 'cancelled' }}">{{ '✓ OK' if validation.is_valid else '✗ FEHLER' }}</span>
                 </div>
-                <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); line-height:1.6; color:var(--text-dim); margin-bottom:12px;">{{ validation.validated_at|zeitpunkt_de }}</p>
+                <p style="font-family:'Press Start 2P',monospace; font-size:var(--fs-klein); line-height:1.6; color:var(--text-dim); margin-bottom:12px;">{% if validation.anlass == 'finalisierung' %}Prüfung beim Finalisieren am {% endif %}{{ validation.validated_at|zeitpunkt_de }}</p>
+                {% if validation.xml_sha256 and invoice.zugferd_xml and validation.xml_sha256 != xml_hash_aktuell %}
+                <p data-pruefung-veraltet style="color:var(--amber); margin-bottom:12px;">⚠ Diese Prüfung bezieht sich nicht auf das gespeicherte XML. Bitte erneut prüfen.</p>
+                {% endif %}
+                {% if validation.bestaetigt_am %}
+                <p data-trotz-warnung style="color:var(--amber); margin-bottom:12px;">Trotz Warnung finalisiert am {{ validation.bestaetigt_am|zeitpunkt_de }}. Übergangene Regeln: {{ validation.bestaetigte_regeln|join(', ') }}</p>
+                {% endif %}
 
                 {% if validation.errors %}
                 <div style="margin-bottom:12px;">
@@ -14,6 +20,7 @@
                         <span style="color:var(--pink); flex-shrink:0;">✗</span>
                         <div>
                             <span style="color:var(--pink);">{{ err.message }}</span>
+                            {% set code = err.code|default('') %}{% if code.startswith('MUSTANG_') %}<span data-mustang-regel="{{ code[8:] }}" style="color:var(--text-dim);"> [{{ code[8:] }}]</span>{% endif %}
                             {% if err.field %}<span style="color:var(--text-dim);"> ({{ err.field }})</span>{% endif %}
                         </div>
                     </div>
@@ -26,7 +33,8 @@
                     {% for w in validation.warnings %}
                     <div style="display:flex; gap:8px; margin-bottom:6px; font-family:'VT323',monospace; font-size:var(--fs-gross);">
                         <span style="color:var(--amber); flex-shrink:0;">⚠</span>
-                        <span style="color:var(--amber);">{{ w.message }}</span>
+                        {% set code = w.code|default('') %}
+                        <span style="color:var(--amber);">{{ w.message }}{% if code.startswith('MUSTANG_') %}<span data-mustang-regel="{{ code[8:] }}" style="color:var(--text-dim);"> [{{ code[8:] }}]</span>{% endif %}</span>
                     </div>
                     {% endfor %}
                 </div>

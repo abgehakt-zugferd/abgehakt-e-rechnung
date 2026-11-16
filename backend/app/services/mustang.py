@@ -86,7 +86,8 @@ def validate(xml_or_pdf_path: Path) -> dict:
         # `[error]` steht bewusst drin, damit auch `_no_errors` es als Fehler sieht.
         meldung = f"[error] Mustang nicht ausführbar, nicht gemessen: {grund}"
         return {"is_valid": False, "nicht_ausfuehrbar": True, "grund": grund,
-                "raw": meldung, "errors": [meldung], "warnings": []}
+                "raw": meldung, "errors": [meldung], "warnings": [],
+                "befunde": befunde_aus_bericht(meldung)}
     output = stdout + stderr
     return {
         "is_valid": rc == 0 and _no_errors(output),
@@ -95,6 +96,7 @@ def validate(xml_or_pdf_path: Path) -> dict:
         "raw": output,
         "errors": _extract_issues(output, "error"),
         "warnings": _extract_issues(output, "warning"),
+        "befunde": befunde_aus_bericht(output),
     }
 
 
@@ -143,6 +145,46 @@ def _no_errors(output: str) -> bool:
     # Erfolgszusammenfassungen enthält "error" als Substring und darf nicht
     # als Fehler gewertet werden.
     return not re.search(r'\[(error|fehler)\]', output, re.IGNORECASE)
+
+
+# Eine Mustang-Meldung lautet „[REGEL]-Text [ID REGEL] from /xslt/...xslt)“. Die
+# Zerlegung in Regel und Text steht NUR hier; wer Mustang-Meldungen anzeigt oder
+# speichert (Prüfergebnis, Finalisieren), nimmt `befunde_aus_bericht`/`befunde_von`.
+_REGEL = re.compile(r"^\[([A-Za-z0-9_.\-]+)\]-?\s*")
+_ANHANG = re.compile(r"\s*\[ID [^\]]+\] from \S+\)\s*$")
+_ZEILE = re.compile(r"^\[(error|fehler|warning)\]\s*", re.IGNORECASE)
+
+
+def _befund(text: str, schwere: str) -> dict:
+    text = _ZEILE.sub("", text.strip())
+    treffer = _REGEL.match(text)
+    return {
+        "regel": treffer.group(1) if treffer else "",
+        "text": _ANHANG.sub("", _REGEL.sub("", text, count=1)).strip(),
+        "schwere": schwere,
+    }
+
+
+def befunde_aus_bericht(output: str) -> list[dict]:
+    """Strukturierte Befunde {regel, text, schwere} aus dem Mustang-Bericht.
+
+    Schwere ist „error“ oder „warning“. Dieselbe Meldung als XML-Element und als
+    Zeile zählt einmal. `regel` ist leer, wenn Mustang keine Kennung nennt.
+    """
+    befunde: list[dict] = []
+    for schwere in ("error", "warning"):
+        for roh in _extract_issues(output, schwere):
+            befund = _befund(roh, schwere)
+            if befund not in befunde:
+                befunde.append(befund)
+    return befunde
+
+
+def befunde_von(ergebnis: dict) -> list[dict]:
+    """Befunde eines `validate`-Ergebnisses (Rückfall auf den Rohbericht)."""
+    if "befunde" in ergebnis:
+        return ergebnis["befunde"]
+    return befunde_aus_bericht(ergebnis.get("raw") or "")
 
 
 def _extract_issues(output: str, severity: str) -> list[str]:
