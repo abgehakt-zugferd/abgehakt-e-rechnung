@@ -24,7 +24,7 @@ Klammern.
 
 ### Behoben
 
-- **Kein leerer Lieferblock mehr in der E-Rechnung (#299).** Eine Rechnung mit Leistungszeitraum, aber ohne Leistungsdatum enthielt einen leeren Lieferabschnitt; Prüfwerkzeuge meldeten dazu die Warnung PEPPOL-EN16931-R008, und die Buchhaltungssoftware zeigte die Rechnung als „E-Rechnung mit Formatfehlern“. Jetzt steht das Ende des Leistungszeitraums als Lieferdatum im XML; das gespeicherte Leistungsdatum der Rechnung bleibt unverändert. Warnungen des Prüfwerkzeugs erscheinen außerdem im Prüfprotokoll (sie waren bisher immer leer), ohne das Finalisieren zu sperren. Rechnungen ganz ohne Leistungsdatum und Zeitraum (Kleinbetragsrechnungen) bleiben wie bisher.
+- **Kein leerer Lieferblock mehr in der E-Rechnung (#299).** Eine Rechnung mit Leistungszeitraum, aber ohne Leistungsdatum enthielt einen leeren Lieferabschnitt; Prüfwerkzeuge meldeten dazu die Warnung PEPPOL-EN16931-R008, und die Buchhaltungssoftware zeigte die Rechnung als „E-Rechnung mit Formatfehlern“. Jetzt steht das Ende des Leistungszeitraums als Lieferdatum im XML; das gespeicherte Leistungsdatum der Rechnung bleibt unverändert. Warnungen des Prüfwerkzeugs erscheinen außerdem im Prüfprotokoll (sie waren bisher immer leer), ohne das Finalisieren zu sperren. Rechnungen ganz ohne Leistungsdatum und Zeitraum (Kleinbetragsrechnungen) bleiben wie bisher. Ebenso bleiben Anzahlungsrechnungen unverändert: ihr Zeitraum liegt in der Zukunft und wird nicht als erfolgte Lieferung ausgewiesen.
 
 ### Sicherheit
 

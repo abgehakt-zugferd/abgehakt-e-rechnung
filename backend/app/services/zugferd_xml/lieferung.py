@@ -1,6 +1,7 @@
 """Lieferung (HeaderTradeDelivery) und Belegreferenzen (BG-3)."""
 from app.models.invoice import Invoice
 from app.services import anzahlungen
+from app.services.belegart import belegart
 
 from app.services.zugferd_xml.format import esc, fmt_date
 
@@ -45,7 +46,14 @@ def delivery_xml(invoice: Invoice) -> str:
     # Hat die Rechnung nur einen Leistungszeitraum, steht dessen Ende als
     # Lieferdatum im Block (#299), sonst bliebe er leer. Das betrifft nur das XML:
     # `invoice.delivery_date` bleibt unverändert.
-    lieferdatum = invoice.delivery_date or invoice.service_period_end
+    #
+    # Ausnahme Anzahlungsrechnung (386): Ihr Zeitraum liegt in der Zukunft (BG-14
+    # „voraussichtlich“); ein ActualDeliverySupplyChainEvent würde behaupten, es sei
+    # bereits geliefert. Dort bleibt der Block ohne Ereignis, bis das fachlich
+    # geklärt ist (offen, siehe #299).
+    lieferdatum = invoice.delivery_date
+    if not lieferdatum and belegart(invoice.invoice_type).intern != "prepayment":
+        lieferdatum = invoice.service_period_end
     delivery_event = ""
     if lieferdatum:
         delivery_event = f"""

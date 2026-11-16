@@ -96,6 +96,15 @@ def test_leistungsdatum_hat_vorrang_vor_dem_zeitraumende():
     assert _ereignis(_lieferblock(inv)) == ("102", "20260615")
 
 
+def test_anzahlungsrechnung_schreibt_kein_lieferereignis_aus_dem_zeitraum():
+    """386: Der Zeitraum liegt in der Zukunft (BG-14 „voraussichtlich“). Ein
+    tatsächliches Lieferereignis würde behaupten, es sei schon geliefert worden."""
+    inv = _invoice(_kunde(), delivery_date=None, invoice_type="prepayment",
+                   service_period_start=date(2026, 12, 1), service_period_end=date(2026, 12, 31))
+
+    assert _ereignis(_lieferblock(inv)) is None
+
+
 def test_kleinbetrag_ohne_datum_und_zeitraum_behaelt_den_leeren_block():
     """§ 33 UStDV (#47): Der Block muss als Element stehen (CII-Schema), ohne
     Inhalt. Das ist der eine bekannte leere Fall und wird nicht aufgefüllt."""
