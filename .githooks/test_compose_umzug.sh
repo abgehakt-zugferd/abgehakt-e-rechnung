@@ -71,6 +71,16 @@ ergebnis app_port_aus_der_umgebung_mit_loopback $? "Portzeile der App: $app_port
 grep -q '^#\?[[:space:]]*APP_BIND=127.0.0.1' "$beispiel" && grep -q '^#\?[[:space:]]*APP_PORT=3000' "$beispiel"
 ergebnis env_beispiel_nennt_app_bind_und_port $? "APP_BIND/APP_PORT fehlen in der Beispieldatei"
 
+db_ports=$(awk '/^  db:/{d=1;next} /^  [a-z]/{d=0} d&&/^    ports:/{print}' "$compose")
+[ -z "$db_ports" ]
+ergebnis db_hat_keinen_host_port $? "db-Dienst hat noch ports:"
+
+grep -q '"${DB_BIND:-127.0.0.1}:${DB_PORT:-5432}:5432"' "$zusatz" 2>/dev/null
+ergebnis zusatzdatei_oeffnet_db_port_nur_loopback $? "docker-compose.db-port.yml fehlt oder falsch"
+
+grep -q '^#\?[[:space:]]*DB_BIND=' "$beispiel" && grep -q '^#\?[[:space:]]*DB_PORT=' "$beispiel"
+ergebnis env_beispiel_nennt_db_bind_und_port $? "DB_BIND/DB_PORT fehlen in der Beispieldatei"
+
 aus=$( cd "$wurzel" && "$wache" 2>&1 )
 if printf '%s' "$aus" | grep -qF -- "netz: ROT"; then rc=1; else rc=0; fi
 ergebnis echte_wurzel_ohne_netz_rot $rc "$aus"

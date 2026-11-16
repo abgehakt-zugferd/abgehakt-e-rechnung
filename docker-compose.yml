@@ -11,11 +11,9 @@ services:
       POSTGRES_DB: ${DB_NAME:-abgehakt}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      # NUR Loopback: "5432:5432" veröffentlicht die DB an alle Interfaces (0.0.0.0)
-      # und macht sie im LAN/WLAN angreifbar. Host-Tools (psql, GUI-Clients) erreichen
-      # sie über 127.0.0.1:5432 unverändert.
-      - "127.0.0.1:5432:5432"
+    # Kein Host-Port: die App erreicht die Datenbank im Compose-Netz (db:5432), Dumps laufen
+    # per `docker compose exec db pg_dump ...`. Wer von aussen (psql, GUI-Client) heran
+    # muss, nimmt docker-compose.db-port.yml dazu; die oeffnet den Port nur auf Loopback.
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_BOOTSTRAP_USER:-abgehakt_db} -d ${DB_NAME:-abgehakt}"]

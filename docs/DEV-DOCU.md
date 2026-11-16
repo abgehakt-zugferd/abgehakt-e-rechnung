@@ -983,7 +983,7 @@ docker compose -p abgehakt-test \
 | GUI | `http://127.0.0.1:3000` | `http://127.0.0.1:3001` |
 | Kennzeichnung | normal | Banner **TESTINSTANZ** |
 | E-Mail | Kunde + DATEV-BCC | nur `TESTINSTANZ_MAIL_TO` |
-| Daten | `storage/`, Postgres `:5432` | `storage-integration/`, `:5433` |
+| Daten | `storage/`, Postgres ohne Host-Port (Zusatzdatei `docker-compose.db-port.yml`: `:5432`) | `storage-integration/`, `:5433` |
 
 Compose-Mounts in der Testinstanz: Wegwerf-`storage-integration`, `${UEBERGABEN_ORDNER}` nach
 `/uebergaben`, `./schluessel-integration` nach `/app/schluessel` (nur oeffentliche
