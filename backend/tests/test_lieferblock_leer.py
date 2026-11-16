@@ -19,6 +19,7 @@ import pytest
 
 from app.models.customer import Customer
 from app.services import mustang, zugferd_xml
+from app.services.zugferd_xml.lieferung import delivery_xml
 from app.services.rechnung import pruefung
 from tests.helpers import mustang_befund
 from tests.test_zugferd_xml_schema import _company, _invoice
@@ -26,6 +27,8 @@ from tests.test_zugferd_xml_schema import _company, _invoice
 NS = {"ram": "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100",
       "udt": "urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100"}
 R008 = "PEPPOL-EN16931-R008"
+LEERER_BLOCK = ("\n        <ram:ApplicableHeaderTradeDelivery>\n"
+                "        </ram:ApplicableHeaderTradeDelivery>")
 
 # Bericht, wie Mustang 2.26 ihn schreibt (gekürzt): Warnungen und Fehler stehen
 # als XML-Elemente, nicht als „[warning]“-Zeilen.
@@ -144,12 +147,17 @@ def test_kleinbetrag_ohne_datum_und_zeitraum_schreibt_das_kundenland():
 
 
 def test_ohne_kundenland_bleibt_der_block_leer():
-    """Der eine verbleibende leere Fall (kein Datum, kein Land). Der Block muss als
-    Element stehen (CII-Schema); die Warnungs-Rückfrage beim Finalisieren fängt ihn ab."""
-    inv = _invoice(_kunde(country=None), delivery_date=None)
+    """Der eine verbleibende leere Fall (kein Datum, kein Land). Er muss als Element
+    stehen (CII-Schema); die Warnungs-Rückfrage beim Finalisieren fängt ihn ab. Mit
+    einem Kunden ohne Land scheitert schon die Käuferanschrift (siehe
+    test_kundenland_xml), deshalb wird der Block hier einzeln geprüft."""
+    inv = _invoice(_kunde(), delivery_date=None)
+    inv.customer = None
 
-    block = _lieferblock(inv)
+    fragment = ET.fromstring(
+        f'<w xmlns:ram="{NS["ram"]}" xmlns:udt="{NS["udt"]}">{delivery_xml(inv)}</w>')
 
+    block = fragment.find("ram:ApplicableHeaderTradeDelivery", NS)
     assert block is not None
     assert len(block) == 0
 
@@ -206,23 +214,17 @@ def _kleinbetrag_mit_land():
     return _invoice(_kunde(), delivery_date=None), False
 
 
-def _ohne_kundenland():
-    return _invoice(_kunde(country=None), delivery_date=None), True
-
-
 @pytest.mark.parametrize("bauen", [
     _s_mit_datum, _s_nur_zeitraum, _anzahlung_zeitraum, _ae_zeitraum,
-    _k_innergemeinschaftlich, _kleinbetrag_mit_land, _ohne_kundenland,
+    _k_innergemeinschaftlich, _kleinbetrag_mit_land,
 ])
 def test_xml_enthaelt_keine_leeren_elemente(bauen):
-    inv, ohne_land = bauen()
+    inv, _ = bauen()
     wurzel = ET.fromstring(zugferd_xml.generate_xml(inv, _company()))
 
     leer = [e.tag.rsplit("}", 1)[-1] for e in wurzel.iter()
             if len(e) == 0 and not (e.text or "").strip()]
-    # Ein leerer Block bleibt nur ohne Datum und ohne Kundenland.
-    erlaubt = ["ApplicableHeaderTradeDelivery"] if ohne_land else []
-    assert leer == erlaubt
+    assert leer == []
 
 
 # -- 2. Mustang-Bericht auswerten ------------------------------------------
@@ -320,9 +322,11 @@ def test_mustang_meldet_mit_kundenland_im_lieferblock_weder_warnung_noch_fehler(
 
 
 @pytest.mark.skipif(not mustang.jar_available(), reason="Mustang-JAR nicht verfügbar")
-def test_mustang_meldet_ohne_kundenland_weiter_die_leere_block_warnung():
-    """Gegenprobe: Ohne Land und ohne Datum bleibt R008 echt, also hat der Test
-    oben etwas gemessen."""
-    ergebnis = _mustang_ueber(_ohne_kundenland()[0])
+def test_mustang_meldet_einen_leeren_block_weiter_als_warnung():
+    """Gegenprobe: Ein leerer Block bleibt für Mustang R008, also hat der Test oben
+    etwas gemessen."""
+    inv = _invoice(_kunde(), delivery_date=None)
+    with patch("app.services.zugferd_xml.erzeugen.delivery_xml", return_value=LEERER_BLOCK):
+        ergebnis = _mustang_ueber(inv)
 
     mustang_befund.bericht_enthaelt(ergebnis, R008)

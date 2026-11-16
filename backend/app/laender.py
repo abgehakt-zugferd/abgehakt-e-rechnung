@@ -384,6 +384,15 @@ def sortierschluessel(name: str) -> str:
     return "".join(z for z in zerlegt if not unicodedata.combining(z))
 
 
+def normalisiere_land(wert: str | None) -> str:
+    """Ländercode aus einem Formularwert: ohne Leerraum, groß, Vorgabe „DE“.
+
+    Eine Stelle für Kundenformular, Ersteinrichtung und Firmenstammdaten; ein leeres
+    Land landete sonst als leeres CountryID-Element in der E-Rechnung.
+    """
+    return (wert or "").strip().upper() or "DE"
+
+
 def registriere_laender_globals(templates: Jinja2Templates) -> None:
     """Macht `LAENDER` und `ISO_LAENDER` in einem Jinja-Environment verfügbar.
 

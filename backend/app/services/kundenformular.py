@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.laender import normalisiere_land
 from app.models.customer import Customer
 from app.services import empfaenger
 from app.services.adresse import bereinige_adresszeile2
@@ -96,7 +97,7 @@ def stammdaten_setzen(
     customer.address_line2 = bereinige_adresszeile2(name, address_line2)
     customer.zip_code = zip_code.strip()
     customer.city = city.strip()
-    customer.country = country.strip() or "DE"
+    customer.country = normalisiere_land(country)
     customer.email = email.strip() or None
     customer.cc_emails = empfaenger.normalisiere(cc_emails) or None
     customer.phone = phone.strip() or None

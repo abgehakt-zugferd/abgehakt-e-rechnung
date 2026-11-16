@@ -29,7 +29,7 @@ from app.services.steuer_ruecklage import (
 )
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
-from app.laender import registriere_laender_globals
+from app.laender import normalisiere_land, registriere_laender_globals
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -157,7 +157,7 @@ def save_company(
     company.address_line2 = bereinige_adresszeile2(name, address_line2)
     company.zip_code = zip_code.strip()
     company.city = city.strip()
-    company.country = country.strip() or "DE"
+    company.country = normalisiere_land(country)
     company.tax_number = tax_number.strip() or None
     if not neu_vat:
         ust_zuruecksetzen(company)

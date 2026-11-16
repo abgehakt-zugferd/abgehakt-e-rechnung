@@ -1,4 +1,5 @@
 """Lieferung (HeaderTradeDelivery) und Belegreferenzen (BG-3)."""
+from app.laender import normalisiere_land
 from app.models.invoice import Invoice
 from app.services import anzahlungen
 
@@ -29,7 +30,7 @@ def delivery_xml(invoice: Invoice) -> str:
       ist. Aus dem Leistungszeitraum wird nichts abgeleitet: ein Lieferdatum, das nicht
       im Datensatz steht, wäre eine erfundene Angabe (bei der Anzahlungsrechnung
       zudem die Behauptung einer schon erfolgten Lieferung).
-    - Ohne delivery_date steht, wenn der Kunde ein Land hat, nur sein Land im Block
+    - Ohne delivery_date steht, wenn es einen Kunden gibt, nur sein Land im Block
       (ShipToTradeParty/PostalTradeAddress/CountryID, kein Name, keine Straße).
       Grund: Der Block darf nicht leer sein. Das FeRD-Schematron (Factur-X 1.08,
       FACTUR-X_EN16931.sch, BR-FX-EN-04) verlangt „if BT-72 is not used, at least the
@@ -49,11 +50,11 @@ def delivery_xml(invoice: Invoice) -> str:
     inv_cat = getattr(invoice, "tax_category", "S")
     customer = invoice.customer
     ship_to = ""
-    if customer and customer.country and (inv_cat == "K" or not invoice.delivery_date):
+    if customer and (inv_cat == "K" or not invoice.delivery_date):
         ship_to = f"""
             <ram:ShipToTradeParty>
                 <ram:PostalTradeAddress>
-                    <ram:CountryID>{esc(customer.country)}</ram:CountryID>
+                    <ram:CountryID>{esc(normalisiere_land(customer.country))}</ram:CountryID>
                 </ram:PostalTradeAddress>
             </ram:ShipToTradeParty>"""
     delivery_event = ""

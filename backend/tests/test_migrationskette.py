@@ -377,3 +377,27 @@ def test_frische_firmenzeile_fuehrt_in_die_ersteinrichtung(migrationsdatenbank):
     assert zeile.zip_code == ""
     assert zeile.city == ""
     assert zeile.setup_completed_at is None
+
+
+def test_kundenland_nicht_leer_und_pruefergebnis_spalten_nach_upgrade_head(migrationsdatenbank):
+    """Migration 034/035: Spalten am Prüfergebnis, CHECK gegen ein leeres Kundenland."""
+    url, _ = migrationsdatenbank
+    engine = create_engine(url)
+    try:
+        with engine.connect() as conn:
+            spalten = {z[0] for z in conn.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'validation_results'"))}
+            checks = {z[0] for z in conn.execute(text(
+                "SELECT conname FROM pg_constraint "
+                "WHERE conrelid = 'customers'::regclass AND contype = 'c'"))}
+        assert {"xml_sha256", "anlass", "bestaetigte_regeln", "bestaetigt_am"} <= spalten
+        assert "ck_customers_country_nicht_leer" in checks
+        with pytest.raises(IntegrityError):
+            with engine.connect() as conn:
+                conn.execute(text(
+                    "INSERT INTO customers (customer_number, name, address_line1, zip_code, "
+                    "city, country) VALUES ('K-LAND-1', 'Kunde', 'Weg 1', '10115', 'Berlin', '')"))
+                conn.commit()
+    finally:
+        engine.dispose()

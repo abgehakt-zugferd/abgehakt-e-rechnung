@@ -12,6 +12,7 @@ class Customer(Base):
     # Wertevorraete als DB-CHECKs, identisch zu Migration 025 (alembic check):
     # das Formular prueft zuerst, aber der CHECK greift auch ohne Formular.
     __table_args__ = (
+        CheckConstraint("country <> ''", name="ck_customers_country_nicht_leer"),
         CheckConstraint(
             "auftrag_steuer IS NULL OR auftrag_steuer IN ('AE')",
             name="ck_customers_auftrag_steuer_wertevorrat",
