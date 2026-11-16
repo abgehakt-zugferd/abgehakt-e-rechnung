@@ -291,3 +291,26 @@ def test_hash_im_pruefergebnis_ist_der_hash_der_abgelegten_xml_datei(pg_session,
     datei = get_settings().storage_path / "xml" / f"{entwurf.invoice_number}.xml"
     # Gezeigter Hash, gespeicherter Hash und Hash der abgelegten Bytes sind derselbe.
     assert vr.xml_sha256 == hashlib.sha256(datei.read_bytes()).hexdigest() == gezeigt
+
+
+# -- Die Bestätigung braucht einen echten Hash (64 Hex-Zeichen) --------------
+
+@pytest.mark.parametrize("hash_wert", [None, "", "xyz", "G" * 64, "0" * 63, "0" * 65])
+def test_gleicher_unechter_hash_gilt_nicht_als_bestaetigung(hash_wert):
+    """None == None (oder zwei gleiche Fantasiewerte) darf nicht als Bestätigung durchgehen."""
+    from unittest.mock import MagicMock
+
+    from app.services.rechnung.fehler import FinalisierungWarnung
+    from app.services.rechnung.finalisieren import warnungen_pruefen
+
+    with pytest.raises(FinalisierungWarnung):
+        warnungen_pruefen(MagicMock(), _warnend(), [R008], hash_wert, hash_wert)
+
+
+def test_gleicher_echter_hash_gilt_als_bestaetigung():
+    from unittest.mock import MagicMock
+
+    from app.services.rechnung.finalisieren import warnungen_pruefen
+
+    h = "ab12" * 16
+    assert warnungen_pruefen(MagicMock(), _warnend(), [R008], h, h) == [R008]
