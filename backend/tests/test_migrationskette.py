@@ -401,3 +401,23 @@ def test_kundenland_nicht_leer_und_pruefergebnis_spalten_nach_upgrade_head(migra
                 conn.commit()
     finally:
         engine.dispose()
+
+
+def test_firmenland_nicht_leer_nach_upgrade_head(migrationsdatenbank):
+    """Migration 036: CHECK gegen ein leeres Firmenland (wie 035 für Kunden)."""
+    url, _ = migrationsdatenbank
+    engine = create_engine(url)
+    try:
+        with engine.connect() as conn:
+            checks = {z[0] for z in conn.execute(text(
+                "SELECT conname FROM pg_constraint "
+                "WHERE conrelid = 'company'::regclass AND contype = 'c'"))}
+        assert "ck_company_country_nicht_leer" in checks
+        with pytest.raises(IntegrityError):
+            with engine.connect() as conn:
+                conn.execute(text(
+                    "INSERT INTO company (id, name, address_line1, zip_code, city, country) "
+                    "VALUES (2, 'Firma', 'Weg 1', '10115', 'Berlin', '')"))
+                conn.commit()
+    finally:
+        engine.dispose()
