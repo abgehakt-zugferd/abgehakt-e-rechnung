@@ -1,7 +1,6 @@
 """Lieferung (HeaderTradeDelivery) und Belegreferenzen (BG-3)."""
 from app.models.invoice import Invoice
 from app.services import anzahlungen
-from app.services.belegart import belegart
 
 from app.services.zugferd_xml.format import esc, fmt_date
 
@@ -23,43 +22,46 @@ def billing_period_xml(invoice: Invoice) -> str:
 
 
 def delivery_xml(invoice: Invoice) -> str:
+    """ApplicableHeaderTradeDelivery: Lieferdatum (BT-72) oder Lieferland (BG-13).
+
+    Eine Regel für alle Fälle (#299):
+    - BT-72 (ActualDeliverySupplyChainEvent) nur, wenn `invoice.delivery_date` gesetzt
+      ist. Aus dem Leistungszeitraum wird nichts abgeleitet: ein Lieferdatum, das nicht
+      im Datensatz steht, wäre eine erfundene Angabe (bei der Anzahlungsrechnung
+      zudem die Behauptung einer schon erfolgten Lieferung).
+    - Ohne delivery_date steht, wenn der Kunde ein Land hat, nur sein Land im Block
+      (ShipToTradeParty/PostalTradeAddress/CountryID, kein Name, keine Straße).
+      Grund: Der Block darf nicht leer sein. Das FeRD-Schematron (Factur-X 1.08,
+      FACTUR-X_EN16931.sch, BR-FX-EN-04) verlangt „if BT-72 is not used, at least the
+      country of delivery (BT-80) must be specified for technical reasons“; ein leerer
+      Block löst in Mustang PEPPOL-EN16931-R008 aus (KoSIT nimmt die Regel für diesen
+      Block aus). BR-57 verlangt dabei eine nicht leere CountryID.
+    - Kategorie K schreibt ShipTo immer (BR-IC-12, Lieferland BT-80); es gibt EINEN
+      ShipTo-Zweig, nichts steht doppelt.
+    - Mit delivery_date bei S/AE bleibt der Block wie bisher ohne ShipTo.
+
+    Ohne Datum und ohne Kundenland bleibt der Block leer. Er muss als Element stehen
+    (das CII-Schema verlangt ihn zwischen Agreement und Settlement), und das ist der
+    einzige leere Fall; ihn fängt die Warnungs-Rückfrage beim Finalisieren ab. Die
+    Kleinbetragsrechnung ohne Leistungsdatum (§ 33 UStDV, #47) hat in der Regel ein
+    Kundenland und fällt deshalb nicht darunter.
+    """
     inv_cat = getattr(invoice, "tax_category", "S")
     customer = invoice.customer
     ship_to = ""
-    if inv_cat == "K" and customer:
-        # BR-IC-12: ig. Lieferung braucht Lieferland (BT-80).
+    if customer and customer.country and (inv_cat == "K" or not invoice.delivery_date):
         ship_to = f"""
             <ram:ShipToTradeParty>
                 <ram:PostalTradeAddress>
                     <ram:CountryID>{esc(customer.country)}</ram:CountryID>
                 </ram:PostalTradeAddress>
             </ram:ShipToTradeParty>"""
-    # Der Block bleibt auch dann stehen, wenn nichts darin steht: das CII-Schema
-    # verlangt <ram:ApplicableHeaderTradeDelivery> zwischen Agreement und
-    # Settlement. Fehlte er, war die Datei schon am Schema unzulässig, nicht erst
-    # an einer Geschäftsregel. Getroffen hat das die Kleinbetragsrechnung ohne
-    # Leistungsdatum, die § 33 UStDV ausdrücklich erlaubt (#47). Genau dieser Fall
-    # (weder Leistungsdatum noch Leistungszeitraum) bleibt ein leerer Block; Mustang
-    # meldet dazu PEPPOL-EN16931-R008 als Warnung, und der Fall wird nicht aufgefüllt,
-    # weil es kein Datum gibt, das stimmen könnte.
-    #
-    # Hat die Rechnung nur einen Leistungszeitraum, steht dessen Ende als
-    # Lieferdatum im Block (#299), sonst bliebe er leer. Das betrifft nur das XML:
-    # `invoice.delivery_date` bleibt unverändert.
-    #
-    # Ausnahme Anzahlungsrechnung (386): Ihr Zeitraum liegt in der Zukunft (BG-14
-    # „voraussichtlich“); ein ActualDeliverySupplyChainEvent würde behaupten, es sei
-    # bereits geliefert. Dort bleibt der Block ohne Ereignis, bis das fachlich
-    # geklärt ist (offen, siehe #299).
-    lieferdatum = invoice.delivery_date
-    if not lieferdatum and belegart(invoice.invoice_type).intern != "prepayment":
-        lieferdatum = invoice.service_period_end
     delivery_event = ""
-    if lieferdatum:
+    if invoice.delivery_date:
         delivery_event = f"""
             <ram:ActualDeliverySupplyChainEvent>
                 <ram:OccurrenceDateTime>
-                    <udt:DateTimeString format="102">{fmt_date(lieferdatum)}</udt:DateTimeString>
+                    <udt:DateTimeString format="102">{fmt_date(invoice.delivery_date)}</udt:DateTimeString>
                 </ram:OccurrenceDateTime>
             </ram:ActualDeliverySupplyChainEvent>"""
     return f"""

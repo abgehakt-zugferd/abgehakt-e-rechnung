@@ -1083,8 +1083,11 @@ def test_postcode_precedes_lineone_in_all_addresses():
     vor PostcodeCode ausgegeben wurde. Die 124 String-Match-Tests sahen das nie.
     """
     root = _parse(generate_xml(_invoice(), _company()))
-    addrs = _findall(root, ".//ram:PostalTradeAddress")
-    assert len(addrs) >= 2  # Verkäufer + Käufer
+    # Verkäufer und Käufer. Die Lieferanschrift (ShipToTradeParty) trägt bewusst nur
+    # das Land (#299, BR-FX-EN-04) und ist hier nicht gemeint.
+    addrs = (_findall(root, ".//ram:SellerTradeParty/ram:PostalTradeAddress")
+             + _findall(root, ".//ram:BuyerTradeParty/ram:PostalTradeAddress"))
+    assert len(addrs) == 2
     for addr in addrs:
         tags = [child.tag.split("}")[-1] for child in addr]
         assert "PostcodeCode" in tags and "LineOne" in tags, tags

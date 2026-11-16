@@ -79,41 +79,88 @@ def _ereignis(block):
     return None if knoten is None else (knoten.get("format"), knoten.text)
 
 
+def _lieferland(block):
+    """Kinder von ShipToTradeParty: nur PostalTradeAddress/CountryID, sonst nichts."""
+    ziel = block.findall("ram:ShipToTradeParty", NS)
+    assert len(ziel) <= 1, "ShipToTradeParty doppelt"
+    if not ziel:
+        return None
+    adresse = ziel[0].findall("ram:PostalTradeAddress", NS)
+    assert [k.tag.rsplit("}", 1)[-1] for k in ziel[0]] == ["PostalTradeAddress"]
+    assert [k.tag.rsplit("}", 1)[-1] for k in adresse[0]] == ["CountryID"]
+    return adresse[0].find("ram:CountryID", NS).text
+
+
 # -- 1. Lieferblock ---------------------------------------------------------
+# Eine Regel für alle Fälle: BT-72 nur mit gesetztem delivery_date, sonst das
+# Lieferland des Kunden (BG-13, nur CountryID). Aus dem Zeitraum wird nichts
+# abgeleitet: ein Lieferdatum, das nicht im Datensatz steht, wäre erfunden.
 
-def test_nur_zeitraum_schreibt_das_ende_als_lieferdatum():
-    inv = _invoice(_kunde(), delivery_date=None,
-                   service_period_start=date(2026, 6, 1), service_period_end=date(2026, 6, 30))
-
-    assert _ereignis(_lieferblock(inv)) == ("102", "20260630")
-    assert inv.delivery_date is None  # nur das XML ändert sich, nicht der Beleg
-
-
-def test_leistungsdatum_hat_vorrang_vor_dem_zeitraumende():
+def test_leistungsdatum_schreibt_das_ereignis_und_kein_lieferland():
     inv = _invoice(_kunde(), delivery_date=date(2026, 6, 15),
                    service_period_start=date(2026, 6, 1), service_period_end=date(2026, 6, 30))
 
-    assert _ereignis(_lieferblock(inv)) == ("102", "20260615")
+    block = _lieferblock(inv)
+
+    assert _ereignis(block) == ("102", "20260615")
+    assert _lieferland(block) is None   # unverändert: bei S/AE mit Datum kein ShipTo
 
 
-def test_anzahlungsrechnung_schreibt_kein_lieferereignis_aus_dem_zeitraum():
-    """386: Der Zeitraum liegt in der Zukunft (BG-14 „voraussichtlich“). Ein
-    tatsächliches Lieferereignis würde behaupten, es sei schon geliefert worden."""
+def test_nur_zeitraum_schreibt_das_kundenland_und_kein_ereignis():
+    inv = _invoice(_kunde(), delivery_date=None,
+                   service_period_start=date(2026, 6, 1), service_period_end=date(2026, 6, 30))
+
+    block = _lieferblock(inv)
+
+    assert _ereignis(block) is None
+    assert _lieferland(block) == "DE"
+    assert inv.delivery_date is None
+
+
+def test_anzahlungsrechnung_schreibt_das_kundenland_und_kein_ereignis():
     inv = _invoice(_kunde(), delivery_date=None, invoice_type="prepayment",
                    service_period_start=date(2026, 12, 1), service_period_end=date(2026, 12, 31))
 
-    assert _ereignis(_lieferblock(inv)) is None
+    block = _lieferblock(inv)
+
+    assert _ereignis(block) is None
+    assert _lieferland(block) == "DE"
 
 
-def test_kleinbetrag_ohne_datum_und_zeitraum_behaelt_den_leeren_block():
-    """§ 33 UStDV (#47): Der Block muss als Element stehen (CII-Schema), ohne
-    Inhalt. Das ist der eine bekannte leere Fall und wird nicht aufgefüllt."""
+def test_kleinbetrag_ohne_datum_und_zeitraum_schreibt_das_kundenland():
     inv = _invoice(_kunde(), delivery_date=None)
+
+    assert _lieferland(_lieferblock(inv)) == "DE"
+
+
+def test_ohne_kundenland_bleibt_der_block_leer():
+    """Der eine verbleibende leere Fall (kein Datum, kein Land). Der Block muss als
+    Element stehen (CII-Schema); die Warnungs-Rückfrage beim Finalisieren fängt ihn ab."""
+    inv = _invoice(_kunde(country=None), delivery_date=None)
 
     block = _lieferblock(inv)
 
     assert block is not None
     assert len(block) == 0
+
+
+def test_innergemeinschaftliche_lieferung_hat_genau_ein_shipto_und_das_ereignis():
+    inv, _ = _k_innergemeinschaftlich()
+
+    block = _lieferblock(inv)
+
+    assert _lieferland(block) == "AT"
+    assert _ereignis(block) == ("102", "20260708")
+
+
+def test_ig_lieferung_ohne_datum_hat_genau_ein_shipto_und_kein_ereignis():
+    inv, _ = _k_innergemeinschaftlich()
+    inv.delivery_date = None
+
+    block = _lieferblock(inv)
+
+    assert _lieferland(block) == "AT"
+    assert _ereignis(block) is None
 
 
 # -- 4. Wächter: keine leeren Elemente -------------------------------------
@@ -125,6 +172,11 @@ def _s_mit_datum():
 def _s_nur_zeitraum():
     return _invoice(_kunde(), delivery_date=None, service_period_start=date(2026, 6, 1),
                     service_period_end=date(2026, 6, 30)), False
+
+
+def _anzahlung_zeitraum():
+    return _invoice(_kunde(), delivery_date=None, invoice_type="prepayment",
+                    service_period_start=date(2026, 12, 1), service_period_end=date(2026, 12, 31)), False
 
 
 def _ae_zeitraum():
@@ -140,22 +192,26 @@ def _k_innergemeinschaftlich():
     return _ohne_nullsteuer(inv), False
 
 
-def _kleinbetrag_ohne_datum():
-    return _invoice(_kunde(), delivery_date=None), True
+def _kleinbetrag_mit_land():
+    return _invoice(_kunde(), delivery_date=None), False
+
+
+def _ohne_kundenland():
+    return _invoice(_kunde(country=None), delivery_date=None), True
 
 
 @pytest.mark.parametrize("bauen", [
-    _s_mit_datum, _s_nur_zeitraum, _ae_zeitraum, _k_innergemeinschaftlich,
-    _kleinbetrag_ohne_datum,
+    _s_mit_datum, _s_nur_zeitraum, _anzahlung_zeitraum, _ae_zeitraum,
+    _k_innergemeinschaftlich, _kleinbetrag_mit_land, _ohne_kundenland,
 ])
 def test_xml_enthaelt_keine_leeren_elemente(bauen):
-    inv, kleinbetrag = bauen()
+    inv, ohne_land = bauen()
     wurzel = ET.fromstring(zugferd_xml.generate_xml(inv, _company()))
 
     leer = [e.tag.rsplit("}", 1)[-1] for e in wurzel.iter()
             if len(e) == 0 and not (e.text or "").strip()]
-    # Der Kleinbetrag ohne Datum und Zeitraum ist der dokumentierte Sonderfall.
-    erlaubt = ["ApplicableHeaderTradeDelivery"] if kleinbetrag else []
+    # Ein leerer Block bleibt nur ohne Datum und ohne Kundenland.
+    erlaubt = ["ApplicableHeaderTradeDelivery"] if ohne_land else []
     assert leer == erlaubt
 
 
@@ -229,20 +285,34 @@ def test_mustang_warnung_ohne_regelkennung_bekommt_allgemeinen_code():
 
 # -- 5. Mustang wirklich ----------------------------------------------------
 
-@pytest.mark.skipif(not mustang.jar_available(), reason="Mustang-JAR nicht verfügbar")
-def test_mustang_meldet_fuer_rechnung_mit_zeitraum_keinen_leeren_block():
-    inv = _invoice(_kunde(), delivery_date=None,
-                   service_period_start=date(2026, 6, 1), service_period_end=date(2026, 6, 30))
+def _mustang_ueber(inv):
     xml = zugferd_xml.generate_xml(inv, _company())
     fd, name = tempfile.mkstemp(suffix=".xml")
     datei = Path(name)
     try:
         os.write(fd, xml.encode("utf-8"))
         os.close(fd)
-        ergebnis = mustang.validate(datei)
+        return mustang.validate(datei)
     finally:
         datei.unlink(missing_ok=True)
 
+
+@pytest.mark.skipif(not mustang.jar_available(), reason="Mustang-JAR nicht verfügbar")
+@pytest.mark.parametrize("bauen", [_s_nur_zeitraum, _anzahlung_zeitraum, _kleinbetrag_mit_land])
+def test_mustang_meldet_mit_kundenland_im_lieferblock_weder_warnung_noch_fehler(bauen):
+    inv, _ = bauen()
+
+    ergebnis = _mustang_ueber(inv)
+
     mustang_befund.gueltig_mit_xml(ergebnis)
     mustang_befund.bericht_ohne(ergebnis, R008)
-    assert ergebnis["warnings"] == []
+    assert ergebnis["befunde"] == []
+
+
+@pytest.mark.skipif(not mustang.jar_available(), reason="Mustang-JAR nicht verfügbar")
+def test_mustang_meldet_ohne_kundenland_weiter_die_leere_block_warnung():
+    """Gegenprobe: Ohne Land und ohne Datum bleibt R008 echt, also hat der Test
+    oben etwas gemessen."""
+    ergebnis = _mustang_ueber(_ohne_kundenland()[0])
+
+    mustang_befund.bericht_enthaelt(ergebnis, R008)
