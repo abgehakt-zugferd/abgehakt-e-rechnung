@@ -30,6 +30,7 @@
         {% with storno=storniert_durch %}{% include "invoices/storniert_durch.html" %}{% endwith %}
     </div>
 
+    {% include "invoices/detail_finalisierung_warnung.html" %}
     {% include "invoices/detail_zahlungshinweis.html" %}
     {% include "invoices/detail_aktionen.html" %}
 

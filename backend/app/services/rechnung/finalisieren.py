@@ -13,9 +13,10 @@ from app.services.auftragszahlung import finalisierung_pruefen
 from app.services.archive_frist import berechne_archive_until
 from app.services.belegart import ist_storno
 from app.services.belegsprache.zahlungshinweis import zahlungstext_vor_finalisieren
-from app.services.rechnung.fehler import RechnungFehler
+from app.services.rechnung.fehler import FinalisierungWarnung, RechnungFehler, warnungsschluessel
 from app.services.rechnung import platzhaltersperre
 from app.services.rechnung.firma import get_company
+from app.services.rechnung.pruefung import finalisierung_protokollieren, xml_hash
 from app.zeit import heute
 
 
@@ -157,22 +158,22 @@ def visuelles_pdf_erzeugen(invoice: Invoice, company: Company, arbeitsverzeichni
     return visual_pdf
 
 
-def mustang_einbettung_pruefen(zugferd_pdf: Path) -> tuple[bool, str]:
-    """Mustang-Gegenprobe des kombinierten PDFs: (gültig, erster Prüffehler)."""
+def mustang_einbettung_pruefen(zugferd_pdf: Path) -> tuple[bool, str, dict]:
+    """Mustang-Gegenprobe des kombinierten PDFs: (gültig, erster Prüffehler, Ergebnis)."""
     # E1 (#98 Hardness): `combine` liefert True (rc=0 + Datei existiert) auch
     # für ein PDF, das ein Empfänger-/Prüfer-System ablehnen würde. Mustang
     # ist die Wahrheit — siehe mustang.ist_gueltige_e_rechnung. Sonst
     # fail-closed: die Rechnung bleibt draft (unten), kein Commit.
     result = mustang.validate(zugferd_pdf)
     if mustang.ist_gueltige_e_rechnung(result):
-        return True, ""
+        return True, "", result
     fehler = result.get("errors") or []
-    return False, str(fehler[0]).strip() if fehler else ""
+    return False, str(fehler[0]).strip() if fehler else "", result
 
 
 def einbettung_versuchen(invoice: Invoice, visual_pdf: Path, xml_path: Path,
-                         zugferd_pdf: Path, arbeitsverzeichnis: Path) -> tuple[bool, str]:
-    """PDF/A-3-Wandlung und XML-Einbettung; liefert (eingebettet, Prüfgrund)."""
+                         zugferd_pdf: Path, arbeitsverzeichnis: Path) -> tuple[bool, str, dict]:
+    """PDF/A-3-Wandlung und XML-Einbettung; liefert (eingebettet, Prüfgrund, Mustang-Ergebnis)."""
     # Pipeline: visuelles PDF → PDF/A-3 (Ghostscript) → Mustang bettet XML ein.
     # FAIL-CLOSED (#98 P0.1): eine E-Rechnung OHNE eingebettete ZUGFeRD-XML ist seit
     # 2025 rechtlich unvollständig (der XML-Teil hat Vorrang). Gelingt die Einbettung
@@ -183,12 +184,13 @@ def einbettung_versuchen(invoice: Invoice, visual_pdf: Path, xml_path: Path,
     # gar nichts finalisiert).
     combined = False
     pruefgrund = ""      # erster Prüffehler, wandert in die Fehlermeldung (s. u.)
+    ergebnis: dict = {}
     if pdfa.gs_available() and mustang.jar_available():
         pdfa_pdf = arbeitsverzeichnis / f"{invoice.invoice_number}_pdfa.pdf"
         if pdfa.to_pdfa3(visual_pdf, pdfa_pdf, title=invoice.invoice_number) and \
                 mustang.combine(pdfa_pdf, xml_path, zugferd_pdf):
-            combined, pruefgrund = mustang_einbettung_pruefen(zugferd_pdf)
-    return combined, pruefgrund
+            combined, pruefgrund, ergebnis = mustang_einbettung_pruefen(zugferd_pdf)
+    return combined, pruefgrund, ergebnis
 
 
 def einbettung_abweisen(db: Session, pruefgrund: str) -> None:
@@ -207,22 +209,49 @@ def einbettung_abweisen(db: Session, pruefgrund: str) -> None:
     )
 
 
+def warnungen_pruefen(db: Session, ergebnis: dict, bestaetigt: list[str] | None,
+                      xml_sha256: str, bestaetigter_hash: str | None) -> list[str]:
+    """Mustang-Warnungen gegen die Bestätigung des Nutzers halten.
+
+    Liefert die bestätigten (übergangenen) Regelkennungen, leer ohne Warnung. Die
+    Bestätigung gilt nur, wenn Regelmenge UND Hash des in diesem Lauf erzeugten XML
+    mit dem übereinstimmen, was der Nutzer gesehen hat (`bestaetigter_hash` aus dem
+    Formular; fehlt er oder ist er fremd, gilt nichts). Sonst wird NICHT finalisiert:
+    Rollback wie bei einem Fehler (Entwurf bleibt, nichts verbraucht), und der Nutzer
+    bekommt die Warnungen erneut zur Entscheidung (FinalisierungWarnung).
+    """
+    warnungen = [b for b in mustang.befunde_von(ergebnis) if b["schwere"] == "warning"]
+    if not warnungen:
+        return []
+    schluessel = sorted({warnungsschluessel(w) for w in warnungen})
+    if sorted(set(bestaetigt or [])) != schluessel or bestaetigter_hash != xml_sha256:
+        db.rollback()
+        raise FinalisierungWarnung(warnungen, xml_sha256)
+    return schluessel
+
+
 def beleg_im_arbeitsverzeichnis(db: Session, invoice: Invoice, company: Company,
-                                arbeitsverzeichnis: Path, xml_content: str) -> tuple[Path, Path]:
-    """Visuelles PDF, XML und ZUGFeRD-PDF im Arbeitsverzeichnis; liefert (PDF, XML)."""
+                                arbeitsverzeichnis: Path, xml_content: str,
+                                bestaetigt: list[str] | None = None,
+                                bestaetigter_hash: str | None = None) -> tuple[Path, Path, dict, list[str]]:
+    """Visuelles PDF, XML und ZUGFeRD-PDF im Arbeitsverzeichnis.
+
+    Liefert (PDF, XML, Mustang-Ergebnis, übergangene Warnungen)."""
     visual_pdf = visuelles_pdf_erzeugen(invoice, company, arbeitsverzeichnis)
 
     # 3. Mustang: XML in PDF einbetten → ZUGFeRD PDF
     xml_path = arbeitsverzeichnis / f"{invoice.invoice_number}.xml"
-    xml_path.write_text(xml_content, encoding="utf-8")
+    # Bytes, nicht Text: der Hash im Prüfprotokoll gilt genau für diese Bytes.
+    xml_path.write_bytes(xml_content.encode("utf-8"))
 
     zugferd_pdf = arbeitsverzeichnis / f"{invoice.invoice_number}.pdf"
-    combined, pruefgrund = einbettung_versuchen(
+    combined, pruefgrund, ergebnis = einbettung_versuchen(
         invoice, visual_pdf, xml_path, zugferd_pdf, arbeitsverzeichnis)
 
     if not combined:
         einbettung_abweisen(db, pruefgrund)
-    return zugferd_pdf, xml_path
+    uebergangen = warnungen_pruefen(db, ergebnis, bestaetigt, xml_hash(xml_content), bestaetigter_hash)
+    return zugferd_pdf, xml_path, ergebnis, uebergangen
 
 
 def als_gestellt_markieren(invoice: Invoice, zugferd_pdf: Path) -> None:
@@ -258,8 +287,14 @@ def archivieren_und_committen(db: Session, zugferd_pdf: Path, xml_path: Path) ->
         raise
 
 
-def ausfuehren(db: Session, invoice_id) -> Invoice:
-    """Entwurf finalisieren: prüfen, Beleg erzeugen, archivieren, committen."""
+def ausfuehren(db: Session, invoice_id, bestaetigt: list[str] | None = None,
+               bestaetigter_hash: str | None = None) -> Invoice:
+    """Entwurf finalisieren: prüfen, Beleg erzeugen, archivieren, committen.
+
+    `bestaetigt`: Regelkennungen der Mustang-Warnungen, die der Nutzer gesehen hat und
+    übergeht. Meldet Mustang andere Warnungen, wird nicht finalisiert
+    (FinalisierungWarnung).
+    """
     invoice = entwurf_sperren(db, invoice_id)
     finalisierung_pruefen(invoice)
     stelltag_verschieben(invoice)
@@ -273,9 +308,10 @@ def ausfuehren(db: Session, invoice_id) -> Invoice:
 
     arbeitsverzeichnis = arbeitsverzeichnis_anlegen(invoice)
     try:
-        zugferd_pdf, xml_path = beleg_im_arbeitsverzeichnis(
-            db, invoice, company, arbeitsverzeichnis, xml_content)
+        zugferd_pdf, xml_path, ergebnis, uebergangen = beleg_im_arbeitsverzeichnis(
+            db, invoice, company, arbeitsverzeichnis, xml_content, bestaetigt, bestaetigter_hash)
         als_gestellt_markieren(invoice, zugferd_pdf)
+        finalisierung_protokollieren(db, invoice, company, ergebnis, uebergangen)
         archivieren_und_committen(db, zugferd_pdf, xml_path)
     finally:
         shutil.rmtree(arbeitsverzeichnis, ignore_errors=True)

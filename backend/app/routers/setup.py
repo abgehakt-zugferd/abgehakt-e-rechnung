@@ -14,7 +14,7 @@ from app.services.adresse import bereinige_adresszeile2
 from app.services.bankverbindung import normalisiere_bic, normalisiere_iban, pruefe_bic, pruefe_iban
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
-from app.laender import registriere_laender_globals
+from app.laender import normalisiere_land, registriere_laender_globals
 from app.database import get_db
 from app.models.company import Company
 from app.services.ersteinrichtung import (
@@ -81,7 +81,7 @@ async def speichern(request: Request, db: Session = Depends(get_db)):
         else:
             wert = wert or None
         setattr(company, feld, wert)
-    company.country = werte["country"] or "DE"
+    company.country = normalisiere_land(werte["country"])
     einrichtung_abschliessen(company)
     db.commit()
 

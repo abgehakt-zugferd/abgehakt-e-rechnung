@@ -86,6 +86,13 @@ class ValidationResult(Base):
     errors: Mapped[Optional[list]] = mapped_column(JSON)
     warnings: Mapped[Optional[list]] = mapped_column(JSON)
     mustang_output: Mapped[Optional[str]] = mapped_column(Text)
+    # Momentaufnahme: SHA-256 des geprüften zugferd_xml. Ohne XML (Entwurf) NULL.
+    xml_sha256: Mapped[Optional[str]] = mapped_column(String(64))
+    # "finalisierung" = Prüfung beim Finalisieren; NULL/"pruefung" = auf Knopfdruck.
+    anlass: Mapped[Optional[str]] = mapped_column(String(20))
+    # Trotz Warnung finalisiert: übergangene Regelkennungen und Zeitpunkt der Bestätigung.
+    bestaetigte_regeln: Mapped[Optional[list]] = mapped_column(JSON)
+    bestaetigt_am: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     invoice: Mapped["Invoice"] = relationship("Invoice", back_populates="validations")
 
