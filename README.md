@@ -330,8 +330,9 @@ fehlerhaft.
 > **Das Programm hat keine Anmeldung, und das ist Absicht.** Es ist ein Werkzeug für einen
 > Rechner, kein Dienst für mehrere Personen. Wer die Oberfläche erreicht, kann alles: Rechnungen
 > ansehen, neue anlegen, versenden und den Datenexport mit sämtlichen Kundendaten herunterladen.
-> Deshalb ist Port 3000 ab Werk **nur vom eigenen Rechner aus erreichbar** (`127.0.0.1:3000:3000`
-> in `docker-compose.yml`). Ändern Sie diese Zeile nicht, um "mal eben vom Tablet" darauf zuzugreifen:
+> Deshalb ist Port 3000 ab Werk **nur vom eigenen Rechner aus erreichbar** (Vorgabe
+> `APP_BIND=127.0.0.1`, `APP_PORT=3000`, beide in der `.env` änderbar). Setzen Sie `APP_BIND`
+> nicht auf `0.0.0.0`, um "mal eben vom Tablet" darauf zuzugreifen:
 > im Hotel-WLAN oder im offenen Büronetz liegt Ihre Buchhaltung dann für alle offen. Wer den
 > Zugriff aus dem Netz wirklich braucht, stellt eine Anmeldung davor, etwa einen Reverse Proxy
 > mit Passwortschutz oder ein VPN.

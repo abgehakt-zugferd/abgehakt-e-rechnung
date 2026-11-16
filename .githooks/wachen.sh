@@ -23,12 +23,14 @@ fehler=0
 # Anwendung heisst das: wer im selben Netz sitzt, sieht die Rechnungen, legt neue an und
 # laedt den GoBD-Export samt Kundendaten herunter. Eine Anmeldung gibt es nicht
 # (SECURITY.md). Wer bewusst aus dem Netz zugreifen will, aendert die Zeile und weiss
-# dann, was er tut.
+# dann, was er tut. Erlaubt ist auch die Variablenform "${APP_BIND:-127.0.0.1}:...":
+# die Vorgabe muss Loopback sein, ein Betreiber setzt die Adresse in seiner Umgebung.
 offen="$(git ls-files '*compose*.yml' | while read -r f; do
     awk -v datei="$f" '
       /^[[:space:]]*ports:/ { in_ports = 1; next }
-      in_ports && /^[[:space:]]*-[[:space:]]*"?[0-9]/ &&
-        $0 !~ /"?(127\.0\.0\.1|localhost):/ { print datei ":" NR ": " $0 }
+      in_ports && /^[[:space:]]*-[[:space:]]*"?[0-9$]/ &&
+        $0 !~ /"?(127\.0\.0\.1|localhost):/ &&
+        $0 !~ /"?\$\{[A-Za-z_]+:-(127\.0\.0\.1|localhost)\}:/ { print datei ":" NR ": " $0 }
       /^[[:space:]]*-?[[:space:]]*[a-zA-Z_]+:/ { if ($0 !~ /^[[:space:]]*ports:/) in_ports = 0 }
     ' "$f"
   done)"

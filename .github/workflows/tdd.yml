@@ -45,6 +45,9 @@ jobs:
       - name: Wachen (Schluessel-Mount und Schluesselordner)
         run: .githooks/test_wachen.sh
 
+      - name: Compose fuer den Umzug (App-Port aus der Umgebung, kein DB-Port)
+        run: .githooks/test_compose_umzug.sh
+
       - name: run-tests Aufraeumen (anonymes Volume)
         run: .githooks/test_run_tests_aufraeumen.sh
 

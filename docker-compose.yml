@@ -70,9 +70,10 @@ services:
       # er schwerer: die Anwendung bringt keine Anmeldung mit (SECURITY.md). "3000:3000"
       # hinge an allen Schnittstellen, und jeder im selben Netz koennte Rechnungen
       # einsehen, neue anlegen, versenden und den GoBD-Export mit allen Kundendaten
-      # herunterladen. Wer den Zugriff aus dem Netz wirklich will, aendert diese Zeile
-      # und stellt eine Anmeldung davor (Reverse Proxy, VPN).
-      - "127.0.0.1:3000:3000"
+      # herunterladen. Wer den Zugriff aus dem Netz wirklich will, setzt APP_BIND (und
+      # ggf. APP_PORT) in seiner Umgebung und stellt eine Anmeldung davor (Reverse Proxy,
+      # VPN). Die Vorgabe bleibt Loopback.
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"
     depends_on:
       db:
         condition: service_healthy
