@@ -34,6 +34,7 @@ def test_warnung_wird_in_regel_und_text_zerlegt():
     assert befunde == [{
         "regel": "PEPPOL-EN16931-R008", "schwere": "warning",
         "text": "Document MUST not contain empty elements. (still status warning)",
+        "ort": "/*:CrossIndustryInvoice[1]/*:ApplicableHeaderTradeDelivery[1]",
     }]
 
 
@@ -61,12 +62,14 @@ def test_zeilenmarker_ohne_element_wird_gelesen():
         ("error", "Etwas ist kaputt"), ("warning", "Etwas ist fraglich")]
 
 
-def test_validate_liefert_befunde_und_aendert_is_valid_nicht():
+def test_validate_liefert_befunde_und_wertet_ein_fehlerelement_als_ungueltig():
     with patch.object(mustang, "_run", return_value=(BERICHT_FEHLER, "", 0)):
         ergebnis = mustang.validate(Path("x.xml"))
 
     assert [b["regel"] for b in ergebnis["befunde"] if b["schwere"] == "error"] == ["BR-07"]
-    assert ergebnis["is_valid"] is True
+    # Ein Fehler im Bericht macht das Ergebnis ungültig, auch bei Rückgabecode 0
+    # (die Leser widersprechen sich nicht; echtes Mustang liefert bei Fehlern rc 255).
+    assert ergebnis["is_valid"] is False
 
 
 def test_nicht_ausfuehrbar_ist_ein_befund_mit_schwere_fehler():
@@ -100,13 +103,13 @@ def _pruefen(raw, *, is_valid=True):
         return inv, pruefung.run_validation(_Sitzung(), inv, _company())
 
 
-def test_mustang_fehler_stehen_im_pruefergebnis_ohne_is_valid_zu_aendern():
+def test_mustang_fehler_stehen_im_pruefergebnis_und_machen_es_ungueltig():
     _, vr = _pruefen(BERICHT_FEHLER + "Parsed PDF:absent XML:valid\n")
 
     fehler = [e for e in vr.errors if e["code"].startswith("MUSTANG_")]
     assert [(e["code"], e["severity"]) for e in fehler] == [("MUSTANG_BR-07", "error")]
     assert "[ID" not in fehler[0]["message"]
-    assert vr.is_valid is True   # wie heute: rc 0 und keine [error]-Zeile
+    assert vr.is_valid is False   # ein Fehler im Bericht gilt, auch bei rc 0
 
 
 def test_mustang_fehler_ohne_kennung_heissen_mustang_fehler():
@@ -159,3 +162,80 @@ def test_angezeigtes_protokoll_traegt_dieselben_regeln_wie_das_pruefergebnis(pg_
 
     assert gespeichert == {"BR-07", "PEPPOL-EN16931-R008", "WARNUNG"}
     assert angezeigt == gespeichert
+
+
+# -- Parser: mehrzeilig, maskiert, Ort, Altzeile ---------------------------
+
+def test_mehrzeilige_meldung_wird_vollstaendig_gelesen():
+    bericht = _bericht('<error type="4">[BR-09]-Erste Zeile\n      zweite Zeile'
+                       ' [ID BR-09] from /xslt/x.xslt)</error>')
+
+    (befund,) = mustang.befunde_aus_bericht(bericht)
+
+    assert befund["regel"] == "BR-09"
+    assert "zweite Zeile" in befund["text"]
+    assert "[ID" not in befund["text"]
+
+
+def test_maskierter_text_wird_entmaskiert():
+    bericht = _bericht('<warning type="4">[BR-10]-Element &lt;ram:Name&gt; &amp; Co fehlt'
+                       ' [ID BR-10] from /xslt/x.xslt)</warning>')
+
+    (befund,) = mustang.befunde_aus_bericht(bericht)
+
+    assert befund["text"] == "Element <ram:Name> & Co fehlt"
+
+
+def test_ort_der_meldung_steht_im_feld_des_pruefeintrags():
+    ort = "/*:CrossIndustryInvoice[1]/*:ApplicableHeaderTradeDelivery[1]"
+
+    eintrag = pruefung.befund_als_eintrag(mustang.befunde_aus_bericht(BERICHT_WARNUNG)[0])
+
+    assert eintrag["field"] == ort
+
+
+def test_ort_mit_maskierten_zeichen_wird_entmaskiert():
+    bericht = _bericht('<error location="/a[@x=&quot;1&quot;]" type="4">[BR-1]-t</error>')
+
+    assert mustang.befunde_aus_bericht(bericht)[0]["ort"] == '/a[@x="1"]'
+
+
+def test_altzeile_warning_bekommt_den_code_mustang_warnung():
+    (befund,) = mustang.befunde_aus_bericht("[warning] Etwas ist fraglich\n")
+
+    assert pruefung.befund_als_eintrag(befund)["code"] == "MUSTANG_WARNUNG"
+    assert befund["ort"] == ""
+
+
+# -- Die drei Leser widersprechen sich nicht --------------------------------
+
+XML_VALID = "\nParsed PDF:absent XML:valid\n"
+FEHLER_BEI_RC0 = _bericht('<error type="4">[BR-07]-Kaputt [ID BR-07] from x.xslt)</error>') + XML_VALID
+SAUBER = _bericht() + XML_VALID
+NUR_WARNUNG = BERICHT_WARNUNG
+ZEILENFEHLER = "[error] Kaputt" + XML_VALID
+
+
+@pytest.mark.parametrize("raw,rc,gueltig,fehlerbefund", [
+    (SAUBER, 0, True, False), (NUR_WARNUNG, 0, True, False),
+    (FEHLER_BEI_RC0, 0, False, True), (ZEILENFEHLER, 0, False, True),
+    (SAUBER, 255, False, False), (FEHLER_BEI_RC0, 255, False, True),
+])
+def test_dieselbe_ausgabe_ergibt_in_allen_lesern_dasselbe_urteil(raw, rc, gueltig, fehlerbefund):
+    with patch.object(mustang, "_run", return_value=(raw, "", rc)):
+        ergebnis = mustang.validate(Path("x.xml"))
+    hat_fehlerbefund = any(b["schwere"] == "error" for b in mustang.befunde_aus_bericht(raw))
+
+    assert hat_fehlerbefund is fehlerbefund
+    assert ergebnis["is_valid"] is gueltig
+    assert mustang.ist_gueltige_e_rechnung(ergebnis) is gueltig
+    # Kein Leser sagt „gültig“, während ein anderer einen Fehler gefunden hat.
+    assert not (hat_fehlerbefund and mustang.ist_gueltige_e_rechnung(ergebnis))
+
+
+def test_ist_gueltig_prueft_auch_ein_ergebnis_ohne_befundliste():
+    """Ein Ergebnis, das nur is_valid und den Rohbericht trägt (Test-Doubles, ältere
+    Aufrufer), wird nicht durchgewinkt, wenn der Rohbericht einen Fehler enthält."""
+    ergebnis = {"is_valid": True, "nicht_ausfuehrbar": False, "raw": FEHLER_BEI_RC0}
+
+    assert mustang.ist_gueltige_e_rechnung(ergebnis) is False

@@ -27,7 +27,7 @@ def befund_als_eintrag(befund: dict) -> dict:
         "code": f"MUSTANG_{befund['regel'] or fallback}",
         "severity": befund["schwere"],
         "message": befund["text"],
-        "field": "",
+        "field": befund.get("ort", ""),
     }
 
 

@@ -132,6 +132,17 @@ def test_finalisierung_ohne_warnung_speichert_trotzdem_ein_pruefergebnis(pg_sess
     assert not [w for w in vr.warnings if w["code"].startswith("MUSTANG_")]
 
 
+def test_fehlerelement_im_bericht_sperrt_auch_wenn_is_valid_wahr_gemeldet_wird(pg_session, entwurf):
+    """Ein Fehler in den Befunden blockiert, egal was is_valid behauptet."""
+    ergebnis = {"is_valid": True, "nicht_ausfuehrbar": False, "errors": [], "warnings": [],
+                "raw": '<error type="4">[BR-07]-Kaputt [ID BR-07] from x.xslt)</error>\nXML:valid\n'}
+
+    r = _finalisieren(pg_session, entwurf, ergebnis)
+
+    assert r.status_code == 400
+    assert _frisch(pg_session, entwurf).status == "draft"
+
+
 def test_mustang_fehler_sperren_weiter_hart(pg_session, entwurf):
     fehler = {"is_valid": False, "nicht_ausfuehrbar": False, "errors": [],
               "warnings": [], "raw": "<error>[BR-07]-Kaputt [ID BR-07] from x.xslt)</error>"}

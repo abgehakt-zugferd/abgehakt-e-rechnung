@@ -21,7 +21,7 @@
                         <div>
                             <span style="color:var(--pink);">{{ err.message }}</span>
                             {% set code = err.code|default('') %}{% if code.startswith('MUSTANG_') %}<span data-mustang-regel="{{ code[8:] }}" style="color:var(--text-dim);"> [{{ code[8:] }}]</span>{% endif %}
-                            {% if err.field %}<span style="color:var(--text-dim);"> ({{ err.field }})</span>{% endif %}
+                            {% if err.field and not code.startswith('MUSTANG_') %}<span style="color:var(--text-dim);"> ({{ err.field }})</span>{% endif %}
                         </div>
                     </div>
                     {% endfor %}

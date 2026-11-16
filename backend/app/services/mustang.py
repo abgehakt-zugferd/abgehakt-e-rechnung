@@ -89,14 +89,18 @@ def validate(xml_or_pdf_path: Path) -> dict:
                 "raw": meldung, "errors": [meldung], "warnings": [],
                 "befunde": befunde_aus_bericht(meldung)}
     output = stdout + stderr
+    befunde = befunde_aus_bericht(output)
     return {
-        "is_valid": rc == 0 and _no_errors(output),
+        # Rückgabecode, [error]-Marker UND ein Fehler-Element im Bericht: die Leser
+        # (is_valid, ist_gueltige_e_rechnung, Befunde) sollen einander nicht
+        # widersprechen. Gemessen: bei echten Fehlern liefert Mustang ohnehin rc 255.
+        "is_valid": rc == 0 and _no_errors(output) and not _hat_fehler(befunde),
         "nicht_ausfuehrbar": False,
         "grund": "",
         "raw": output,
         "errors": _extract_issues(output, "error"),
         "warnings": _extract_issues(output, "warning"),
-        "befunde": befunde_aus_bericht(output),
+        "befunde": befunde,
     }
 
 
@@ -110,7 +114,8 @@ def ist_gueltige_e_rechnung(result: dict) -> bool:
     """
     if result.get("nicht_ausfuehrbar"):
         return False
-    return bool(result.get("is_valid")) and "XML:valid" in (result.get("raw") or "")
+    return (bool(result.get("is_valid")) and "XML:valid" in (result.get("raw") or "")
+            and not _hat_fehler(befunde_von(result)))
 
 
 def extract_xml(pdf_path: Path, out_xml: Path) -> bool:
@@ -155,13 +160,18 @@ _ANHANG = re.compile(r"\s*\[ID [^\]]+\] from \S+\)\s*$")
 _ZEILE = re.compile(r"^\[(error|fehler|warning)\]\s*", re.IGNORECASE)
 
 
-def _befund(text: str, schwere: str) -> dict:
+def _hat_fehler(befunde: list[dict]) -> bool:
+    return any(b["schwere"] == "error" for b in befunde)
+
+
+def _befund(text: str, schwere: str, ort: str = "") -> dict:
     text = _ZEILE.sub("", text.strip())
     treffer = _REGEL.match(text)
     return {
         "regel": treffer.group(1) if treffer else "",
         "text": _ANHANG.sub("", _REGEL.sub("", text, count=1)).strip(),
         "schwere": schwere,
+        "ort": ort,
     }
 
 
@@ -173,8 +183,8 @@ def befunde_aus_bericht(output: str) -> list[dict]:
     """
     befunde: list[dict] = []
     for schwere in ("error", "warning"):
-        for roh in _extract_issues(output, schwere):
-            befund = _befund(roh, schwere)
+        for roh, ort in _meldungen(output, schwere):
+            befund = _befund(roh, schwere, ort)
             if befund not in befunde:
                 befunde.append(befund)
     return befunde
@@ -187,14 +197,26 @@ def befunde_von(ergebnis: dict) -> list[dict]:
     return befunde_aus_bericht(ergebnis.get("raw") or "")
 
 
-def _extract_issues(output: str, severity: str) -> list[str]:
-    """Meldungen einer Schwere aus dem Prüfbericht.
+_ORT = re.compile(r'\blocation="([^"]*)"')
 
-    Mustang 2.26 schreibt sie als XML-Elemente (`<warning ...>[REGEL]-Text</warning>`,
-    ebenso `<error ...>`); die Zeilen „[warning] ...“ gibt es dort nicht. Beides wird
-    gelesen, XML zuerst. Die Wertung `is_valid` hängt nicht an dieser Liste.
+
+def _meldungen(output: str, severity: str) -> list[tuple[str, str]]:
+    """(Text, Ort) je Meldung einer Schwere aus dem Prüfbericht.
+
+    Mustang 2.26 schreibt sie als XML-Elemente (`<warning location="...">[REGEL]-Text
+    </warning>`, ebenso `<error ...>`; der Text kann mehrere Zeilen haben und ist
+    maskiert); die Zeilen „[warning] ...“ gibt es dort nicht. Beides wird gelesen,
+    XML zuerst. Zeilenmeldungen haben keinen Ort.
     """
-    elemente = re.compile(rf"<{severity}\b[^>]*>(.*?)</{severity}>", re.DOTALL)
-    aus_xml = [html.unescape(m.group(1)).strip() for m in elemente.finditer(output)]
+    elemente = re.compile(rf"<{severity}\b([^>]*)>(.*?)</{severity}>", re.DOTALL)
+    aus_xml = []
+    for m in elemente.finditer(output):
+        ort = _ORT.search(m.group(1))
+        aus_xml.append((html.unescape(m.group(2)).strip(), html.unescape(ort.group(1)) if ort else ""))
     zeilen = re.compile(rf"\[{severity}\].*", re.IGNORECASE)
-    return aus_xml + [m.group() for m in zeilen.finditer(output)]
+    return aus_xml + [(m.group(), "") for m in zeilen.finditer(output)]
+
+
+def _extract_issues(output: str, severity: str) -> list[str]:
+    """Meldungstexte einer Schwere (siehe `_meldungen`)."""
+    return [text for text, _ in _meldungen(output, severity)]

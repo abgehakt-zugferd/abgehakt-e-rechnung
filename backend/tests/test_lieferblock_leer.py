@@ -230,13 +230,13 @@ def test_warnungen_aus_den_warning_elementen_werden_gelesen():
     assert ergebnis["is_valid"] is True
 
 
-def test_fehler_aus_den_error_elementen_werden_gelesen_ohne_die_wertung_zu_aendern():
+def test_fehler_aus_den_error_elementen_werden_gelesen_und_machen_es_ungueltig():
     ergebnis = _validate_mit(BERICHT_FEHLER, rc=0)
 
     assert [f for f in ergebnis["errors"] if f.startswith("[BR-07]")]
     assert ergebnis["warnings"] == ["Arithmetical issue:Payable total in XML is 999.00"]
-    # is_valid hängt weiter nur an Rückgabecode und [error]-Marker.
-    assert ergebnis["is_valid"] is True
+    # Ein Fehlerelement macht das Ergebnis ungültig, auch bei rc 0.
+    assert ergebnis["is_valid"] is False
     assert _validate_mit(BERICHT_FEHLER, rc=1)["is_valid"] is False
 
 
