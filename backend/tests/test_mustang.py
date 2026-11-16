@@ -1,43 +1,51 @@
 """
-Tests für mustang._no_errors().
+Tests für die Fehlerwertung in mustang.validate() (is_valid bei rc 0).
 Bug: substring-Suche nach "error" trifft auch "0 errors" in Erfolgsmeldungen.
 """
-from app.services.mustang import _no_errors
+from unittest.mock import patch
+from pathlib import Path
+
+from app.services import mustang
+
+
+def _gueltig(ausgabe: str) -> bool:
+    with patch.object(mustang, "_run", return_value=(ausgabe, "", 0)):
+        return mustang.validate(Path("x.xml"))["is_valid"]
 
 
 def test_empty_output_has_no_errors():
-    assert _no_errors("") is True
+    assert _gueltig("") is True
 
 
 def test_clean_success_message_has_no_errors():
-    assert _no_errors("Factur-X validation passed successfully.") is True
+    assert _gueltig("Factur-X validation passed successfully.") is True
 
 
 def test_zero_errors_count_in_summary_is_not_an_error():
     # Regression: Mustang gibt bei Erfolg "0 error(s)" aus — das darf nicht
     # als Fehlerindikator gelten.
-    assert _no_errors("Validation of invoice.xml: 0 error(s), 0 warning(s)") is True
+    assert _gueltig("Validation of invoice.xml: 0 error(s), 0 warning(s)") is True
 
 
 def test_zero_errors_alternative_phrasing():
-    assert _no_errors("Summary: 0 errors found, 0 warnings found") is True
+    assert _gueltig("Summary: 0 errors found, 0 warnings found") is True
 
 
 def test_bracketed_error_is_detected():
-    assert _no_errors("[ERROR] BT-2 IssueDateTime is required") is False
+    assert _gueltig("[ERROR] BT-2 IssueDateTime is required") is False
 
 
 def test_lowercase_bracketed_error_is_detected():
-    assert _no_errors("[error] Missing mandatory field SellerName") is False
+    assert _gueltig("[error] Missing mandatory field SellerName") is False
 
 
 def test_german_fehler_in_brackets_is_detected():
-    assert _no_errors("[Fehler] Pflichtfeld fehlt: Rechnungsnummer") is False
+    assert _gueltig("[Fehler] Pflichtfeld fehlt: Rechnungsnummer") is False
 
 
 def test_mixed_valid_output_with_error_line():
     output = "Checking invoice.xml\n[error] BT-31 is required\n0 warnings"
-    assert _no_errors(output) is False
+    assert _gueltig(output) is False
 
 
 # --- combine() Härtung: non-interaktiv + echte Erfolgsprüfung ---

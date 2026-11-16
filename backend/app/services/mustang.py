@@ -83,7 +83,7 @@ def validate(xml_or_pdf_path: Path) -> dict:
         ])
     except MustangNichtAusfuehrbar as fehler:
         grund = str(fehler)
-        # `[error]` steht bewusst drin, damit auch `_no_errors` es als Fehler sieht.
+        # `[error]` steht bewusst drin, damit `befunde_aus_bericht` es als Fehler liest.
         meldung = f"[error] Mustang nicht ausführbar, nicht gemessen: {grund}"
         return {"is_valid": False, "nicht_ausfuehrbar": True, "grund": grund,
                 "raw": meldung, "errors": [meldung], "warnings": [],
@@ -91,10 +91,10 @@ def validate(xml_or_pdf_path: Path) -> dict:
     output = stdout + stderr
     befunde = befunde_aus_bericht(output)
     return {
-        # Rückgabecode, [error]-Marker UND ein Fehler-Element im Bericht: die Leser
+        # Rückgabecode und ein Fehler im Bericht (Element oder [error]-Zeile): die Leser
         # (is_valid, ist_gueltige_e_rechnung, Befunde) sollen einander nicht
         # widersprechen. Gemessen: bei echten Fehlern liefert Mustang ohnehin rc 255.
-        "is_valid": rc == 0 and _no_errors(output) and not _hat_fehler(befunde),
+        "is_valid": rc == 0 and not _hat_fehler(befunde),
         "nicht_ausfuehrbar": False,
         "grund": "",
         "raw": output,
@@ -143,13 +143,6 @@ def _profile_flag(profile: str) -> str:
         "EXTENDED": "EX",
     }
     return mapping.get(profile, "E")
-
-
-def _no_errors(output: str) -> bool:
-    # Nur explizite [error]- oder [fehler]-Marker zählen — "0 errors" in
-    # Erfolgszusammenfassungen enthält "error" als Substring und darf nicht
-    # als Fehler gewertet werden.
-    return not re.search(r'\[(error|fehler)\]', output, re.IGNORECASE)
 
 
 # Eine Mustang-Meldung lautet „[REGEL]-Text [ID REGEL] from /xslt/...xslt)“. Die
@@ -213,7 +206,10 @@ def _meldungen(output: str, severity: str) -> list[tuple[str, str]]:
     for m in elemente.finditer(output):
         ort = _ORT.search(m.group(1))
         aus_xml.append((html.unescape(m.group(2)).strip(), html.unescape(ort.group(1)) if ort else ""))
-    zeilen = re.compile(rf"\[{severity}\].*", re.IGNORECASE)
+    # Nur explizite Marker zählen („0 errors“ in Erfolgszusammenfassungen ist keiner);
+    # für Fehler gilt auch der deutsche „[Fehler]“.
+    marker = "error|fehler" if severity == "error" else severity
+    zeilen = re.compile(rf"\[(?:{marker})\].*", re.IGNORECASE)
     return aus_xml + [(m.group(), "") for m in zeilen.finditer(output)]
 
 
