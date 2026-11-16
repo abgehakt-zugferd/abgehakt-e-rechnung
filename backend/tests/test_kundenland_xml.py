@@ -6,6 +6,8 @@ Land liest (XML, Belegrollen), nimmt `bereinige_land`: ein leeres Land bleibt le
 - Käufer ohne Land: kein CountryID-Element. Mustang meldet dafür als FEHLER BR-11
   (Käuferanschrift ohne BT-55; dazu Schema- und FX-SCH-A-000422-Fehler, am echten
   Bericht abgelesen), das Finalisieren wird also blockiert.
+- Verkäufer (eigene Firma) ohne Land: ebenfalls kein CountryID-Element, Mustang meldet
+  BR-09 (BT-40) als Fehler.
 - Lieferanschrift ohne Land: kein ShipToTradeParty. Der Block bleibt leer, Mustang
   meldet die Warnung PEPPOL-EN16931-R008, die Rückfrage beim Finalisieren greift.
 Die Datenbank lässt ein leeres Kundenland ohnehin nicht zu (CHECK); diese Tests
@@ -22,6 +24,10 @@ from app.services import zugferd_xml
 from tests.helpers import mustang_befund
 from app.services.belegrollen import _partei
 from tests.test_lieferblock_leer import NS, _company, _invoice, _kunde
+
+
+# Am echten Mustang-Bericht abgelesen: Verkäuferanschrift ohne BT-40 (dazu Schemafehler).
+REGEL_VERKAEUFER = "BR-09"
 
 
 def _laender(inv):
@@ -66,14 +72,14 @@ def test_land_wird_in_beiden_anschriften_gleich_geschrieben():
 
 # -- Echter Mustang ----------------------------------------------------------
 
-def _mustang(inv):
+def _mustang(inv, firma=None):
     import os, tempfile
     from pathlib import Path
 
     from app.services import mustang
     fd, name = tempfile.mkstemp(suffix=".xml")
     try:
-        os.write(fd, zugferd_xml.generate_xml(inv, _company()).encode("utf-8"))
+        os.write(fd, zugferd_xml.generate_xml(inv, firma or _company()).encode("utf-8"))
         os.close(fd)
         return mustang.validate(Path(name))
     finally:
@@ -99,3 +105,18 @@ def test_mustang_meldet_lieferblock_ohne_land_als_r008_warnung():
 
     mustang_befund.ungueltig(ergebnis)   # der Käufer ohne Land bleibt ein Fehler
     assert "PEPPOL-EN16931-R008" in _befunde(ergebnis, "warning")
+
+
+@pytest.mark.skipif(not mustang_modul.jar_available(), reason="Mustang-JAR nicht verfügbar")
+def test_mustang_blockiert_verkaeufer_ohne_land_mit_regel():
+    """Eigene Firma mit country='': kein erfundenes DE, Mustang meldet einen Fehler."""
+    inv = _invoice(_kunde(), delivery_date=date(2026, 6, 15))
+    wurzel = ET.fromstring(zugferd_xml.generate_xml(inv, _company(country="")))
+    verkaeufer = wurzel.find(".//ram:SellerTradeParty/ram:PostalTradeAddress", NS)
+    assert verkaeufer.find("ram:CountryID", NS) is None
+
+    ergebnis = _mustang(inv, _company(country=""))
+
+    mustang_befund.ungueltig(ergebnis)
+    assert REGEL_VERKAEUFER in _befunde(ergebnis, "error")
+    assert mustang_modul.ist_gueltige_e_rechnung(ergebnis) is False

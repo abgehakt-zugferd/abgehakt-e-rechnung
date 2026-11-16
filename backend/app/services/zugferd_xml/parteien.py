@@ -182,13 +182,16 @@ def _addr2_xml(name, address_line2) -> str:
 
 def seller_trade_party_xml(seller: Partei, invoice: Invoice, inv_cat: str) -> str:
     addr2 = _addr2_xml(seller.name, seller.address_line2)
+    # Ohne Land (BT-40) kein CountryID-Element statt eines erfundenen „DE“ oder eines
+    # leeren Elements; Mustang meldet das als Fehler (Regel siehe test_kundenland_xml).
+    land_xml = (f"\n                    <ram:CountryID>{esc(seller.country)}</ram:CountryID>"
+                if seller.country else "")
     return f"""            <ram:SellerTradeParty>{seller_id_xml(seller, inv_cat)}
                 <ram:Name>{esc(seller.name)}</ram:Name>{seller_legal_xml(seller, invoice)}{seller_contact_xml(seller)}
                 <ram:PostalTradeAddress>
                     <ram:PostcodeCode>{esc(seller.zip_code)}</ram:PostcodeCode>
                     <ram:LineOne>{esc(seller.address_line1)}</ram:LineOne>{addr2}
-                    <ram:CityName>{esc(seller.city)}</ram:CityName>
-                    <ram:CountryID>{esc(seller.country)}</ram:CountryID>
+                    <ram:CityName>{esc(seller.city)}</ram:CityName>{land_xml}
                 </ram:PostalTradeAddress>{electronic_address_xml(seller.email)}{seller_tax_xml(seller, inv_cat)}
             </ram:SellerTradeParty>"""
 
