@@ -314,3 +314,36 @@ def test_gleicher_echter_hash_gilt_als_bestaetigung():
 
     h = "ab12" * 16
     assert warnungen_pruefen(MagicMock(), _warnend(), [R008], h, h) == [R008]
+
+
+# -- Ort einer Mustang-Meldung in der Prüfanzeige ----------------------------
+
+_LANGER_ORT = (
+    "/*:CrossIndustryInvoice[namespace-uri()='urn:un:unece:uncefact:data:standard:"
+    "CrossIndustryInvoice:100'][1]/*:SupplyChainTradeTransaction[namespace-uri()='urn:x'][1]"
+    "/*:ApplicableHeaderTradeAgreement[namespace-uri()='urn:y'][1]"
+    "/*:BuyerTradeParty[namespace-uri()='urn:y'][1]/*:PostalTradeAddress[namespace-uri()='urn:y'][2]")
+
+
+def test_pruefort_kuerzt_den_xpath_lesbar():
+    from app.darstellung import pruefort
+
+    assert pruefort(_LANGER_ORT) == "…/ApplicableHeaderTradeAgreement/BuyerTradeParty/PostalTradeAddress[2]"
+    assert pruefort("/*:CrossIndustryInvoice[namespace-uri()='urn:x'][1]") == "CrossIndustryInvoice"
+    assert pruefort("") == "" and pruefort(None) == ""
+
+
+@pytest.mark.parametrize("liste,schwere", [("errors", "error"), ("warnings", "warning")])
+def test_pruefanzeige_zeigt_den_ort_der_mustang_meldung(pg_session, entwurf, liste, schwere):
+    _finalisieren(pg_session, entwurf, _sauber())
+    eintrag = {"code": "MUSTANG_BR-11", "severity": schwere, "message": "Käuferland fehlt",
+               "field": _LANGER_ORT}
+    pg_session.add(ValidationResult(invoice_id=entwurf.id, is_valid=False, anlass="pruefung",
+                                    errors=[eintrag] if liste == "errors" else [],
+                                    warnings=[eintrag] if liste == "warnings" else []))
+    pg_session.commit()
+
+    seite = client(pg_session).get(f"/invoices/{entwurf.id}").text
+
+    assert "…/ApplicableHeaderTradeAgreement/BuyerTradeParty/PostalTradeAddress[2]" in seite
+    assert "namespace-uri" not in seite

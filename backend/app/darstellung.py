@@ -17,6 +17,7 @@ thread-sicherer Zustand und setzt voraus, dass die passende Locale im Image
 erzeugt wurde (im schlanken Debian-Basisimage ist sie es nicht). Die Regel für
 deutsche Zahlen ist zu einfach, um dafür eine Umgebungsabhängigkeit einzugehen.
 """
+import re
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -96,6 +97,17 @@ def uhrzeit_de(wert) -> str:
     return _als_utc(wert).astimezone(ZEITZONE).strftime("%H:%M")
 
 
+_NAMENSRAUM = re.compile(r"\[namespace-uri\(\)='[^']*'\]")
+
+
+def pruefort(ort: str | None) -> str:
+    """Ort einer Mustang-Meldung (XPath) lesbar und gekürzt: ohne `*:`, Namensraum und
+    `[1]`, höchstens die letzten drei Schritte, davor „…/“."""
+    schritte = [s for s in _NAMENSRAUM.sub("", ort or "").replace("*:", "").split("/") if s]
+    schritte = [s[:-3] if s.endswith("[1]") else s for s in schritte]
+    return ("…/" if len(schritte) > 3 else "") + "/".join(schritte[-3:])
+
+
 def mit_setup_link(text: str) -> Markup:
     """Fehlertext escaped; nur der Pfad /setup wird zum Anker (#205).
 
@@ -125,3 +137,4 @@ def registriere_darstellungsfilter(templates: Jinja2Templates) -> None:
     templates.env.filters["datum_de"] = datum_de
     templates.env.filters["zeitpunkt_de"] = zeitpunkt_de
     templates.env.filters["uhrzeit_de"] = uhrzeit_de
+    templates.env.filters["pruefort"] = pruefort
