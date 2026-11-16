@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
+from app.config import get_settings, update_pruefung_aktiv
 from app.database import get_db
 from app.models.app_config import AppConfig
 from app.services.update_banner import compute_banner, compute_mitteilung
@@ -30,6 +30,11 @@ logger = logging.getLogger(__name__)
 def load_update_banner(request: Request, db: Session = Depends(get_db)) -> None:
     request.state.update_banner = None
     request.state.mitteilung = None
+    # Ohne Pruefung gibt es nichts zu erinnern und keinen Knopf: auch ein frueher
+    # gespeicherter Hinweis bleibt unsichtbar, ein nicht schliessbarer Banner mit
+    # veraltetem Stand waere sonst fuer immer da.
+    if not update_pruefung_aktiv():
+        return
     try:
         cfg = db.query(AppConfig).filter(AppConfig.id == 1).first()
         if cfg is None:
