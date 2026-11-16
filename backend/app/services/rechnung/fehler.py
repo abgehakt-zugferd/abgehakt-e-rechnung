@@ -12,9 +12,11 @@ class FinalisierungWarnung(Exception):
     sind Mustang-Befunde {regel, text, schwere}; `schluessel` nennt sie für die Bestätigung.
     """
 
-    def __init__(self, warnungen: list[dict]):
+    def __init__(self, warnungen: list[dict], xml_sha256: str | None = None):
         super().__init__("Mustang meldet Warnungen: " + ", ".join(warnungsschluessel(w) for w in warnungen))
         self.warnungen = warnungen
+        # Hash des XML, zu dem die Warnungen gehören; die Bestätigung gilt nur dafür.
+        self.xml_sha256 = xml_sha256
 
     @property
     def schluessel(self) -> list[str]:

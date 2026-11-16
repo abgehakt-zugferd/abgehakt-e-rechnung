@@ -14,6 +14,7 @@
     {% endfor %}
     <form method="post" action="/invoices/{{ invoice.id }}/finalisieren" style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;"
           onsubmit="return confirm('Trotz Warnung finalisieren? Danach keine Änderung mehr möglich.')">
+        <input type="hidden" name="xml_sha256" value="{{ finalisierung_hash }}">
         {% for k in finalisierung_schluessel %}<input type="hidden" name="bestaetigt" value="{{ k }}">{% endfor %}
         <button type="submit" class="btn-primary">TROTZ WARNUNG FINALISIEREN</button>
         <a href="/invoices/{{ invoice.id }}" class="btn-secondary">ABBRECHEN (BLEIBT ENTWURF)</a>

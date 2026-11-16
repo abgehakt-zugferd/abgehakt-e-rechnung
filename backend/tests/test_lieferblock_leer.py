@@ -106,6 +106,16 @@ def test_leistungsdatum_schreibt_das_ereignis_und_kein_lieferland():
     assert _lieferland(block) is None   # unverändert: bei S/AE mit Datum kein ShipTo
 
 
+def test_leistungsdatum_ohne_zeitraum_schreibt_das_ereignis_und_kein_lieferland():
+    """Datum gesetzt, nicht K, kein Zeitraum: der Zeitraum spielt für den Block keine Rolle."""
+    inv = _invoice(_kunde(), delivery_date=date(2026, 6, 15))
+
+    block = _lieferblock(inv)
+
+    assert _ereignis(block) == ("102", "20260615")
+    assert _lieferland(block) is None
+
+
 def test_nur_zeitraum_schreibt_das_kundenland_und_kein_ereignis():
     inv = _invoice(_kunde(), delivery_date=None,
                    service_period_start=date(2026, 6, 1), service_period_end=date(2026, 6, 30))

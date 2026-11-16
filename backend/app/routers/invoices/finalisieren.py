@@ -35,17 +35,24 @@ settings = get_settings()
 @router.post("/{invoice_id}/finalisieren")
 def finalize_invoice(invoice_id: uuid.UUID, request: Request = None,
                      bestaetigt: Annotated[list[str] | None, Form()] = None,
+                     xml_sha256: Annotated[str | None, Form()] = None,
                      db: Session = Depends(get_db)):
     try:
-        ausfuehren(db, invoice_id, bestaetigt or [])
+        ausfuehren(db, invoice_id, bestaetigt or [], xml_sha256)
     except FinalisierungWarnung as w:
+        if request is None:
+            # Direktaufruf ohne Anfrage: keine Seite möglich, aber auch kein Absturz.
+            raise HTTPException(
+                status_code=409,
+                detail=f"{w} Bestätigung nötig; die Rechnung bleibt Entwurf.") from w
         # Nichts finalisiert (Rollback erfolgt): die Rechnungsseite zeigt die Warnungen
         # mit der Wahl „trotz Warnung finalisieren“ oder abbrechen.
         invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
         return templates.TemplateResponse(
             request, "invoices/detail.html",
             {**detail_kontext(db, invoice), "finalisierung_warnungen": w.warnungen,
-             "finalisierung_schluessel": w.schluessel},
+             "finalisierung_schluessel": w.schluessel,
+             "finalisierung_hash": w.xml_sha256},
             status_code=409)
     except RechnungFehler as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail) from e

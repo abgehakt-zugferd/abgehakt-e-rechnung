@@ -6,6 +6,7 @@ echtem Mustang und Ghostscript. Entwurf bleibt Entwurf: keine Nummer verbraucht,
 keine Dateien, kein Prüfergebnis.
 """
 import hashlib
+import re
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -37,10 +38,20 @@ def _sauber():
             "raw": "Parsed PDF:valid\nXML:valid\n"}
 
 
-def _finalisieren(pg_session, inv, ergebnis, bestaetigt=()):
+def _finalisieren(pg_session, inv, ergebnis, bestaetigt=(), xml_sha256=None):
+    daten = {"bestaetigt": list(bestaetigt)}
+    if xml_sha256 is not None:
+        daten["xml_sha256"] = xml_sha256
     with patched_success_pipeline(validate=ergebnis):
-        return client(pg_session).post(
-            f"/invoices/{inv.id}/finalisieren", data={"bestaetigt": list(bestaetigt)})
+        return client(pg_session).post(f"/invoices/{inv.id}/finalisieren", data=daten)
+
+
+def _bestaetigen(pg_session, inv, ergebnis, regeln=(R008,)):
+    """Erst die Rückfrage holen, dann mit deren Hash und den Regeln bestätigen."""
+    erste = _finalisieren(pg_session, inv, ergebnis)
+    assert erste.status_code == 409, erste.text[-500:]
+    h = re.search(r'name="xml_sha256" value="([^"]*)"', erste.text).group(1)
+    return _finalisieren(pg_session, inv, ergebnis, bestaetigt=regeln, xml_sha256=h)
 
 
 def _frisch(pg_session, inv):
@@ -92,7 +103,7 @@ def test_abgewiesene_finalisierung_gibt_die_zeilensperre_frei(pg_session, pg_eng
 
 
 def test_bestaetigung_derselben_warnung_finalisiert_und_protokolliert(pg_session, entwurf):
-    r = _finalisieren(pg_session, entwurf, _warnend(), bestaetigt=[R008])
+    r = _bestaetigen(pg_session, entwurf, _warnend())
 
     assert r.status_code == 303
     row = _frisch(pg_session, entwurf)
@@ -156,7 +167,7 @@ def test_mustang_fehler_sperren_weiter_hart(pg_session, entwurf):
 # -- Anzeige ----------------------------------------------------------------
 
 def test_protokoll_der_finalisierten_rechnung_zeigt_warnung_ohne_erneut_pruefen(pg_session, entwurf):
-    _finalisieren(pg_session, entwurf, _warnend(), bestaetigt=[R008])
+    _bestaetigen(pg_session, entwurf, _warnend())
 
     seite = client(pg_session).get(f"/invoices/{entwurf.id}").text
 
@@ -195,7 +206,8 @@ def test_echte_mustang_warnung_haelt_an_und_wird_bestaetigt(pg_session):
             assert _frisch(pg_session, inv).status == "draft"
 
             zweite = client(pg_session).post(
-                f"/invoices/{inv.id}/finalisieren", data={"bestaetigt": [R008]})
+                f"/invoices/{inv.id}/finalisieren",
+                data={"bestaetigt": [R008], "xml_sha256": _hash_aus_seite(erste.text)})
         assert zweite.status_code == 303
         assert _frisch(pg_session, inv).status == "issued"
         (vr,) = _protokolle(pg_session, inv)
@@ -203,3 +215,79 @@ def test_echte_mustang_warnung_haelt_an_und_wird_bestaetigt(pg_session):
         assert f"MUSTANG_{R008}" in [w["code"] for w in vr.warnings]
     finally:
         cleanup(inv.invoice_number)
+
+
+# -- Bestätigung ist an das gezeigte XML gebunden ----------------------------
+
+def _hash_aus_seite(text):
+    treffer = re.search(r'name="xml_sha256" value="([^"]*)"', text)
+    assert treffer, "Warnungsseite ohne Hashfeld"
+    return treffer.group(1)
+
+
+def test_geaenderter_entwurf_macht_die_alte_bestaetigung_ungueltig(pg_session, entwurf):
+    erste = _finalisieren(pg_session, entwurf, _warnend())
+    altes_formular = _hash_aus_seite(erste.text)
+    assert erste.status_code == 409
+    # Der Entwurf wird geändert, die Warnung bleibt dieselbe: das XML ist ein anderes.
+    entwurf.items[0].description = "Beratung, geändert nach der Rückfrage"
+    pg_session.commit()
+
+    zweite = _finalisieren(pg_session, entwurf, _warnend(), bestaetigt=[R008], xml_sha256=altes_formular)
+
+    assert zweite.status_code == 409
+    assert _frisch(pg_session, entwurf).status == "draft"
+    assert _hash_aus_seite(zweite.text) != altes_formular
+    # Mit dem neuen Formular geht es.
+    dritte = _finalisieren(pg_session, entwurf, _warnend(), bestaetigt=[R008],
+                           xml_sha256=_hash_aus_seite(zweite.text))
+    assert dritte.status_code == 303
+
+
+@pytest.mark.parametrize("hash_wert", [None, "", "xyz", "0" * 64, "A" * 64])
+def test_fehlender_oder_fremder_hash_gibt_eine_neue_rueckfrage(pg_session, entwurf, hash_wert):
+    r = _finalisieren(pg_session, entwurf, _warnend(), bestaetigt=[R008], xml_sha256=hash_wert)
+
+    assert r.status_code == 409
+    assert _frisch(pg_session, entwurf).status == "draft"
+    assert _protokolle(pg_session, entwurf) == []
+
+
+def test_richtiger_hash_mit_falscher_regelmenge_gibt_eine_neue_rueckfrage(pg_session, entwurf):
+    h = _hash_aus_seite(_finalisieren(pg_session, entwurf, _warnend()).text)
+
+    r = _finalisieren(pg_session, entwurf, _warnend(), bestaetigt=["BR-ANDERE-1"], xml_sha256=h)
+
+    assert r.status_code == 409
+    assert _frisch(pg_session, entwurf).status == "draft"
+
+
+def test_direktaufruf_ohne_request_wirft_bei_warnung_eine_klare_meldung(pg_session, entwurf):
+    from fastapi import HTTPException
+
+    from app.routers.invoices.finalisieren import finalize_invoice
+
+    with patched_success_pipeline(validate=_warnend()):
+        with pytest.raises(HTTPException) as fehler:
+            finalize_invoice(entwurf.id, db=pg_session)
+
+    assert fehler.value.status_code == 409
+    assert R008 in fehler.value.detail
+    assert _frisch(pg_session, entwurf).status == "draft"
+
+
+# -- Hash über genau die eingebetteten Bytes ---------------------------------
+
+def test_hash_im_pruefergebnis_ist_der_hash_der_abgelegten_xml_datei(pg_session, entwurf):
+    from app.config import get_settings
+
+    erste = _finalisieren(pg_session, entwurf, _warnend())
+    gezeigt = _hash_aus_seite(erste.text)
+
+    r = _finalisieren(pg_session, entwurf, _warnend(), bestaetigt=[R008], xml_sha256=gezeigt)
+
+    assert r.status_code == 303
+    (vr,) = _protokolle(pg_session, entwurf)
+    datei = get_settings().storage_path / "xml" / f"{entwurf.invoice_number}.xml"
+    # Gezeigter Hash, gespeicherter Hash und Hash der abgelegten Bytes sind derselbe.
+    assert vr.xml_sha256 == hashlib.sha256(datei.read_bytes()).hexdigest() == gezeigt

@@ -16,7 +16,7 @@ from app.services.belegsprache.zahlungshinweis import zahlungstext_vor_finalisie
 from app.services.rechnung.fehler import FinalisierungWarnung, RechnungFehler, warnungsschluessel
 from app.services.rechnung import platzhaltersperre
 from app.services.rechnung.firma import get_company
-from app.services.rechnung.pruefung import finalisierung_protokollieren
+from app.services.rechnung.pruefung import finalisierung_protokollieren, xml_hash
 from app.zeit import heute
 
 
@@ -209,27 +209,31 @@ def einbettung_abweisen(db: Session, pruefgrund: str) -> None:
     )
 
 
-def warnungen_pruefen(db: Session, ergebnis: dict, bestaetigt: list[str] | None) -> list[str]:
+def warnungen_pruefen(db: Session, ergebnis: dict, bestaetigt: list[str] | None,
+                      xml_sha256: str, bestaetigter_hash: str | None) -> list[str]:
     """Mustang-Warnungen gegen die Bestätigung des Nutzers halten.
 
-    Liefert die bestätigten (übergangenen) Regelkennungen, leer ohne Warnung. Meldet
-    Mustang Warnungen, die nicht genau den bestätigten entsprechen, wird NICHT
-    finalisiert: Rollback wie bei einem Fehler (Entwurf bleibt, nichts verbraucht),
-    und der Nutzer bekommt die Warnungen zur Entscheidung (FinalisierungWarnung).
+    Liefert die bestätigten (übergangenen) Regelkennungen, leer ohne Warnung. Die
+    Bestätigung gilt nur, wenn Regelmenge UND Hash des in diesem Lauf erzeugten XML
+    mit dem übereinstimmen, was der Nutzer gesehen hat (`bestaetigter_hash` aus dem
+    Formular; fehlt er oder ist er fremd, gilt nichts). Sonst wird NICHT finalisiert:
+    Rollback wie bei einem Fehler (Entwurf bleibt, nichts verbraucht), und der Nutzer
+    bekommt die Warnungen erneut zur Entscheidung (FinalisierungWarnung).
     """
     warnungen = [b for b in mustang.befunde_von(ergebnis) if b["schwere"] == "warning"]
     if not warnungen:
         return []
     schluessel = sorted({warnungsschluessel(w) for w in warnungen})
-    if sorted(set(bestaetigt or [])) != schluessel:
+    if sorted(set(bestaetigt or [])) != schluessel or bestaetigter_hash != xml_sha256:
         db.rollback()
-        raise FinalisierungWarnung(warnungen)
+        raise FinalisierungWarnung(warnungen, xml_sha256)
     return schluessel
 
 
 def beleg_im_arbeitsverzeichnis(db: Session, invoice: Invoice, company: Company,
                                 arbeitsverzeichnis: Path, xml_content: str,
-                                bestaetigt: list[str] | None = None) -> tuple[Path, Path, dict, list[str]]:
+                                bestaetigt: list[str] | None = None,
+                                bestaetigter_hash: str | None = None) -> tuple[Path, Path, dict, list[str]]:
     """Visuelles PDF, XML und ZUGFeRD-PDF im Arbeitsverzeichnis.
 
     Liefert (PDF, XML, Mustang-Ergebnis, übergangene Warnungen)."""
@@ -237,7 +241,8 @@ def beleg_im_arbeitsverzeichnis(db: Session, invoice: Invoice, company: Company,
 
     # 3. Mustang: XML in PDF einbetten → ZUGFeRD PDF
     xml_path = arbeitsverzeichnis / f"{invoice.invoice_number}.xml"
-    xml_path.write_text(xml_content, encoding="utf-8")
+    # Bytes, nicht Text: der Hash im Prüfprotokoll gilt genau für diese Bytes.
+    xml_path.write_bytes(xml_content.encode("utf-8"))
 
     zugferd_pdf = arbeitsverzeichnis / f"{invoice.invoice_number}.pdf"
     combined, pruefgrund, ergebnis = einbettung_versuchen(
@@ -245,7 +250,7 @@ def beleg_im_arbeitsverzeichnis(db: Session, invoice: Invoice, company: Company,
 
     if not combined:
         einbettung_abweisen(db, pruefgrund)
-    uebergangen = warnungen_pruefen(db, ergebnis, bestaetigt)
+    uebergangen = warnungen_pruefen(db, ergebnis, bestaetigt, xml_hash(xml_content), bestaetigter_hash)
     return zugferd_pdf, xml_path, ergebnis, uebergangen
 
 
@@ -282,7 +287,8 @@ def archivieren_und_committen(db: Session, zugferd_pdf: Path, xml_path: Path) ->
         raise
 
 
-def ausfuehren(db: Session, invoice_id, bestaetigt: list[str] | None = None) -> Invoice:
+def ausfuehren(db: Session, invoice_id, bestaetigt: list[str] | None = None,
+               bestaetigter_hash: str | None = None) -> Invoice:
     """Entwurf finalisieren: prüfen, Beleg erzeugen, archivieren, committen.
 
     `bestaetigt`: Regelkennungen der Mustang-Warnungen, die der Nutzer gesehen hat und
@@ -303,7 +309,7 @@ def ausfuehren(db: Session, invoice_id, bestaetigt: list[str] | None = None) -> 
     arbeitsverzeichnis = arbeitsverzeichnis_anlegen(invoice)
     try:
         zugferd_pdf, xml_path, ergebnis, uebergangen = beleg_im_arbeitsverzeichnis(
-            db, invoice, company, arbeitsverzeichnis, xml_content, bestaetigt)
+            db, invoice, company, arbeitsverzeichnis, xml_content, bestaetigt, bestaetigter_hash)
         als_gestellt_markieren(invoice, zugferd_pdf)
         finalisierung_protokollieren(db, invoice, company, ergebnis, uebergangen)
         archivieren_und_committen(db, zugferd_pdf, xml_path)
