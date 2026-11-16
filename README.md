@@ -387,7 +387,8 @@ Drei Dinge müssen gesichert werden, und sie liegen an verschiedenen Orten:
 Die ersten beiden gehören zusammen und müssen vom **selben Zeitpunkt** stammen. Die Datenbank
 kennt zu jeder Rechnung einen Dateinamen; liegt die zugehörige PDF nicht in `storage/`, ist der
 Beleg weg, auch wenn der Datensatz noch da ist. Die `.env` ändert sich dagegen fast nie; sie
-muss nur vorhanden und dieselbe sein.
+muss nur vorhanden und dieselbe sein. Zum Umzug auf einen anderen Rechner siehe
+[docs/BETRIEB-UMZUG.md](docs/BETRIEB-UMZUG.md).
 
 Eine Warnung, die in der Praxis öfter greift als jeder Festplattenschaden: Werkzeuge und
 Aufräumbefehle, die „nicht versionierte Dateien entfernen" anbieten, löschen `.env` mit, weil
