@@ -35,8 +35,10 @@ _AUSNAHMEN = (
     "/export",
     "/updates",
     "/static",
-    "/gesundheit",
 )
+
+# Nur der genaue Pfad, kein Praefix: ein Pfad unter /gesundheit ist keine Gesundheitsroute.
+_EXAKTE_AUSNAHMEN = ("/gesundheit",)
 
 
 class EinrichtungOffen(Exception):
@@ -44,7 +46,7 @@ class EinrichtungOffen(Exception):
 
 
 def pfad_ausgenommen(pfad: str) -> bool:
-    if pfad == "/" or pfad == "":
+    if pfad == "/" or pfad == "" or pfad in _EXAKTE_AUSNAHMEN:
         return True
     return any(pfad == p or pfad.startswith(p + "/") for p in _AUSNAHMEN)
 

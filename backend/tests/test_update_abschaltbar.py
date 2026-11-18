@@ -70,8 +70,15 @@ def _cfg(pg_session, **kw):
 # --- die Einstellung ---
 
 def test_vorgabe_ist_an():
+    """Ungesetzt und leer (`UPDATE_PRUEFUNG=`) gelten als `an`."""
     assert Settings(secret_key="x" * 32, update_pruefung="").update_pruefung_aktiv is True
     assert Settings(secret_key="x" * 32).update_pruefung_aktiv is True
+
+
+@pytest.mark.parametrize("wert", ["an", "An", " AN ", "  "])
+def test_an_in_jeder_schreibweise_ist_aktiv(wert):
+    """Gross- und Kleinschreibung und Leerzeichen am Rand sind egal; nur Leerzeichen = leer."""
+    assert Settings(secret_key="x" * 32, update_pruefung=wert).update_pruefung_aktiv is True
 
 
 @pytest.mark.parametrize("wert", ["aus", "AUS", " aus "])
@@ -79,7 +86,7 @@ def test_aus_schaltet_ab(wert):
     assert Settings(secret_key="x" * 32, update_pruefung=wert).update_pruefung_aktiv is False
 
 
-@pytest.mark.parametrize("wert", ["nein", "off", "false", "0"])
+@pytest.mark.parametrize("wert", ["nein", "off", "false", "0", "aus."])
 def test_unbekannter_wert_bricht_laut_ab(wert):
     """Ein Tippfehler darf die Pruefung nicht still eingeschaltet lassen."""
     with pytest.raises(ValueError, match="UPDATE_PRUEFUNG"):

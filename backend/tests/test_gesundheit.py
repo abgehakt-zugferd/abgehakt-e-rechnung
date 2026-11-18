@@ -79,3 +79,18 @@ def test_antwort_enthaelt_keine_firmen_oder_rechnungsdaten(client):
 
 def test_gesundheit_ist_eine_lesende_route(client):
     assert client.post("/gesundheit").status_code == 405
+
+
+
+def test_ausnahme_gilt_nur_fuer_den_exakten_pfad():
+    """Die Ausnahme im Einrichtungstor ist kein Praefix: ein Pfad unter /gesundheit
+    waere keine Gesundheitsroute und bekaeme sonst still das Tor erlassen. (Ein
+    HTTP-Test geht hier nicht: ohne passende Route laeuft keine Abhaengigkeit, die
+    Antwort waere ohnehin 404. Deshalb die Entscheidung des Tors selbst.)"""
+    from app.dependencies.einrichtungstor import pfad_ausgenommen
+
+    assert pfad_ausgenommen("/gesundheit") is True
+    for pfad in ("/gesundheit/x", "/gesundheit/", "/gesundheitx", "/gesundheit/db"):
+        assert pfad_ausgenommen(pfad) is False, pfad
+    # Die Praefix-Ausnahmen bleiben Praefixe.
+    assert pfad_ausgenommen("/settings/firma") is True

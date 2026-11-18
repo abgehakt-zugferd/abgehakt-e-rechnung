@@ -118,7 +118,7 @@ Alle Werte stehen mit Erklärung in `.env.example`.
 |---|---|---|
 | `APP_BIND` | `127.0.0.1` | Adresse, auf der der Port der Anwendung am Wirt lauscht. Läuft der Proxy auf demselben Rechner, bleibt es dabei. `0.0.0.0` hängt die Anwendung ohne Anmeldung an alle Schnittstellen und ist nirgends voreingestellt. |
 | `APP_PORT` | `3000` | Port am Wirt (im Container immer 3000) |
-| `UPDATE_PRUEFUNG` | `an` | `aus` schaltet die Update-Prüfung ab: kein Knopf, keine Erinnerung, kein Netzabruf; `POST /updates/pruefen` antwortet mit 403 und dem Hinweis „abgeschaltet". Andere Werte als `an` und `aus` brechen den Start ab. |
+| `UPDATE_PRUEFUNG` | `an` | `aus` schaltet die Update-Prüfung ab: kein Knopf, keine Erinnerung, kein Netzabruf; `POST /updates/pruefen` antwortet mit 403 und dem Hinweis „abgeschaltet". Groß- und Kleinschreibung und Leerzeichen am Rand sind egal; ein leerer Wert gilt als `an`; jeder andere Wert (auch ein Tippfehler wie `aus.`) bricht den Start ab. |
 | `DB_BIND`, `DB_PORT` | `127.0.0.1`, `5432` | nur mit der Zusatzdatei unten wirksam |
 
 ### Datenbank-Port

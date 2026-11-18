@@ -58,8 +58,10 @@ class Settings(BaseSettings):
     schluessel_pfad: str = ""
 
     # `an` (Vorgabe) oder `aus`. Bei `aus` fragt die Anwendung api.github.com nie an,
-    # zeigt keinen Knopf dafuer und weist /updates/pruefen mit 403 ab. Jeder andere
-    # Wert bricht den Start ab: ein Tippfehler darf nicht still anschalten.
+    # zeigt keinen Knopf dafuer und weist /updates/pruefen mit 403 ab. Gross-/Klein-
+    # schreibung und Leerzeichen am Rand sind egal; ein LEERER Wert (`UPDATE_PRUEFUNG=`)
+    # gilt als `an`. Jeder andere Wert bricht den Start ab: ein Tippfehler darf nicht
+    # still anschalten.
     update_pruefung: str = "an"
 
     storage_path: Path = Path("/app/storage")
