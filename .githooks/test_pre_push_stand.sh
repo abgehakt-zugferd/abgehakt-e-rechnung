@@ -264,5 +264,27 @@ else
     echo "gruen rote_suite_blockiert_ohne_umweg_empfehlung"
 fi
 
+# --- Fall G: keine Hook-Meldung unter .githooks/ empfiehlt einen Umweg am Hook vorbei ---
+# Gelesen werden die Hook-Skripte (nicht die test_*.sh, die das Wort pruefen). Zeilen, die
+# nur Kommentar sind, zaehlen nicht; ein Verbot ("nicht --no-verify") ist erlaubt.
+treffer_datei="$werkstatt/no-verify.txt"
+: > "$treffer_datei"
+for f in "$hier"/*.sh "$hier/pre-push"; do
+    name=${f##*/}
+    if [ "${name#test_}" != "$name" ]; then
+        continue
+    fi
+    grep -nH -- "no-verify" "$f" >> "$treffer_datei" 2>/dev/null
+done
+umweg=$(grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' "$treffer_datei" \
+    | grep -vE 'nicht[^"]{0,12}no-verify')
+if [ -n "$umweg" ]; then
+    echo "ROT  hooks_empfehlen_keinen_umweg: --no-verify in einer Hook-Meldung" >&2
+    printf '%s\n' "$umweg" | sed 's/^/      /' >&2
+    fehl=1
+else
+    echo "gruen hooks_empfehlen_keinen_umweg"
+fi
+
 [ "$fehl" -eq 0 ] && echo "test_pre_push_stand: alle gruen"
 exit "$fehl"
