@@ -307,6 +307,19 @@ def test_gleicher_unechter_hash_gilt_nicht_als_bestaetigung(hash_wert):
         warnungen_pruefen(MagicMock(), _warnend(), [R008], hash_wert, hash_wert)
 
 
+def test_richtiger_hash_in_grossbuchstaben_wird_abgewiesen():
+    """Der Hash muss `[0-9a-f]{64}` sein (hexdigest ist klein); GROSS ist ein anderer Text,
+    auch wenn beide Seiten gleich sind."""
+    from unittest.mock import MagicMock
+
+    from app.services.rechnung.fehler import FinalisierungWarnung
+    from app.services.rechnung.finalisieren import warnungen_pruefen
+
+    gross = ("ab12" * 16).upper()
+    with pytest.raises(FinalisierungWarnung):
+        warnungen_pruefen(MagicMock(), _warnend(), [R008], gross, gross)
+
+
 def test_gleicher_echter_hash_gilt_als_bestaetigung():
     from unittest.mock import MagicMock
 
