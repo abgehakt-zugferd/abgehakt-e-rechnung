@@ -66,10 +66,14 @@ if [ "$ausnahme_rc" -ne 0 ]; then
         || ungemessen "Ausnahmendatei nicht auswertbar (rc=$ausnahme_rc): $(printf '%s' "$ausnahme_aus" | tr '\n' ' ' | cut -c1-300)"
     exit 1
 fi
-ignorieren=()
+# Die Ausnahmen werden hier ausgewertet, nicht per `pip-audit --ignore-vuln`: pip-audit
+# meldet nicht, ob eine Ausnahme etwas getroffen hat, und die Attrappe im Test kann den
+# Aufruf dann exakt vergleichen.
+ausnahme_ids=()
 while read -r art kennung; do
-    [ "$art" = "ID" ] && ignorieren+=(--ignore-vuln "$kennung")
+    [ "$art" = "ID" ] && ausnahme_ids+=("$kennung")
 done <<< "$ausnahme_aus"
+benutzt=" "
 
 # --- ein Lauf: Export, Zaehlen, pip-audit, Auswerten ------------------------------
 # $1 Name  $2.. Gruppenschalter fuer uv export. Setzt gepruefte_$1 nicht global,
@@ -87,12 +91,13 @@ lauf() {
     [ "$gepinnt" -gt 0 ] || ungemessen "Export ($name) enthaelt kein einziges gepinntes Paket."
 
     pip-audit --require-hashes --disable-pip --format json \
-        ${ignorieren[@]+"${ignorieren[@]}"} -r "$exp" \
+        -r "$exp" \
         > "$werkstatt/$name.json" 2> "$werkstatt/$name.pa.err"
     pa_rc=$?
-    auswertung=$(python3 -I "$py" auswerten "$werkstatt/$name.json" "$exp")
+    auswertung=$(python3 -I "$py" auswerten "$werkstatt/$name.json" "$exp" ${ausnahme_ids[@]+"${ausnahme_ids[@]}"})
     py_rc=$?
     [ "$py_rc" -eq 0 ] || ungemessen "pip-audit ($name): Auswertung ist gescheitert (rc=$py_rc): $(printf '%s' "$auswertung" | tr '\n' ' ' | cut -c1-300)"
+    benutzt="$benutzt$(printf '%s\n' "$auswertung" | sed -n 's/^AUSGENOMMEN \([^ ]*\) .*/\1/p' | tr '\n' ' ')"
     nicht_geprueft=$(printf '%s\n' "$auswertung" | sed -n 's/^UNGEMESSEN //p')
     [ -z "$nicht_geprueft" ] || ungemessen "pip-audit ($name): $(printf '%s' "$nicht_geprueft" | tr '\n' ';')"
     geprueft=$(printf '%s\n' "$auswertung" | sed -n 's/^ANZAHL //p')
@@ -102,7 +107,8 @@ lauf() {
         printf 'ROT: Fund in %s:\n' "$name" >&2
         printf '%s\n' "$funde" | sed 's/^/  /' >&2
         fund=1
-    elif [ "$pa_rc" -ne 0 ]; then
+    elif [ "$pa_rc" -ne 0 ] && { [ "$pa_rc" -ne 1 ] || ! printf '%s\n' "$auswertung" | grep -q '^AUSGENOMMEN '; }; then
+        # rc 1 ist bei pip-audit "Fund": ohne Fund im Bericht (auch ausgenommenen) ein Werkzeugfehler.
         ungemessen "pip-audit ($name) endete mit rc=$pa_rc ohne Fund: $(tr '\n' ' ' < "$werkstatt/$name.pa.err" | cut -c1-300)"
     fi
     zahlen+=("$name $geprueft Pakete")
@@ -112,5 +118,11 @@ zahlen=()
 lauf Laufzeit --no-group test
 lauf Test --only-group test
 
+for kennung in ${ausnahme_ids[@]+"${ausnahme_ids[@]}"}; do
+    case "$benutzt" in
+        *" $kennung "*) ;;
+        *) echo "Hinweis: Ausnahme $kennung passt zu keinem Fund, sie kann aus .github/pip-audit-ausnahmen.txt gestrichen werden." >&2 ;;
+    esac
+done
 [ "$fund" -eq 0 ] || exit 1
-echo "OK: ${zahlen[0]}, ${zahlen[1]} gegen backend/uv.lock geprueft, keine bekannten Luecken (Ausnahmen: $(( ${#ignorieren[@]} / 2 )))."
+echo "OK: ${zahlen[0]}, ${zahlen[1]} gegen backend/uv.lock geprueft, keine bekannten Luecken (Ausnahmen: ${#ausnahme_ids[@]})."

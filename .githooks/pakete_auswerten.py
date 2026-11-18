@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Auswertung fuer pakete_pruefen.sh: liest den JSON-Bericht von pip-audit.
 
-Aufruf: pakete_auswerten.py auswerten <bericht.json> <export.txt>
+Aufruf: pakete_auswerten.py auswerten <bericht.json> <export.txt> [ausnahme-kennung ...]
         pakete_auswerten.py ausnahmen <datei> <heute JJJJ-MM-TT>
 
-Ausgabe je Zeile: ANZAHL n | FUND name version id fix x | UNGEMESSEN grund.
+Ausgabe je Zeile: ANZAHL n | AUSGENOMMEN kennung ... | FUND name version id fix x | UNGEMESSEN grund.
 Exit 0 heisst nur "ausgewertet"; jede Ausnahme ist Exit 2 (nicht gemessen), nie 0.
 """
 import datetime
@@ -87,7 +87,7 @@ def pins(export):
     return gefunden
 
 
-def auswerten(bericht, export):
+def auswerten(bericht, export, ausgenommen):
     pakete = json.load(open(bericht))["dependencies"]
     print("ANZAHL", len(pakete))
     erwartet = pins(export)
@@ -102,6 +102,11 @@ def auswerten(bericht, export):
             print("UNGEMESSEN %s ohne vulns-Liste im Bericht" % name)
             continue
         for v in p["vulns"]:
+            treffer = {v["id"], *v.get("aliases", [])} & ausgenommen
+            if treffer:
+                for kennung in sorted(treffer):
+                    print("AUSGENOMMEN", kennung, name, p["version"], v["id"])
+                continue
             fix = ",".join(v.get("fix_versions") or []) or "keine"
             print("FUND", name, p["version"], v["id"], "fix", fix)
     for n in sorted(set(erwartet) - set(gesehen)):
@@ -113,7 +118,7 @@ def auswerten(bericht, export):
 if __name__ == "__main__":
     try:
         if sys.argv[1] == "auswerten":
-            auswerten(sys.argv[2], sys.argv[3])
+            auswerten(sys.argv[2], sys.argv[3], set(sys.argv[4:]))
         elif sys.argv[1] == "ausnahmen":
             sys.exit(ausnahmen(sys.argv[2], sys.argv[3]))
         else:

@@ -43,16 +43,17 @@ ATT
 cat > "$att/pip-audit" <<'ATT'
 #!/bin/sh
 # Attrappe: liest die Exportdatei (-r), meldet JSON wie pip-audit --format json.
-# FAKE_VULN="paket:kennung:fix" laesst genau dieses Paket verwundbar sein,
-# ausser die Kennung kommt per --ignore-vuln.
-req=; ign=
-while [ $# -gt 0 ]; do
-    case $1 in
-        -r) req=$2; shift ;;
-        --ignore-vuln) ign="$ign $2"; shift ;;
-    esac
-    shift
-done
+# FAKE_VULN="paket:kennung:fix[:alias]" laesst genau dieses Paket verwundbar sein.
+# Die Attrappe vergleicht den Aufruf EXAKT mit der erwarteten Liste: ein fehlendes
+# --require-hashes oder --disable-pip, ein fremdes --ignore-vuln oder ein anderes
+# Format macht den Lauf rot (Exit 9, kein JSON). Ausnahmen wertet das Skript selbst aus.
+for letztes; do :; done
+req=$letztes
+[ "$*" = "--require-hashes --disable-pip --format json -r $req" ] || {
+    echo "Attrappe: Aufruf weicht ab: $*" >&2
+    exit 9
+}
+ign=
 case "${FAKE_PA:-}" in
     kaputt) echo "Traceback: Failed to upgrade pip" >&2; exit 1 ;;
     leer) echo '{"dependencies":[],"fixes":[]}'; exit 0 ;;
@@ -220,6 +221,15 @@ rot_zeile "PYSEC-0001 #12 2026-11-25 2026-11-19" seit_in_der_zukunft_ist_rot "se
 rot_zeile "PYSEC-0001 #12 2026-11-05 2026-11-10" ablauf_vor_seit_ist_rot "Ablauf liegt vor seit"
 AUSNAHMEN="PYSEC-0999 #12 2026-12-10 2026-11-18
 " FAKE_VULN="$V" lauf fremde_ausnahme_deckt_fund_nicht 1 "PYSEC-0001" "OK"
+AUSNAHMEN="CVE-2026-0001 #12 2026-12-10 2026-11-18
+" FAKE_VULN="jinja2:PYSEC-0001:3.1.7:CVE-2026-0001" lauf ausnahme_ueber_alias_macht_gruen 0 "OK" "NICHT GEMESSEN"
+# Hinweis, nicht rot: eine Ausnahme, die zu keinem Fund passt, soll gestrichen werden.
+AUSNAHMEN="PYSEC-0999 #12 2026-12-10 2026-11-18
+" lauf ungenutzte_ausnahme_wird_als_hinweis_genannt 0 "Hinweis: Ausnahme PYSEC-0999 passt zu keinem Fund" "NICHT GEMESSEN"
+AUSNAHMEN="PYSEC-0001 #12 2026-12-10 2026-11-18
+" FAKE_VULN="$V" lauf genutzte_ausnahme_ist_kein_hinweis 0 "OK" "Hinweis"
+AUSNAHMEN="PYSEC-0002 #12 2026-12-10 2026-11-18
+" FAKE_VULN="pytest:PYSEC-0002:9.9" lauf ausnahme_deckt_fund_im_test_lauf_ist_kein_hinweis 0 "OK" "Hinweis"
 
 [ "$fehl" -eq 0 ] && echo "test_pakete_pruefen: alle gruen ($zahl Faelle)"
 exit "$fehl"
