@@ -111,8 +111,6 @@ lauf() {
     nicht_geprueft=$(printf '%s\n' "$auswertung" | sed -n 's/^UNGEMESSEN //p')
     [ -z "$nicht_geprueft" ] || ungemessen "pip-audit ($name): $(printf '%s' "$nicht_geprueft" | tr '\n' ';')"
     geprueft=$(printf '%s\n' "$auswertung" | sed -n 's/^ANZAHL //p')
-    [ "${geprueft:-0}" -gt 0 ] || ungemessen "pip-audit ($name) hat null Pakete geprueft."
-    [ "$geprueft" -eq "$gepinnt" ] || ungemessen "pip-audit ($name) hat $geprueft Pakete geprueft, gepinnt sind $gepinnt."
     # pip-audit meldet dieselbe Kennung je Alias mehrfach: einmal je Zeile genuegt.
     funde=$(printf '%s\n' "$auswertung" | sed -n 's/^FUND //p' | sort -u)
     if [ -n "$funde" ]; then

@@ -66,6 +66,7 @@ BEGIN { split(vuln, v, ":"); printf "{\"dependencies\":[" }
     if (n++) printf ","
     erster = (n == 1)
     if (modus == "fremd") p[1] = "fremd" n
+    if (modus == "norm") { nn = tolower(p[1]); gsub(/[-_.]+/, "-", nn); p[1] = nn }
     if (erster && modus == "kein_dict") { printf "\"kein-objekt\""; next }
     vs = "\"vulns\":[]"
     if (p[1] == v[1] && index(ign, " " v[2] " ") == 0) {
@@ -89,6 +90,12 @@ jinja2==3.1.6 \
     --hash=sha256:bb
 colorama==0.4.6 ; sys_platform == 'win32' \
     --hash=sha256:cc
+EOT
+cat > "$werkstatt/norm.txt" <<'EOT'
+Typing_Extensions==4.12.2 \
+    --hash=sha256:ff
+zope.interface==7.0 \
+    --hash=sha256:gg
 EOT
 cat > "$werkstatt/test.txt" <<'EOT'
 pytest==9.2.0 \
@@ -167,6 +174,10 @@ AUSNAHMEN="$KEINE" FAKE_PA=vulns_null lauf vulns_null_bei_rc0_ist_rot 1 "NICHT G
 AUSNAHMEN="$KEINE" FAKE_PA=vulns_string lauf vulns_string_bei_rc0_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=vulns_umbenannt lauf fehlendes_vulns_nennt_das_paket 1 "aiofiles ohne vulns-Liste" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=skip lauf skip_reason_ist_nicht_geprueft 1 "aiofiles uebersprungen: kein Wheel" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=fremd lauf fremde_namen_gleicher_anzahl_sind_rot 1 "aiofiles fehlt im Bericht" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=fremd lauf fremder_name_im_bericht_wird_genannt 1 "fremd1 nicht im Export" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf fehlendes_paket_wird_mit_namen_genannt 1 "aiofiles fehlt im Bericht" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=norm LAUFZEIT="$werkstatt/norm.txt" lauf namen_nach_pep503_gleich_ist_gruen 0 "OK" "NICHT GEMESSEN"
 AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf weniger_geprueft_als_gepinnt_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN=- lauf ausnahmedatei_fehlt_ist_rot 1 "NICHT GEMESSEN" "OK"
 
