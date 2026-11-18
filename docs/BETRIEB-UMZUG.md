@@ -121,6 +121,11 @@ Alle Werte stehen mit Erklärung in `.env.example`.
 | `UPDATE_PRUEFUNG` | `an` | `aus` schaltet die Update-Prüfung ab: kein Knopf, keine Erinnerung, kein Netzabruf; `POST /updates/pruefen` antwortet mit 403 und dem Hinweis „abgeschaltet". Groß- und Kleinschreibung und Leerzeichen am Rand sind egal; ein leerer Wert gilt als `an`; jeder andere Wert (auch ein Tippfehler wie `aus.`) bricht den Start ab. |
 | `DB_BIND`, `DB_PORT` | `127.0.0.1`, `5432` | nur mit der Zusatzdatei unten wirksam |
 
+Die Netz-Wache im Pre-Push und in der CI prüft die **Vorgaben der Compose-Dateien**, nicht
+den laufenden Betrieb. Ein `APP_BIND=0.0.0.0` in der `.env` des Servers sieht sie nicht. Ob
+der Server tatsächlich nur auf Loopback lauscht, misst man dort selbst, etwa mit
+`ss -tlnp` oder `docker compose port app 3000`.
+
 ### Datenbank-Port
 
 Die Datenbank hat in `docker-compose.yml` **keinen Host-Port**. Die Anwendung erreicht sie
