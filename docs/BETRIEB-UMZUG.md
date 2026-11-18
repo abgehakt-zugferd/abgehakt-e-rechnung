@@ -154,16 +154,26 @@ Monitor kann sie ebenso nutzen. Die Ursache eines 503 steht im Log (`docker comp
 eingerichtete existiert), zwei Kunden (einen deutschen, einen österreichischen mit
 Platzhalter-USt-IdNr.) und zwei Rechnungsentwürfe mit Positionen.
 
+**Vorher die Anwendung stoppen.** Der Schutz des Skripts prüft zuerst, ob schon Daten da
+sind, und schreibt erst danach. Legt jemand in der Oberfläche gleichzeitig einen Kunden
+an, ist diese Lücke offen, und beide Wege vergeben Rechnungsnummern. Deshalb läuft das
+Skript in einem eigenen, kurzlebigen Container, während der Dienst `app` steht (die
+Datenbank muss laufen):
+
 ```bash
-docker compose exec app python -m scripts.seed_testdaten                  # nur Entwürfe
-docker compose exec app python -m scripts.seed_testdaten --finalisieren   # auch als E-Rechnung stellen
+docker compose stop app
+docker compose run --rm app python -m scripts.seed_testdaten                  # nur Entwürfe
+docker compose run --rm app python -m scripts.seed_testdaten --finalisieren   # auch als E-Rechnung stellen
+docker compose start app
 ```
 
 Mit `--finalisieren` laufen die Entwürfe durch den normalen Dienstweg: PDF/A-3 mit
 eingebetteter XML, Mustang-Prüfung, Ablage in `storage/pdfs` und `storage/xml`.
-Enthält die Datenbank schon Kunden oder Rechnungen, bricht das Skript ab und schreibt
-nichts; `--erzwingen` hebt den Schutz auf. **Nicht in einer Live-Installation ausführen:**
-finalisierte Rechnungen sind unveränderlich und verbrauchen Rechnungsnummern.
+Enthält die Datenbank schon Kunden, Rechnungen oder eine Firma mit Namen (auch wenn die
+Einrichtung nicht abgeschlossen ist), bricht das Skript ab und schreibt nichts;
+`--erzwingen` hebt den Schutz auf, eine eingerichtete Firma bleibt auch dann unberührt.
+**Nicht in einer Live-Installation ausführen:** finalisierte Rechnungen sind
+unveränderlich und verbrauchen Rechnungsnummern.
 
 ## 5. Checkliste für den Umzug
 

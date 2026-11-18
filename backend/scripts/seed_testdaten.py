@@ -7,11 +7,15 @@ und zwei Rechnungsentwuerfe mit Positionen. Mit `--finalisieren` werden die
 Entwuerfe ueber den normalen Dienstweg gestellt (PDF/A-3 mit eingebetteter XML,
 Mustang-Pruefung, Ablage unter storage/), nicht per SQL.
 
-Schutz: Enthaelt die Datenbank schon Kunden oder Rechnungen, bricht das Skript ab,
-ohne etwas zu schreiben. `--erzwingen` hebt den Schutz auf.
+Schutz: Enthaelt die Datenbank schon Kunden, Rechnungen oder eine Firma mit Namen (auch
+ohne abgeschlossene Einrichtung), bricht das Skript ab, ohne etwas zu schreiben.
+`--erzwingen` hebt den Schutz auf; eine eingerichtete Firma bleibt auch dann unberuehrt.
 
-Aufruf im Container:
-    docker compose exec app python -m scripts.seed_testdaten [--finalisieren] [--erzwingen]
+Aufruf im Container, bei gestoppter Anwendung (der Schutz prueft vor dem Schreiben;
+ein gleichzeitiger Zugriff aus der Oberflaeche wuerde die Luecke dazwischen nutzen):
+    docker compose stop app
+    docker compose run --rm app python -m scripts.seed_testdaten [--finalisieren] [--erzwingen]
+    docker compose start app
 
 Alle Werte sind offensichtliche Platzhalter. Nichts davon ist eine echte Firma,
 Steuernummer oder USt-IdNr.; das Skript gehoert nicht in eine Live-Installation.
@@ -48,9 +52,14 @@ def _firma_felder() -> dict:
 
 
 def _bestand_vorhanden(db: Session) -> bool:
+    """Kunden, Rechnungen oder eine Firma mit Namen: auch ohne abgeschlossene Einrichtung
+    sind das Daten eines Betreibers, die das Skript nicht ueberschreiben darf."""
+    from app.models.company import Company
     from app.models.customer import Customer
     from app.models.invoice import Invoice
-    return db.query(Customer).count() > 0 or db.query(Invoice).count() > 0
+    firma = db.query(Company).filter(Company.id == 1).first()
+    firma_belegt = firma is not None and bool((firma.name or "").strip())
+    return firma_belegt or db.query(Customer).count() > 0 or db.query(Invoice).count() > 0
 
 
 def _firma_sicherstellen(db: Session) -> None:

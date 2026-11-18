@@ -24,7 +24,7 @@ def _zahlen(pg_session):
 
 
 def test_leere_db_erhaelt_zwei_kunden_und_zwei_entwuerfe(pg_session, capsys):
-    firma_vorher = pg_session.query(Company).filter(Company.id == 1).one().name
+    leere_firma(pg_session)
 
     rc = main([], db=pg_session)
 
@@ -44,9 +44,36 @@ def test_leere_db_erhaelt_zwei_kunden_und_zwei_entwuerfe(pg_session, capsys):
         assert e.net_total == sum((i.net_amount for i in e.items), Decimal("0"))
         assert e.gross_total == e.net_total + e.tax_total
     assert {e.tax_category for e in entwuerfe} == {"S", "AE"}
-    # Eine vorhandene, eingerichtete Firma bleibt unberuehrt.
-    assert pg_session.query(Company).filter(Company.id == 1).one().name == firma_vorher
     assert "2 Kunden" in capsys.readouterr().out
+
+
+def test_firma_mit_name_ist_bestand_auch_ohne_abgeschlossene_einrichtung(pg_session, capsys):
+    firma = leere_firma(pg_session)
+    firma.name = "Vorhandene Firma"
+    firma.address_line1 = "Altweg 9"
+    pg_session.commit()
+
+    rc = main([], db=pg_session)
+
+    assert rc != 0
+    assert "--erzwingen" in capsys.readouterr().err
+    pg_session.expire_all()
+    firma = pg_session.query(Company).filter(Company.id == 1).one()
+    assert (firma.name, firma.address_line1) == ("Vorhandene Firma", "Altweg 9")
+    assert firma.setup_completed_at is None
+    assert _zahlen(pg_session) == (0, 0)
+
+
+def test_eingerichtete_firma_ist_bestand_und_bleibt_mit_erzwingen_unberuehrt(pg_session):
+    vorher = pg_session.query(Company).filter(Company.id == 1).one().name
+
+    assert main([], db=pg_session) != 0
+    assert _zahlen(pg_session) == (0, 0)
+
+    assert main(["--erzwingen"], db=pg_session) == 0
+    pg_session.expire_all()
+    assert pg_session.query(Company).filter(Company.id == 1).one().name == vorher
+    assert _zahlen(pg_session) == (2, 2)
 
 
 def test_leere_firmenzeile_wird_mit_erfundenen_daten_eingerichtet(pg_session):
@@ -72,6 +99,7 @@ def test_fehlende_firmenzeile_wird_angelegt(pg_session):
 
 
 def test_vorhandener_kunde_bricht_ohne_erzwingen_ab_und_schreibt_nichts(pg_session, capsys):
+    leere_firma(pg_session)
     pg_session.add(Customer(customer_number="K-VORHER", name="Vorhandener Kunde",
                             address_line1="Weg 1", zip_code="10115", city="Berlin",
                             country="DE"))
@@ -102,6 +130,7 @@ def test_leere_firma_und_vorhandener_kunde_aendert_auch_die_firma_nicht(pg_sessi
 
 
 def test_erzwingen_legt_trotz_vorhandenem_kunden_an(pg_session):
+    leere_firma(pg_session)
     pg_session.add(Customer(customer_number="K-VORHER", name="Vorhandener Kunde",
                             address_line1="Weg 1", zip_code="10115", city="Berlin",
                             country="DE"))
@@ -120,6 +149,7 @@ def test_erzwingen_legt_trotz_vorhandenem_kunden_an(pg_session):
 def test_finalisieren_erzeugt_gueltige_e_rechnungen_im_storage(pg_session):
     storage = get_settings().storage_path
     angelegt = []
+    leere_firma(pg_session)
     try:
         assert main(["--finalisieren"], db=pg_session) == 0
 
