@@ -29,9 +29,11 @@ ergebnis() { # $1 Name  $2 0=gruen 1=rot  $3 Hinweis
     fi
 }
 
-# --- Teil A: die Netz-Wache versteht die Variablenform ------------------------------
-# $1 Name  $2 erwartet (rot|gruen)  $3 Portzeile
-pruefe_netzwache() {
+# --- Teil A: die Netz-Wache misst die Normalform (netzwache.sh) ---------------------
+# Die Wache fragt Compose nach der JSON-Normalform; die Fixtures sind deshalb gueltige
+# Compose-Dateien (mit image). Rot heisst: Meldung "netz: ROT".
+
+neues_repo() {
     repo=$(mktemp -d "$werkstatt/repo.XXXXXX") && [ -d "$repo" ] || exit 2
     git -C "$repo" init -q
     git -C "$repo" config user.name probe
@@ -39,25 +41,86 @@ pruefe_netzwache() {
     mkdir -p "$repo/backend"
     printf 'FROM scratch\n' > "$repo/backend/Dockerfile"
     printf 'chown -R 100:101 storage\n' > "$repo/README.md"
-    printf 'services:\n  app:\n    ports:\n      - %s\n' "$3" > "$repo/docker-compose.yml"
-    git -C "$repo" add -A
-    git -C "$repo" commit -q -m probe
-    aus=$( cd "$repo" && "$wache" 2>&1 )
-    if printf '%s' "$aus" | grep -qF -- "netz: ROT"; then ist=rot; else ist=gruen; fi
-    if [ "$ist" = "$2" ]; then ergebnis "$1" 0 ""; else
-        ergebnis "$1" 1 "erwartet $2, war $ist"; fi
 }
 
-pruefe_netzwache variable_mit_loopback_vorgabe_ist_gruen gruen \
-    '"${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"'
-pruefe_netzwache variable_mit_offener_vorgabe_ist_rot rot \
-    '"${APP_BIND:-0.0.0.0}:${APP_PORT:-3000}:3000"'
-pruefe_netzwache variable_ohne_vorgabe_ist_rot rot \
-    '"${APP_BIND}:${APP_PORT:-3000}:3000"'
-pruefe_netzwache variable_mit_leerer_vorgabe_ist_rot rot \
-    '"${APP_BIND:-}:${APP_PORT:-3000}:3000"'
-pruefe_netzwache offener_port_bleibt_rot rot '"3000:3000"'
-pruefe_netzwache loopback_literal_bleibt_gruen gruen '"127.0.0.1:3000:3000"'
+# $1 Name  $2 erwartet (rot|gruen)  $3 Dienstkoerper (YAML, eingerueckt unter app:)
+# Zusatzumgebung: ENV_ZUSATZ (z. B. "APP_BIND=0.0.0.0 NETZWACHE_MIT_UMGEBUNG=1")
+pruefe_dienst() {
+    neues_repo
+    printf 'services:\n  app:\n    image: probe\n%s\n' "$3" > "$repo/docker-compose.yml"
+    git -C "$repo" add -A
+    git -C "$repo" commit -q -m probe
+    # shellcheck disable=SC2086
+    aus=$( cd "$repo" && env ${ENV_ZUSATZ:-NETZWACHE_X=1} "$wache" 2>&1 )
+    if printf '%s' "$aus" | grep -qF -- "netz: ROT"; then ist=rot
+    elif printf '%s' "$aus" | grep -qF -- "NICHT GEMESSEN"; then ist=ungemessen
+    else ist=gruen; fi
+    if [ "$ist" = "$2" ]; then ergebnis "$1" 0 ""; else
+        ergebnis "$1" 1 "erwartet $2, war $ist: $aus"; fi
+}
+
+p() { printf '    ports:\n      - %s' "$1"; }
+
+pruefe_dienst variable_mit_loopback_vorgabe_ist_gruen gruen \
+    "$(p '"${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"')"
+pruefe_dienst variable_mit_offener_vorgabe_ist_rot rot \
+    "$(p '"${APP_BIND:-0.0.0.0}:${APP_PORT:-3000}:3000"')"
+pruefe_dienst variable_ohne_vorgabe_ist_rot rot "$(p '"${APP_BIND}:${APP_PORT:-3000}:3000"')"
+pruefe_dienst variable_mit_leerer_vorgabe_ist_rot rot "$(p '"${APP_BIND:-}:${APP_PORT:-3000}:3000"')"
+pruefe_dienst offener_port_bleibt_rot rot "$(p '"3000:3000"')"
+pruefe_dienst loopback_literal_bleibt_gruen gruen "$(p '"127.0.0.1:3000:3000"')"
+# Die drei Luecken des alten Textmusters:
+pruefe_dienst ipv6_alle_schnittstellen_ist_rot rot "$(p '"[::]:3000:3000"')"
+pruefe_dienst einfache_anfuehrung_mit_variable_ist_rot rot "$(p "'\${X:-0.0.0.0}:3000:3000'")"
+pruefe_dienst langform_target_published_ist_rot rot \
+    "$(printf '    ports:\n      - target: 3000\n        published: "3000"')"
+# Weitere Wege nach aussen:
+pruefe_dienst langform_mit_fremder_host_ip_ist_rot rot \
+    "$(printf '    ports:\n      - target: 3000\n        published: "3000"\n        host_ip: 192.0.2.1')"
+pruefe_dienst langform_mit_loopback_ist_gruen gruen \
+    "$(printf '    ports:\n      - target: 3000\n        published: "3000"\n        host_ip: 127.0.0.1')"
+pruefe_dienst port_ohne_host_angabe_ist_rot rot "$(p '"3000"')"
+pruefe_dienst network_mode_host_ist_rot rot "    network_mode: host"
+
+# Verhalten bei gesetzter Umgebung: Standard misst die Vorgabe der Dateien (eine
+# Betreiberumgebung blockiert keinen Push); mit NETZWACHE_MIT_UMGEBUNG=1 wird sie
+# mitgemessen, und APP_BIND=0.0.0.0 ist dann rot.
+LOOP='"${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"'
+ENV_ZUSATZ="APP_BIND=0.0.0.0" pruefe_dienst \
+    gesetztes_app_bind_wird_standardmaessig_nicht_gemessen gruen "$(p "$LOOP")"
+ENV_ZUSATZ="APP_BIND=0.0.0.0 NETZWACHE_MIT_UMGEBUNG=1" pruefe_dienst \
+    gesetztes_app_bind_0000_ist_mit_umgebung_rot rot "$(p "$LOOP")"
+ENV_ZUSATZ="NETZWACHE_MIT_UMGEBUNG=1" pruefe_dienst \
+    ungesetztes_app_bind_ist_mit_umgebung_die_vorgabe_gruen gruen "$(p "$LOOP")"
+
+# Zusatzdateien: die Wache misst auch die Kombinationen.
+neues_repo
+printf 'services:\n  db:\n    image: probe\n' > "$repo/docker-compose.yml"
+printf 'services:\n  db:\n    ports:\n      - "5432:5432"\n' > "$repo/docker-compose.db-port.yml"
+git -C "$repo" add -A
+git -C "$repo" commit -q -m probe
+aus=$( cd "$repo" && "$wache" 2>&1 )
+printf '%s' "$aus" | grep -qF -- "netz: ROT"
+ergebnis offene_zusatzdatei_db_port_ist_rot $? "$aus"
+
+# Nicht gemessen ist nicht gruen: PATH ohne docker.
+neues_repo
+printf 'services:\n  app:\n    image: probe\n' > "$repo/docker-compose.yml"
+git -C "$repo" add -A
+git -C "$repo" commit -q -m probe
+ohne="$werkstatt/ohne-docker"
+mkdir -p "$ohne"
+for pfad in /usr/bin/* /bin/*; do
+    name=${pfad##*/}
+    [ "$name" = docker ] && continue
+    [ -e "$ohne/$name" ] || ln -s "$pfad" "$ohne/$name"
+done
+# Direkt netzwache.sh: ueber wachen.sh waere rc!=0 schon durch andere Wachen erfuellt.
+aus=$( cd "$repo" && PATH="$ohne" /bin/sh "$hier/netzwache.sh" 2>&1 )
+rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$aus" | grep -qF -- "NICHT GEMESSEN" \
+   && ! printf '%s' "$aus" | grep -qF -- "netz: ROT"; then r=0; else r=1; fi
+ergebnis fehlendes_docker_ist_nicht_gemessen_und_nicht_gruen $r "rc=$rc: $aus"
 
 # --- Teil B: die lebenden Dateien -----------------------------------------------------
 compose="$wurzel/docker-compose.yml"

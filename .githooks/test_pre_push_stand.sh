@@ -26,7 +26,7 @@ trap 'rm -rf "$werkstatt"' EXIT
 schreib_gruen() {
     root=$1
     mkdir -p "$root/backend" "$root/.githooks"
-    printf '%s\n' 'services: {}' > "$root/docker-compose.yml"
+    printf '%s\n' 'services:' '  app:' '    image: probe' > "$root/docker-compose.yml"
     printf '%s\n' \
         'FROM scratch' \
         'RUN adduser --system --uid 100 --gid 101 x' \
@@ -47,6 +47,7 @@ schreib_rot_netz() {
     printf '%s\n' \
         'services:' \
         '  app:' \
+        '    image: probe' \
         '    ports:' \
         '      - "3000:3000"' \
         > "$1/docker-compose.yml"
@@ -67,6 +68,8 @@ neues_repo() {
     cp "$hier/pre-push" "$d/.githooks/pre-push"
     cp "$hier/datenwache.sh" "$d/.githooks/datenwache.sh"
     cp "$hier/wachen.sh" "$d/.githooks/wachen.sh"
+    cp "$hier/netzwache.sh" "$d/.githooks/netzwache.sh"
+    cp "$hier/compose_ports_pruefen.py" "$d/.githooks/compose_ports_pruefen.py"
     # Hilfsskript, sobald vorhanden (nach Implementierung); fehlend = alter Hook.
     if [ -f "$hier/pre-push-stand.sh" ]; then
         cp "$hier/pre-push-stand.sh" "$d/.githooks/pre-push-stand.sh"
