@@ -92,7 +92,7 @@ def save_company(
     address_line2: str = Form(""),
     zip_code: str = Form(...),
     city: str = Form(...),
-    country: str = Form("DE"),
+    country: str = Form(...),
     tax_number: str = Form(""),
     vat_id: str = Form(""),
     email: str = Form(""),
@@ -127,6 +127,8 @@ def save_company(
     # der Sitzung und ein späterer Commit an anderer Stelle nähme sie mit.
     if (meldung := pruefe_praefix(invoice_prefix)):
         return settings_page(request, db, saved=False, error=meldung)
+    if not country.strip():
+        return settings_page(request, db, saved=False, error="Bitte ein Land wählen.")
     if rechtsform not in RECHTSFORMEN:
         return settings_page(request, db, saved=False,
                              error="Bitte die Rechtsform wählen (Pflichtangaben auf Rechnungen).")

@@ -37,12 +37,6 @@ def test_kunde_speichert_das_normalisierte_land(web, pg_session):
     assert pg_session.query(Customer).filter(Customer.name == "Land Kunde A").one().country == "AT"
 
 
-def test_kunde_ohne_land_bekommt_de(web, pg_session):
-    web.post("/customers/neu", data=_kundendaten(country="   ", name="Land Kunde B"))
-
-    assert pg_session.query(Customer).filter(Customer.name == "Land Kunde B").one().country == "DE"
-
-
 @pytest.mark.parametrize("roh,erwartet", [(" at ", "AT"), ("   ", "DE"), ("nl", "NL")])
 def test_ersteinrichtung_speichert_das_normalisierte_land(web, pg_session, roh, erwartet):
     _uneingerichtet(pg_session)
@@ -54,7 +48,7 @@ def test_ersteinrichtung_speichert_das_normalisierte_land(web, pg_session, roh, 
     assert pg_session.get(Company, 1).country == erwartet
 
 
-@pytest.mark.parametrize("roh,erwartet", [(" fr ", "FR"), ("   ", "DE"), ("it", "IT")])
+@pytest.mark.parametrize("roh,erwartet", [(" fr ", "FR"), ("it", "IT")])
 def test_firmenstammdaten_speichern_das_normalisierte_land(web, pg_session, roh, erwartet):
     firma = pg_session.get(Company, 1)
     r = web.post("/settings/firma", data={

@@ -121,6 +121,9 @@ def _kunde_anlegen(request, db, *, number, values, bank, stamm, steuer, vorgaben
     cc_fehler = empfaenger.pruefe(stamm["cc_emails"])
     if cc_fehler:
         return _render_form(request, None, number, values, cc_fehler)
+    land_fehler = kform.land_pruefen(stamm["country"])
+    if land_fehler:
+        return _render_form(request, None, number, values, land_fehler)
     vorgaben_fehler = kform.vorgaben_pruefen(
         vorgaben["auftrag_steuer"], vorgaben["belegsprache_vorgabe"],
     )
@@ -152,7 +155,7 @@ def create_customer(
     request: Request, db: Session = Depends(get_db),
     name: str = Form(...), customer_number: str = Form(""),
     address_line1: str = Form(...), address_line2: str = Form(""),
-    zip_code: str = Form(...), city: str = Form(...), country: str = Form("DE"),
+    zip_code: str = Form(...), city: str = Form(...), country: str = Form(...),
     vat_id: str = Form(""), tax_number: str = Form(""),
     ust_status: str = Form(UST_STATUS_UNGEKLAERT), gutschriftempfaenger: str = Form(""),
     email: str = Form(""), cc_emails: str = Form(""), phone: str = Form(""),
@@ -215,6 +218,9 @@ def _kunde_aktualisieren(request, db, customer, *, number, bank, stamm, steuer, 
     cc_fehler = empfaenger.pruefe(stamm["cc_emails"])
     if cc_fehler:
         return _render_form(request, customer, "", {}, cc_fehler)
+    land_fehler = kform.land_pruefen(stamm["country"])
+    if land_fehler:
+        return _render_form(request, customer, "", {}, land_fehler)
     vorgaben_fehler = kform.vorgaben_pruefen(
         vorgaben["auftrag_steuer"], vorgaben["belegsprache_vorgabe"],
     )
@@ -265,7 +271,7 @@ def update_customer(
     request: Request, customer_id: uuid.UUID, db: Session = Depends(get_db),
     name: str = Form(...), customer_number: str = Form(""),
     address_line1: str = Form(...), address_line2: str = Form(""),
-    zip_code: str = Form(...), city: str = Form(...), country: str = Form("DE"),
+    zip_code: str = Form(...), city: str = Form(...), country: str = Form(...),
     vat_id: str = Form(""), tax_number: str = Form(""),
     ust_status: str = Form(UST_STATUS_UNGEKLAERT), gutschriftempfaenger: str = Form(""),
     email: str = Form(""), cc_emails: str = Form(""), phone: str = Form(""),
