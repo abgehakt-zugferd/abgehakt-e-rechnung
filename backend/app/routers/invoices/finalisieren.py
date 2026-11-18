@@ -72,6 +72,13 @@ def zahlungshinweis_uebernehmen(invoice_id: uuid.UUID, db: Session = Depends(get
 
 @status_router.get("/{invoice_id}/pdf")
 def download_pdf(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
+    """PDF einer finalisierten Rechnung.
+
+    Zusage: liefert den beim Finalisieren geprüften und gespeicherten Beleg byte-gleich aus
+    und prüft ihn bewusst nicht erneut. Der Beleg ist unveränderlich; eine Neuprüfung mit
+    einer neueren Mustang-Fassung darf einen festgeschriebenen Beleg nicht nachträglich
+    sperren (Test: tests/test_belege_byte_gleich.py).
+    """
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice or not invoice.pdf_filename:
         raise HTTPException(404, "PDF nicht gefunden")
