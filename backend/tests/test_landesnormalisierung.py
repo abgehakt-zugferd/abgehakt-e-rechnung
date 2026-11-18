@@ -37,7 +37,7 @@ def test_kunde_speichert_das_normalisierte_land(web, pg_session):
     assert pg_session.query(Customer).filter(Customer.name == "Land Kunde A").one().country == "AT"
 
 
-@pytest.mark.parametrize("roh,erwartet", [(" at ", "AT"), ("   ", "DE"), ("nl", "NL")])
+@pytest.mark.parametrize("roh,erwartet", [(" at ", "AT"), ("nl", "NL")])
 def test_ersteinrichtung_speichert_das_normalisierte_land(web, pg_session, roh, erwartet):
     _uneingerichtet(pg_session)
 
@@ -46,6 +46,23 @@ def test_ersteinrichtung_speichert_das_normalisierte_land(web, pg_session, roh, 
     assert r.status_code == 303
     pg_session.expire_all()
     assert pg_session.get(Company, 1).country == erwartet
+
+
+@pytest.mark.parametrize("land", ["", "   ", None])
+def test_ersteinrichtung_ohne_land_zeigt_formularfehler_und_speichert_nichts(web, pg_session, land):
+    _uneingerichtet(pg_session)
+    daten = {**FORMULAR}
+    if land is None:
+        daten.pop("country")
+    else:
+        daten["country"] = land
+
+    r = web.post("/setup", data=daten)
+
+    assert r.status_code == 400 and "Bitte ein Land wählen" in r.text
+    pg_session.expire_all()
+    firma = pg_session.get(Company, 1)
+    assert firma.setup_completed_at is None and firma.name != FORMULAR["name"]
 
 
 @pytest.mark.parametrize("roh,erwartet", [(" fr ", "FR"), ("it", "IT")])
