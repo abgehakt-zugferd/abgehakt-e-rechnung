@@ -80,7 +80,7 @@ BEGIN { split(vuln, v, ":"); printf "{\"dependencies\":[" }
     if (erster && modus == "skip") vs = "\"skip_reason\":\"kein Wheel\""
     printf "{\"name\":\"%s\",\"version\":\"%s\",%s}", p[1], p[2], vs
 }
-END { printf "],\"fixes\":[]}\n"; exit (fund ? (modus == "rc2" ? 2 : 1) : (modus == "rc" ? 2 : 0)) }' "$req"
+END { printf "],\"fixes\":[]}\n"; exit (fund ? (modus == "rc2" ? 2 : 1) : (modus == "rc" ? 2 : (modus == "rc1" ? 1 : 0))) }' "$req"
 ATT
 chmod +x "$att/uv" "$att/pip-audit"
 
@@ -178,6 +178,7 @@ AUSNAHMEN="$KEINE" FAKE_PA=vulns_umbenannt lauf fehlendes_vulns_nennt_das_paket 
 AUSNAHMEN="$KEINE" FAKE_PA=skip lauf skip_reason_ist_nicht_geprueft 1 "aiofiles uebersprungen: kein Wheel" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=fremd lauf fremde_namen_gleicher_anzahl_sind_rot 1 "aiofiles fehlt im Bericht" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=fremd lauf fremder_name_im_bericht_wird_genannt 1 "fremd1 nicht im Export" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=rc1 lauf pip_audit_rc1_ohne_fund_ist_werkzeugfehler 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf fehlendes_paket_wird_mit_namen_genannt 1 "aiofiles fehlt im Bericht" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=norm LAUFZEIT="$werkstatt/norm.txt" lauf namen_nach_pep503_gleich_ist_gruen 0 "OK" "NICHT GEMESSEN"
 AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf weniger_geprueft_als_gepinnt_ist_rot 1 "NICHT GEMESSEN" "OK"
