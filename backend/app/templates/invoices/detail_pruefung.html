@@ -22,6 +22,7 @@
                             <span style="color:var(--pink);">{{ err.message }}</span>
                             {% set code = err.code|default('') %}{% if code.startswith('MUSTANG_') %}<span data-mustang-regel="{{ code[8:] }}" style="color:var(--text-dim);"> [{{ code[8:] }}]</span>{% endif %}
                             {% if err.field and not code.startswith('MUSTANG_') %}<span style="color:var(--text-dim);"> ({{ err.field }})</span>{% endif %}
+                            {% if err.field and code.startswith('MUSTANG_') %}<span data-mustang-ort style="color:var(--text-dim);"> ({{ err.field|pruefort }})</span>{% endif %}
                         </div>
                     </div>
                     {% endfor %}
@@ -34,7 +35,7 @@
                     <div style="display:flex; gap:8px; margin-bottom:6px; font-family:'VT323',monospace; font-size:var(--fs-gross);">
                         <span style="color:var(--amber); flex-shrink:0;">⚠</span>
                         {% set code = w.code|default('') %}
-                        <span style="color:var(--amber);">{{ w.message }}{% if code.startswith('MUSTANG_') %}<span data-mustang-regel="{{ code[8:] }}" style="color:var(--text-dim);"> [{{ code[8:] }}]</span>{% endif %}</span>
+                        <span style="color:var(--amber);">{{ w.message }}{% if code.startswith('MUSTANG_') %}<span data-mustang-regel="{{ code[8:] }}" style="color:var(--text-dim);"> [{{ code[8:] }}]</span>{% endif %}{% if w.field and code.startswith('MUSTANG_') %}<span data-mustang-ort style="color:var(--text-dim);"> ({{ w.field|pruefort }})</span>{% endif %}</span>
                     </div>
                     {% endfor %}
                 </div>

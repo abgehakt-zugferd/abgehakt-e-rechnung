@@ -123,6 +123,11 @@ def archive_page(request: Request, db: Session = Depends(get_db), q: str = "", s
 def archive_file(bereich: str, name: str, db: Session = Depends(get_db)):
     """Einzelne Archivdatei ausliefern.
 
+    Zusage: liefert den beim Finalisieren geprüften und gespeicherten Beleg byte-gleich aus
+    und prüft ihn bewusst nicht erneut. Der Beleg ist unveränderlich; eine Neuprüfung mit
+    einer neueren Mustang-Fassung darf einen festgeschriebenen Beleg nicht nachträglich
+    sperren (Test: tests/test_belege_byte_gleich.py).
+
     Der Dateiname kommt aus der URL — ohne Eingrenzung wäre das ein Leseloch in den
     ganzen Container. Zwei Schranken: `Path(name).name` wirft jede Pfadangabe weg,
     und der aufgelöste Pfad muss danach WIRKLICH im Zielverzeichnis liegen (fängt

@@ -390,7 +390,17 @@ def normalisiere_land(wert: str | None) -> str:
     Eine Stelle für Kundenformular, Ersteinrichtung und Firmenstammdaten; ein leeres
     Land landete sonst als leeres CountryID-Element in der E-Rechnung.
     """
-    return (wert or "").strip().upper() or "DE"
+    return bereinige_land(wert) or "DE"
+
+
+def bereinige_land(wert: str | None) -> str:
+    """Ländercode im Lesepfad (XML, Belegrollen): ohne Leerraum, groß, sonst nichts.
+
+    Anders als `normalisiere_land` (Formularweg) ersetzt diese Funktion nichts: ein
+    leeres Land bleibt leer. Wer ein gespeichertes Land liest, darf keines erfinden;
+    die Vorgabe „DE“ gilt nur dort, wo ein Mensch ein Formular abschickt.
+    """
+    return (wert or "").strip().upper()
 
 
 def registriere_laender_globals(templates: Jinja2Templates) -> None:

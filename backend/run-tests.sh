@@ -75,6 +75,8 @@ docker run --rm \
   `# storage/secret.key selbst. Genau das soll die Baseline mitprüfen — der` \
   `# Wegwerf-Container liest kein .env, ist also der ehrlichste Testfall dafür.` \
   -e DB_APP_PASSWORD="test-app-passwort-nur-fuer-testlauf" \
+  `# Das JAR liegt im Test-Abbild; fehlt es, bricht der Lauf ab statt still zu skippen.` \
+  -e MUSTANG_ERWARTET=1 \
   -v "$(pwd)/app:/app/app:ro" \
   -v "$(pwd)/tests:/app/tests:ro" \
   ${vektor_args[@]+"${vektor_args[@]}"} \

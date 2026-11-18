@@ -22,6 +22,7 @@ from app.services.ersteinrichtung import (
     einrichtung_abschliessen,
     einrichtung_luecke,
 )
+from app.services.kundenformular import land_pruefen
 from app.services.pflichtangaben import RECHTSFORMEN
 
 router = APIRouter()
@@ -60,6 +61,8 @@ async def speichern(request: Request, db: Session = Depends(get_db)):
     if (meldung := einrichtung_luecke(probe)):
         return _mit_fehler(request, db, werte, meldung)
 
+    if (meldung := land_pruefen(werte["country"])):
+        return _mit_fehler(request, db, werte, meldung)
     if (meldung := pruefe_iban(werte["bank_iban"])):
         return _mit_fehler(request, db, werte, meldung)
     if (meldung := pruefe_bic(werte["bank_bic"])):

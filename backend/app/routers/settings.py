@@ -29,6 +29,7 @@ from app.services.steuer_ruecklage import (
 )
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
+from app.services.kundenformular import land_pruefen
 from app.laender import normalisiere_land, registriere_laender_globals
 
 router = APIRouter()
@@ -92,7 +93,7 @@ def save_company(
     address_line2: str = Form(""),
     zip_code: str = Form(...),
     city: str = Form(...),
-    country: str = Form("DE"),
+    country: str = Form(...),
     tax_number: str = Form(""),
     vat_id: str = Form(""),
     email: str = Form(""),
@@ -126,6 +127,8 @@ def save_company(
     # sagt. Würde erst am Ende geprüft, hingen die übrigen Zuweisungen bereits in
     # der Sitzung und ein späterer Commit an anderer Stelle nähme sie mit.
     if (meldung := pruefe_praefix(invoice_prefix)):
+        return settings_page(request, db, saved=False, error=meldung)
+    if (meldung := land_pruefen(country)):
         return settings_page(request, db, saved=False, error=meldung)
     if rechtsform not in RECHTSFORMEN:
         return settings_page(request, db, saved=False,

@@ -1,12 +1,16 @@
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import String, Boolean, DateTime, Integer, Numeric, func
+from sqlalchemy import CheckConstraint, String, Boolean, DateTime, Integer, Numeric, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
 class Company(Base):
     __tablename__ = "company"
+    __table_args__ = (
+        # Identisch zu Migration 036 (alembic check); NOT VALID dort, weil Altzeilen möglich sind.
+        CheckConstraint("country <> ''", name="ck_company_country_nicht_leer"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     # KEINE Defaults auf den Firmenfeldern (#99 §4.1): sie ließen eine frische

@@ -39,6 +39,18 @@ def _vektor_lage() -> str:
     )
 
 
+def pytest_sessionstart(session):
+    """Erwartet die Umgebung das Mustang-JAR (MUSTANG_ERWARTET), ist sein Fehlen rot."""
+    import os
+
+    from app.services import mustang
+    from tests.helpers.mustang_erwartet import jar_fehlt_obwohl_erwartet
+
+    meldung = jar_fehlt_obwohl_erwartet(os.environ, jar_da=mustang.jar_available())
+    if meldung:
+        pytest.exit(meldung, returncode=1)
+
+
 def pytest_report_header(config):
     return _vektor_lage()
 

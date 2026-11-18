@@ -35,6 +35,13 @@ def export_page(request: Request):
 
 @router.get("/gobd")
 def download_gobd(von: date, bis: date, db: Session = Depends(get_db)):
+    """GoBD-Export (Z3-ZIP).
+
+    Zusage: legt den beim Finalisieren geprüften und gespeicherten Beleg byte-gleich aus
+    und prüft ihn bewusst nicht erneut. Der Beleg ist unveränderlich; eine Neuprüfung mit
+    einer neueren Mustang-Fassung darf einen festgeschriebenen Beleg nicht nachträglich
+    sperren (Test: tests/test_belege_byte_gleich.py).
+    """
     if bis < von:
         raise HTTPException(400, "Das Enddatum darf nicht vor dem Startdatum liegen.")
 

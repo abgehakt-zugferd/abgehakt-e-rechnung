@@ -37,13 +37,7 @@ def test_kunde_speichert_das_normalisierte_land(web, pg_session):
     assert pg_session.query(Customer).filter(Customer.name == "Land Kunde A").one().country == "AT"
 
 
-def test_kunde_ohne_land_bekommt_de(web, pg_session):
-    web.post("/customers/neu", data=_kundendaten(country="   ", name="Land Kunde B"))
-
-    assert pg_session.query(Customer).filter(Customer.name == "Land Kunde B").one().country == "DE"
-
-
-@pytest.mark.parametrize("roh,erwartet", [(" at ", "AT"), ("   ", "DE"), ("nl", "NL")])
+@pytest.mark.parametrize("roh,erwartet", [(" at ", "AT"), ("nl", "NL")])
 def test_ersteinrichtung_speichert_das_normalisierte_land(web, pg_session, roh, erwartet):
     _uneingerichtet(pg_session)
 
@@ -54,7 +48,24 @@ def test_ersteinrichtung_speichert_das_normalisierte_land(web, pg_session, roh, 
     assert pg_session.get(Company, 1).country == erwartet
 
 
-@pytest.mark.parametrize("roh,erwartet", [(" fr ", "FR"), ("   ", "DE"), ("it", "IT")])
+@pytest.mark.parametrize("land", ["", "   ", None])
+def test_ersteinrichtung_ohne_land_zeigt_formularfehler_und_speichert_nichts(web, pg_session, land):
+    _uneingerichtet(pg_session)
+    daten = {**FORMULAR}
+    if land is None:
+        daten.pop("country")
+    else:
+        daten["country"] = land
+
+    r = web.post("/setup", data=daten)
+
+    assert r.status_code == 400 and "Bitte ein Land wählen" in r.text
+    pg_session.expire_all()
+    firma = pg_session.get(Company, 1)
+    assert firma.setup_completed_at is None and firma.name != FORMULAR["name"]
+
+
+@pytest.mark.parametrize("roh,erwartet", [(" fr ", "FR"), ("it", "IT")])
 def test_firmenstammdaten_speichern_das_normalisierte_land(web, pg_session, roh, erwartet):
     firma = pg_session.get(Company, 1)
     r = web.post("/settings/firma", data={
@@ -80,3 +91,53 @@ def test_leeres_kundenland_wird_von_der_datenbank_abgewiesen(pg_session):
     with pytest.raises(IntegrityError):
         pg_session.commit()
     pg_session.rollback()
+
+
+def test_rueckfall_auf_de_steht_nur_in_laender_py():
+    """Eine Quelle für den Rückfall: `normalisiere_land`. Andere Stellen rufen sie auf,
+    statt „DE“ als Ersatzwert selbst zu schreiben (`or "DE"`, `else "DE"`, Vorgabe am Feld).
+    Gelesene Länder (`bereinige_land`) bekommen keinen Ersatz."""
+    import re
+    from pathlib import Path
+
+    app = Path(__file__).resolve().parent.parent / "app"
+    muster = re.compile(r"""(?:\bor|\belse)\s+["']DE["']|country\s*:\s*str\s*=\s*["']DE["']""")
+    treffer = [f"{p.relative_to(app)}:{n}"
+               for p in app.rglob("*.py") if p.name != "laender.py"
+               for n, zeile in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+               if muster.search(zeile)]
+    assert treffer == []
+
+
+def test_partei_vorgabe_laeuft_ueber_normalisiere_land_und_fehlender_kunde_hat_kein_land():
+    from app.services.belegrollen import Partei
+    from app.services.zugferd_xml.parteien import buyer_trade_party_xml
+
+    assert Partei().country == normalisiere_land(None) == "DE"
+    # Ohne Kunden kein CountryID: kein erfundenes DE (Docstring von buyer_trade_party_xml).
+    assert "CountryID" not in buyer_trade_party_xml(None, "S")
+
+
+# Vorbelegungen, die der Nutzer im Formular sieht und ändern kann (kein stiller Rückfall).
+_SICHTBARE_VORBELEGUNG = {
+    "customers/form.html": "values.get('country') or 'DE'",
+    "setup/index.html": "wert('country') or 'DE'",
+}
+
+
+def test_templates_haben_nur_die_benannten_de_vorbelegungen():
+    """Der Lint zu `normalisiere_land` sucht in `*.py`; Templates dürfen `or 'DE'` nur
+    als sichtbare Formular-Vorbelegung führen, und zwar genau an den benannten Stellen."""
+    import re
+    from pathlib import Path
+
+    templates = Path(__file__).resolve().parent.parent / "app" / "templates"
+    muster = re.compile(r"""\bor\s+['"]DE['"]""")
+    treffer = {}
+    for p in templates.rglob("*.html"):
+        zeilen = [z for z in p.read_text(encoding="utf-8").splitlines() if muster.search(z)]
+        if zeilen:
+            treffer[p.relative_to(templates).as_posix()] = zeilen
+    assert set(treffer) == set(_SICHTBARE_VORBELEGUNG)
+    for datei, zeilen in treffer.items():
+        assert all(_SICHTBARE_VORBELEGUNG[datei] in z for z in zeilen)

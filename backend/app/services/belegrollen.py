@@ -5,7 +5,7 @@ haben eigene Empfänger und dürfen deshalb nicht durch diesen Tausch laufen.
 """
 from dataclasses import dataclass
 
-from app.laender import normalisiere_land
+from app.laender import bereinige_land, normalisiere_land
 from app.services.belegart import belegart
 
 
@@ -16,7 +16,7 @@ class Partei:
     address_line2: str = ""
     zip_code: str = ""
     city: str = ""
-    country: str = "DE"
+    country: str = normalisiere_land(None)   # Vorgabe nur für Partei() ohne Angabe
     email: str = ""
     phone: str = ""
     steuernummer: str = ""
@@ -63,7 +63,7 @@ def _partei(objekt, *, firma: bool) -> Partei:
         )
     }
     return Partei(
-        **felder, country=normalisiere_land(getattr(objekt, "country", None)),
+        **felder, country=bereinige_land(getattr(objekt, "country", None)),
         steuernummer=wert("tax_number"), ust_id=wert("vat_id"),
         kennung="" if firma else wert("customer_number"),
         # Nur die Firma hat einen gepflegten Kontaktpunkt. Beim Kunden ist

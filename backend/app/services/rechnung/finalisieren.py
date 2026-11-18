@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -209,6 +210,9 @@ def einbettung_abweisen(db: Session, pruefgrund: str) -> None:
     )
 
 
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+
+
 def warnungen_pruefen(db: Session, ergebnis: dict, bestaetigt: list[str] | None,
                       xml_sha256: str, bestaetigter_hash: str | None) -> list[str]:
     """Mustang-Warnungen gegen die Bestätigung des Nutzers halten.
@@ -216,7 +220,8 @@ def warnungen_pruefen(db: Session, ergebnis: dict, bestaetigt: list[str] | None,
     Liefert die bestätigten (übergangenen) Regelkennungen, leer ohne Warnung. Die
     Bestätigung gilt nur, wenn Regelmenge UND Hash des in diesem Lauf erzeugten XML
     mit dem übereinstimmen, was der Nutzer gesehen hat (`bestaetigter_hash` aus dem
-    Formular; fehlt er oder ist er fremd, gilt nichts). Sonst wird NICHT finalisiert:
+    Formular; fehlt er, ist er fremd oder kein SHA-256 aus 64 Hex-Zeichen, gilt nichts; zwei
+    fehlende Hashes sind keine Übereinstimmung). Sonst wird NICHT finalisiert:
     Rollback wie bei einem Fehler (Entwurf bleibt, nichts verbraucht), und der Nutzer
     bekommt die Warnungen erneut zur Entscheidung (FinalisierungWarnung).
     """
@@ -224,7 +229,9 @@ def warnungen_pruefen(db: Session, ergebnis: dict, bestaetigt: list[str] | None,
     if not warnungen:
         return []
     schluessel = sorted({warnungsschluessel(w) for w in warnungen})
-    if sorted(set(bestaetigt or [])) != schluessel or bestaetigter_hash != xml_sha256:
+    hash_echt = bool(bestaetigter_hash and _SHA256.fullmatch(bestaetigter_hash)
+                     and bestaetigter_hash == xml_sha256)
+    if sorted(set(bestaetigt or [])) != schluessel or not hash_echt:
         db.rollback()
         raise FinalisierungWarnung(warnungen, xml_sha256)
     return schluessel

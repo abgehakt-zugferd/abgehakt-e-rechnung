@@ -326,7 +326,7 @@ gesamten fail-closed-Weg im Finalisieren **vorbei**: kein `unlink` der Zwischen-
 Rechnungsnummer in `storage/pdfs/`, im GoBD-Archiv später nicht mehr von einem Beleg zu
 unterscheiden. Beide Stellen fangen die Ausnahme deshalb ab und melden sie als gewöhnlichen
 Fehlschlag (`combine` → `False`, `validate` → `is_valid False` mit `[error]`-Marker, damit
-auch `_no_errors` greift).
+auch die Befundauswertung ihn als Fehler liest).
 
 Aufgefallen ist das nicht im Betrieb, sondern in der eigenen Suite: `test_kontaktdaten_und_
 referenz.py::test_die_erweiterte_rechnung_bleibt_schema_gueltig` fiel **einmal** um, während

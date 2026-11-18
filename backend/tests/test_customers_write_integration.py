@@ -28,7 +28,8 @@ def _client(pg_session):
     return TestClient(app, follow_redirects=False)
 
 
-_REQUIRED = {"name": "Muster GmbH", "address_line1": "Weg 1", "zip_code": "10115", "city": "Berlin"}
+_REQUIRED = {"name": "Muster GmbH", "address_line1": "Weg 1", "zip_code": "10115", "city": "Berlin",
+             "country": "DE"}
 
 
 def _seed(pg_session, **over):

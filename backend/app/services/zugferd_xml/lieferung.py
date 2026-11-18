@@ -1,5 +1,5 @@
 """Lieferung (HeaderTradeDelivery) und Belegreferenzen (BG-3)."""
-from app.laender import normalisiere_land
+from app.laender import bereinige_land
 from app.models.invoice import Invoice
 from app.services import anzahlungen
 
@@ -43,18 +43,22 @@ def delivery_xml(invoice: Invoice) -> str:
 
     Ohne Datum und ohne Kundenland bleibt der Block leer. Er muss als Element stehen
     (das CII-Schema verlangt ihn zwischen Agreement und Settlement), und das ist der
-    einzige leere Fall; ihn fängt die Warnungs-Rückfrage beim Finalisieren ab. Die
-    Kleinbetragsrechnung ohne Leistungsdatum (§ 33 UStDV, #47) hat in der Regel ein
+    einzige leere Fall; ihn fängt die Warnungs-Rückfrage beim Finalisieren ab (R008).
+    Ein leeres Land wird nicht durch „DE“ ersetzt (`bereinige_land`, nicht
+    `normalisiere_land`): im Lesepfad wird kein Land erfunden. Ein Kunde ohne Land
+    scheitert außerdem an BR-11 (Käuferanschrift), siehe `parteien.buyer_trade_party_xml`.
+    Die Kleinbetragsrechnung ohne Leistungsdatum (§ 33 UStDV, #47) hat in der Regel ein
     Kundenland und fällt deshalb nicht darunter.
     """
     inv_cat = getattr(invoice, "tax_category", "S")
     customer = invoice.customer
     ship_to = ""
-    if customer and (inv_cat == "K" or not invoice.delivery_date):
+    land = bereinige_land(customer.country) if customer else ""
+    if land and (inv_cat == "K" or not invoice.delivery_date):
         ship_to = f"""
             <ram:ShipToTradeParty>
                 <ram:PostalTradeAddress>
-                    <ram:CountryID>{esc(normalisiere_land(customer.country))}</ram:CountryID>
+                    <ram:CountryID>{esc(land)}</ram:CountryID>
                 </ram:PostalTradeAddress>
             </ram:ShipToTradeParty>"""
     delivery_event = ""
