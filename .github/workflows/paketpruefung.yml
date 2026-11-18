@@ -1,0 +1,59 @@
+name: paketpruefung
+
+# Prüft die Python-Pakete aus backend/uv.lock auf bekannte Schwachstellen. Das Repo ist
+# öffentlich und wird von anderen installiert; ohne diesen Lauf merkt niemand, dass ein
+# gepinntes Paket nachträglich eine Meldung bekommt. Die Logik steht in
+# .githooks/pakete_pruefen.sh (mit eigenem Test, `.githooks/test_pakete_pruefen.sh`),
+# dieser Workflow installiert nur die Werkzeuge und ruft es auf.
+#
+# Gemessen wird Laufzeit (was ins Abbild kommt) und Test (Gruppe "test") getrennt.
+# "Nicht gemessen" ist nie grün: fehlt etwas, ist der Lauf rot und sagt NICHT GEMESSEN.
+# Ausnahmen nur über .github/pip-audit-ausnahmen.txt, mit Issue und Ablaufdatum.
+#
+# Der Zeitplan allein genügt nicht: GitHub schaltet geplante Läufe in öffentlichen Repos
+# nach 60 Tagen ohne Aktivität ab. Deshalb laufen push und pull_request bei jeder
+# Änderung an den Paketen ebenfalls; von Hand geht es über workflow_dispatch.
+
+on:
+  schedule:
+    # Montag früh, 05:23 UTC.
+    - cron: '23 5 * * 1'
+  push:
+    branches: [main]
+    paths:
+      - backend/uv.lock
+      - backend/pyproject.toml
+      - .github/workflows/paketpruefung.yml
+      - .github/pip-audit-ausnahmen.txt
+      - .githooks/pakete_pruefen.sh
+      - .githooks/pakete_auswerten.py
+  pull_request:
+    paths:
+      - backend/uv.lock
+      - backend/pyproject.toml
+      - .github/workflows/paketpruefung.yml
+      - .github/pip-audit-ausnahmen.txt
+      - .githooks/pakete_pruefen.sh
+      - .githooks/pakete_auswerten.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pakete:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Feste Fassungen: der Lauf soll reproduzierbar messen. uv wie in backend/Dockerfile,
+      # damit `uv export` dieselbe Lock-Datei liest wie der Abbild-Bau.
+      - name: Werkzeuge installieren
+        run: pip install pip-audit==2.10.1 uv==0.11.32
+
+      - name: Pakete aus uv.lock auf bekannte Lücken prüfen
+        run: .githooks/pakete_pruefen.sh

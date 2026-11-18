@@ -10,6 +10,7 @@ Klammern.
 ### Neu
 
 - **Schlussrechnung verrechnet eine Anzahlung (#259, erster Teil).** Im Rechnungsformular lässt sich eine bezahlte Anzahlungsrechnung desselben Kunden auswählen. Die E-Rechnung führt sie als Vorauszahlung (BT-113) mit Verweis auf die Anzahlungsrechnung, das PDF zieht sie unter der Summe ab. Prüfungen vor dem Finalisieren verhindern doppelte, fremde oder unbezahlte Anzahlungen. Noch nicht enthalten: mehrere Anzahlungen je Rechnung und der Abzug in den Kennzahlen der Übersicht.
+- **Schwachstellenprüfung der Python-Pakete.** Ein neuer GitHub-Workflow (`paketpruefung`) prüft wöchentlich und bei jeder Änderung an `backend/uv.lock` oder `backend/pyproject.toml`, ob ein gepinntes Paket eine bekannte Sicherheitslücke hat, getrennt nach Laufzeitpaketen und Testgruppe. „Nicht gemessen“ (fehlende Lock-Datei, leerer Export, null geprüfte Pakete) ist rot, nie grün. Ausnahmen gibt es nur befristet (höchstens 30 Tage) und mit Issue-Nummer in `.github/pip-audit-ausnahmen.txt`. Für den Betrieb ändert sich nichts; die Prüfung läuft auch lokal mit `.githooks/pakete_pruefen.sh`.
 
 ### Geändert
 
