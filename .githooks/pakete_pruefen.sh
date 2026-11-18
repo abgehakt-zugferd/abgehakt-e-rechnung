@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Schwachstellenpruefung der Python-Pakete gegen backend/uv.lock.
 #
-# Aufrufer ist .github/workflows/pip-audit.yml; das Skript liegt hier, damit es
+# Aufrufer ist .github/workflows/paketpruefung.yml; das Skript liegt hier, damit es
 # einen eigenen Shell-Test hat (test_pakete_pruefen.sh) und der Workflow nur noch
 # aufruft. Lokal geht es genauso: `.githooks/pakete_pruefen.sh` (braucht uv, pip-audit
 # und python3 auf PATH).
@@ -22,8 +22,13 @@
 # gepinnt: Exit 1 mit "NICHT GEMESSEN" und dem Grund. Ein Fund ist ebenfalls Exit 1.
 #
 # Ausnahmen (.github/pip-audit-ausnahmen.txt): Format und Regeln stehen im Kopf dieser
-# Datei. Das Skript prueft Vollstaendigkeit und Ablauf und reicht nur gueltige Kennungen
-# per --ignore-vuln an pip-audit weiter; pip-audit selbst kennt kein Ablaufdatum.
+# Datei, die Pruefung in pakete_auswerten.py (echter Kalendertag, hoechstens 30 Tage ab
+# `seit`, Ablauf). Die Ausnahmen werden hier selbst ausgewertet, nicht per
+# --ignore-vuln: pip-audit kennt kein Ablaufdatum und meldet nicht, ob eine Ausnahme
+# etwas getroffen hat. Eine Ausnahme ohne Fund erscheint als Hinweis (nicht rot).
+#
+# Gruppen: nur "test" ist zugeordnet. Jede weitere Gruppe oder jeder Extra in
+# pyproject.toml ergibt NICHT GEMESSEN mit Namen.
 #
 # Umgebung (fuer Tests): PAKETE_WURZEL (Repo-Wurzel), PAKETE_HEUTE (JJJJ-MM-TT).
 set -uo pipefail

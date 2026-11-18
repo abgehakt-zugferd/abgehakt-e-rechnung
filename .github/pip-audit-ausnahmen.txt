@@ -6,19 +6,28 @@
 # den Fall, dass es keine behobene Fassung gibt oder ein Update nachweislich nicht
 # möglich ist, und sie läuft ab.
 #
-# Eine Ausnahme pro Zeile, drei Felder, durch Leerzeichen getrennt:
+# Eine Ausnahme pro Zeile, vier Felder, durch Leerzeichen getrennt:
 #
-#   Kennung   Issue   Ablaufdatum
+#   Kennung   Issue   Ablaufdatum   seit
 #
-#   Kennung       die Kennung aus der Fundmeldung (PYSEC-..., GHSA-..., CVE-...)
+#   Kennung       die Kennung aus der Fundmeldung (PYSEC-..., GHSA-..., CVE-...); ein Alias
+#                 aus der Meldung genügt ebenfalls
 #   Issue         Nummer des Issues, das Begründung und Folgeschritt trägt (#123 oder 123)
-#   Ablaufdatum   JJJJ-MM-TT; am Ablauftag gilt die Ausnahme noch, danach ist der Lauf rot
+#   Ablaufdatum   JJJJ-MM-TT, ein echter Kalendertag; am Ablauftag gilt die Ausnahme noch,
+#                 danach ist der Lauf rot
+#   seit          JJJJ-MM-TT, der Tag, an dem die Ausnahme eingetragen wurde; nicht in
+#                 der Zukunft
+#
+# Höchstfrist: das Ablaufdatum liegt höchstens 30 Tage nach `seit` (nicht nach heute;
+# sonst wanderte die Frist mit jedem Lauf mit). Dieselbe Zahl gilt in allen Projekten.
+# Länger braucht einen neuen Eintrag mit neuem `seit` und neuer Begründung im Issue.
 #
 # Beispiel (erfunden, nicht aktiv):
-#   PYSEC-0000-00000 #123 2027-01-31
+#   PYSEC-0000-00000 #123 2027-01-20 2026-12-21
 #
-# Rot ist der Lauf auch bei einer Zeile mit fehlendem oder ungültigem Feld, nicht nur bei
-# einer abgelaufenen. Zeilen mit # am Anfang und Leerzeilen zählen nicht. Die Datei muss
-# vorhanden sein (leer genügt); fehlt sie, ist der Lauf "NICHT GEMESSEN".
+# Rot ist der Lauf auch bei einer Zeile mit fehlendem oder ungültigem Feld, bei zu langer
+# Frist und bei einer abgelaufenen. Eine Ausnahme, die zu keinem Fund passt, erscheint
+# in der Ausgabe als Hinweis; sie kann dann gestrichen werden. Zeilen mit # am Anfang
+# und Leerzeilen zählen nicht. Die Datei muss vorhanden sein (leer genügt); fehlt sie, ist der Lauf "NICHT GEMESSEN".
 #
 # Aktuell keine Ausnahmen.

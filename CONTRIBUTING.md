@@ -165,7 +165,7 @@ Bau des Abbilds bricht ab, sobald Lock und `pyproject.toml` auseinanderlaufen.
 
 **Bekannte Lücken in Paketen** prüft der Workflow `paketpruefung` (wöchentlich, bei jeder
 Änderung an `backend/uv.lock` oder `backend/pyproject.toml` und von Hand). Ist er rot, wird
-zuerst das Paket aktualisiert; nur wenn das nicht geht, kommt eine befristete Ausnahme mit
+zuerst das Paket aktualisiert; nur wenn das nicht geht, kommt eine auf 30 Tage befristete Ausnahme mit
 Issue-Nummer in `.github/pip-audit-ausnahmen.txt` (Format im Kopf der Datei). Lokal:
 `.githooks/pakete_pruefen.sh` (braucht `uv` und `pip-audit`). Laut GitHub-Dokumentation
 schaltet GitHub geplante Läufe in öffentlichen Repos nach 60 Tagen ohne Aktivität ab; das

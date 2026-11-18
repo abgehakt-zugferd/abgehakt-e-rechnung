@@ -242,5 +242,26 @@ AUSNAHMEN="PYSEC-0001 #12 2026-12-10 2026-11-18
 AUSNAHMEN="PYSEC-0002 #12 2026-12-10 2026-11-18
 " FAKE_VULN="pytest:PYSEC-0002:9.9" lauf ausnahme_deckt_fund_im_test_lauf_ist_kein_hinweis 0 "OK" "Hinweis"
 
+# Architektur-Lint (der Text ist hier die Regel): jede Workflow-Datei, die das Skript
+# oder der Workflow beim Namen nennt, muss es geben. Zeilen mit # zaehlen mit, denn
+# gerade die Kopfkommentare lagen daneben.
+wurzel=$(cd "$hier/.." && pwd)
+zahl=$((zahl + 1))
+genannt=$(grep -ho '\.github/workflows/[A-Za-z0-9_.-]*\.yml' "$skript" "$hier/pakete_auswerten.py" \
+    "$wurzel/.github/pip-audit-ausnahmen.txt" | sort -u)
+if [ -z "$genannt" ]; then
+    echo "ROT  genannte_workflows_existieren: kein Workflow genannt, die Pruefung misst nichts" >&2
+    fehl=1
+else
+    fehlt=
+    for f in $genannt; do [ -f "$wurzel/$f" ] || fehlt="$fehlt $f"; done
+    if [ -n "$fehlt" ]; then
+        echo "ROT  genannte_workflows_existieren: nicht vorhanden:$fehlt" >&2
+        fehl=1
+    else
+        echo "gruen genannte_workflows_existieren"
+    fi
+fi
+
 [ "$fehl" -eq 0 ] && echo "test_pakete_pruefen: alle gruen ($zahl Faelle)"
 exit "$fehl"
