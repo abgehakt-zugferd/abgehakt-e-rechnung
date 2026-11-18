@@ -80,7 +80,7 @@ BEGIN { split(vuln, v, ":"); printf "{\"dependencies\":[" }
     if (erster && modus == "skip") vs = "\"skip_reason\":\"kein Wheel\""
     printf "{\"name\":\"%s\",\"version\":\"%s\",%s}", p[1], p[2], vs
 }
-END { printf "],\"fixes\":[]}\n"; exit (fund ? 1 : (modus == "rc" ? 2 : 0)) }' "$req"
+END { printf "],\"fixes\":[]}\n"; exit (fund ? (modus == "rc2" ? 2 : 1) : (modus == "rc" ? 2 : 0)) }' "$req"
 ATT
 chmod +x "$att/uv" "$att/pip-audit"
 
@@ -221,6 +221,8 @@ rot_zeile "PYSEC-0001 #12 2026-11-25 2026-11-19" seit_in_der_zukunft_ist_rot "se
 rot_zeile "PYSEC-0001 #12 2026-11-05 2026-11-10" ablauf_vor_seit_ist_rot "Ablauf liegt vor seit"
 AUSNAHMEN="PYSEC-0999 #12 2026-12-10 2026-11-18
 " FAKE_VULN="$V" lauf fremde_ausnahme_deckt_fund_nicht 1 "PYSEC-0001" "OK"
+AUSNAHMEN="PYSEC-0001 #12 2026-12-10 2026-11-18
+" FAKE_PA=rc2 FAKE_VULN="$V" lauf rc2_trotz_ausgenommenem_fund_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN="CVE-2026-0001 #12 2026-12-10 2026-11-18
 " FAKE_VULN="jinja2:PYSEC-0001:3.1.7:CVE-2026-0001" lauf ausnahme_ueber_alias_macht_gruen 0 "OK" "NICHT GEMESSEN"
 # Hinweis, nicht rot: eine Ausnahme, die zu keinem Fund passt, soll gestrichen werden.
