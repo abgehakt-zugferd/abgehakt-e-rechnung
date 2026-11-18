@@ -120,3 +120,35 @@ def test_mustang_blockiert_verkaeufer_ohne_land_mit_regel():
     mustang_befund.ungueltig(ergebnis)
     assert REGEL_VERKAEUFER in _befunde(ergebnis, "error")
     assert mustang_modul.ist_gueltige_e_rechnung(ergebnis) is False
+
+
+# -- Verbrauchertest: wo der Rückfall im XML ankommt --------------------------
+
+def _xml_mit_rueckfall_zz(inv, firma):
+    from unittest.mock import patch
+    with patch("app.services.belegrollen.normalisiere_land", return_value="ZZ"), \
+         patch("app.services.zugferd_xml.parteien.normalisiere_land", return_value="ZZ"):
+        return zugferd_xml.generate_xml(inv, firma)
+
+
+def test_verkaeufer_ohne_land_bekommt_keinen_rueckfall_im_xml():
+    inv = _invoice(_kunde(), delivery_date=date(2026, 6, 15))
+
+    xml = _xml_mit_rueckfall_zz(inv, _company(country=""))
+
+    wurzel = ET.fromstring(xml)
+    assert "ZZ" not in xml
+    assert wurzel.find(".//ram:SellerTradeParty/ram:PostalTradeAddress/ram:CountryID", NS) is None
+
+
+def test_fehlender_kunde_bekommt_keinen_rueckfall_im_xml():
+    """`besetzung` macht aus einem fehlenden Kunden eine Partei mit leerem Land; der
+    Rückfall (`normalisiere_land`) erreicht den Generator nicht."""
+    inv = _invoice(_kunde(), delivery_date=date(2026, 6, 15))
+    inv.customer = None
+
+    xml = _xml_mit_rueckfall_zz(inv, _company())
+
+    assert "ZZ" not in xml
+    assert ET.fromstring(xml).find(
+        ".//ram:BuyerTradeParty/ram:PostalTradeAddress/ram:CountryID", NS) is None
