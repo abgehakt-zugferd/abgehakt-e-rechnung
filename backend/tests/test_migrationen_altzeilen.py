@@ -22,6 +22,14 @@ NEUER_KUNDE = ("INSERT INTO customers (customer_number, name, address_line1, zip
                "city, country) VALUES ('{n}', 'Kunde', 'Weg 1', '10115', 'Berlin', '')")
 
 
+def ist_verbindungsfehler(fehler: Exception) -> bool:
+    """Nur „Server nicht erreichbar“ rechtfertigt einen Skip, nicht jeder OperationalError."""
+    text_ = str(fehler).lower()
+    return any(m in text_ for m in (
+        "could not connect", "connection refused", "could not translate host",
+        "name or service not known", "timeout expired"))
+
+
 @pytest.fixture
 def wegwerf_db():
     settings = get_settings()
@@ -31,8 +39,10 @@ def wegwerf_db():
         with admin.connect() as conn:
             conn.execute(text(f"DROP DATABASE IF EXISTS {DB} WITH (FORCE)"))
             conn.execute(text(f"CREATE DATABASE {DB}"))
-    except OperationalError:
+    except OperationalError as fehler:
         admin.dispose()
+        if not ist_verbindungsfehler(fehler):
+            raise   # Rechte, fehlende Datenbank usw. sind Fehler, kein Skip
         pytest.skip("PostgreSQL nicht erreichbar – Migrationstest übersprungen")
     url = f"{basis}/{DB}"
     vorher = os.environ.get("DATABASE_URL")
@@ -100,3 +110,9 @@ def test_altzeile_firma_mit_leerem_land_bremst_036_nicht(wegwerf_db):
         url, "INSERT INTO company (id, name, address_line1, zip_code, city, country) "
              "VALUES (2, 'Firma', 'Weg 1', '10115', 'Berlin', '')",
         "ck_company_country_nicht_leer")
+
+
+def test_nur_verbindungsfehler_sind_ein_skip_grund():
+    assert ist_verbindungsfehler(OperationalError("x", {}, Exception("connection refused")))
+    assert not ist_verbindungsfehler(OperationalError("x", {}, Exception("password authentication failed")))
+    assert not ist_verbindungsfehler(OperationalError("x", {}, Exception('database "x" does not exist')))
