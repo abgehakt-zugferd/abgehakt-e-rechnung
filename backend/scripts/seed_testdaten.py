@@ -53,10 +53,16 @@ def _firma_felder() -> dict:
 
 def _firma_belegt(firma) -> bool:
     """Irgendein Feld, das das Skript mit Musterwerten ueberschriebe, ist nicht leer.
-    `country` zaehlt nicht: es hat einen Spaltenvorgabewert und ist nie leer."""
-    return firma is not None and any(
-        str(getattr(firma, feld) or "").strip()
-        for feld in _firma_felder() if feld != "country")
+    `country` hat einen Spaltenvorgabewert (DE) und ist nie leer: es zaehlt nur, wenn es
+    davon abweicht, denn dann hat jemand es gewaehlt."""
+    if firma is None:
+        return False
+    muster = _firma_felder()
+    vorgabe_land = muster["country"]
+    if (firma.country or "").strip().upper() not in ("", vorgabe_land):
+        return True
+    return any(str(getattr(firma, feld) or "").strip()
+               for feld in muster if feld != "country")
 
 
 def _bestand_vorhanden(db: Session) -> bool:

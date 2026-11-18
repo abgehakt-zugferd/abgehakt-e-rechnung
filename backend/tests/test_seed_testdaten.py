@@ -185,6 +185,9 @@ def test_finalisieren_erzeugt_gueltige_e_rechnungen_im_storage(pg_session):
     ("address_line1", "Altweg 9"), ("zip_code", "99999"), ("city", "Altstadt"),
     ("tax_number", "00/000/00000"), ("vat_id", "XX000"), ("registergericht", "Amtsgericht Alt"),
     ("vertretung", "Alte Leitung"), ("email", "alt@example.invalid"),
+    ("rechtsform", "ug"), ("registernummer", "HRB 7"),
+    # Ein Land, das vom Spaltenvorgabewert DE abweicht, ist eine Entscheidung des Betreibers.
+    ("country", "AT"),
 ])
 def test_jedes_nicht_leere_firmenfeld_ist_bestand_auch_bei_leerem_namen(
     pg_session, capsys, feld, wert,
