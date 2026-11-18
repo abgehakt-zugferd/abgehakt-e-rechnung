@@ -104,10 +104,18 @@ die Stand-Prüfung weitergereicht, damit nichts die Ref-Zeilen vorher verbraucht
   (`.github/workflows/issue-wache.yml`): bei einem Fund erhalten sie ein Label und einen
   Hinweiskommentar, der nur die Musterklasse nennt.
 - **Sieben Wachen aus `.githooks/wachen.sh`:**
-  - **Kein veröffentlichter Port ohne `127.0.0.1:`** in einer Compose-Datei. `"3000:3000"`
-    hängt an allen Schnittstellen, und die Anwendung bringt keine Anmeldung mit: wer im
-    selben Netz sitzt, sähe damit alle Rechnungen und lüde den GoBD-Export samt
-    Kundendaten herunter.
+  - **Kein veröffentlichter Port ohne `127.0.0.1`.** `"3000:3000"` hängt an allen
+    Schnittstellen, und die Anwendung bringt keine Anmeldung mit: wer im selben Netz sitzt,
+    sähe damit alle Rechnungen und lüde den GoBD-Export samt Kundendaten herunter.
+    Gemessen wird nicht der Text, sondern die Normalform von `docker compose config
+    --format json` (`.githooks/netzwache.sh`) für `docker-compose.yml` allein und mit je
+    einer Zusatzdatei. Das Inventar kommt aus `git ls-files` (`*compose*.yml` und `.yaml`);
+    jede Datei braucht eine Zuordnung im Skript (Zusatz oder bewusst ausgenommen mit
+    Grund), eine neue ohne Zuordnung ist rot. `docker-compose.dev.yml` wird geprüft. Positivliste: nur `host_ip` 127.0.0.1 ist grün; `[::]`, Langform,
+    einfache Anführungszeichen und `network_mode: host` sind rot. Fehlt docker, python3
+    oder Compose, meldet die Wache „nicht gemessen" und endet mit Fehler. Die Umgebung des
+    Aufrufers (`APP_BIND` usw.) wird ausgeblendet, damit die Vorgabe der Dateien zählt;
+    `NETZWACHE_MIT_UMGEBUNG=1` misst sie mit.
   - **`docker-compose.yml` bleibt die Auslieferung.** Kein `target: test`, kein Mount aus
     `./backend/`. Beides gehört in `docker-compose.dev.yml`, das die Wache bewusst nicht
     prüft.

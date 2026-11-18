@@ -11,11 +11,9 @@ services:
       POSTGRES_DB: ${DB_NAME:-abgehakt}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      # NUR Loopback: "5432:5432" veröffentlicht die DB an alle Interfaces (0.0.0.0)
-      # und macht sie im LAN/WLAN angreifbar. Host-Tools (psql, GUI-Clients) erreichen
-      # sie über 127.0.0.1:5432 unverändert.
-      - "127.0.0.1:5432:5432"
+    # Kein Host-Port: die App erreicht die Datenbank im Compose-Netz (db:5432), Dumps laufen
+    # per `docker compose exec db pg_dump ...`. Wer von aussen (psql, GUI-Client) heran
+    # muss, nimmt docker-compose.db-port.yml dazu; die oeffnet den Port nur auf Loopback.
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_BOOTSTRAP_USER:-abgehakt_db} -d ${DB_NAME:-abgehakt}"]
@@ -70,15 +68,16 @@ services:
       # er schwerer: die Anwendung bringt keine Anmeldung mit (SECURITY.md). "3000:3000"
       # hinge an allen Schnittstellen, und jeder im selben Netz koennte Rechnungen
       # einsehen, neue anlegen, versenden und den GoBD-Export mit allen Kundendaten
-      # herunterladen. Wer den Zugriff aus dem Netz wirklich will, aendert diese Zeile
-      # und stellt eine Anmeldung davor (Reverse Proxy, VPN).
-      - "127.0.0.1:3000:3000"
+      # herunterladen. Wer den Zugriff aus dem Netz wirklich will, setzt APP_BIND (und
+      # ggf. APP_PORT) in seiner Umgebung und stellt eine Anmeldung davor (Reverse Proxy,
+      # VPN). Die Vorgabe bleibt Loopback.
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/dashboard"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/gesundheit"]
       interval: 30s
       timeout: 10s
       retries: 3

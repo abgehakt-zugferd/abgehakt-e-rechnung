@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from pathlib import Path
@@ -56,6 +57,13 @@ class Settings(BaseSettings):
     uebergaben_ordner: str = ""
     schluessel_pfad: str = ""
 
+    # `an` (Vorgabe) oder `aus`. Bei `aus` fragt die Anwendung api.github.com nie an,
+    # zeigt keinen Knopf dafuer und weist /updates/pruefen mit 403 ab. Gross-/Klein-
+    # schreibung und Leerzeichen am Rand sind egal; ein LEERER Wert (`UPDATE_PRUEFUNG=`)
+    # gilt als `an`. Jeder andere Wert bricht den Start ab: ein Tippfehler darf nicht
+    # still anschalten.
+    update_pruefung: str = "an"
+
     storage_path: Path = Path("/app/storage")
     mustang_jar: Path = Path("/app/lib/Mustang-CLI.jar")
 
@@ -67,6 +75,18 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         extra = "ignore"
+
+    @field_validator("update_pruefung", mode="before")
+    @classmethod
+    def _update_pruefung_pruefen(cls, wert) -> str:
+        norm = str(wert or "").strip().lower() or "an"
+        if norm not in ("an", "aus"):
+            raise ValueError(f"UPDATE_PRUEFUNG muss 'an' oder 'aus' sein, nicht '{wert}'")
+        return norm
+
+    @property
+    def update_pruefung_aktiv(self) -> bool:
+        return self.update_pruefung != "aus"
 
     def model_post_init(self, __context) -> None:
         """Ohne .env keine Sackgasse: der Schlüssel verwaltet sich selbst (L7)."""
@@ -81,3 +101,8 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
+
+
+def update_pruefung_aktiv() -> bool:
+    """Eine Stelle fuer alle Aufrufer (Route, Hinweis-Abhaengigkeit)."""
+    return get_settings().update_pruefung_aktiv

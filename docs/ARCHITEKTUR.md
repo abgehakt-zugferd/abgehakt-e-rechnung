@@ -378,8 +378,9 @@ statische Dateien gehören nicht zur Belegerzeugung; `/` bleibt der Einstieg und
 weiter, das Ziel selbst ist geschützt.
 
 `HTTPException(303)` würde der HTML-Fehlerhandler zu einer Fehlerseite machen, deshalb
-die eigene Ausnahme `EinrichtungOffen`. Der Compose-Healthcheck ruft `/dashboard` auf;
-die 303-Umleitung bleibt für `curl -f` gesund, weil 3xx dort kein Fehler sind.
+die eigene Ausnahme `EinrichtungOffen`. Der Compose-Healthcheck ruft `/gesundheit` auf
+(`{"status": "ok"}` bei erreichbarer Datenbank, sonst 503 ohne Fehlertext); die Route
+ist vom Tor ausgenommen und gibt keine Belegdaten aus.
 
 Unabhängig vom Tor verweigert die Rechnungserzeugung mit `400` (`get_company`), solange
 die Einrichtung fehlt. Ohne Firmenname, Anschrift und Steuernummer **oder** USt-IdNr.

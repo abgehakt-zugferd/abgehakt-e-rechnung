@@ -8,9 +8,9 @@ deshalb eine eigene Ausnahme, die nur hier als 303 beantwortet wird.
 
 Ausnahmen (ohne Einrichtung erreichbar): Setup, Einstellungen (dort wird die
 Einrichtung seit #205 ebenfalls abgeschlossen), Archiv, GoBD-Export, Updates,
-statische Dateien und `/`. Der Compose-Healthcheck trifft `/dashboard`
-(docker-compose.yml); dort bleibt die 303-Umleitung, und `curl -f` wertet 3xx
-nicht als Fehler.
+statische Dateien, `/` und `/gesundheit`. Der Compose-Healthcheck trifft
+`/gesundheit`: die Route fragt die Datenbank selbst und darf weder umgeleitet werden
+noch am Tor scheitern, wenn die Datenbank nicht antwortet.
 
 Kunden: mitgeschuetzt. Stammdaten tragen keine Verkaeuferangaben, stehen aber
 nicht auf der Ausnahmeliste des Auftrags; das Tor soll zur Einrichtung fuehren.
@@ -37,13 +37,16 @@ _AUSNAHMEN = (
     "/static",
 )
 
+# Nur der genaue Pfad, kein Praefix: ein Pfad unter /gesundheit ist keine Gesundheitsroute.
+_EXAKTE_AUSNAHMEN = ("/gesundheit",)
+
 
 class EinrichtungOffen(Exception):
     """Ersteinrichtung fehlt — Antwort ist 303 auf /setup, keine Fehlerseite."""
 
 
 def pfad_ausgenommen(pfad: str) -> bool:
-    if pfad == "/" or pfad == "":
+    if pfad == "/" or pfad == "" or pfad in _EXAKTE_AUSNAHMEN:
         return True
     return any(pfad == p or pfad.startswith(p + "/") for p in _AUSNAHMEN)
 

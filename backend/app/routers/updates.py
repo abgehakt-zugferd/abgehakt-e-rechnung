@@ -1,14 +1,14 @@
 """Update-Prüfung (#120): zwei Form-Posts, Post/Redirect/Get wie im Rest des Projekts."""
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
-from app.config import get_settings
+from app.config import get_settings, update_pruefung_aktiv
 from app.database import get_db
 from app.models.app_config import AppConfig
 from app.services.update_banner import SNOOZE_DAYS
@@ -36,6 +36,14 @@ def _edition() -> str:
 @router.post("/pruefen")
 def pruefen(request: Request, bestaetigt: str = Form(default=""),
             db: Session = Depends(get_db)):
+    # 403: verstanden, aber vom Betreiber untersagt (UPDATE_PRUEFUNG=aus). Vor allem
+    # anderen, damit nichts in die DB geschrieben und nichts abgerufen wird.
+    if not update_pruefung_aktiv():
+        raise HTTPException(
+            403,
+            "Die Update-Prüfung ist vom Betreiber abgeschaltet (UPDATE_PRUEFUNG=aus). "
+            "Es wird nichts abgerufen.",
+        )
     cfg = _config(db)
     version = get_settings().app_version
 

@@ -19,27 +19,12 @@ cd "$(git rev-parse --show-toplevel)"
 
 fehler=0
 
-# Ein veroeffentlichter Port ohne `127.0.0.1:` haengt an ALLEN Schnittstellen. Bei dieser
+# Ein veroeffentlichter Port ohne `127.0.0.1` haengt an ALLEN Schnittstellen. Bei dieser
 # Anwendung heisst das: wer im selben Netz sitzt, sieht die Rechnungen, legt neue an und
 # laedt den GoBD-Export samt Kundendaten herunter. Eine Anmeldung gibt es nicht
-# (SECURITY.md). Wer bewusst aus dem Netz zugreifen will, aendert die Zeile und weiss
-# dann, was er tut.
-offen="$(git ls-files '*compose*.yml' | while read -r f; do
-    awk -v datei="$f" '
-      /^[[:space:]]*ports:/ { in_ports = 1; next }
-      in_ports && /^[[:space:]]*-[[:space:]]*"?[0-9]/ &&
-        $0 !~ /"?(127\.0\.0\.1|localhost):/ { print datei ":" NR ": " $0 }
-      /^[[:space:]]*-?[[:space:]]*[a-zA-Z_]+:/ { if ($0 !~ /^[[:space:]]*ports:/) in_ports = 0 }
-    ' "$f"
-  done)"
-if [ -n "$offen" ]; then
-  {
-    echo ""
-    echo "netz: ROT - Port ohne 127.0.0.1 veroeffentlicht."
-    echo "  \"3000:3000\" haengt an allen Schnittstellen; die Anwendung hat keine Anmeldung."
-    echo "  Gemeint ist fast immer \"127.0.0.1:3000:3000\"."
-    echo "$offen"
-  } >&2
+# (SECURITY.md). Gemessen wird die Normalform, die Compose selbst aufloest, nicht der
+# Text der Datei: siehe netzwache.sh (inkl. "nicht gemessen ist nicht gruen").
+if ! sh "$(dirname "$0")/netzwache.sh"; then
   fehler=1
 fi
 

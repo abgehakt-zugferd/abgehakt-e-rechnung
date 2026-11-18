@@ -1,0 +1,21 @@
+# Zusatzdatei: veroeffentlicht den Datenbank-Port auf dem Wirt. Nur bei Bedarf.
+#
+# Die Basisdatei docker-compose.yml veroeffentlicht keinen Datenbank-Port; die App erreicht
+# die DB im Compose-Netz, Dumps laufen per `docker compose exec`. Diese Datei oeffnet den
+# Port wieder, vorgabegemaess nur auf Loopback (127.0.0.1:5432). Wer DB_BIND auf eine
+# andere Adresse setzt, setzt die Datenbank diesem Netz aus: das ist seine Entscheidung.
+#
+# Verwendung, ohne COMPOSE_FILE in der Umgebung:
+#   docker compose -f docker-compose.yml -f docker-compose.db-port.yml up -d
+#
+# Verwendung, wenn COMPOSE_FILE gesetzt ist (etwa mit docker-compose.uebergabe.yml):
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.uebergabe.yml:docker-compose.db-port.yml
+# Das Trennzeichen ist unter Linux und macOS ":" (unter Windows ";"). Ein `-f` auf der
+# Kommandozeile ersetzt COMPOSE_FILE vollstaendig; dann alle Dateien mit -f nennen.
+#
+# Wert in .env oder Umgebung: DB_BIND (Vorgabe 127.0.0.1), DB_PORT (Vorgabe 5432).
+
+services:
+  db:
+    ports:
+      - "${DB_BIND:-127.0.0.1}:${DB_PORT:-5432}:5432"

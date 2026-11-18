@@ -123,8 +123,9 @@ rm -rf storage-integration
 
 ## Live-Installation
 
-Der Stack auf **3000/5432** (`docker compose up` ohne `-p abgehakt-test`) bleibt
-unverändert. Zwei Compose-Dateien, anderer Projektname. Der eigene Projektname ist Pflicht,
+Der Stack auf **3000** (`docker compose up` ohne `-p abgehakt-test`) bleibt
+unverändert; seine Datenbank hat keinen Host-Port (nur mit `docker-compose.db-port.yml` auf
+5432). Zwei Compose-Dateien, anderer Projektname. Der eigene Projektname ist Pflicht,
 reicht aber allein nicht: `container_name` und `ports` stehen in `docker-compose.yml` fest,
 und Container-Namen müssen auf dem Rechner global eindeutig sein, unabhängig vom
 Projektnamen. Deshalb überschreibt `docker-compose.integration.yml` beides.

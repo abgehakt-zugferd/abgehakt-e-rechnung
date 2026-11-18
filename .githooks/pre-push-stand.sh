@@ -102,7 +102,7 @@ pruefe_baum() {
   {
     echo ""
     echo "tdd: ROT, Push blockiert. Kein ungetesteter Code verlässt das Repo."
-    echo "     Bewusste Ausnahme nur via:  git push --no-verify"
+    echo "     Den Fehler beheben und den Push wiederholen. Der Hook wird nicht umgangen."
   } >&2
   rm -f "$out"
   return 1

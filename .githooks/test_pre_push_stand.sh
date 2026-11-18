@@ -26,7 +26,7 @@ trap 'rm -rf "$werkstatt"' EXIT
 schreib_gruen() {
     root=$1
     mkdir -p "$root/backend" "$root/.githooks"
-    printf '%s\n' 'services: {}' > "$root/docker-compose.yml"
+    printf '%s\n' 'services:' '  app:' '    image: probe' > "$root/docker-compose.yml"
     printf '%s\n' \
         'FROM scratch' \
         'RUN adduser --system --uid 100 --gid 101 x' \
@@ -47,6 +47,7 @@ schreib_rot_netz() {
     printf '%s\n' \
         'services:' \
         '  app:' \
+        '    image: probe' \
         '    ports:' \
         '      - "3000:3000"' \
         > "$1/docker-compose.yml"
@@ -67,6 +68,8 @@ neues_repo() {
     cp "$hier/pre-push" "$d/.githooks/pre-push"
     cp "$hier/datenwache.sh" "$d/.githooks/datenwache.sh"
     cp "$hier/wachen.sh" "$d/.githooks/wachen.sh"
+    cp "$hier/netzwache.sh" "$d/.githooks/netzwache.sh"
+    cp "$hier/compose_ports_pruefen.py" "$d/.githooks/compose_ports_pruefen.py"
     # Hilfsskript, sobald vorhanden (nach Implementierung); fehlend = alter Hook.
     if [ -f "$hier/pre-push-stand.sh" ]; then
         cp "$hier/pre-push-stand.sh" "$d/.githooks/pre-push-stand.sh"
@@ -236,6 +239,51 @@ if [ "$rc_d" -eq 0 ] || ! grep -qF -- "datenwache:" "$aus_d"; then
     fehl=1
 else
     echo "gruen datenwache_sieht_stdin"
+fi
+
+# --- Fall F: rote Suite, die Meldung empfiehlt keinen Umweg am Hook vorbei ---------
+repo_f=$(neues_repo)
+schreib_gruen "$repo_f"
+git -C "$repo_f" add -A
+git -C "$repo_f" commit -qm gruen-f
+sha_f=$(git -C "$repo_f" rev-parse HEAD)
+aus_f="$werkstatt/fall-f.aus"
+( cd "$repo_f" && printf 'refs/heads/main %s refs/heads/main %s\n' "$sha_f" "$leer" \
+    | env DATENWACHE_UEBERSTIMMT=1 PRE_PUSH_TEST_CMD='false' \
+        bash .githooks/pre-push origin unused-url ) >"$aus_f" 2>&1
+rc_f=$?
+if [ "$rc_f" -eq 0 ] || ! grep -qF -- "tdd: ROT" "$aus_f"; then
+    echo "ROT  rote_suite_blockiert: Push muss an der Suite scheitern (rc=$rc_f)" >&2
+    sed 's/^/      /' "$aus_f" | tail -20 >&2
+    fehl=1
+elif grep -qF -- "no-verify" "$aus_f"; then
+    echo "ROT  rote_suite_empfiehlt_keinen_umweg: die Meldung nennt --no-verify" >&2
+    sed 's/^/      /' "$aus_f" | tail -20 >&2
+    fehl=1
+else
+    echo "gruen rote_suite_blockiert_ohne_umweg_empfehlung"
+fi
+
+# --- Fall G: keine Hook-Meldung unter .githooks/ empfiehlt einen Umweg am Hook vorbei ---
+# Gelesen werden die Hook-Skripte (nicht die test_*.sh, die das Wort pruefen). Zeilen, die
+# nur Kommentar sind, zaehlen nicht; ein Verbot ("nicht --no-verify") ist erlaubt.
+treffer_datei="$werkstatt/no-verify.txt"
+: > "$treffer_datei"
+for f in "$hier"/*.sh "$hier/pre-push"; do
+    name=${f##*/}
+    if [ "${name#test_}" != "$name" ]; then
+        continue
+    fi
+    grep -nH -- "no-verify" "$f" >> "$treffer_datei" 2>/dev/null
+done
+umweg=$(grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' "$treffer_datei" \
+    | grep -vE 'nicht[^"]{0,12}no-verify')
+if [ -n "$umweg" ]; then
+    echo "ROT  hooks_empfehlen_keinen_umweg: --no-verify in einer Hook-Meldung" >&2
+    printf '%s\n' "$umweg" | sed 's/^/      /' >&2
+    fehl=1
+else
+    echo "gruen hooks_empfehlen_keinen_umweg"
 fi
 
 [ "$fehl" -eq 0 ] && echo "test_pre_push_stand: alle gruen"
