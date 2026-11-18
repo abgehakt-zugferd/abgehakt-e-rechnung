@@ -169,8 +169,8 @@ docker compose start app
 
 Mit `--finalisieren` laufen die Entwürfe durch den normalen Dienstweg: PDF/A-3 mit
 eingebetteter XML, Mustang-Prüfung, Ablage in `storage/pdfs` und `storage/xml`.
-Enthält die Datenbank schon Kunden, Rechnungen oder eine Firma mit Namen (auch wenn die
-Einrichtung nicht abgeschlossen ist), bricht das Skript ab und schreibt nichts;
+Enthält die Datenbank schon Kunden, Rechnungen oder eine Firma mit irgendeinem belegten
+Feld (auch bei leerem Namen oder wenn die Einrichtung nicht abgeschlossen ist), bricht das Skript ab und schreibt nichts;
 `--erzwingen` hebt den Schutz auf, eine eingerichtete Firma bleibt auch dann unberührt.
 **Nicht in einer Live-Installation ausführen:** finalisierte Rechnungen sind
 unveränderlich und verbrauchen Rechnungsnummern.

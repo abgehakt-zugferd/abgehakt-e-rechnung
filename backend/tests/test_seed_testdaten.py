@@ -16,7 +16,18 @@ from app.services import mustang, pdfa
 from app.services.ersteinrichtung import ist_eingerichtet
 from scripts.seed_testdaten import main
 from tests.helpers import mustang_befund
-from tests.helpers.firma_eingerichtet import leere_firma
+from tests.helpers.firma_eingerichtet import leere_firma as _teilweise_leer
+
+
+def leere_firma(pg_session):
+    """Firmenzeile ganz leer: auch die Pflichtangaben der Rechtsform und die Kontaktdaten,
+    die die Fixture setzt. Jedes nicht leere Feld waere fuer das Skript Bestand."""
+    firma = _teilweise_leer(pg_session)
+    for feld in ("rechtsform", "registergericht", "registernummer", "vertretung",
+                 "email", "phone", "sitz"):
+        setattr(firma, feld, None)
+    pg_session.commit()
+    return firma
 
 
 def _zahlen(pg_session):
@@ -168,3 +179,27 @@ def test_finalisieren_erzeugt_gueltige_e_rechnungen_im_storage(pg_session):
     finally:
         for datei in angelegt:
             datei.unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize("feld, wert", [
+    ("address_line1", "Altweg 9"), ("zip_code", "99999"), ("city", "Altstadt"),
+    ("tax_number", "00/000/00000"), ("vat_id", "XX000"), ("registergericht", "Amtsgericht Alt"),
+    ("vertretung", "Alte Leitung"), ("email", "alt@example.invalid"),
+])
+def test_jedes_nicht_leere_firmenfeld_ist_bestand_auch_bei_leerem_namen(
+    pg_session, capsys, feld, wert,
+):
+    """Name leer, aber ein anderes Feld belegt: die Musterwerte duerften es ueberschreiben."""
+    firma = leere_firma(pg_session)
+    setattr(firma, feld, wert)
+    pg_session.commit()
+
+    rc = main([], db=pg_session)
+
+    assert rc != 0
+    assert "--erzwingen" in capsys.readouterr().err
+    pg_session.expire_all()
+    firma = pg_session.query(Company).filter(Company.id == 1).one()
+    assert getattr(firma, feld) == wert
+    assert not (firma.name or "").strip()
+    assert _zahlen(pg_session) == (0, 0)
