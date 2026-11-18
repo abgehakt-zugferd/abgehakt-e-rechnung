@@ -122,6 +122,35 @@ if [ "$rc" -ne 0 ] && printf '%s' "$aus" | grep -qF -- "NICHT GEMESSEN" \
    && ! printf '%s' "$aus" | grep -qF -- "netz: ROT"; then r=0; else r=1; fi
 ergebnis fehlendes_docker_ist_nicht_gemessen_und_nicht_gruen $r "rc=$rc: $aus"
 
+# Fehlende Messgrundlage ist nicht gruen: ein JSON ohne Dienste hat nichts gemessen.
+# $1 Name  $2 JSON-Text
+pruefe_ohne_messgrundlage() {
+    datei="$werkstatt/grundlage.json"
+    printf '%s' "$2" > "$datei"
+    aus=$( python3 "$hier/compose_ports_pruefen.py" "$datei" probe 2>&1 )
+    rc=$?
+    if [ "$rc" -ne 0 ] && printf '%s' "$aus" | grep -qF -- "NICHT GEMESSEN"; then r=0; else r=1; fi
+    ergebnis "$1" $r "rc=$rc: $aus"
+}
+pruefe_ohne_messgrundlage json_ohne_services_ist_nicht_gemessen '{}'
+pruefe_ohne_messgrundlage json_mit_leeren_services_ist_nicht_gemessen '{"services": {}}'
+pruefe_ohne_messgrundlage json_mit_services_als_liste_ist_nicht_gemessen '{"services": []}'
+
+# netzwache.sh gibt das als "nicht gemessen" weiter, nicht als Fund und nicht als gruen.
+neues_repo
+printf 'services:\n  app:\n    image: probe\n' > "$repo/docker-compose.yml"
+git -C "$repo" add -A
+git -C "$repo" commit -q -m probe
+attrappe="$werkstatt/attrappe-docker"
+mkdir -p "$attrappe"
+printf '%s\n' '#!/bin/sh' '[ "$2" = "version" ] && exit 0' "printf '{}'" > "$attrappe/docker"
+chmod +x "$attrappe/docker"
+aus=$( cd "$repo" && PATH="$attrappe:$PATH" /bin/sh "$hier/netzwache.sh" 2>&1 )
+rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$aus" | grep -qF -- "NICHT GEMESSEN" \
+   && ! printf '%s' "$aus" | grep -qF -- "netz: ROT"; then r=0; else r=1; fi
+ergebnis netzwache_meldet_leere_messgrundlage_als_nicht_gemessen $r "rc=$rc: $aus"
+
 # --- Teil B: die lebenden Dateien -----------------------------------------------------
 compose="$wurzel/docker-compose.yml"
 zusatz="$wurzel/docker-compose.db-port.yml"

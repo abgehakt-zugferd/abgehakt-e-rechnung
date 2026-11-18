@@ -7,7 +7,7 @@ Rot ist: jede Port-Angabe, deren host_ip nicht 127.0.0.1 ist (auch fehlendes hos
 auch eine Angabe ohne published, denn sie veroeffentlicht einen zufaelligen Host-Port
 an allen Schnittstellen), und `network_mode: host`. Compose hat die Kurz- und Langform,
 Anfuehrungszeichen und Variablen schon aufgeloest; hier wird nur die Normalform gelesen.
-Exit 0 = gruen, 1 = Fund, 2 = JSON nicht lesbar (nicht gemessen).
+Exit 0 = gruen, 1 = Fund, 2 = nicht gemessen (JSON nicht lesbar oder ohne Dienste).
 """
 import json
 import sys
@@ -33,6 +33,12 @@ def main(argv: list[str]) -> int:
             config = json.load(datei)
     except (OSError, ValueError, IndexError) as fehler:
         print(f"netz: NICHT GEMESSEN - JSON nicht lesbar: {fehler}", file=sys.stderr)
+        return 2
+    dienste = config.get("services") if isinstance(config, dict) else None
+    if (not isinstance(dienste, dict) or not dienste):
+        # Ohne Dienste ist nichts gemessen; "keine Funde" waere dann eine leere Menge.
+        print("netz: NICHT GEMESSEN - die Normalform enthaelt keine Dienste (services fehlt, "
+              "ist leer oder kein Objekt)", file=sys.stderr)
         return 2
     treffer = funde(config)
     for zeile in treffer:
