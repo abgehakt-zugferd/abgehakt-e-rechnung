@@ -2,6 +2,7 @@
 """Auswertung fuer pakete_pruefen.sh: liest den JSON-Bericht von pip-audit.
 
 Aufruf: pakete_auswerten.py auswerten <bericht.json> <export.txt> [ausnahme-kennung ...]
+        pakete_auswerten.py gruppen <pyproject.toml>
         pakete_auswerten.py ausnahmen <datei> <heute JJJJ-MM-TT>
 
 Ausgabe je Zeile: ANZAHL n | AUSGENOMMEN kennung ... | FUND name version id fix x | UNGEMESSEN grund.
@@ -72,6 +73,21 @@ def ausnahmen(datei, heute_text):
     return fehler
 
 
+# Gruppen, die einem der beiden Laeufe zugeordnet sind (Laufzeit = ohne diese Gruppe).
+# Jede andere Gruppe oder jeder Extra stuende in keinem Lauf, "dev" sogar unbemerkt in
+# der Laufzeit (uv nimmt sie als Standardgruppe mit): ein Mensch ordnet sie zu.
+BEKANNTE_GRUPPEN = {"test"}
+
+
+def gruppen(pyproject):
+    import tomllib
+    daten = tomllib.load(open(pyproject, "rb"))
+    for name in sorted(set(daten.get("dependency-groups", {})) - BEKANNTE_GRUPPEN):
+        print("UNBEKANNT Gruppe", name)
+    for name in sorted(daten.get("project", {}).get("optional-dependencies", {})):
+        print("UNBEKANNT Extra", name)
+
+
 def norm(name):
     """Namensform nach PEP 503: klein, Folgen von - _ . werden ein -."""
     return re.sub(r"[-_.]+", "-", name).lower()
@@ -119,6 +135,8 @@ if __name__ == "__main__":
     try:
         if sys.argv[1] == "auswerten":
             auswerten(sys.argv[2], sys.argv[3], set(sys.argv[4:]))
+        elif sys.argv[1] == "gruppen":
+            gruppen(sys.argv[2])
         elif sys.argv[1] == "ausnahmen":
             sys.exit(ausnahmen(sys.argv[2], sys.argv[3]))
         else:

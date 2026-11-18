@@ -116,7 +116,8 @@ lauf() {
     w="$werkstatt/fall.$zahl"
     mkdir -p "$w/backend" "$w/.github"
     [ -z "${OHNE_LOCK:-}" ] && printf 'version = 1\n' > "$w/backend/uv.lock"
-    printf 'name = "x"\n' > "$w/backend/pyproject.toml"
+    printf '[project]\nname = "x"\n[dependency-groups]\ntest = ["pytest==9.2.0"]\n%s\n' \
+        "${PYPROJECT_ZUSATZ-}" > "$w/backend/pyproject.toml"
     case "${AUSNAHMEN-}" in
         -) ;;
         *) printf '%s' "${AUSNAHMEN-}" > "$w/.github/pip-audit-ausnahmen.txt" ;;
@@ -149,7 +150,7 @@ lauf() {
         fehl=1
     fi
     # Zuweisungen vor einem Funktionsaufruf bleiben in sh bestehen: wegraeumen.
-    unset OHNE_LOCK OHNE_UV OHNE_PA FAKE_UV_RC FAKE_PA FAKE_VULN LAUFZEIT TESTEXPORT AUSNAHMEN HEUTE
+    unset OHNE_LOCK OHNE_UV OHNE_PA FAKE_UV_RC FAKE_PA FAKE_VULN LAUFZEIT TESTEXPORT AUSNAHMEN HEUTE PYPROJECT_ZUSATZ
 }
 
 KEINE=""
@@ -181,6 +182,14 @@ AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf fehlendes_paket_wird_mit_namen_genannt 1
 AUSNAHMEN="$KEINE" FAKE_PA=norm LAUFZEIT="$werkstatt/norm.txt" lauf namen_nach_pep503_gleich_ist_gruen 0 "OK" "NICHT GEMESSEN"
 AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf weniger_geprueft_als_gepinnt_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN=- lauf ausnahmedatei_fehlt_ist_rot 1 "NICHT GEMESSEN" "OK"
+
+# Gruppen: nur "test" ist zugeordnet; jede andere wuerde in keinem Lauf stehen
+# (oder, bei "dev", unbemerkt in der Laufzeit).
+AUSNAHMEN="$KEINE" PYPROJECT_ZUSATZ='docs = ["sphinx==7.0"]' lauf unbekannte_gruppe_ist_nicht_gemessen 1 "Gruppe docs" "OK"
+AUSNAHMEN="$KEINE" PYPROJECT_ZUSATZ='dev = ["ruff==0.5"]' lauf dev_gruppe_ist_nicht_gemessen 1 "Gruppe dev" "OK"
+AUSNAHMEN="$KEINE" PYPROJECT_ZUSATZ='[project.optional-dependencies]
+pdf = ["x==1"]' lauf unbekannter_extra_ist_nicht_gemessen 1 "Extra pdf" "OK"
+AUSNAHMEN="$KEINE" PYPROJECT_ZUSATZ='[[[kaputt' lauf unlesbare_pyproject_ist_nicht_gemessen 1 "NICHT GEMESSEN" "OK"
 
 # Fund: rot, mit Paket, Fassung, Kennung und fixierter Fassung.
 AUSNAHMEN="$KEINE" FAKE_VULN="jinja2:PYSEC-0001:3.1.7" lauf fund_laufzeit_ist_rot 1 \

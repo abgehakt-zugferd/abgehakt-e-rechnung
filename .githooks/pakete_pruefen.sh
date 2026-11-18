@@ -114,6 +114,15 @@ lauf() {
     zahlen+=("$name $geprueft Pakete")
 }
 
+# Nur "test" ist einem Lauf zugeordnet. Jede weitere Gruppe (oder jeder Extra) wuerde
+# in keinem Lauf stehen: lieber NICHT GEMESSEN mit Namen als stilles Auslassen. Alle
+# Gruppen automatisch zu pruefen wuerde sie unbesehen der Laufzeit oder dem Test
+# zuschlagen und damit die getrennte Meldung aushoehlen; zuordnen soll ein Mensch.
+gruppen_aus=$(python3 -I "$py" gruppen "$wurzel/backend/pyproject.toml")
+gruppen_rc=$?
+[ "$gruppen_rc" -eq 0 ] || ungemessen "backend/pyproject.toml nicht auswertbar (rc=$gruppen_rc): $(printf '%s' "$gruppen_aus" | tr '\n' ' ' | cut -c1-200)"
+[ -z "$gruppen_aus" ] || ungemessen "$(printf '%s' "$gruppen_aus" | sed 's/^UNBEKANNT //' | tr '\n' ',') in backend/pyproject.toml keinem Lauf zugeordnet (bekannt: nur Gruppe test); in pakete_auswerten.py zuordnen."
+
 zahlen=()
 lauf Laufzeit --no-group test
 lauf Test --only-group test
