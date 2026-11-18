@@ -52,8 +52,8 @@ zuordnung() {
         docker-compose.yml) echo basis ;;
         docker-compose.dev.yml | docker-compose.uebergabe.yml | \
         docker-compose.db-port.yml | docker-compose.integration.yml) echo zusatz ;;
-        # Bewusst ausgenommene Dateien hier eintragen, mit Grund:
-        #   datei.yml) echo "ausgenommen: Grund" ;;
+        # Bewusst ausgenommene Dateien hier eintragen, mit nicht leerem Grund:
+        #   datei.yml) echo "ausgenommen:Grund" ;;
         *) echo unbekannt ;;
     esac
 }
@@ -68,10 +68,18 @@ for f in $inventar; do
     case "$art" in
         basis) ;;
         zusatz) printf '%s\n' "$f" >> "$tmp/zusaetze.txt" ;;
-        ausgenommen:*) continue ;;
+        ausgenommen:*)
+            # Eine Ausnahme ohne Grund ist keine Entscheidung, sondern eine Luecke.
+            grund=${art#ausgenommen:}
+            if [ -z "$(printf '%s' "$grund" | tr -d '[:space:]')" ]; then
+                printf '  %s (ausgenommen ohne Grund)\n' "$f" >> "$tmp/ohne_zuordnung.txt"
+            fi
+            continue ;;
         *) printf '  %s\n' "$f" >> "$tmp/ohne_zuordnung.txt"; continue ;;
     esac
-    [ -f "$f" ] && cp "$f" "$tmp/$f"
+    # In git eingetragen, aber nicht auf der Platte: nichts gemessen, nicht uebersprungen.
+    [ -f "$f" ] || nicht_gemessen "$f steht in git, fehlt aber auf der Platte."
+    cp "$f" "$tmp/$f"
 done
 : > "$tmp/.env"
 : > "$tmp/integration.env"

@@ -202,6 +202,60 @@ pruefe_pruefer_attrappe() {
 pruefe_pruefer_attrappe pruefer_rc1_ohne_fundzeile_ist_nicht_gemessen 1
 pruefe_pruefer_attrappe pruefer_rc7_ist_nicht_gemessen 7
 
+# U-R3-1: Exit 0 MIT Ausgabe widerspricht sich: nicht gemessen.
+py0="$werkstatt/py-exit0-mit-ausgabe"
+mkdir -p "$py0"
+printf '%s\n' '#!/bin/sh' 'echo "  Fundzeile trotz Exit 0"' 'exit 0' > "$py0/python3"
+chmod +x "$py0/python3"
+neues_repo
+printf 'services:\n  app:\n    image: probe\n' > "$repo/docker-compose.yml"
+git -C "$repo" add -A
+git -C "$repo" commit -q -m probe
+aus=$( cd "$repo" && PATH="$py0:$PATH" /bin/sh "$hier/netzwache.sh" 2>&1 )
+rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$aus" | grep -qF -- "NICHT GEMESSEN" \
+   && ! printf '%s' "$aus" | grep -qF -- "netz: ROT"; then r=0; else r=1; fi
+ergebnis pruefer_exit0_mit_ausgabe_ist_nicht_gemessen $r "rc=$rc: $aus"
+
+# U-R3-2: eine in git eingetragene, aber auf der Platte fehlende Zusatzdatei ist nicht gemessen.
+neues_repo
+printf 'services:\n  app:\n    image: probe\n' > "$repo/docker-compose.yml"
+printf 'services:\n  db:\n    image: probe\n' > "$repo/docker-compose.db-port.yml"
+git -C "$repo" add -A
+git -C "$repo" commit -q -m probe
+rm "$repo/docker-compose.db-port.yml"
+aus=$( cd "$repo" && /bin/sh "$hier/netzwache.sh" 2>&1 )
+rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$aus" | grep -qF -- "NICHT GEMESSEN" \
+   && ! printf '%s' "$aus" | grep -qF -- "netz: ROT"; then r=0; else r=1; fi
+ergebnis fehlende_zusatzdatei_auf_der_platte_ist_nicht_gemessen $r "rc=$rc: $aus"
+
+# "ausgenommen" braucht einen Grund. Die Zuordnung steht im Skript; der Test arbeitet an
+# einer Kopie, in die er eine Zeile einfuegt.
+# $1 Name  $2 Zeile fuer die Zuordnung  $3 erwartet (rot|gruen)
+pruefe_ausnahme() {
+    kopie="$werkstatt/hook-$1"
+    mkdir -p "$kopie"
+    cp "$hier/netzwache.sh" "$hier/compose_ports_pruefen.py" "$kopie/"
+    awk -v zeile="$2" '/^        \*\) echo unbekannt/ { print zeile } { print }' \
+        "$hier/netzwache.sh" > "$kopie/netzwache.sh"
+    neues_repo
+    printf 'services:\n  app:\n    image: probe\n' > "$repo/docker-compose.yml"
+    printf '%s\n' "$LAN" > "$repo/docker-compose.lan.yml"
+    git -C "$repo" add -A
+    git -C "$repo" commit -q -m probe
+    aus=$( cd "$repo" && /bin/sh "$kopie/netzwache.sh" 2>&1 )
+    if printf '%s' "$aus" | grep -qF -- "netz: ROT"; then ist=rot; else ist=gruen; fi
+    if [ "$ist" = "$3" ]; then ergebnis "$1" 0 ""; else
+        ergebnis "$1" 1 "erwartet $3, war $ist: $aus"; fi
+}
+pruefe_ausnahme ausgenommen_mit_grund_wird_nicht_gemessen \
+    '        docker-compose.lan.yml) echo "ausgenommen:nur im Labor" ;;' gruen
+pruefe_ausnahme ausgenommen_mit_leerem_grund_ist_rot \
+    '        docker-compose.lan.yml) echo "ausgenommen:" ;;' rot
+pruefe_ausnahme ausgenommen_mit_blankem_grund_ist_rot \
+    '        docker-compose.lan.yml) echo "ausgenommen:   " ;;' rot
+
 # --- Teil B: die lebenden Dateien -----------------------------------------------------
 compose="$wurzel/docker-compose.yml"
 zusatz="$wurzel/docker-compose.db-port.yml"
