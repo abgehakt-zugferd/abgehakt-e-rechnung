@@ -229,7 +229,7 @@ def test_spaetere_kundenaenderung_aendert_keinen_bestehenden_beleg(pg_session):
 
     r = client.post(f"/customers/{kunde.id}/bearbeiten", data={
         "name": "Plattform GmbH", "address_line1": "Weg 1",
-        "zip_code": "10115", "city": "Berlin",
+        "zip_code": "10115", "city": "Berlin", "country": "DE",
         "customer_number": kunde.customer_number,
         "kopftext": "Gaenzlich andere Grundlage",
         "fusstext": "Gaenzlich anderer Fuss",
