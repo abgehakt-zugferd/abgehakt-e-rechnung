@@ -108,6 +108,8 @@ lauf() {
     auswertung=$(python3 -I "$(dirname "$0")/pakete_auswerten.py" auswerten "$werkstatt/$name.json" "$exp")
     py_rc=$?
     [ "$py_rc" -eq 0 ] || ungemessen "pip-audit ($name): Auswertung ist gescheitert (rc=$py_rc): $(printf '%s' "$auswertung" | tr '\n' ' ' | cut -c1-300)"
+    nicht_geprueft=$(printf '%s\n' "$auswertung" | sed -n 's/^UNGEMESSEN //p')
+    [ -z "$nicht_geprueft" ] || ungemessen "pip-audit ($name): $(printf '%s' "$nicht_geprueft" | tr '\n' ';')"
     geprueft=$(printf '%s\n' "$auswertung" | sed -n 's/^ANZAHL //p')
     [ "${geprueft:-0}" -gt 0 ] || ungemessen "pip-audit ($name) hat null Pakete geprueft."
     [ "$geprueft" -eq "$gepinnt" ] || ungemessen "pip-audit ($name) hat $geprueft Pakete geprueft, gepinnt sind $gepinnt."

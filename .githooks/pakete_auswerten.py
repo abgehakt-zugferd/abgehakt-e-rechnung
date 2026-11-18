@@ -14,9 +14,16 @@ def auswerten(bericht):
     pakete = json.load(open(bericht))["dependencies"]
     print("ANZAHL", len(pakete))
     for p in pakete:
+        name = p["name"]
+        if p.get("skip_reason"):
+            print("UNGEMESSEN %s uebersprungen: %s" % (name, p["skip_reason"]))
+            continue
+        if not isinstance(p.get("vulns"), list):
+            print("UNGEMESSEN %s ohne vulns-Liste im Bericht" % name)
+            continue
         for v in p["vulns"]:
             fix = ",".join(v.get("fix_versions") or []) or "keine"
-            print("FUND", p["name"], p["version"], v["id"], "fix", fix)
+            print("FUND", name, p["version"], v["id"], "fix", fix)
 
 
 if __name__ == "__main__":

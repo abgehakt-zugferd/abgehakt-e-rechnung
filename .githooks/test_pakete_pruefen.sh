@@ -165,6 +165,8 @@ AUSNAHMEN="$KEINE" FAKE_PA=rc lauf pip_audit_rc_ohne_fund_ist_rot 1 "NICHT GEMES
 AUSNAHMEN="$KEINE" FAKE_PA=kein_dict lauf eintrag_ohne_objekt_bei_rc0_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=vulns_null lauf vulns_null_bei_rc0_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=vulns_string lauf vulns_string_bei_rc0_ist_rot 1 "NICHT GEMESSEN" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=vulns_umbenannt lauf fehlendes_vulns_nennt_das_paket 1 "aiofiles ohne vulns-Liste" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=skip lauf skip_reason_ist_nicht_geprueft 1 "aiofiles uebersprungen: kein Wheel" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf weniger_geprueft_als_gepinnt_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN=- lauf ausnahmedatei_fehlt_ist_rot 1 "NICHT GEMESSEN" "OK"
 
