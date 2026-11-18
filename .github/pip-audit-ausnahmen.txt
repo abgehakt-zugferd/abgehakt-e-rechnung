@@ -1,0 +1,24 @@
+# Ausnahmen für die Schwachstellenprüfung der Python-Pakete
+# (.github/workflows/paketpruefung.yml, Skript .githooks/pakete_pruefen.sh).
+#
+# Zuerst wird aktualisiert: Hat ein Paket eine behobene Fassung, steht der Pin in
+# backend/pyproject.toml bald darauf in einer neuen Fassung. Eine Ausnahme ist nur für
+# den Fall, dass es keine behobene Fassung gibt oder ein Update nachweislich nicht
+# möglich ist, und sie läuft ab.
+#
+# Eine Ausnahme pro Zeile, drei Felder, durch Leerzeichen getrennt:
+#
+#   Kennung   Issue   Ablaufdatum
+#
+#   Kennung       die Kennung aus der Fundmeldung (PYSEC-..., GHSA-..., CVE-...)
+#   Issue         Nummer des Issues, das Begründung und Folgeschritt trägt (#123 oder 123)
+#   Ablaufdatum   JJJJ-MM-TT; am Ablauftag gilt die Ausnahme noch, danach ist der Lauf rot
+#
+# Beispiel (erfunden, nicht aktiv):
+#   PYSEC-0000-00000 #123 2027-01-31
+#
+# Rot ist der Lauf auch bei einer Zeile mit fehlendem oder ungültigem Feld, nicht nur bei
+# einer abgelaufenen. Zeilen mit # am Anfang und Leerzeilen zählen nicht. Die Datei muss
+# vorhanden sein (leer genügt); fehlt sie, ist der Lauf "NICHT GEMESSEN".
+#
+# Aktuell keine Ausnahmen.

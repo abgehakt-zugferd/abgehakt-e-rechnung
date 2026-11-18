@@ -51,6 +51,9 @@ jobs:
       - name: run-tests Aufraeumen (anonymes Volume)
         run: .githooks/test_run_tests_aufraeumen.sh
 
+      - name: Paketpruefung (nicht gemessen ist nie gruen, Ausnahmen laufen ab)
+        run: .githooks/test_pakete_pruefen.sh
+
   test:
     runs-on: ubuntu-latest
     steps:

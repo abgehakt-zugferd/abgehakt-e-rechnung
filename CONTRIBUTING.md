@@ -163,6 +163,15 @@ Containers, und sie ist beim nächsten Start verschwunden. `backend/uv.lock` wir
 bearbeitet; auf dem Rechner muss dafür kein uv installiert sein, `./uv.sh` bringt es mit. Der
 Bau des Abbilds bricht ab, sobald Lock und `pyproject.toml` auseinanderlaufen.
 
+**Bekannte Lücken in Paketen** prüft der Workflow `paketpruefung` (wöchentlich, bei jeder
+Änderung an `backend/uv.lock` oder `backend/pyproject.toml` und von Hand). Ist er rot, wird
+zuerst das Paket aktualisiert; nur wenn das nicht geht, kommt eine befristete Ausnahme mit
+Issue-Nummer in `.github/pip-audit-ausnahmen.txt` (Format im Kopf der Datei). Lokal:
+`.githooks/pakete_pruefen.sh` (braucht `uv` und `pip-audit`). Laut GitHub-Dokumentation
+schaltet GitHub geplante Läufe in öffentlichen Repos nach 60 Tagen ohne Aktivität ab; das
+fällt in der Actions-Übersicht als abgeschalteter Zeitplan auf, und `push` und
+`pull_request` lösen den Lauf bei jeder Lock-Änderung ohnehin aus.
+
 ## Was vor dem Code zu lesen ist
 
 [`docs/ARCHITEKTUR.md`](docs/ARCHITEKTUR.md): der Aufbau und die Regeln, die nicht gebrochen
