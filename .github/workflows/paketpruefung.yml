@@ -26,6 +26,7 @@ on:
       - .github/workflows/paketpruefung.yml
       - .github/pip-audit-ausnahmen.txt
       - .githooks/pakete_pruefen.sh
+      - .githooks/pakete_auswerten.py
   pull_request:
     paths:
       - backend/uv.lock
@@ -33,6 +34,7 @@ on:
       - .github/workflows/paketpruefung.yml
       - .github/pip-audit-ausnahmen.txt
       - .githooks/pakete_pruefen.sh
+      - .githooks/pakete_auswerten.py
   workflow_dispatch:
 
 permissions:
