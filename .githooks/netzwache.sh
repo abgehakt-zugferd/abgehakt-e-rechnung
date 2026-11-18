@@ -8,8 +8,12 @@
 # `network_mode: host` selbst auf. Ein Textmuster (awk) sah das nicht. Die Regel ist eine
 # Positivliste (compose_ports_pruefen.py): nur host_ip 127.0.0.1 ist gruen.
 #
-# Geprueft werden: docker-compose.yml allein, mit docker-compose.uebergabe.yml, mit
-# docker-compose.db-port.yml und mit docker-compose.integration.yml, soweit vorhanden.
+# Das Inventar kommt aus `git ls-files` (Muster *compose*.yml und *compose*.yaml). Jede
+# Datei braucht eine Zuordnung (Funktion zuordnung unten): "basis" (docker-compose.yml,
+# wird allein geprueft), "zusatz" (wird zusammen mit der Basis geprueft) oder "ausgenommen"
+# mit Grund. Eine Datei ohne Zuordnung ist ROT: wer eine neue Compose-Datei anlegt, muss
+# hier entscheiden, ob sie geprueft wird. docker-compose.dev.yml ist "zusatz": sie
+# veroeffentlicht heute keinen Port, und ein kuenftiger faende die Wache.
 #
 # Gemessen wird, was AUSGELIEFERT wird: die Variablen APP_BIND, APP_PORT, DB_BIND,
 # DB_PORT und COMPOSE_FILE des Aufrufers werden bewusst entfernt, damit die Vorgabe der
@@ -41,13 +45,36 @@ command -v python3 >/dev/null 2>&1 || nicht_gemessen "python3 fehlt im PATH."
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/netzwache.XXXXXX") && [ -d "$tmp" ] \
     || nicht_gemessen "keine Werkstatt anlegbar (mktemp)."
 trap 'rm -rf "$tmp"' EXIT
-for f in docker-compose.yml docker-compose.uebergabe.yml docker-compose.db-port.yml \
-         docker-compose.integration.yml; do
+
+# Zuordnung je Compose-Datei: basis | zusatz | ausgenommen:<Grund> | unbekannt
+zuordnung() {
+    case "$1" in
+        docker-compose.yml) echo basis ;;
+        docker-compose.dev.yml | docker-compose.uebergabe.yml | \
+        docker-compose.db-port.yml | docker-compose.integration.yml) echo zusatz ;;
+        # Bewusst ausgenommene Dateien hier eintragen, mit Grund:
+        #   datei.yml) echo "ausgenommen: Grund" ;;
+        *) echo unbekannt ;;
+    esac
+}
+
+inventar=$(git ls-files '*compose*.yml' '*compose*.yaml') \
+    || nicht_gemessen "git ls-files scheiterte (kein Git-Repository?)."
+: > "$tmp/funde.txt"
+: > "$tmp/zusaetze.txt"
+: > "$tmp/ohne_zuordnung.txt"
+for f in $inventar; do
+    art=$(zuordnung "$f")
+    case "$art" in
+        basis) ;;
+        zusatz) printf '%s\n' "$f" >> "$tmp/zusaetze.txt" ;;
+        ausgenommen:*) continue ;;
+        *) printf '  %s\n' "$f" >> "$tmp/ohne_zuordnung.txt"; continue ;;
+    esac
     [ -f "$f" ] && cp "$f" "$tmp/$f"
 done
 : > "$tmp/.env"
 : > "$tmp/integration.env"
-: > "$tmp/funde.txt"
 
 # $1 Bezeichnung, weitere Argumente: -f Datei ...
 messen() {
@@ -66,19 +93,39 @@ messen() {
         docker compose --project-directory "$tmp" "$@" config --format json \
         > "$tmp/out.json" 2> "$tmp/err.txt" \
         || nicht_gemessen "der Compose-Aufruf scheiterte ($name): $(head -n 3 "$tmp/err.txt")"
-    python3 "$here/compose_ports_pruefen.py" "$tmp/out.json" "$name" >> "$tmp/funde.txt"
+    python3 "$here/compose_ports_pruefen.py" "$tmp/out.json" "$name" \
+        > "$tmp/neu.txt" 2> "$tmp/pyerr.txt"
     rc=$?
-    [ "$rc" -eq 2 ] && nicht_gemessen "Ergebnis von $name nicht lesbar."
+    # Exit-Code und Ausgabe muessen zusammenpassen: 0 ohne Ausgabe = gruen, 1 mit
+    # Fundzeile = Fund; alles andere (auch ein Traceback mit Exit 1) ist nicht gemessen.
+    case "$rc" in
+        0) [ ! -s "$tmp/neu.txt" ] \
+            || nicht_gemessen "Pruefer meldete Ausgabe bei Exit 0 ($name)." ;;
+        1) [ -s "$tmp/neu.txt" ] \
+            || nicht_gemessen "Pruefer endete mit Exit 1 ohne Fundzeile ($name): $(head -n 3 "$tmp/pyerr.txt")"
+           cat "$tmp/neu.txt" >> "$tmp/funde.txt" ;;
+        *) nicht_gemessen "Pruefer endete mit Exit $rc ($name): $(head -n 3 "$tmp/pyerr.txt")" ;;
+    esac
     return 0
 }
 
 messen "docker-compose.yml" -f "$tmp/docker-compose.yml"
-for zusatz in uebergabe db-port integration; do
-    [ -f "docker-compose.$zusatz.yml" ] || continue
-    messen "docker-compose.yml + $zusatz" \
-        -f "$tmp/docker-compose.yml" -f "$tmp/docker-compose.$zusatz.yml"
-done
+while IFS= read -r zusatz; do
+    [ -n "$zusatz" ] || continue
+    [ -f "$tmp/$zusatz" ] || continue
+    messen "docker-compose.yml + $zusatz" -f "$tmp/docker-compose.yml" -f "$tmp/$zusatz"
+done < "$tmp/zusaetze.txt"
 
+rot=0
+if [ -s "$tmp/ohne_zuordnung.txt" ]; then
+    {
+        echo ""
+        echo "netz: ROT - Compose-Datei ohne Zuordnung:"
+        cat "$tmp/ohne_zuordnung.txt"
+        echo "  In .githooks/netzwache.sh (zuordnung) als zusatz eintragen oder mit Grund ausnehmen."
+    } >&2
+    rot=1
+fi
 if [ -s "$tmp/funde.txt" ]; then
     {
         echo ""
@@ -87,6 +134,6 @@ if [ -s "$tmp/funde.txt" ]; then
         echo "  Die Anwendung hat keine Anmeldung; gemeint ist fast immer \"127.0.0.1:3000:3000\"."
         cat "$tmp/funde.txt"
     } >&2
-    exit 1
+    rot=1
 fi
-exit 0
+exit "$rot"

@@ -151,6 +151,57 @@ if [ "$rc" -ne 0 ] && printf '%s' "$aus" | grep -qF -- "NICHT GEMESSEN" \
    && ! printf '%s' "$aus" | grep -qF -- "netz: ROT"; then r=0; else r=1; fi
 ergebnis netzwache_meldet_leere_messgrundlage_als_nicht_gemessen $r "rc=$rc: $aus"
 
+# F1: das Inventar kommt aus git ls-files; jede Compose-Datei braucht eine Zuordnung.
+# $1 Name  $2 erwartet (rot|gruen)  $3 Dateiname  $4 Inhalt (YAML)
+pruefe_zusatzdatei() {
+    neues_repo
+    printf 'services:\n  app:\n    image: probe\n' > "$repo/docker-compose.yml"
+    printf '%s\n' "$4" > "$repo/$3"
+    git -C "$repo" add -A
+    git -C "$repo" commit -q -m probe
+    aus=$( cd "$repo" && "$wache" 2>&1 )
+    if printf '%s' "$aus" | grep -qF -- "netz: ROT"; then ist=rot; else ist=gruen; fi
+    if [ "$ist" = "$2" ]; then ergebnis "$1" 0 ""; else
+        ergebnis "$1" 1 "erwartet $2, war $ist: $aus"; fi
+}
+LAN='services:
+  app:
+    ports:
+      - "0.0.0.0:3000:3000"'
+pruefe_zusatzdatei neue_lan_datei_mit_offenem_port_ist_rot rot docker-compose.lan.yml "$LAN"
+pruefe_zusatzdatei neue_lan_datei_im_yaml_format_ist_rot rot docker-compose.lan.yaml "$LAN"
+pruefe_zusatzdatei unbekannte_datei_ohne_ports_hat_keine_zuordnung_und_ist_rot rot \
+    compose.override.yml 'services: {}'
+pruefe_zusatzdatei dev_datei_ohne_ports_ist_gruen gruen docker-compose.dev.yml \
+    'services:
+  app:
+    command: ["true"]'
+pruefe_zusatzdatei dev_datei_mit_offenem_port_ist_rot rot docker-compose.dev.yml \
+    'services:
+  app:
+    ports:
+      - "3000:3000"'
+
+# F3: Exit-Code und Ausgabe des Pruefers muessen zusammenpassen.
+# $1 Name  $2 Exit-Code der Python-Attrappe (sie schreibt nur auf stderr)
+pruefe_pruefer_attrappe() {
+    neues_repo
+    printf 'services:\n  app:\n    image: probe\n' > "$repo/docker-compose.yml"
+    git -C "$repo" add -A
+    git -C "$repo" commit -q -m probe
+    py="$werkstatt/py-$2"
+    mkdir -p "$py"
+    printf '%s\n' '#!/bin/sh' 'echo "Traceback (simuliert)" >&2' "exit $2" > "$py/python3"
+    chmod +x "$py/python3"
+    aus=$( cd "$repo" && PATH="$py:$PATH" /bin/sh "$hier/netzwache.sh" 2>&1 )
+    rc=$?
+    if [ "$rc" -ne 0 ] && printf '%s' "$aus" | grep -qF -- "NICHT GEMESSEN" \
+       && ! printf '%s' "$aus" | grep -qF -- "netz: ROT"; then r=0; else r=1; fi
+    ergebnis "$1" $r "rc=$rc: $aus"
+}
+pruefe_pruefer_attrappe pruefer_rc1_ohne_fundzeile_ist_nicht_gemessen 1
+pruefe_pruefer_attrappe pruefer_rc7_ist_nicht_gemessen 7
+
 # --- Teil B: die lebenden Dateien -----------------------------------------------------
 compose="$wurzel/docker-compose.yml"
 zusatz="$wurzel/docker-compose.db-port.yml"
@@ -176,9 +227,26 @@ ergebnis zusatzdatei_oeffnet_db_port_nur_loopback $? "docker-compose.db-port.yml
 grep -q '^#\?[[:space:]]*DB_BIND=' "$beispiel" && grep -q '^#\?[[:space:]]*DB_PORT=' "$beispiel"
 ergebnis env_beispiel_nennt_db_bind_und_port $? "DB_BIND/DB_PORT fehlen in der Beispieldatei"
 
-aus=$( cd "$wurzel" && "$wache" 2>&1 )
-if printf '%s' "$aus" | grep -qF -- "netz: ROT"; then rc=1; else rc=0; fi
-ergebnis echte_wurzel_ohne_netz_rot $rc "$aus"
+# F4: das echte Repo. Gruen nur bei Exit 0 und ohne NICHT GEMESSEN; ohne docker meldet
+# sich der Test ausdruecklich als "nicht gemessen" und ist nicht gruen.
+# $1 Name  $2 PATH fuer den Lauf  $3 erwartet (gruen|ungemessen)
+pruefe_wurzel() {
+    aus=$( cd "$wurzel" && PATH="$2" /bin/sh "$hier/netzwache.sh" 2>&1 )
+    rc=$?
+    if printf '%s' "$aus" | grep -qF -- "NICHT GEMESSEN"; then ist=ungemessen
+    elif [ "$rc" -eq 0 ]; then ist=gruen
+    else ist=rot; fi
+    if [ "$ist" = "$3" ]; then ergebnis "$1" 0 ""; else
+        ergebnis "$1" 1 "erwartet $3, war $ist (rc=$rc): $aus"; fi
+}
+if command -v docker >/dev/null 2>&1; then
+    pruefe_wurzel echte_wurzel_netz_gemessen_und_gruen "$PATH" gruen
+else
+    echo "NICHT GEMESSEN echte_wurzel_netz_gemessen_und_gruen: docker fehlt, Test nicht gruen" >&2
+    fehl=1
+fi
+# Der Test selbst: ohne docker darf er nie gruen werden.
+pruefe_wurzel echte_wurzel_ohne_docker_ist_nicht_gemessen "$ohne" ungemessen
 
 [ "$fehl" -eq 0 ] && echo "test_compose_umzug: alle gruen"
 exit "$fehl"

@@ -109,7 +109,9 @@ die Stand-Prüfung weitergereicht, damit nichts die Ref-Zeilen vorher verbraucht
     sähe damit alle Rechnungen und lüde den GoBD-Export samt Kundendaten herunter.
     Gemessen wird nicht der Text, sondern die Normalform von `docker compose config
     --format json` (`.githooks/netzwache.sh`) für `docker-compose.yml` allein und mit je
-    einer Zusatzdatei. Positivliste: nur `host_ip` 127.0.0.1 ist grün; `[::]`, Langform,
+    einer Zusatzdatei. Das Inventar kommt aus `git ls-files` (`*compose*.yml` und `.yaml`);
+    jede Datei braucht eine Zuordnung im Skript (Zusatz oder bewusst ausgenommen mit
+    Grund), eine neue ohne Zuordnung ist rot. `docker-compose.dev.yml` wird geprüft. Positivliste: nur `host_ip` 127.0.0.1 ist grün; `[::]`, Langform,
     einfache Anführungszeichen und `network_mode: host` sind rot. Fehlt docker, python3
     oder Compose, meldet die Wache „nicht gemessen" und endet mit Fehler. Die Umgebung des
     Aufrufers (`APP_BIND` usw.) wird ausgeblendet, damit die Vorgabe der Dateien zählt;
