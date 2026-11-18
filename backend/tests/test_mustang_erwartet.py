@@ -24,3 +24,35 @@ def test_erwartet_und_fehlt_gibt_eine_meldung(wert):
 ])
 def test_sonst_keine_meldung(umgebung, jar_da):
     assert jar_fehlt_obwohl_erwartet(umgebung, jar_da=jar_da) is None
+
+
+# -- Der Hook selbst (Unterprozess) ------------------------------------------
+
+def _pytest_lauf(extra_env):
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    backend = Path(__file__).resolve().parent.parent
+    env = {k: v for k, v in os.environ.items() if k not in ("MUSTANG_ERWARTET", "MUSTANG_JAR")}
+    env.update(extra_env)
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider",
+         "tests/helpers/winzig_fuer_sessionstart.py"],
+        cwd=backend, env=env, capture_output=True, text=True, timeout=120)
+
+
+def test_sessionstart_bricht_ab_wenn_jar_erwartet_wird_und_fehlt():
+    lauf = _pytest_lauf({"MUSTANG_ERWARTET": "1", "MUSTANG_JAR": "/nicht/vorhanden/Mustang.jar"})
+
+    assert lauf.returncode == 1, lauf.stdout + lauf.stderr
+    assert "MUSTANG_ERWARTET ist gesetzt" in lauf.stdout + lauf.stderr
+    assert "1 passed" not in lauf.stdout
+
+
+def test_sessionstart_bricht_ohne_die_variable_nicht_ab():
+    lauf = _pytest_lauf({"MUSTANG_JAR": "/nicht/vorhanden/Mustang.jar"})
+
+    assert lauf.returncode == 0, lauf.stdout + lauf.stderr
+    assert "1 passed" in lauf.stdout
