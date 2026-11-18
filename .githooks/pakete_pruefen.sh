@@ -53,38 +53,23 @@ command -v pip-audit >/dev/null 2>&1 || ungemessen "pip-audit ist nicht installi
 command -v python3 >/dev/null 2>&1 || ungemessen "python3 fehlt (Auswertung der Ausgabe)."
 [ -f "$ausnahmen" ] || ungemessen ".github/pip-audit-ausnahmen.txt fehlt (leere Datei genuegt, aber sie muss da sein)."
 
-# --- Ausnahmen lesen: Kennung, Issue-Nummer, Ablaufdatum --------------------------
+# --- Ausnahmen lesen: Kennung, Issue, Ablauf, seit -------------------------------
+# Regeln und Meldungen stehen in pakete_auswerten.py (echter Kalendertag, Hoechstfrist
+# ab seit, Ablauf). Hier nur der Ablauf: jede Meldung ist rot, jede Ausnahme des
+# Pruefers ebenfalls.
+py="$(dirname "$0")/pakete_auswerten.py"
+ausnahme_aus=$(python3 -I "$py" ausnahmen "$ausnahmen" "$heute")
+ausnahme_rc=$?
+if [ "$ausnahme_rc" -ne 0 ]; then
+    printf '%s\n' "$ausnahme_aus" | sed -n 's/^FEHLER /ROT: /p' >&2
+    printf '%s\n' "$ausnahme_aus" | grep -q '^FEHLER ' \
+        || ungemessen "Ausnahmendatei nicht auswertbar (rc=$ausnahme_rc): $(printf '%s' "$ausnahme_aus" | tr '\n' ' ' | cut -c1-300)"
+    exit 1
+fi
 ignorieren=()
-ausnahmefehler=0
-nr=0
-while IFS= read -r zeile || [ -n "$zeile" ]; do
-    nr=$((nr + 1))
-    zeile="${zeile#"${zeile%%[![:space:]]*}"}"
-    case "$zeile" in ''|'#'*) continue ;; esac
-    # shellcheck disable=SC2086
-    set -- $zeile
-    if [ "$#" -ne 3 ]; then
-        echo "ROT: Ausnahme unvollständig (Zeile $nr): erwartet 'Kennung Issue Ablaufdatum', gefunden: $zeile" >&2
-        ausnahmefehler=1
-        continue
-    fi
-    kennung=$1 issue=$2 ablauf=$3
-    printf '%s' "$kennung" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_.-]*$' || {
-        echo "ROT: Ausnahme Zeile $nr: Kennung '$kennung' ist keine gueltige Kennung." >&2
-        ausnahmefehler=1; continue; }
-    printf '%s' "$issue" | grep -Eq '^#?[0-9]+$' || {
-        echo "ROT: Ausnahme Zeile $nr ($kennung): Issue '$issue' ist keine Nummer (z. B. #123)." >&2
-        ausnahmefehler=1; continue; }
-    printf '%s' "$ablauf" | grep -Eq '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$' || {
-        echo "ROT: Ausnahme Zeile $nr ($kennung): Datum '$ablauf' ist nicht JJJJ-MM-TT." >&2
-        ausnahmefehler=1; continue; }
-    if [[ "$ablauf" < "$heute" ]]; then
-        echo "ROT: Ausnahme abgelaufen (Zeile $nr): $kennung, Issue $issue, Ablauf $ablauf, heute $heute. Paket aktualisieren oder im Issue neu begruenden." >&2
-        ausnahmefehler=1; continue
-    fi
-    ignorieren+=(--ignore-vuln "$kennung")
-done < "$ausnahmen"
-[ "$ausnahmefehler" -eq 0 ] || exit 1
+while read -r art kennung; do
+    [ "$art" = "ID" ] && ignorieren+=(--ignore-vuln "$kennung")
+done <<< "$ausnahme_aus"
 
 # --- ein Lauf: Export, Zaehlen, pip-audit, Auswerten ------------------------------
 # $1 Name  $2.. Gruppenschalter fuer uv export. Setzt gepruefte_$1 nicht global,
@@ -105,7 +90,7 @@ lauf() {
         ${ignorieren[@]+"${ignorieren[@]}"} -r "$exp" \
         > "$werkstatt/$name.json" 2> "$werkstatt/$name.pa.err"
     pa_rc=$?
-    auswertung=$(python3 -I "$(dirname "$0")/pakete_auswerten.py" auswerten "$werkstatt/$name.json" "$exp")
+    auswertung=$(python3 -I "$py" auswerten "$werkstatt/$name.json" "$exp")
     py_rc=$?
     [ "$py_rc" -eq 0 ] || ungemessen "pip-audit ($name): Auswertung ist gescheitert (rc=$py_rc): $(printf '%s' "$auswertung" | tr '\n' ' ' | cut -c1-300)"
     nicht_geprueft=$(printf '%s\n' "$auswertung" | sed -n 's/^UNGEMESSEN //p')

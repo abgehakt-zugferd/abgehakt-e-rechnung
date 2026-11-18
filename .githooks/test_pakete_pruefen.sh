@@ -187,33 +187,38 @@ AUSNAHMEN="$KEINE" FAKE_VULN="jinja2:PYSEC-0001:3.1.7" lauf fund_laufzeit_ist_ro
 AUSNAHMEN="$KEINE" FAKE_VULN="pytest:PYSEC-0002:9.9" lauf fund_im_test_ist_rot 1 \
     "pytest 9.2.0 PYSEC-0002 fix 9.9" ""
 
-# Ausnahmen: Kennung, Issue, Ablauf. Updates zuerst, Ausnahme ist die Not.
+# Ausnahmen: Kennung, Issue, Ablauf, seit. Updates zuerst, Ausnahme ist die Not.
+# Heute ist 2026-11-18 (PAKETE_HEUTE). Hoechstfrist 30 Tage, gerechnet ab `seit`.
 V="jinja2:PYSEC-0001:3.1.7"
-AUSNAHMEN="PYSEC-0001 #12 2026-12-31
-" FAKE_VULN="$V" lauf gueltige_ausnahme_macht_gruen 0 "OK" ""
+ok_zeile() { AUSNAHMEN="$1
+" FAKE_VULN="$V" lauf "$2" 0 "OK" "NICHT GEMESSEN"; }
+rot_zeile() { AUSNAHMEN="$1
+" FAKE_VULN="$V" lauf "$2" 1 "$3" "OK"; }
+ok_zeile "PYSEC-0001 #12 2026-12-10 2026-11-18" gueltige_ausnahme_macht_gruen
 AUSNAHMEN="# Kommentar
 
-   PYSEC-0001   12   2026-12-31   
+   PYSEC-0001   12   2026-12-10   2026-11-18   
 " FAKE_VULN="$V" lauf kommentare_und_leerzeilen_zaehlen_nicht 0 "OK" ""
-AUSNAHMEN="PYSEC-0001 #12 2026-11-18
-" FAKE_VULN="$V" lauf ablauftag_gilt_noch 0 "OK" ""
-AUSNAHMEN="PYSEC-0001 #12 2026-11-17
-" FAKE_VULN="$V" lauf abgelaufene_ausnahme_ist_rot 1 "abgelaufen" "OK"
-AUSNAHMEN="PYSEC-0001 #12 2026-11-17
+ok_zeile "PYSEC-0001 #12 2026-11-18 2026-10-20" ablauftag_gilt_noch
+rot_zeile "PYSEC-0001 #12 2026-11-17 2026-10-20" abgelaufene_ausnahme_ist_rot "abgelaufen"
+AUSNAHMEN="PYSEC-0001 #12 2026-11-17 2026-10-20
 " lauf abgelaufene_ausnahme_ohne_fund_ist_rot 1 "abgelaufen" "OK"
-AUSNAHMEN="PYSEC-0001 2026-12-31
-" FAKE_VULN="$V" lauf ausnahme_ohne_issue_ist_rot 1 "Ausnahme unvollständig" "OK"
-AUSNAHMEN="PYSEC-0001 #12
-" lauf ausnahme_ohne_datum_ist_rot 1 "Ausnahme unvollständig" "OK"
-AUSNAHMEN="PYSEC-0001 #12 2026-12-31 mehr
-" lauf ausnahme_mit_zuviel_ist_rot 1 "Ausnahme unvollständig" "OK"
-AUSNAHMEN="PYSEC-0001 #12 31.12.2026
-" lauf ausnahme_mit_falschem_datum_ist_rot 1 "Datum" "OK"
-AUSNAHMEN="PYSEC-0001 #12 2026-13-45
-" lauf ausnahme_mit_unmoeglichem_datum_ist_rot 1 "Datum" "OK"
-AUSNAHMEN="PYSEC-0001 abc 2026-12-31
-" lauf ausnahme_mit_falscher_issue_nummer_ist_rot 1 "Issue" "OK"
-AUSNAHMEN="PYSEC-0999 #12 2026-12-31
+rot_zeile "PYSEC-0001 #12 2026-12-10" ausnahme_ohne_seit_ist_rot "Ausnahme unvollständig"
+rot_zeile "PYSEC-0001 2026-12-10 2026-11-18" ausnahme_ohne_issue_ist_rot "Ausnahme unvollständig"
+rot_zeile "PYSEC-0001 #12 2026-12-10 2026-11-18 mehr" ausnahme_mit_zuviel_ist_rot "Ausnahme unvollständig"
+rot_zeile "PYSEC-0001 #12 31.12.2026 2026-11-18" ausnahme_mit_falschem_datum_ist_rot "Datum"
+rot_zeile "PYSEC-0001 #12 2026-13-45 2026-11-18" ausnahme_mit_unmoeglichem_monat_ist_rot "kein Kalendertag"
+rot_zeile "PYSEC-0001 #12 2026-02-31 2026-02-01" ablauf_31_februar_ist_kein_kalendertag "2026-02-31 ist kein Kalendertag"
+rot_zeile "PYSEC-0001 #12 2026-12-10 2026-02-31" seit_31_februar_ist_kein_kalendertag "2026-02-31 ist kein Kalendertag"
+rot_zeile "PYSEC-0001 abc 2026-12-10 2026-11-18" ausnahme_mit_falscher_issue_nummer_ist_rot "Issue"
+# Hoechstfrist: ab seit, nicht ab heute; Obergrenze genau 30 Tage.
+rot_zeile "PYSEC-0001 #12 2026-12-13 2026-10-29" frist_zaehlt_ab_seit_nicht_ab_heute "länger als 30 Tage ab seit"
+ok_zeile "PYSEC-0001 #12 2026-11-19 2026-10-20" frist_30_tage_ab_seit_ist_gruen
+rot_zeile "PYSEC-0001 #12 2026-11-20 2026-10-20" frist_31_tage_ab_seit_ist_rot "länger als 30 Tage ab seit"
+rot_zeile "PYSEC-0001 #12 9999-12-31 2026-11-18" unbefristete_ausnahme_ist_rot "länger als 30 Tage ab seit"
+rot_zeile "PYSEC-0001 #12 2026-11-25 2026-11-19" seit_in_der_zukunft_ist_rot "seit liegt in der Zukunft"
+rot_zeile "PYSEC-0001 #12 2026-11-05 2026-11-10" ablauf_vor_seit_ist_rot "Ablauf liegt vor seit"
+AUSNAHMEN="PYSEC-0999 #12 2026-12-10 2026-11-18
 " FAKE_VULN="$V" lauf fremde_ausnahme_deckt_fund_nicht 1 "PYSEC-0001" "OK"
 
 [ "$fehl" -eq 0 ] && echo "test_pakete_pruefen: alle gruen ($zahl Faelle)"
