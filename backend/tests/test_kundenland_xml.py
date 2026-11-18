@@ -126,8 +126,7 @@ def test_mustang_blockiert_verkaeufer_ohne_land_mit_regel():
 
 def _xml_mit_rueckfall_zz(inv, firma):
     from unittest.mock import patch
-    with patch("app.services.belegrollen.normalisiere_land", return_value="ZZ"), \
-         patch("app.services.zugferd_xml.parteien.normalisiere_land", return_value="ZZ"):
+    with patch("app.services.belegrollen.normalisiere_land", return_value="ZZ"):
         return zugferd_xml.generate_xml(inv, firma)
 
 
