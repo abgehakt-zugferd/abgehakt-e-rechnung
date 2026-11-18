@@ -105,24 +105,9 @@ lauf() {
         ${ignorieren[@]+"${ignorieren[@]}"} -r "$exp" \
         > "$werkstatt/$name.json" 2> "$werkstatt/$name.pa.err"
     pa_rc=$?
-    auswertung=$(python3 -I - "$werkstatt/$name.json" <<'PY'
-import json, sys
-try:
-    d = json.load(open(sys.argv[1]))
-    deps = d["dependencies"]
-except Exception as e:
-    print("KAPUTT", type(e).__name__)
-    sys.exit(0)
-print("ANZAHL", len(deps))
-for p in deps:
-    for v in p.get("vulns", []):
-        fix = ",".join(v.get("fix_versions") or []) or "keine"
-        print("FUND", p["name"], p["version"], v["id"], "fix", fix)
-PY
-)
-    case "$auswertung" in
-        KAPUTT*|"") ungemessen "pip-audit ($name) lieferte keine lesbare Ausgabe (rc=$pa_rc): $(tr '\n' ' ' < "$werkstatt/$name.pa.err" | cut -c1-300)" ;;
-    esac
+    auswertung=$(python3 -I "$(dirname "$0")/pakete_auswerten.py" auswerten "$werkstatt/$name.json" "$exp")
+    py_rc=$?
+    [ "$py_rc" -eq 0 ] || ungemessen "pip-audit ($name): Auswertung ist gescheitert (rc=$py_rc): $(printf '%s' "$auswertung" | tr '\n' ' ' | cut -c1-300)"
     geprueft=$(printf '%s\n' "$auswertung" | sed -n 's/^ANZAHL //p')
     [ "${geprueft:-0}" -gt 0 ] || ungemessen "pip-audit ($name) hat null Pakete geprueft."
     [ "$geprueft" -eq "$gepinnt" ] || ungemessen "pip-audit ($name) hat $geprueft Pakete geprueft, gepinnt sind $gepinnt."

@@ -64,12 +64,19 @@ BEGIN { split(vuln, v, ":"); printf "{\"dependencies\":[" }
     if (modus == "weniger" && !weg) { weg = 1; next }
     split($1, p, "==")
     if (n++) printf ","
-    vs = ""
+    erster = (n == 1)
+    if (modus == "fremd") p[1] = "fremd" n
+    if (erster && modus == "kein_dict") { printf "\"kein-objekt\""; next }
+    vs = "\"vulns\":[]"
     if (p[1] == v[1] && index(ign, " " v[2] " ") == 0) {
-        vs = "{\"id\":\"" v[2] "\",\"fix_versions\":[\"" v[3] "\"],\"aliases\":[],\"description\":\"x\"}"
+        vs = "\"vulns\":[{\"id\":\"" v[2] "\",\"fix_versions\":[\"" v[3] "\"],\"aliases\":[" (v[4] != "" ? "\"" v[4] "\"" : "") "],\"description\":\"x\"}]"
         fund = 1
     }
-    printf "{\"name\":\"%s\",\"version\":\"%s\",\"vulns\":[%s]}", p[1], p[2], vs
+    if (erster && modus == "vulns_null") vs = "\"vulns\":null"
+    if (erster && modus == "vulns_string") vs = "\"vulns\":\"abc\""
+    if (erster && modus == "vulns_umbenannt") vs = "\"vulnerabilities\":[]"
+    if (erster && modus == "skip") vs = "\"skip_reason\":\"kein Wheel\""
+    printf "{\"name\":\"%s\",\"version\":\"%s\",%s}", p[1], p[2], vs
 }
 END { printf "],\"fixes\":[]}\n"; exit (fund ? 1 : (modus == "rc" ? 2 : 0)) }' "$req"
 ATT
@@ -155,6 +162,9 @@ AUSNAHMEN="$KEINE" TESTEXPORT="$werkstatt/leer.txt" lauf leerer_testexport_ist_r
 AUSNAHMEN="$KEINE" FAKE_PA=kaputt lauf pip_audit_ohne_ausgabe_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=leer lauf null_geprueft_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=rc lauf pip_audit_rc_ohne_fund_ist_rot 1 "NICHT GEMESSEN" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=kein_dict lauf eintrag_ohne_objekt_bei_rc0_ist_rot 1 "NICHT GEMESSEN" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=vulns_null lauf vulns_null_bei_rc0_ist_rot 1 "NICHT GEMESSEN" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=vulns_string lauf vulns_string_bei_rc0_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf weniger_geprueft_als_gepinnt_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN=- lauf ausnahmedatei_fehlt_ist_rot 1 "NICHT GEMESSEN" "OK"
 
