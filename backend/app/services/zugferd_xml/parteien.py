@@ -1,5 +1,5 @@
 """Verkaeufer, Kaeufer, Kontakt, Adressen und Steuer-IDs (HeaderTradeAgreement)."""
-from app.laender import bereinige_land
+from app.laender import bereinige_land, normalisiere_land
 from app.models.invoice import Invoice
 from app.services.adresse import bereinige_adresszeile2
 from app.services.belegrollen import Partei
@@ -204,7 +204,7 @@ def buyer_trade_party_xml(customer, inv_cat: str) -> str:
     addr2 = ""
     if customer:
         addr2 = _addr2_xml(customer.name, customer.address_line2)
-    land = bereinige_land(customer.country) if customer else "DE"
+    land = bereinige_land(customer.country) if customer else normalisiere_land(None)
     land_xml = (f"\n                    <ram:CountryID>{esc(land)}</ram:CountryID>"
                 if land else "")
     return f"""            <ram:BuyerTradeParty>{buyer_id_xml(customer)}

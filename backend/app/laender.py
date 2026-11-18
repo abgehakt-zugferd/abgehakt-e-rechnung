@@ -390,7 +390,7 @@ def normalisiere_land(wert: str | None) -> str:
     Eine Stelle für Kundenformular, Ersteinrichtung und Firmenstammdaten; ein leeres
     Land landete sonst als leeres CountryID-Element in der E-Rechnung.
     """
-    return (wert or "").strip().upper() or "DE"
+    return bereinige_land(wert) or "DE"
 
 
 def bereinige_land(wert: str | None) -> str:

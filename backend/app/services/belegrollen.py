@@ -5,7 +5,7 @@ haben eigene Empfänger und dürfen deshalb nicht durch diesen Tausch laufen.
 """
 from dataclasses import dataclass
 
-from app.laender import bereinige_land
+from app.laender import bereinige_land, normalisiere_land
 from app.services.belegart import belegart
 
 
@@ -16,7 +16,7 @@ class Partei:
     address_line2: str = ""
     zip_code: str = ""
     city: str = ""
-    country: str = "DE"
+    country: str = normalisiere_land(None)   # Vorgabe nur für Partei() ohne Angabe
     email: str = ""
     phone: str = ""
     steuernummer: str = ""

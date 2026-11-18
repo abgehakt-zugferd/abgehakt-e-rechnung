@@ -80,3 +80,27 @@ def test_leeres_kundenland_wird_von_der_datenbank_abgewiesen(pg_session):
     with pytest.raises(IntegrityError):
         pg_session.commit()
     pg_session.rollback()
+
+
+def test_rueckfall_auf_de_steht_nur_in_laender_py():
+    """Eine Quelle für den Rückfall: `normalisiere_land`. Andere Stellen rufen sie auf,
+    statt „DE“ als Ersatzwert selbst zu schreiben (`or "DE"`, `else "DE"`, Vorgabe am Feld).
+    Gelesene Länder (`bereinige_land`) bekommen keinen Ersatz."""
+    import re
+    from pathlib import Path
+
+    app = Path(__file__).resolve().parent.parent / "app"
+    muster = re.compile(r"""(?:\bor|\belse)\s+["']DE["']|country\s*:\s*str\s*=\s*["']DE["']""")
+    treffer = [f"{p.relative_to(app)}:{n}"
+               for p in app.rglob("*.py") if p.name != "laender.py"
+               for n, zeile in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+               if muster.search(zeile)]
+    assert treffer == []
+
+
+def test_partei_vorgabe_und_fehlender_kunde_laufen_ueber_normalisiere_land():
+    from app.services.belegrollen import Partei
+    from app.services.zugferd_xml.parteien import buyer_trade_party_xml
+
+    assert Partei().country == normalisiere_land(None) == "DE"
+    assert "<ram:CountryID>DE</ram:CountryID>" in buyer_trade_party_xml(None, "S")
