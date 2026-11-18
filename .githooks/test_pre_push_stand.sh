@@ -241,5 +241,28 @@ else
     echo "gruen datenwache_sieht_stdin"
 fi
 
+# --- Fall F: rote Suite, die Meldung empfiehlt keinen Umweg am Hook vorbei ---------
+repo_f=$(neues_repo)
+schreib_gruen "$repo_f"
+git -C "$repo_f" add -A
+git -C "$repo_f" commit -qm gruen-f
+sha_f=$(git -C "$repo_f" rev-parse HEAD)
+aus_f="$werkstatt/fall-f.aus"
+( cd "$repo_f" && printf 'refs/heads/main %s refs/heads/main %s\n' "$sha_f" "$leer" \
+    | env DATENWACHE_UEBERSTIMMT=1 PRE_PUSH_TEST_CMD='false' \
+        bash .githooks/pre-push origin unused-url ) >"$aus_f" 2>&1
+rc_f=$?
+if [ "$rc_f" -eq 0 ] || ! grep -qF -- "tdd: ROT" "$aus_f"; then
+    echo "ROT  rote_suite_blockiert: Push muss an der Suite scheitern (rc=$rc_f)" >&2
+    sed 's/^/      /' "$aus_f" | tail -20 >&2
+    fehl=1
+elif grep -qF -- "no-verify" "$aus_f"; then
+    echo "ROT  rote_suite_empfiehlt_keinen_umweg: die Meldung nennt --no-verify" >&2
+    sed 's/^/      /' "$aus_f" | tail -20 >&2
+    fehl=1
+else
+    echo "gruen rote_suite_blockiert_ohne_umweg_empfehlung"
+fi
+
 [ "$fehl" -eq 0 ] && echo "test_pre_push_stand: alle gruen"
 exit "$fehl"
