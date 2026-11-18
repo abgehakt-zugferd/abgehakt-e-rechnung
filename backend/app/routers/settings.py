@@ -29,6 +29,7 @@ from app.services.steuer_ruecklage import (
 )
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
+from app.services.kundenformular import land_pruefen
 from app.laender import normalisiere_land, registriere_laender_globals
 
 router = APIRouter()
@@ -127,8 +128,8 @@ def save_company(
     # der Sitzung und ein späterer Commit an anderer Stelle nähme sie mit.
     if (meldung := pruefe_praefix(invoice_prefix)):
         return settings_page(request, db, saved=False, error=meldung)
-    if not country.strip():
-        return settings_page(request, db, saved=False, error="Bitte ein Land wählen.")
+    if (meldung := land_pruefen(country)):
+        return settings_page(request, db, saved=False, error=meldung)
     if rechtsform not in RECHTSFORMEN:
         return settings_page(request, db, saved=False,
                              error="Bitte die Rechtsform wählen (Pflichtangaben auf Rechnungen).")
