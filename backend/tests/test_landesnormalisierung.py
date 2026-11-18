@@ -98,3 +98,28 @@ def test_partei_vorgabe_und_fehlender_kunde_laufen_ueber_normalisiere_land():
 
     assert Partei().country == normalisiere_land(None) == "DE"
     assert "<ram:CountryID>DE</ram:CountryID>" in buyer_trade_party_xml(None, "S")
+
+
+# Vorbelegungen, die der Nutzer im Formular sieht und ändern kann (kein stiller Rückfall).
+_SICHTBARE_VORBELEGUNG = {
+    "customers/form.html": "values.get('country') or 'DE'",
+    "setup/index.html": "wert('country') or 'DE'",
+}
+
+
+def test_templates_haben_nur_die_benannten_de_vorbelegungen():
+    """Der Lint zu `normalisiere_land` sucht in `*.py`; Templates dürfen `or 'DE'` nur
+    als sichtbare Formular-Vorbelegung führen, und zwar genau an den benannten Stellen."""
+    import re
+    from pathlib import Path
+
+    templates = Path(__file__).resolve().parent.parent / "app" / "templates"
+    muster = re.compile(r"""\bor\s+['"]DE['"]""")
+    treffer = {}
+    for p in templates.rglob("*.html"):
+        zeilen = [z for z in p.read_text(encoding="utf-8").splitlines() if muster.search(z)]
+        if zeilen:
+            treffer[p.relative_to(templates).as_posix()] = zeilen
+    assert set(treffer) == set(_SICHTBARE_VORBELEGUNG)
+    for datei, zeilen in treffer.items():
+        assert all(_SICHTBARE_VORBELEGUNG[datei] in z for z in zeilen)
