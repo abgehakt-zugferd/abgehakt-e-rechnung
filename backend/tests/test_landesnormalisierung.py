@@ -109,12 +109,13 @@ def test_rueckfall_auf_de_steht_nur_in_laender_py():
     assert treffer == []
 
 
-def test_partei_vorgabe_und_fehlender_kunde_laufen_ueber_normalisiere_land():
+def test_partei_vorgabe_laeuft_ueber_normalisiere_land_und_fehlender_kunde_hat_kein_land():
     from app.services.belegrollen import Partei
     from app.services.zugferd_xml.parteien import buyer_trade_party_xml
 
     assert Partei().country == normalisiere_land(None) == "DE"
-    assert "<ram:CountryID>DE</ram:CountryID>" in buyer_trade_party_xml(None, "S")
+    # Ohne Kunden kein CountryID: kein erfundenes DE (Docstring von buyer_trade_party_xml).
+    assert "CountryID" not in buyer_trade_party_xml(None, "S")
 
 
 # Vorbelegungen, die der Nutzer im Formular sieht und ändern kann (kein stiller Rückfall).
