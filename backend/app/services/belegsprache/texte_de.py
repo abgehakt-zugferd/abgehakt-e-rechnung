@@ -68,7 +68,7 @@ DARSTELLUNG_DE = {
     "label_original_aufstellung": "Original vom:",
     "label_original_anlagen": "Anlagen des Originals",
     "titel_aufstellung": "ABRECHNUNGSAUFSTELLUNG",
-    "label_aufstellungsnummer": "Aufstellungsnummer:",
+    "label_belegnummer": "Belegnummer:",
     "label_ausstellungsdatum": "Ausstellungsdatum:",
     "label_leistungsmonat": "Leistungsmonat:",
     "label_zahlungsnummer": "Zahlungsnummer:",

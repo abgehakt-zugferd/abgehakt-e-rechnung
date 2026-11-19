@@ -155,7 +155,7 @@ def _kopf(aufstellung, d, fonts) -> Table:
     Das Ausstellungsdatum steht erst ab dem Stellen auf dem Beleg (Guard);
     im Entwurf fehlt die Zeile, statt eines erfundenen Datums.
     """
-    zeilen = [(d.label_aufstellungsnummer, aufstellung.nummer)]
+    zeilen = [(d.label_belegnummer, aufstellung.nummer)]
     if aufstellung.original is not None:
         zeilen.append((d.label_original_aufstellung,
                        d.format_datum(aufstellung.original.ausstellungsdatum)))
