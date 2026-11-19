@@ -122,31 +122,46 @@ def test_mustang_blockiert_verkaeufer_ohne_land_mit_regel():
     assert mustang_modul.ist_gueltige_e_rechnung(ergebnis) is False
 
 
-# -- Verbrauchertest: wo der Rückfall im XML ankommt --------------------------
+# -- Lesepfad erfindet kein Land (Marker ZZ bleibt aus dem XML) ---------------
 
-def _xml_mit_rueckfall_zz(inv, firma):
+def _xml_mit_marker_zz(inv, firma):
+    """Patch auf belegrollen.normalisiere_land liefert „ZZ“ als Erkennungsmarker.
+
+    Die Klassenvorgabe `Partei.country = normalisiere_land(None)` in
+    app/services/belegrollen.py:19 wird beim Import ausgewertet und vom Patch
+    nicht erreicht — diese Tests beweisen deshalb nicht, dass alle Verbraucher
+    an der zentralen Funktion hängen, sondern nur: der Lesepfad erfindet kein Land.
+    """
     from unittest.mock import patch
     with patch("app.services.belegrollen.normalisiere_land", return_value="ZZ"):
         return zugferd_xml.generate_xml(inv, firma)
 
 
-def test_verkaeufer_ohne_land_bekommt_keinen_rueckfall_im_xml():
+def test_lesepfad_erfindet_kein_land_fuer_verkaeufer_ohne_land():
+    """Leeres Verkäuferland: kein CountryID, Marker ZZ erscheint nicht im XML.
+
+    Lücke: belegrollen.py:19 (Klassenvorgabe beim Import) wird vom Patch nicht erreicht.
+    """
     inv = _invoice(_kunde(), delivery_date=date(2026, 6, 15))
 
-    xml = _xml_mit_rueckfall_zz(inv, _company(country=""))
+    xml = _xml_mit_marker_zz(inv, _company(country=""))
 
     wurzel = ET.fromstring(xml)
     assert "ZZ" not in xml
     assert wurzel.find(".//ram:SellerTradeParty/ram:PostalTradeAddress/ram:CountryID", NS) is None
 
 
-def test_fehlender_kunde_bekommt_keinen_rueckfall_im_xml():
-    """`besetzung` macht aus einem fehlenden Kunden eine Partei mit leerem Land; der
-    Rückfall (`normalisiere_land`) erreicht den Generator nicht."""
+def test_lesepfad_erfindet_kein_land_fuer_fehlenden_kunden():
+    """Fehlender Kunde: Partei mit leerem Land, kein CountryID, kein Marker ZZ.
+
+    Bewiesen ist der Lesepfad, nicht die Abhängigkeit aller Verbraucher von
+    normalisiere_land. Lücke: belegrollen.py:19 wird beim Import ausgewertet und
+    vom Patch nicht erreicht.
+    """
     inv = _invoice(_kunde(), delivery_date=date(2026, 6, 15))
     inv.customer = None
 
-    xml = _xml_mit_rueckfall_zz(inv, _company())
+    xml = _xml_mit_marker_zz(inv, _company())
 
     assert "ZZ" not in xml
     assert ET.fromstring(xml).find(
