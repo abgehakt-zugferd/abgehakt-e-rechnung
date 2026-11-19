@@ -14,6 +14,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.config import get_settings
 from tests.helpers.testdb import je_prozess
+from tests.helpers.verbindungsfehler import ist_verbindungsfehler
 from tests.test_migrationskette import _alembic_config
 
 DB = je_prozess("abgehakt_migration018")
@@ -28,9 +29,11 @@ def auf_017():
         with admin.connect() as conn:
             conn.execute(text(f"DROP DATABASE IF EXISTS {DB} WITH (FORCE)"))
             conn.execute(text(f"CREATE DATABASE {DB}"))
-    except OperationalError:
+    except OperationalError as fehler:
         admin.dispose()
-        pytest.fail("PostgreSQL nicht erreichbar: Migration 018 nicht gemessen")
+        if ist_verbindungsfehler(fehler):
+            pytest.fail("PostgreSQL nicht erreichbar: Migration 018 nicht gemessen")
+        pytest.fail(f"Migration 018 nicht gemessen: {fehler}")
     url = f"{basis}/{DB}"
     cfg = _alembic_config(url)
     vorher = os.environ.get("DATABASE_URL")

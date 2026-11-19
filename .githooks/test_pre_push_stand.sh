@@ -267,7 +267,8 @@ fi
 # --- Fall G: keine Hook-Meldung unter .githooks/ empfiehlt einen Umweg am Hook vorbei ---
 # Gelesen werden die Hook-Skripte (nicht die test_*.sh, die das Wort pruefen). Zeilen, die
 # nur Kommentar sind, zaehlen nicht; ein Verbot ("nicht --no-verify") ist erlaubt.
-# Weitere Muster neben no-verify: core.hooksPath=/dev/null und HUSKY=0 (gleicher Umweg).
+# Weitere Muster neben no-verify: hooksPath=/dev/null bzw. hooksPath /dev/null und HUSKY=0
+# (gleicher Umweg). HUSKY="0" bleibt bewusst draußen (Text-Lint, siehe Kommentar oben).
 # Text-Lint ist nie vollstaendig (z. B. SKIP=..., zerlegte Woerter); das bleibt bewusst so.
 #
 # $1 Ordner → Zeilen mit Umweg-Empfehlung (ohne reine Kommentare und ohne "nicht ...")
@@ -281,11 +282,11 @@ umweg_empfehlungen() {
         if [ "${name#test_}" != "$name" ]; then
             continue
         fi
-        grep -nH -E -- 'no-verify|hooksPath=/dev/null|HUSKY=0' "$f" \
+        grep -nH -E -- 'no-verify|hooksPath[ =]/dev/null|HUSKY=0' "$f" \
             >> "$treffer_datei" 2>/dev/null
     done
     grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' "$treffer_datei" \
-        | grep -vE 'nicht[^"]{0,12}(no-verify|hooksPath=/dev/null|HUSKY=0)' || true
+        | grep -vE 'nicht[^"]{0,12}(no-verify|hooksPath[ =]/dev/null|HUSKY=0)' || true
 }
 
 # $1 Name  $2 Dateiinhalt  $3 erwartet (rot=Empfehlung erkannt, gruen=kein Treffer)
@@ -319,6 +320,10 @@ pruefe_umweg_probe empfehlung_hooksPath_ist_umweg \
     'echo "nutze git -c core.hooksPath=/dev/null push"' rot
 pruefe_umweg_probe verbot_hooksPath_ist_kein_umweg \
     'echo "nicht hooksPath=/dev/null setzen"' gruen
+pruefe_umweg_probe empfehlung_hooksPath_leerzeichen_ist_umweg \
+    'echo "nutze git config core.hooksPath /dev/null"' rot
+pruefe_umweg_probe verbot_hooksPath_leerzeichen_ist_kein_umweg \
+    'echo "nicht hooksPath /dev/null setzen"' gruen
 pruefe_umweg_probe fernes_nicht_entschuldigt_keine_empfehlung \
     'echo "nicht vergessen, sonst git -c core.hooksPath=/dev/null push"' rot
 pruefe_umweg_probe empfehlung_HUSKY0_ist_umweg \
