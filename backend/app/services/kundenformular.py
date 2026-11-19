@@ -20,16 +20,6 @@ AUFTRAG_STEUER_WERTE = frozenset({"AE"})
 BELEGSPRACHE_VORGABEN = frozenset({"de", "en"})
 
 
-def land_pruefen(country: str) -> str | None:
-    """Das Land ist Pflicht: leer ist ein Formularfehler, kein stilles „DE“.
-
-    Die Vorbelegung im HTML-Formular sieht der Nutzer; hier wird nichts ersetzt.
-    """
-    if not (country or "").strip():
-        return "Bitte ein Land wählen."
-    return None
-
-
 def vorgaben_pruefen(auftrag_steuer: str, belegsprache_vorgabe: str) -> str | None:
     """Prueft die beiden Vorgaben mit Wertevorrat; None heisst in Ordnung.
 

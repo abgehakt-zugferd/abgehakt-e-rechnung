@@ -29,8 +29,7 @@ from app.services.steuer_ruecklage import (
 )
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
-from app.services.kundenformular import land_pruefen
-from app.laender import normalisiere_land, registriere_laender_globals
+from app.laender import land_pruefen, normalisiere_land, registriere_laender_globals
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")

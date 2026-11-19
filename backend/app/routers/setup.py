@@ -14,7 +14,7 @@ from app.services.adresse import bereinige_adresszeile2
 from app.services.bankverbindung import normalisiere_bic, normalisiere_iban, pruefe_bic, pruefe_iban
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
-from app.laender import normalisiere_land, registriere_laender_globals
+from app.laender import land_pruefen, normalisiere_land, registriere_laender_globals
 from app.database import get_db
 from app.models.company import Company
 from app.services.ersteinrichtung import (
@@ -22,7 +22,6 @@ from app.services.ersteinrichtung import (
     einrichtung_abschliessen,
     einrichtung_luecke,
 )
-from app.services.kundenformular import land_pruefen
 from app.services.pflichtangaben import RECHTSFORMEN
 
 router = APIRouter()

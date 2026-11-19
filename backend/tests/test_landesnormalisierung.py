@@ -96,7 +96,12 @@ def test_leeres_kundenland_wird_von_der_datenbank_abgewiesen(pg_session):
 def test_rueckfall_auf_de_steht_nur_in_laender_py():
     """Eine Quelle für den Rückfall: `normalisiere_land`. Andere Stellen rufen sie auf,
     statt „DE“ als Ersatzwert selbst zu schreiben (`or "DE"`, `else "DE"`, Vorgabe am Feld).
-    Gelesene Länder (`bereinige_land`) bekommen keinen Ersatz."""
+    Gelesene Länder (`bereinige_land`) bekommen keinen Ersatz.
+
+    Bewusst unsichtbar für diesen Lint: `default="DE"` / `server_default="DE"` am
+    Modell (`Company.country`, `Customer.country`) – das ist die eine erlaubte Stelle
+    im Modell; das Muster sucht nur `or`/`else` und `country: str = "DE"`.
+    """
     import re
     from pathlib import Path
 
@@ -107,6 +112,15 @@ def test_rueckfall_auf_de_steht_nur_in_laender_py():
                for n, zeile in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
                if muster.search(zeile)]
     assert treffer == []
+
+
+def test_land_pruefen_liegt_in_laender_nicht_im_kundenformular():
+    """land_pruefen gehört zu bereinige_land/normalisiere_land, nicht zum Kundenformular."""
+    import app.laender as laender
+    import app.services.kundenformular as kform
+
+    assert callable(laender.land_pruefen)
+    assert not hasattr(kform, "land_pruefen")
 
 
 def test_partei_vorgabe_laeuft_ueber_normalisiere_land_und_fehlender_kunde_hat_kein_land():

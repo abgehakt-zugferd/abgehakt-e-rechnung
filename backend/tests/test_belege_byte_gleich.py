@@ -3,12 +3,14 @@
 Zusage: ein finalisierter Beleg ist unveränderlich. Diese Wege lesen die beim
 Finalisieren geprüften und abgelegten Bytes und erzeugen oder prüfen nichts neu; eine
 Neuprüfung mit einer neueren Mustang-Fassung dürfte einen festgeschriebenen Beleg nicht
-nachträglich sperren. Der Test lässt Erzeugung und Mustang beim Abruf scheitern, damit
-ein Neuerzeugen nicht unbemerkt durchgeht.
+nachträglich sperren.
+
+Die Abrufwege (PDF-Download, Archivdatei, GoBD) lesen nur Storage bzw. die DB-Spalte
+`zugferd_xml` — sie importieren keine Erzeuger. Markerbytes in den Fixtures beweisen
+die Bytegleichheit; dekorative Patches auf unimportierte Module fehlen deshalb absichtlich.
 """
 import io
 import zipfile
-from unittest.mock import patch
 
 import pytest
 
@@ -36,30 +38,21 @@ def beleg(pg_session):
     cleanup(nummer)
 
 
-@pytest.fixture
-def nichts_neu():
-    with patch("app.services.zugferd_xml.generate_xml", side_effect=AssertionError("neu erzeugt")), \
-         patch("app.services.pdf_generator.generate_pdf", side_effect=AssertionError("neu erzeugt")), \
-         patch("app.services.mustang.validate", side_effect=AssertionError("neu geprüft")), \
-         patch("app.services.mustang.combine", side_effect=AssertionError("neu eingebettet")):
-        yield
-
-
-def test_pdf_download_liefert_die_gespeicherten_bytes(pg_session, beleg, nichts_neu):
+def test_pdf_download_liefert_die_gespeicherten_bytes(pg_session, beleg):
     r = client(pg_session).get(f"/invoices/{beleg.id}/pdf")
 
     assert r.status_code == 200
     assert r.content == PDF
 
 
-def test_archivdatei_liefert_die_gespeicherten_bytes(pg_session, beleg, nichts_neu):
+def test_archivdatei_liefert_die_gespeicherten_bytes(pg_session, beleg):
     c = client(pg_session)
 
     assert c.get(f"/archiv/datei/pdfs/{beleg.invoice_number}.pdf").content == PDF
     assert c.get(f"/archiv/datei/xml/{beleg.invoice_number}.xml").content == XML
 
 
-def test_gobd_export_enthaelt_die_gespeicherten_bytes(pg_session, beleg, nichts_neu):
+def test_gobd_export_enthaelt_die_gespeicherten_bytes(pg_session, beleg):
     jahr = beleg.issue_date.isoformat()
     r = client(pg_session).get(f"/export/gobd?von={jahr}&bis={jahr}")
 
@@ -67,3 +60,23 @@ def test_gobd_export_enthaelt_die_gespeicherten_bytes(pg_session, beleg, nichts_
     with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
         assert zf.read(f"dokumente/{beleg.invoice_number}.pdf") == PDF
         assert zf.read(f"dokumente/{beleg.invoice_number}.xml") == XML
+
+
+def test_gobd_export_nimmt_xml_aus_db_wenn_datei_fehlt(pg_session, beleg):
+    """GoBD-Ersatzzweig: fehlt die XML-Datei, kommen die DB-Bytes unverändert.
+
+    Kein Erzeuger auf diesem Weg: der Export liest nur Storage/DB (siehe
+    app/services/gobd_export_dateien.py). Die Markerbytes (`gespeichert` inkl.
+    Nicht-ASCII) wären kein Generator-Output — Bytegleichheit belegt den Ersatzzweig.
+    """
+    xml_pfad = get_settings().storage_path / "xml" / f"{beleg.invoice_number}.xml"
+    xml_pfad.unlink()
+    assert not xml_pfad.exists()
+
+    jahr = beleg.issue_date.isoformat()
+    r = client(pg_session).get(f"/export/gobd?von={jahr}&bis={jahr}")
+
+    assert r.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        assert zf.read(f"dokumente/{beleg.invoice_number}.xml") == XML
+        assert zf.read(f"dokumente/{beleg.invoice_number}.pdf") == PDF

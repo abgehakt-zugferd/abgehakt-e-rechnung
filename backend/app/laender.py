@@ -403,6 +403,16 @@ def bereinige_land(wert: str | None) -> str:
     return (wert or "").strip().upper()
 
 
+def land_pruefen(country: str) -> str | None:
+    """Das Land ist Pflicht: leer ist ein Formularfehler, kein stilles „DE“.
+
+    Die Vorbelegung im HTML-Formular sieht der Nutzer; hier wird nichts ersetzt.
+    """
+    if not (country or "").strip():
+        return "Bitte ein Land wählen."
+    return None
+
+
 def registriere_laender_globals(templates: Jinja2Templates) -> None:
     """Macht `LAENDER` und `ISO_LAENDER` in einem Jinja-Environment verfügbar.
 

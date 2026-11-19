@@ -267,19 +267,68 @@ fi
 # --- Fall G: keine Hook-Meldung unter .githooks/ empfiehlt einen Umweg am Hook vorbei ---
 # Gelesen werden die Hook-Skripte (nicht die test_*.sh, die das Wort pruefen). Zeilen, die
 # nur Kommentar sind, zaehlen nicht; ein Verbot ("nicht --no-verify") ist erlaubt.
-treffer_datei="$werkstatt/no-verify.txt"
-: > "$treffer_datei"
-for f in "$hier"/*.sh "$hier/pre-push"; do
-    name=${f##*/}
-    if [ "${name#test_}" != "$name" ]; then
-        continue
+# Weitere Muster neben no-verify: core.hooksPath=/dev/null und HUSKY=0 (gleicher Umweg).
+# Text-Lint ist nie vollstaendig (z. B. SKIP=..., zerlegte Woerter); das bleibt bewusst so.
+#
+# $1 Ordner → Zeilen mit Umweg-Empfehlung (ohne reine Kommentare und ohne "nicht ...")
+umweg_empfehlungen() {
+    ordner=$1
+    treffer_datei="$werkstatt/umweg-treffer.txt"
+    : > "$treffer_datei"
+    for f in "$ordner"/*.sh "$ordner"/pre-push; do
+        [ -f "$f" ] || continue
+        name=${f##*/}
+        if [ "${name#test_}" != "$name" ]; then
+            continue
+        fi
+        grep -nH -E -- 'no-verify|hooksPath=/dev/null|HUSKY=0' "$f" \
+            >> "$treffer_datei" 2>/dev/null
+    done
+    grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' "$treffer_datei" \
+        | grep -vE 'nicht[^"]{0,12}(no-verify|hooksPath=/dev/null|HUSKY=0)' || true
+}
+
+# $1 Name  $2 Dateiinhalt  $3 erwartet (rot=Empfehlung erkannt, gruen=kein Treffer)
+pruefe_umweg_probe() {
+    name=$1
+    inhalt=$2
+    erwartet=$3
+    d="$werkstatt/probe-$name"
+    mkdir -p "$d"
+    printf '%s\n' "$inhalt" > "$d/hinweis.sh"
+    fund=$(umweg_empfehlungen "$d")
+    if [ "$erwartet" = rot ]; then
+        if [ -n "$fund" ]; then
+            echo "gruen $name"
+        else
+            echo "ROT  $name: Umweg-Empfehlung nicht erkannt" >&2
+            fehl=1
+        fi
+    else
+        if [ -z "$fund" ]; then
+            echo "gruen $name"
+        else
+            echo "ROT  $name: Verbot als Umweg gewertet:" >&2
+            printf '%s\n' "$fund" | sed 's/^/      /' >&2
+            fehl=1
+        fi
     fi
-    grep -nH -- "no-verify" "$f" >> "$treffer_datei" 2>/dev/null
-done
-umweg=$(grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' "$treffer_datei" \
-    | grep -vE 'nicht[^"]{0,12}no-verify')
+}
+
+pruefe_umweg_probe empfehlung_hooksPath_ist_umweg \
+    'echo "nutze git -c core.hooksPath=/dev/null push"' rot
+pruefe_umweg_probe verbot_hooksPath_ist_kein_umweg \
+    'echo "nicht hooksPath=/dev/null setzen"' gruen
+pruefe_umweg_probe fernes_nicht_entschuldigt_keine_empfehlung \
+    'echo "nicht vergessen, sonst git -c core.hooksPath=/dev/null push"' rot
+pruefe_umweg_probe empfehlung_HUSKY0_ist_umweg \
+    'echo "HUSKY=0 git push"' rot
+pruefe_umweg_probe verbot_HUSKY0_ist_kein_umweg \
+    'echo "nicht HUSKY=0 setzen"' gruen
+
+umweg=$(umweg_empfehlungen "$hier")
 if [ -n "$umweg" ]; then
-    echo "ROT  hooks_empfehlen_keinen_umweg: --no-verify in einer Hook-Meldung" >&2
+    echo "ROT  hooks_empfehlen_keinen_umweg: Umweg in einer Hook-Meldung" >&2
     printf '%s\n' "$umweg" | sed 's/^/      /' >&2
     fehl=1
 else

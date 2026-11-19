@@ -110,10 +110,16 @@ git -C "$repo" add -A
 git -C "$repo" commit -q -m probe
 ohne="$werkstatt/ohne-docker"
 mkdir -p "$ohne"
+# /usr/bin und /bin ueberschneiden sich (GNU/usrmerge: oft dieselben Namen).
+# Verwaiste Links in der Quelle: [ -e Ziel ] ist falsch, obwohl der Name in
+# $ohne schon liegt - ein zweites ln schreibt dann "File exists" nach stderr.
+# Nur existierende Quellen verlinken; schon gesetzte Namen ueberspringen.
 for pfad in /usr/bin/* /bin/*; do
     name=${pfad##*/}
     [ "$name" = docker ] && continue
-    [ -e "$ohne/$name" ] || ln -s "$pfad" "$ohne/$name"
+    [ -e "$pfad" ] || continue
+    [ -e "$ohne/$name" ] && continue
+    ln -s "$pfad" "$ohne/$name"
 done
 # Direkt netzwache.sh: ueber wachen.sh waere rc!=0 schon durch andere Wachen erfuellt.
 aus=$( cd "$repo" && PATH="$ohne" /bin/sh "$hier/netzwache.sh" 2>&1 )
@@ -216,6 +222,23 @@ rc=$?
 if [ "$rc" -ne 0 ] && printf '%s' "$aus" | grep -qF -- "NICHT GEMESSEN" \
    && ! printf '%s' "$aus" | grep -qF -- "netz: ROT"; then r=0; else r=1; fi
 ergebnis pruefer_exit0_mit_ausgabe_ist_nicht_gemessen $r "rc=$rc: $aus"
+
+# Exit 1 mit stdout-Zeile ohne Fundmuster ("  <name>: ...") ist nicht gemessen, nicht ROT.
+# Naht: python3 auf PATH (wie pruefer_rc1_ohne_fundzeile / exit0_mit_ausgabe).
+py1="$werkstatt/py-exit1-ohne-muster"
+mkdir -p "$py1"
+printf '%s\n' '#!/bin/sh' 'echo "Traceback (simuliert): kein Fundmuster"' 'exit 1' \
+    > "$py1/python3"
+chmod +x "$py1/python3"
+neues_repo
+printf 'services:\n  app:\n    image: probe\n' > "$repo/docker-compose.yml"
+git -C "$repo" add -A
+git -C "$repo" commit -q -m probe
+aus=$( cd "$repo" && PATH="$py1:$PATH" /bin/sh "$hier/netzwache.sh" 2>&1 )
+rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$aus" | grep -qF -- "NICHT GEMESSEN" \
+   && ! printf '%s' "$aus" | grep -qF -- "netz: ROT"; then r=0; else r=1; fi
+ergebnis pruefer_exit1_ohne_fundmuster_ist_nicht_gemessen $r "rc=$rc: $aus"
 
 # U-R3-2: eine in git eingetragene, aber auf der Platte fehlende Zusatzdatei ist nicht gemessen.
 neues_repo

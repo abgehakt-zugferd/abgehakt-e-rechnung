@@ -14,20 +14,13 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.config import get_settings
 from tests.helpers.testdb import je_prozess
+from tests.helpers.verbindungsfehler import ist_verbindungsfehler
 from tests.test_migrationskette import _alembic_config
 
 DB = je_prozess("abgehakt_altzeilen")
 
 NEUER_KUNDE = ("INSERT INTO customers (customer_number, name, address_line1, zip_code, "
                "city, country) VALUES ('{n}', 'Kunde', 'Weg 1', '10115', 'Berlin', '')")
-
-
-def ist_verbindungsfehler(fehler: Exception) -> bool:
-    """Nur „Server nicht erreichbar“ rechtfertigt einen Skip, nicht jeder OperationalError."""
-    text_ = str(fehler).lower()
-    return any(m in text_ for m in (
-        "could not connect", "connection refused", "could not translate host",
-        "name or service not known", "timeout expired"))
 
 
 @pytest.fixture
@@ -111,8 +104,3 @@ def test_altzeile_firma_mit_leerem_land_bremst_036_nicht(wegwerf_db):
              "VALUES (2, 'Firma', 'Weg 1', '10115', 'Berlin', '')",
         "ck_company_country_nicht_leer")
 
-
-def test_nur_verbindungsfehler_sind_ein_skip_grund():
-    assert ist_verbindungsfehler(OperationalError("x", {}, Exception("connection refused")))
-    assert not ist_verbindungsfehler(OperationalError("x", {}, Exception("password authentication failed")))
-    assert not ist_verbindungsfehler(OperationalError("x", {}, Exception('database "x" does not exist')))

@@ -106,11 +106,19 @@ messen() {
     rc=$?
     # Exit-Code und Ausgabe muessen zusammenpassen: 0 ohne Ausgabe = gruen, 1 mit
     # Fundzeile = Fund; alles andere (auch ein Traceback mit Exit 1) ist nicht gemessen.
+    # Fundzeilen kommen aus compose_ports_pruefen.py als "  <name>: ..."; jede andere
+    # stdout-Zeile bei Exit 1 (Traceback, Warnung) zaehlt nicht als Fund.
     case "$rc" in
         0) [ ! -s "$tmp/neu.txt" ] \
             || nicht_gemessen "Pruefer meldete Ausgabe bei Exit 0 ($name)." ;;
         1) [ -s "$tmp/neu.txt" ] \
             || nicht_gemessen "Pruefer endete mit Exit 1 ohne Fundzeile ($name): $(head -n 3 "$tmp/pyerr.txt")"
+           while IFS= read -r fundzeile || [ -n "$fundzeile" ]; do
+               case "$fundzeile" in
+                   "  $name: "*) ;;
+                   *) nicht_gemessen "Pruefer-Ausgabe ohne Fundmuster ($name): $(head -n 3 "$tmp/neu.txt")" ;;
+               esac
+           done < "$tmp/neu.txt"
            cat "$tmp/neu.txt" >> "$tmp/funde.txt" ;;
         *) nicht_gemessen "Pruefer endete mit Exit $rc ($name): $(head -n 3 "$tmp/pyerr.txt")" ;;
     esac

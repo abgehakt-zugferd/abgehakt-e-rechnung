@@ -22,7 +22,7 @@ from app.services.ust_id_pruefung import (
 from app.services.steuerstatus import UST_STATUS_UNGEKLAERT
 from app.branding import register_branding_globals
 from app.darstellung import registriere_darstellungsfilter
-from app.laender import registriere_laender_globals
+from app.laender import land_pruefen, registriere_laender_globals
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -121,7 +121,7 @@ def _kunde_anlegen(request, db, *, number, values, bank, stamm, steuer, vorgaben
     cc_fehler = empfaenger.pruefe(stamm["cc_emails"])
     if cc_fehler:
         return _render_form(request, None, number, values, cc_fehler)
-    land_fehler = kform.land_pruefen(stamm["country"])
+    land_fehler = land_pruefen(stamm["country"])
     if land_fehler:
         return _render_form(request, None, number, values, land_fehler)
     vorgaben_fehler = kform.vorgaben_pruefen(
@@ -218,7 +218,7 @@ def _kunde_aktualisieren(request, db, customer, *, number, bank, stamm, steuer, 
     cc_fehler = empfaenger.pruefe(stamm["cc_emails"])
     if cc_fehler:
         return _render_form(request, customer, "", {}, cc_fehler)
-    land_fehler = kform.land_pruefen(stamm["country"])
+    land_fehler = land_pruefen(stamm["country"])
     if land_fehler:
         return _render_form(request, customer, "", {}, land_fehler)
     vorgaben_fehler = kform.vorgaben_pruefen(
