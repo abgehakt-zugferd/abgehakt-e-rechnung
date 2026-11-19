@@ -38,7 +38,7 @@ heute="${PAKETE_HEUTE:-$(date +%Y-%m-%d)}"
 lock="$wurzel/backend/uv.lock"
 ausnahmen="$wurzel/.github/pip-audit-ausnahmen.txt"
 # Gemeinsamer Auswerter (Kopie). Ohne -I: Nachbarmodule _ausnahmen/_bericht.
-py="$(cd "$(dirname "$0")" && pwd)/pip-audit-auswerter/pip_audit_auswerten.py"
+auswerter="${PAKETE_AUSWERTER:-$(cd "$(dirname "$0")" && pwd)/pip-audit-auswerter/pip_audit_auswerten.py}"
 
 werkstatt=$(mktemp -d "${TMPDIR:-/tmp}/pakete.XXXXXX") && [ -d "$werkstatt" ] || {
     echo "NICHT GEMESSEN: keine Werkstatt anlegbar (mktemp)." >&2
@@ -58,7 +58,7 @@ command -v uv >/dev/null 2>&1 || ungemessen "uv ist nicht installiert (nicht auf
 command -v pip-audit >/dev/null 2>&1 || ungemessen "pip-audit ist nicht installiert (nicht auf PATH)."
 command -v python3 >/dev/null 2>&1 || ungemessen "python3 fehlt (Auswertung der Ausgabe)."
 [ -f "$ausnahmen" ] || ungemessen ".github/pip-audit-ausnahmen.txt fehlt (leere Datei genuegt, aber sie muss da sein)."
-[ -f "$py" ] || ungemessen "gemeinsamer Auswerter fehlt: $py"
+[ -f "$auswerter" ] || ungemessen "Auswerter fehlt: $auswerter"
 
 # Exit des Auswerters gegen die ERGEBNIS-Schlusszeile. Passen sie nicht, gilt
 # der Lauf als nicht gemessen (Vertrag der gemeinsamen Fassung).
@@ -90,7 +90,7 @@ lauf() {
             --no-emit-project --no-header --no-annotate "$@" ) > "$exp_roh" 2> "$werkstatt/$name.uv.err"; then
         ungemessen "uv export ($name) ist gescheitert: $(tr '\n' ' ' < "$werkstatt/$name.uv.err")"
     fi
-    if ! python3 "$py" vorbereiten "$exp_roh" > "$exp" 2> "$werkstatt/$name.vor.err"; then
+    if ! python3 "$auswerter" vorbereiten "$exp_roh" > "$exp" 2> "$werkstatt/$name.vor.err"; then
         ungemessen "vorbereiten ($name): $(tr '\n' ' ' < "$werkstatt/$name.vor.err" | cut -c1-300)"
     fi
     gepinnt=$(grep -cE '^[A-Za-z0-9_.-]+==' "$exp" || true)
@@ -100,15 +100,16 @@ lauf() {
         -r "$exp" \
         > "$werkstatt/$name.json" 2> "$werkstatt/$name.pa.err"
     pa_rc=$?
-    auswertung=$(python3 "$py" auswerten \
+    auswertung=$(python3 "$auswerter" auswerten \
         --pins "$exp" \
         --bericht "$werkstatt/$name.json" \
         --rc "$pa_rc" \
         --ausnahmen "$ausnahmen" \
-        --heute "$heute" 2>&1)
+        --heute "$heute" 2> "$werkstatt/$name.aus.err")
     py_rc=$?
+    auswertung_err=$(tr '\n' ' ' < "$werkstatt/$name.aus.err" | cut -c1-300)
     if ! ergebnis_passt "$py_rc" "$auswertung"; then
-        ungemessen "pip-audit ($name): Exit $py_rc und ERGEBNIS passen nicht: $(printf '%s' "$auswertung" | tr '\n' ' ' | cut -c1-300)"
+        ungemessen "pip-audit ($name): Exit $py_rc und ERGEBNIS passen nicht: $(printf '%s %s' "$auswertung" "$auswertung_err" | tr '\n' ' ' | cut -c1-300)"
     fi
     # NICHT GEMESSEN / LUECKE sofort; HINWEIS erst nach beiden Laeufen.
     printf '%s\n' "$auswertung" | grep -E '^(NICHT GEMESSEN|LUECKE) ' \

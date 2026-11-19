@@ -15,6 +15,7 @@ hier=$(cd "$(dirname "$0")" && pwd)
 skript="$hier/pakete_pruefen.sh"
 fehl=0
 zahl=0
+. "$hier/pakete_testhilfe.sh"
 
 werkstatt=$(mktemp -d "${TMPDIR:-/tmp}/pakete.XXXXXX") \
     && [ -n "$werkstatt" ] && [ -d "$werkstatt" ] || {
@@ -106,61 +107,6 @@ pluggy==1.6.0 \
 EOT
 : > "$werkstatt/leer.txt"
 
-# $1 Name  $2 erwarteter rc (0 = gruen; 1 = beliebiger Fehler; 2 = genau Exit 2)
-# $3 erwarteter Wortlaut (leer = keiner)
-# $4 Wortlaut, der NICHT vorkommen darf (leer = keiner)
-# Umgebung des Falls: FAKE_*, AUSNAHMEN (Dateiinhalt, "-" = Datei fehlt), OHNE_LOCK,
-# OHNE_UV, OHNE_PA, HEUTE.
-lauf() {
-    name=$1; erw_rc=$2; wortlaut=$3; verboten=${4:-}
-    zahl=$((zahl + 1))
-    w="$werkstatt/fall.$zahl"
-    mkdir -p "$w/backend" "$w/.github"
-    [ -z "${OHNE_LOCK:-}" ] && printf 'version = 1\n' > "$w/backend/uv.lock"
-    printf '[project]\nname = "x"\n[dependency-groups]\ntest = ["pytest==9.2.0"]\n%s\n' \
-        "${PYPROJECT_ZUSATZ-}" > "$w/backend/pyproject.toml"
-    case "${AUSNAHMEN-}" in
-        -) ;;
-        *) printf '%s' "${AUSNAHMEN-}" > "$w/.github/pip-audit-ausnahmen.txt" ;;
-    esac
-    pfad="$werkstatt/pfad.$zahl"
-    mkdir -p "$pfad"
-    for b in sh awk grep sed date cat tr wc head sort mktemp rm mkdir cut printf dirname; do
-        for d in /usr/bin /bin; do
-            [ -x "$d/$b" ] && { ln -sf "$d/$b" "$pfad/$b"; break; }
-        done
-    done
-    ln -sf "$(command -v python3)" "$pfad/python3"
-    ln -sf "$(command -v bash)" "$pfad/bash"
-    [ -z "${OHNE_UV:-}" ] && ln -sf "$att/uv" "$pfad/uv"
-    [ -z "${OHNE_PA:-}" ] && ln -sf "$att/pip-audit" "$pfad/pip-audit"
-    aus=$(PATH="$pfad" PAKETE_WURZEL="$w" PAKETE_HEUTE="${HEUTE:-2026-11-18}" \
-          FAKE_EXPORT_LAUFZEIT="${LAUFZEIT:-$werkstatt/lauf.txt}" \
-          FAKE_EXPORT_TEST="${TESTEXPORT:-$werkstatt/test.txt}" \
-          "$(command -v bash)" "$skript" 2>&1)
-    rc=$?
-    ok=1
-    if [ "$erw_rc" -eq 0 ]; then
-        [ "$rc" -eq 0 ] || ok=0
-    elif [ "$erw_rc" -eq 2 ]; then
-        # A3: ungueltige/zu lange/abgelaufene Ausnahme ergibt genau 2.
-        [ "$rc" -eq 2 ] || ok=0
-    else
-        [ "$rc" -ne 0 ] || ok=0
-    fi
-    [ -z "$wortlaut" ] || printf '%s' "$aus" | grep -qF -- "$wortlaut" || ok=0
-    [ -z "$verboten" ] || ! printf '%s' "$aus" | grep -qF -- "$verboten" || ok=0
-    if [ "$ok" -eq 1 ]; then
-        echo "gruen $name"
-    else
-        echo "ROT  $name: erwartet rc=$erw_rc und '$wortlaut', nicht '$verboten' (rc=$rc)" >&2
-        printf '%s\n' "$aus" >&2
-        fehl=1
-    fi
-    # Zuweisungen vor einem Funktionsaufruf bleiben in sh bestehen: wegraeumen.
-    unset OHNE_LOCK OHNE_UV OHNE_PA FAKE_UV_RC FAKE_PA FAKE_VULN LAUFZEIT TESTEXPORT AUSNAHMEN HEUTE PYPROJECT_ZUSATZ
-}
-
 KEINE=""
 
 # Durchstich: sauberer Stand ist gruen und nennt, was geprueft wurde.
@@ -209,6 +155,25 @@ AUSNAHMEN="$KEINE" FAKE_VULN="pytest:PYSEC-0002:9.9" lauf fund_im_test_ist_rot 1
 # Die behobene Fassung steht in der Fundzeile, sonst fehlt der Weg zum Update.
 AUSNAHMEN="$KEINE" FAKE_VULN="jinja2:PYSEC-0001:3.1.7" lauf fund_nennt_behobene_fassung 1 \
     "behoben in 3.1.7" "NICHT GEMESSEN"
+AUSNAHMEN="$KEINE" FAKE_VULN="pytest:PYSEC-0002:9.9" lauf fund_im_test_nennt_behobene_fassung 1 \
+    "behoben in 9.9" "NICHT GEMESSEN"
+
+# Auswerter muss bei Widerspruch als NICHT GEMESSEN fallen.
+aus_0_luecke=$(schreib_auswerter_attrappe 0_luecke 0 '"LUECKE fake\nERGEBNIS LUECKE (1 Fund)\n"' '""')
+AUSNAHMEN="$KEINE" AUSWERTER="$aus_0_luecke" lauf auswerter_exit_0_mit_luecke_ist_nicht_gemessen 1 \
+    "NICHT GEMESSEN" "OK"
+aus_1_sauber=$(schreib_auswerter_attrappe 1_sauber 1 '"ERGEBNIS SAUBER (5 Pakete)\n"' '""')
+AUSNAHMEN="$KEINE" AUSWERTER="$aus_1_sauber" lauf auswerter_exit_1_mit_sauber_ist_nicht_gemessen 1 \
+    "NICHT GEMESSEN" "OK"
+aus_1_ohne=$(schreib_auswerter_attrappe 1_ohne 1 '"LUECKE fake\n"' '""')
+AUSNAHMEN="$KEINE" AUSWERTER="$aus_1_ohne" lauf auswerter_exit_1_ohne_ergebnis_ist_nicht_gemessen 1 \
+    "NICHT GEMESSEN" "OK"
+aus_0_ohne=$(schreib_auswerter_attrappe 0_ohne 0 '"AUSGENOMMEN PYSEC-1 fake 1.0 PYSEC-1\n"' '""')
+AUSNAHMEN="$KEINE" AUSWERTER="$aus_0_ohne" lauf auswerter_exit_0_ohne_ergebnis_ist_nicht_gemessen 1 \
+    "NICHT GEMESSEN" "OK"
+aus_stderr=$(schreib_auswerter_attrappe stderr_scheinerfolg 0 '""' '"ERGEBNIS SAUBER (5 Pakete)\n"')
+AUSNAHMEN="$KEINE" AUSWERTER="$aus_stderr" lauf ergebnis_nur_auf_stderr_zaehlt_nicht 1 \
+    "NICHT GEMESSEN" "OK"
 
 # Ausnahmen: Kennung, Issue, Ablauf, seit. Updates zuerst, Ausnahme ist die Not.
 # Heute ist 2026-11-18 (PAKETE_HEUTE). Hoechstfrist 30 Tage, gerechnet ab `seit`.
@@ -276,44 +241,6 @@ else
         echo "gruen genannte_workflows_existieren"
     fi
 fi
-
-# uv-Version: paketpruefung.yml (pip install uv==…) und backend/Dockerfile
-# (ghcr.io/astral-sh/uv:…) muessen dieselbe Fassung pinnen; sonst misst die
-# Paketpruefung mit einem anderen Exporter als der Abbild-Bau. Fehlt eine Angabe
-# oder ist sie nicht lesbar: NICHT GEMESSEN, nicht gruen.
-# $1 workflow-Pfad  $2 Dockerfile-Pfad → gruen|abweichend|ungemessen
-uv_version_lage() {
-    wf=$1
-    df=$2
-    [ -f "$wf" ] && [ -r "$wf" ] || { echo ungemessen; return; }
-    [ -f "$df" ] && [ -r "$df" ] || { echo ungemessen; return; }
-    # workflow: "uv==0.11.32" (pip install); Dockerfile: "ghcr.io/astral-sh/uv:0.11.32@"
-    v_wf=$(grep -oE 'uv==[0-9]+\.[0-9]+\.[0-9]+' "$wf" | head -n 1 | sed 's/^uv==//')
-    v_df=$(grep -oE 'ghcr\.io/astral-sh/uv:[0-9]+\.[0-9]+\.[0-9]+' "$df" \
-        | head -n 1 | sed 's/^.*://')
-    if [ -z "$v_wf" ] || [ -z "$v_df" ]; then
-        echo ungemessen
-        return
-    fi
-    if [ "$v_wf" = "$v_df" ]; then
-        echo gruen
-    else
-        echo abweichend
-    fi
-}
-
-# $1 Name  $2 workflow  $3 Dockerfile  $4 erwartet (gruen|abweichend|ungemessen)
-pruefe_uv_versionen() {
-    name=$1
-    zahl=$((zahl + 1))
-    ist=$(uv_version_lage "$2" "$3")
-    if [ "$ist" = "$4" ]; then
-        echo "gruen $name"
-    else
-        echo "ROT  $name: erwartet $4, war $ist" >&2
-        fehl=1
-    fi
-}
 
 wf_kopie="$werkstatt/paketpruefung.yml"
 df_kopie="$werkstatt/Dockerfile.uv"

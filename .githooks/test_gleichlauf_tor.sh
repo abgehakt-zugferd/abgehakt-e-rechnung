@@ -63,7 +63,7 @@ ATT
 }
 
 # $1 Name  $2 Repo  $3 Q  $4 Schalter (leer=unset, sonst Wert)  $5 erw_rc  $6 Wortlaut
-# $7 Wortlaut-verboten (leer=keiner)  $8 suite_erwartet (0|1)
+# $7 Wortlaut-verboten (leer=keiner)  $8 suite_erwartet (0|1)  $9 HOME (leer=normal)
 fall() {
     name=$1
     repo=$2
@@ -73,6 +73,7 @@ fall() {
     wortlaut=$6
     verboten=${7:-}
     suite_erwartet=$8
+    home_ort=${9:-}
     zahl=$((zahl + 1))
     rm -f "$werkstatt/spur.datenwache" "$werkstatt/spur.stand" "$werkstatt/argv.txt"
     if [ -n "$schalter" ]; then
@@ -82,8 +83,15 @@ fall() {
     fi
     sha=$(git -C "$repo" rev-parse HEAD)
     aus="$werkstatt/$name.aus"
+    if [ -n "$home_ort" ]; then
+        env_q='PIPAUDIT_QUELLE='
+        env_home="HOME=$home_ort"
+    else
+        env_q="PIPAUDIT_QUELLE=$q"
+        env_home=
+    fi
     ( cd "$repo" && printf 'refs/heads/main %s refs/heads/main %s\n' "$sha" "$leer" \
-        | env PIPAUDIT_QUELLE="$q" bash .githooks/pre-push origin unused-url ) >"$aus" 2>&1
+        | env $env_q $env_home bash .githooks/pre-push origin unused-url ) >"$aus" 2>&1
     rc=$?
     ok=1
     if [ "$rc" -ne "$erw_rc" ]; then
@@ -93,8 +101,10 @@ fall() {
     [ -z "$verboten" ] || ! grep -qF -- "$verboten" "$aus" || ok=0
     if [ "$suite_erwartet" -eq 1 ]; then
         [ -e "$werkstatt/spur.datenwache" ] || ok=0
+        [ -e "$werkstatt/spur.stand" ] || ok=0
     else
         [ ! -e "$werkstatt/spur.datenwache" ] || ok=0
+        [ ! -e "$werkstatt/spur.stand" ] || ok=0
     fi
     if [ "$ok" -eq 1 ]; then
         echo "gruen $name"
@@ -142,6 +152,14 @@ fall attrappe_1_ist_rot "$repo" "$q_mit" "" 1 "" "" 0
 schreib_attrappe "$q_mit" 2
 fall attrappe_2_ist_rot "$repo" "$q_mit" "" 1 "" "" 0
 
+# Attrappe 3 → rot, Suite nicht.
+schreib_attrappe "$q_mit" 3
+fall attrappe_3_ist_rot "$repo" "$q_mit" "" 1 "" "" 0
+
+# Schalter pflicht bei vorhandener Quelle: Attrappe laeuft, ihr Exit zaehlt.
+schreib_attrappe "$q_mit" 2
+fall quelle_vorhanden_und_pflicht_nimmt_attrappen_exit "$repo" "$q_mit" "pflicht" 1 "" "" 0
+
 # Attrappe fehlt, kein Schalter → WARNUNG und durch.
 fall fehlt_ohne_schalter_warnung_und_durch "$repo" "$q_leer" "" 0 \
     "WARNUNG: Gleichlauf NICHT GEMESSEN" "ROT: Gleichlauf" 1
@@ -153,6 +171,26 @@ fall fehlt_mit_pflicht_ist_rot "$repo" "$q_leer" "pflicht" 1 \
 # Attrappe fehlt, Schalter anderer Wert → WARNUNG und durch.
 fall fehlt_mit_anderem_schalter_warnung_und_durch "$repo" "$q_leer" "aus" 0 \
     "WARNUNG: Gleichlauf NICHT GEMESSEN" "ROT: Gleichlauf" 1
+
+# Leere PIPAUDIT_QUELLE faellt auf \$HOME/Documents/... zurueck.
+home_q="$werkstatt/home"
+mkdir -p "$home_q/Documents/claude/claude-global-skills"
+schreib_attrappe "$home_q/Documents/claude/claude-global-skills" 0
+fall leere_quelle_nimmt_home_fallback "$repo" "__leere_quelle__" "" 0 "" "" 1 "$home_q"
+zahl=$((zahl + 1))
+fallback_argv_ok=0
+if [ -f "$werkstatt/argv.txt" ]; then
+    z3=$(sed -n '3p' "$werkstatt/argv.txt")
+    z3p=$(cd "$z3" 2>/dev/null && pwd -P)
+    ziel=$(cd "$home_q/Documents/claude/claude-global-skills" && pwd -P)
+    [ "$z3p" = "$ziel" ] && fallback_argv_ok=1
+fi
+if [ "$fallback_argv_ok" -eq 1 ]; then
+    echo "gruen leere_quelle_verwendet_home_als_checkout"
+else
+    echo "ROT  leere_quelle_verwendet_home_als_checkout: $(cat "$werkstatt/argv.txt" 2>/dev/null)" >&2
+    fehl=1
+fi
 
 [ "$fehl" -eq 0 ] && echo "test_gleichlauf_tor: alle gruen ($zahl Faelle)"
 exit "$fehl"
