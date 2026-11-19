@@ -264,5 +264,60 @@ else
     fi
 fi
 
+# uv-Version: paketpruefung.yml (pip install uv==…) und backend/Dockerfile
+# (ghcr.io/astral-sh/uv:…) muessen dieselbe Fassung pinnten; sonst misst die
+# Paketpruefung mit einem anderen Exporter als der Abbild-Bau. Fehlt eine Angabe
+# oder ist sie nicht lesbar: NICHT GEMESSEN, nicht gruen.
+# $1 workflow-Pfad  $2 Dockerfile-Pfad → gruen|abweichend|ungemessen
+uv_version_lage() {
+    wf=$1
+    df=$2
+    [ -f "$wf" ] && [ -r "$wf" ] || { echo ungemessen; return; }
+    [ -f "$df" ] && [ -r "$df" ] || { echo ungemessen; return; }
+    # workflow: "uv==0.11.32" (pip install); Dockerfile: "ghcr.io/astral-sh/uv:0.11.32@"
+    v_wf=$(grep -oE 'uv==[0-9]+\.[0-9]+\.[0-9]+' "$wf" | head -n 1 | sed 's/^uv==//')
+    v_df=$(grep -oE 'ghcr\.io/astral-sh/uv:[0-9]+\.[0-9]+\.[0-9]+' "$df" \
+        | head -n 1 | sed 's/^.*://')
+    if [ -z "$v_wf" ] || [ -z "$v_df" ]; then
+        echo ungemessen
+        return
+    fi
+    if [ "$v_wf" = "$v_df" ]; then
+        echo gruen
+    else
+        echo abweichend
+    fi
+}
+
+# $1 Name  $2 workflow  $3 Dockerfile  $4 erwartet (gruen|abweichend|ungemessen)
+pruefe_uv_versionen() {
+    name=$1
+    zahl=$((zahl + 1))
+    ist=$(uv_version_lage "$2" "$3")
+    if [ "$ist" = "$4" ]; then
+        echo "gruen $name"
+    else
+        echo "ROT  $name: erwartet $4, war $ist" >&2
+        fehl=1
+    fi
+}
+
+wf_kopie="$werkstatt/paketpruefung.yml"
+df_kopie="$werkstatt/Dockerfile.uv"
+cp "$wurzel/.github/workflows/paketpruefung.yml" "$wf_kopie"
+cp "$wurzel/backend/Dockerfile" "$df_kopie"
+# Abweichende Workflow-Version; Dockerfile unveraendert (Kopie).
+awk '{gsub(/uv==0\.11\.32/, "uv==0.0.1")}1' "$wf_kopie" > "$wf_kopie.tmp" \
+    && mv "$wf_kopie.tmp" "$wf_kopie"
+pruefe_uv_versionen uv_version_weicht_ab_ist_rot "$wf_kopie" "$df_kopie" abweichend
+
+: > "$werkstatt/uv-leer.yml"
+pruefe_uv_versionen uv_version_fehlt_ist_nicht_gemessen \
+    "$werkstatt/uv-leer.yml" "$df_kopie" ungemessen
+
+pruefe_uv_versionen uv_version_workflow_und_dockerfile_gleich \
+    "$wurzel/.github/workflows/paketpruefung.yml" \
+    "$wurzel/backend/Dockerfile" gruen
+
 [ "$fehl" -eq 0 ] && echo "test_pakete_pruefen: alle gruen ($zahl Faelle)"
 exit "$fehl"
