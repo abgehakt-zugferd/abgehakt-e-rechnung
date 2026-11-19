@@ -285,7 +285,7 @@ umweg_empfehlungen() {
             >> "$treffer_datei" 2>/dev/null
     done
     grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' "$treffer_datei" \
-        | grep -vE 'nicht[^"]{0,40}(no-verify|hooksPath=/dev/null|HUSKY=0)' || true
+        | grep -vE 'nicht[^"]{0,12}(no-verify|hooksPath=/dev/null|HUSKY=0)' || true
 }
 
 # $1 Name  $2 Dateiinhalt  $3 erwartet (rot=Empfehlung erkannt, gruen=kein Treffer)
@@ -319,6 +319,8 @@ pruefe_umweg_probe empfehlung_hooksPath_ist_umweg \
     'echo "nutze git -c core.hooksPath=/dev/null push"' rot
 pruefe_umweg_probe verbot_hooksPath_ist_kein_umweg \
     'echo "nicht hooksPath=/dev/null setzen"' gruen
+pruefe_umweg_probe fernes_nicht_entschuldigt_keine_empfehlung \
+    'echo "nicht vergessen, sonst git -c core.hooksPath=/dev/null push"' rot
 pruefe_umweg_probe empfehlung_HUSKY0_ist_umweg \
     'echo "HUSKY=0 git push"' rot
 pruefe_umweg_probe verbot_HUSKY0_ist_kein_umweg \
