@@ -54,6 +54,9 @@ jobs:
       - name: Paketpruefung (nicht gemessen ist nie gruen, Ausnahmen laufen ab)
         run: .githooks/test_pakete_pruefen.sh
 
+      - name: Gleichlauf-Tor (pip-audit-Auswerter-Kopie)
+        run: .githooks/test_gleichlauf_tor.sh
+
   test:
     runs-on: ubuntu-latest
     steps:

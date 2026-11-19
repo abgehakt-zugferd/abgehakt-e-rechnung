@@ -74,11 +74,18 @@ git config core.hooksPath .githooks
 
 ### Was der Hook außer den Tests noch prüft
 
-Vor der Suite brechen Wachen den Push ab. Sie stehen im Hook und nicht in der Suite, weil
-sie Dateien im Wurzelverzeichnis lesen und der Testcontainer nur `backend/` sieht: ein Test
-dafür würde still übersprungen, und ein übersprungener Test gilt hier als Fehlschlag. Der
-Reihe nach laufen die Datenwache, die Gedankenstrich-Wache und die sieben Wachen aus
-`.githooks/wachen.sh`; auf die Suite folgt der Skip-Guard.
+Vor der Suite bricht zuerst das **Gleichlauf-Tor** für die Kopie des gemeinsamen
+pip-audit-Auswerters ab (`.githooks/pip-audit-auswerter/` gegen den Checkout unter
+`~/Documents/claude/claude-global-skills`, verschiebbar nur für Tests über
+`PIPAUDIT_QUELLE`). Fehlt der Checkout, erscheint eine Warnzeile und der Push geht
+weiter; Mitwirkende ohne diesen Checkout merken also nichts außer der Warnung. Wer den
+Checkout pflegt, setzt lokal `git config --local pipaudit.gleichlauf pflicht`, dann ist
+ein fehlender Checkout rot. Danach brechen Wachen den Push ab. Sie stehen im Hook und
+nicht in der Suite, weil sie Dateien im Wurzelverzeichnis lesen und der Testcontainer
+nur `backend/` sieht: ein Test dafür würde still übersprungen, und ein übersprungener
+Test gilt hier als Fehlschlag. Der Reihe nach laufen die Datenwache, die
+Gedankenstrich-Wache und die sieben Wachen aus `.githooks/wachen.sh`; auf die Suite
+folgt der Skip-Guard.
 
 **Geprüft wird der gepushte Commit, nicht der Checkout.** `git push origin <branch>` aus
 einem anderen Worktree oder bei ausgechecktem anderem Stand liefert dem Hook auf stdin je

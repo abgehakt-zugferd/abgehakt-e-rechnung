@@ -21,6 +21,12 @@ werkstatt=$(mktemp -d "${TMPDIR:-/tmp}/pre-push-stand.XXXXXX") \
     exit 2
 }
 trap 'rm -rf "$werkstatt"' EXIT
+# Leerer Checkout-Pfad: Gleichlauf-Block darf keine echte gleichlauf.py rufen.
+PIPAUDIT_QUELLE=$(mktemp -d "$werkstatt/q-leer.XXXXXX") || {
+    echo "ABBRUCH: kein leerer PIPAUDIT_QUELLE-Ordner." >&2
+    exit 2
+}
+export PIPAUDIT_QUELLE
 
 # Minimaldateien, unter denen wachen.sh gruen bleibt (vgl. test_wachen.sh).
 schreib_gruen() {
@@ -76,6 +82,9 @@ neues_repo() {
         chmod +x "$d/.githooks/pre-push-stand.sh"
     fi
     chmod +x "$d/.githooks/pre-push" "$d/.githooks/datenwache.sh" "$d/.githooks/wachen.sh"
+    # Eigenes .git: Schalter nicht vom umgebenden Klon (pipaudit.gleichlauf=pflicht)
+    # erben. Ausdruecklich "aus", damit fehlt-Checkout nur warnt, nicht blockt.
+    git -C "$d" config --local pipaudit.gleichlauf aus
     printf '%s\n' "$d"
 }
 
