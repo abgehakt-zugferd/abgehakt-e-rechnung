@@ -265,7 +265,7 @@ else
 fi
 
 # uv-Version: paketpruefung.yml (pip install uv==…) und backend/Dockerfile
-# (ghcr.io/astral-sh/uv:…) muessen dieselbe Fassung pinnten; sonst misst die
+# (ghcr.io/astral-sh/uv:…) muessen dieselbe Fassung pinnen; sonst misst die
 # Paketpruefung mit einem anderen Exporter als der Abbild-Bau. Fehlt eine Angabe
 # oder ist sie nicht lesbar: NICHT GEMESSEN, nicht gruen.
 # $1 workflow-Pfad  $2 Dockerfile-Pfad → gruen|abweichend|ungemessen
