@@ -31,6 +31,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.config import get_settings
 from tests.helpers.testdb import je_prozess
+from tests.helpers.verbindungsfehler import ist_verbindungsfehler
 
 MIGRATIONS_DB = je_prozess("abgehakt_migrationstest")
 
@@ -64,8 +65,10 @@ def migrationsdatenbank():
         with admin.connect() as conn:
             conn.execute(text(f"DROP DATABASE IF EXISTS {MIGRATIONS_DB} WITH (FORCE)"))
             conn.execute(text(f"CREATE DATABASE {MIGRATIONS_DB}"))
-    except OperationalError:
+    except OperationalError as fehler:
         admin.dispose()
+        if not ist_verbindungsfehler(fehler):
+            raise
         pytest.skip("PostgreSQL nicht erreichbar – Migrationstest übersprungen")
 
     url = f"{basis}/{MIGRATIONS_DB}"

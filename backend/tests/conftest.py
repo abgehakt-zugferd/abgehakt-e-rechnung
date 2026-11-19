@@ -19,6 +19,7 @@ from app.db.roles import ensure_app_role, resolve_owner_role
 from app.main import app
 from tests.helpers.rollensperre import clusterweite_rollensperre
 from tests.helpers.testdb import datenbankname
+from tests.helpers.verbindungsfehler import ist_verbindungsfehler
 
 # Name der Wegwerf-DB; je Prozess eindeutig mit ABGEHAKT_TEST_DB_JE_PROZESS=1.
 TEST_DB_NAME = datenbankname()
@@ -119,8 +120,10 @@ def pg_engine():
         with admin_engine.connect() as conn:
             conn.execute(text(f"DROP DATABASE IF EXISTS {TEST_DB_NAME} WITH (FORCE)"))
             conn.execute(text(f"CREATE DATABASE {TEST_DB_NAME}"))
-    except OperationalError:
+    except OperationalError as fehler:
         admin_engine.dispose()
+        if not ist_verbindungsfehler(fehler):
+            raise
         pytest.skip("PostgreSQL nicht erreichbar – DB-Integrationstests übersprungen")
 
     import app.models  # noqa: F401 — registriert alle Tabellen an Base.metadata
