@@ -75,9 +75,14 @@ git config core.hooksPath .githooks
 ### Was der Hook außer den Tests noch prüft
 
 Vor der Suite bricht zuerst das **Gleichlauf-Tor** für die Kopie des gemeinsamen
-pip-audit-Auswerters ab (`.githooks/pip-audit-auswerter/` gegen den Checkout unter
-`~/Documents/claude/claude-global-skills`, verschiebbar nur für Tests über
-`PIPAUDIT_QUELLE`). Fehlt der Checkout, erscheint eine Warnzeile und der Push geht
+pip-audit-Auswerters ab. Geprüft wird die Kopie unter
+`.githooks/pip-audit-auswerter/` im gepushten Commit, nicht der Arbeitsbaum: je
+gepushter Ref läuft der Vergleich gegen den Stand, den der Push sendet.
+Prüfprogramm und Quelle holt der Hook per Fetch und `git archive` aus `origin/main`
+des Checkouts unter `~/Documents/claude/claude-global-skills` (verschiebbar nur für
+Tests über `PIPAUDIT_QUELLE`); der Arbeitsbaum dieses Checkouts wird nie gelesen,
+ein Pull ist für das Tor nicht nötig. Fehlt der Checkout, erscheint eine Warnzeile
+und der Push geht
 weiter; Mitwirkende ohne diesen Checkout merken also nichts außer der Warnung. Wer den
 Checkout pflegt, setzt lokal `git config --local pipaudit.gleichlauf pflicht`, dann ist
 ein fehlender Checkout rot. Danach brechen Wachen den Push ab. Sie stehen im Hook und
