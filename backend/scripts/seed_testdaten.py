@@ -51,14 +51,35 @@ def _firma_felder() -> dict:
     )
 
 
+def _vorgabe_als_text(arg, herkunft: str) -> str:
+    """Nur ein str gilt als Vorgabe; SQL-Klausel → Klauseltext ohne Anführungszeichen.
+
+    Callable oder andere Typen würden per str() Unsinn liefern — deshalb RuntimeError.
+    """
+    if callable(arg):
+        raise RuntimeError(
+            f"Company.country.{herkunft}.arg ist aufrufbar, kein fester Vorgabetext"
+        )
+    if isinstance(arg, str):
+        roh = arg
+    elif isinstance(getattr(arg, "text", None), str):
+        # TextClause o. ä.: Klauseltext, Anführungszeichen der SQL-Literalform streifen
+        roh = arg.text
+    else:
+        raise RuntimeError(
+            f"Company.country.{herkunft}.arg muss str sein, nicht {type(arg).__name__}"
+        )
+    return roh.strip().strip("'\"").upper()
+
+
 def _vorgabe_land() -> str:
     """Spaltendefault von Company.country (Modell), nicht das Musterliteral."""
     from app.models.company import Company
     spalte = Company.__table__.c.country
     if spalte.default is not None and spalte.default.arg is not None:
-        return str(spalte.default.arg).strip().upper()
+        return _vorgabe_als_text(spalte.default.arg, "default")
     if spalte.server_default is not None and spalte.server_default.arg is not None:
-        return str(spalte.server_default.arg).strip().upper()
+        return _vorgabe_als_text(spalte.server_default.arg, "server_default")
     raise RuntimeError("Company.country hat weder default noch server_default")
 
 

@@ -14,7 +14,7 @@ from app.models.customer import Customer
 from app.models.invoice import Invoice
 from app.services import mustang, pdfa
 from app.services.ersteinrichtung import ist_eingerichtet
-from scripts.seed_testdaten import _firma_belegt, _firma_felder, main
+from scripts.seed_testdaten import _firma_belegt, _firma_felder, _vorgabe_land, main
 from tests.helpers import mustang_befund
 from tests.helpers.firma_eingerichtet import leere_firma as _teilweise_leer
 
@@ -222,3 +222,32 @@ def test_firma_belegt_liest_vorgabeland_aus_dem_modell(monkeypatch):
     leer = {feld: "" for feld in _firma_felder()}
     assert _firma_belegt(SimpleNamespace(**{**leer, "country": "AT"})) is False
     assert _firma_belegt(SimpleNamespace(**{**leer, "country": "DE"})) is True
+
+
+def test_vorgabe_land_lehnt_callable_ab(monkeypatch):
+    """Callable als default.arg liefert Unsinn per str(); klarer RuntimeError statt raten."""
+    spalte = Company.__table__.c.country
+    monkeypatch.setattr(spalte.default, "arg", lambda: "DE")
+
+    with pytest.raises(RuntimeError, match=r"aufrufbar|Callable|callable"):
+        _vorgabe_land()
+
+
+def test_vorgabe_land_nimmt_server_default_klauseltext_ohne_anfuehrungszeichen(monkeypatch):
+    """SQL-Klausel (TextClause): Klauseltext ohne Anführungszeichen, nicht str(Klausel)."""
+    from sqlalchemy import text
+
+    spalte = Company.__table__.c.country
+    monkeypatch.setattr(spalte, "default", None)
+    monkeypatch.setattr(spalte.server_default, "arg", text("'AT'"))
+
+    assert _vorgabe_land() == "AT"
+
+
+def test_vorgabe_land_lehnt_fremden_arg_typ_ab(monkeypatch):
+    """Alles außer str (bzw. Klauseltext) ist kein Vorgabeland."""
+    spalte = Company.__table__.c.country
+    monkeypatch.setattr(spalte.default, "arg", 42)
+
+    with pytest.raises(RuntimeError, match=r"str"):
+        _vorgabe_land()
