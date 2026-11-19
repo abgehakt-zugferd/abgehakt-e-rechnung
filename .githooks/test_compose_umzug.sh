@@ -110,10 +110,16 @@ git -C "$repo" add -A
 git -C "$repo" commit -q -m probe
 ohne="$werkstatt/ohne-docker"
 mkdir -p "$ohne"
+# /usr/bin und /bin ueberschneiden sich (GNU/usrmerge: oft dieselben Namen).
+# Verwaiste Links in der Quelle: [ -e Ziel ] ist falsch, obwohl der Name in
+# $ohne schon liegt - ein zweites ln schreibt dann "File exists" nach stderr.
+# Nur existierende Quellen verlinken; schon gesetzte Namen ueberspringen.
 for pfad in /usr/bin/* /bin/*; do
     name=${pfad##*/}
     [ "$name" = docker ] && continue
-    [ -e "$ohne/$name" ] || ln -s "$pfad" "$ohne/$name"
+    [ -e "$pfad" ] || continue
+    [ -e "$ohne/$name" ] && continue
+    ln -s "$pfad" "$ohne/$name"
 done
 # Direkt netzwache.sh: ueber wachen.sh waere rc!=0 schon durch andere Wachen erfuellt.
 aus=$( cd "$repo" && PATH="$ohne" /bin/sh "$hier/netzwache.sh" 2>&1 )
