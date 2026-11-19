@@ -113,7 +113,7 @@ class Belegdarstellung:
     label_original_aufstellung: str
     label_original_anlagen: str
     titel_aufstellung: str
-    label_aufstellungsnummer: str
+    label_belegnummer: str
     label_ausstellungsdatum: str
     label_leistungsmonat: str
     label_zahlungsnummer: str

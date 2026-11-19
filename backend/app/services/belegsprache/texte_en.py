@@ -73,7 +73,7 @@ DARSTELLUNG_EN = {
     "label_original_aufstellung": "Original dated:",
     "label_original_anlagen": "Attachments of the original",
     "titel_aufstellung": "SETTLEMENT STATEMENT",
-    "label_aufstellungsnummer": "Statement number:",
+    "label_belegnummer": "Document number:",
     "label_ausstellungsdatum": "Date of issue:",
     "label_leistungsmonat": "Month of service:",
     "label_zahlungsnummer": "Payment number:",

@@ -47,11 +47,15 @@ def _aufstellung(*, sprache=None, **over):
 
 def test_de_eur_traegt_alle_angaben(tmp_path):
     ziel = tmp_path / "aufstellung.pdf"
-    erzeuge_pdf(_aufstellung(), _firma(), ziel)
+    aufstellung = _aufstellung()
+    erzeuge_pdf(aufstellung, _firma(), ziel)
 
     t = text(ziel)
     assert "ABRECHNUNGSAUFSTELLUNG" in t
-    assert "Aufstellungsnummer:" in t
+    # „Belegnummer“ statt „Aufstellungsnummer“: die Texterkennung beim Belegempfang
+    # findet die Nummer sonst nicht. Die Aufstellung bleibt als solche ueberschrieben.
+    assert "Belegnummer:" in t and aufstellung.nummer in t
+    assert "Aufstellungsnummer" not in t
     assert "Ausstellungsdatum:" in t and "18.10.2026" in t
     assert "Leistungsmonat:" in t and "09/2026" in t
     assert "Zahlungsnummer:" in t and "4711" in t
@@ -80,7 +84,8 @@ def test_en_fremdwaehrung_traegt_alle_angaben(tmp_path):
 
     t = text(ziel)
     assert "SETTLEMENT STATEMENT" in t
-    assert "Statement number:" in t
+    assert "Document number:" in t and a.nummer in t
+    assert "Statement number" not in t
     assert "Date of issue:" in t and "2026-10-18" in t
     assert "Month of service:" in t and "09/2026" in t
     assert "Payment number:" in t and "4711" in t
