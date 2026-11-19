@@ -27,6 +27,20 @@ wurzel="$(git rev-parse --show-toplevel)" || exit 1
 [ -n "$wurzel" ] || { echo "pre-push: Repo-Wurzel nicht bestimmbar." >&2; exit 1; }
 cd "$wurzel" || exit 1
 
+# Gleichlauf der Auswerter-Kopie mit der Quelle (claude-global-skills).
+# Vor der teuren Suite (Datenwache, Stand/Wachen/Tests), damit ein Abweichen
+# schnell rot ist und nicht erst nach Minuten auffaellt.
+Q="${PIPAUDIT_QUELLE:-$HOME/Documents/claude/claude-global-skills}"
+if [ -f "$Q/pip-audit-auswerter/gleichlauf.py" ]; then
+    python3 "$Q/pip-audit-auswerter/gleichlauf.py" \
+        "$wurzel/.githooks/pip-audit-auswerter" --checkout "$Q" || exit 1
+elif [ "$(git config --local --get pipaudit.gleichlauf)" = "pflicht" ]; then
+    echo "ROT: Gleichlauf NICHT GEMESSEN: kein claude-global-skills-Checkout unter $Q (pipaudit.gleichlauf=pflicht)" >&2
+    exit 1
+else
+    echo "WARNUNG: Gleichlauf NICHT GEMESSEN: kein claude-global-skills-Checkout unter $Q" >&2
+fi
+
 # stdin nur einmal lesen (#219): Datenwache und Stand-Pruefung brauchen dieselben
 # Zeilen. Command-Substitution frisst Schluss-Newlines; Markierung verhindert das.
 push_refs=$(cat; printf x) || exit 1

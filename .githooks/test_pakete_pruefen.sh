@@ -106,7 +106,8 @@ pluggy==1.6.0 \
 EOT
 : > "$werkstatt/leer.txt"
 
-# $1 Name  $2 erwarteter rc (0 oder 1)  $3 erwarteter Wortlaut (leer = keiner)
+# $1 Name  $2 erwarteter rc (0 = gruen; 1 = beliebiger Fehler; 2 = genau Exit 2)
+# $3 erwarteter Wortlaut (leer = keiner)
 # $4 Wortlaut, der NICHT vorkommen darf (leer = keiner)
 # Umgebung des Falls: FAKE_*, AUSNAHMEN (Dateiinhalt, "-" = Datei fehlt), OHNE_LOCK,
 # OHNE_UV, OHNE_PA, HEUTE.
@@ -139,7 +140,14 @@ lauf() {
           "$(command -v bash)" "$skript" 2>&1)
     rc=$?
     ok=1
-    if [ "$erw_rc" -eq 0 ]; then [ "$rc" -eq 0 ] || ok=0; else [ "$rc" -ne 0 ] || ok=0; fi
+    if [ "$erw_rc" -eq 0 ]; then
+        [ "$rc" -eq 0 ] || ok=0
+    elif [ "$erw_rc" -eq 2 ]; then
+        # A3: ungueltige/zu lange/abgelaufene Ausnahme ergibt genau 2.
+        [ "$rc" -eq 2 ] || ok=0
+    else
+        [ "$rc" -ne 0 ] || ok=0
+    fi
     [ -z "$wortlaut" ] || printf '%s' "$aus" | grep -qF -- "$wortlaut" || ok=0
     [ -z "$verboten" ] || ! printf '%s' "$aus" | grep -qF -- "$verboten" || ok=0
     if [ "$ok" -eq 1 ]; then
@@ -176,10 +184,11 @@ AUSNAHMEN="$KEINE" FAKE_PA=vulns_null lauf vulns_null_bei_rc0_ist_rot 1 "NICHT G
 AUSNAHMEN="$KEINE" FAKE_PA=vulns_string lauf vulns_string_bei_rc0_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=vulns_umbenannt lauf fehlendes_vulns_nennt_das_paket 1 "aiofiles ohne vulns-Liste" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=skip lauf skip_reason_ist_nicht_geprueft 1 "aiofiles uebersprungen: kein Wheel" "OK"
-AUSNAHMEN="$KEINE" FAKE_PA=fremd lauf fremde_namen_gleicher_anzahl_sind_rot 1 "aiofiles fehlt im Bericht" "OK"
-AUSNAHMEN="$KEINE" FAKE_PA=fremd lauf fremder_name_im_bericht_wird_genannt 1 "fremd1 nicht im Export" "OK"
+# Gemeinsame Fassung: Pin-Abgleich nennt Name+Version (fachgleich, anderer Wortlaut).
+AUSNAHMEN="$KEINE" FAKE_PA=fremd lauf fremde_namen_gleicher_anzahl_sind_rot 1 "aiofiles 24.1.0 gepinnt, aber nicht im Bericht" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=fremd lauf fremder_name_im_bericht_wird_genannt 1 "fremd1 24.1.0 im Bericht, aber nicht gepinnt" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=rc1 lauf pip_audit_rc1_ohne_fund_ist_werkzeugfehler 1 "NICHT GEMESSEN" "OK"
-AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf fehlendes_paket_wird_mit_namen_genannt 1 "aiofiles fehlt im Bericht" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf fehlendes_paket_wird_mit_namen_genannt 1 "aiofiles 24.1.0 gepinnt, aber nicht im Bericht" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=norm LAUFZEIT="$werkstatt/norm.txt" lauf namen_nach_pep503_gleich_ist_gruen 0 "OK" "NICHT GEMESSEN"
 AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf weniger_geprueft_als_gepinnt_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN=- lauf ausnahmedatei_fehlt_ist_rot 1 "NICHT GEMESSEN" "OK"
@@ -192,19 +201,23 @@ AUSNAHMEN="$KEINE" PYPROJECT_ZUSATZ='[project.optional-dependencies]
 pdf = ["x==1"]' lauf unbekannter_extra_ist_nicht_gemessen 1 "Extra pdf" "OK"
 AUSNAHMEN="$KEINE" PYPROJECT_ZUSATZ='[[[kaputt' lauf unlesbare_pyproject_ist_nicht_gemessen 1 "NICHT GEMESSEN" "OK"
 
-# Fund: rot, mit Paket, Fassung, Kennung und fixierter Fassung.
+# Fund: rot; gemeinsame Fassung meldet LUECKE … behoben in … (fachgleich).
 AUSNAHMEN="$KEINE" FAKE_VULN="jinja2:PYSEC-0001:3.1.7" lauf fund_laufzeit_ist_rot 1 \
-    "jinja2 3.1.6 PYSEC-0001 fix 3.1.7" "NICHT GEMESSEN"
+    "jinja2 3.1.6 PYSEC-0001" "NICHT GEMESSEN"
 AUSNAHMEN="$KEINE" FAKE_VULN="pytest:PYSEC-0002:9.9" lauf fund_im_test_ist_rot 1 \
-    "pytest 9.2.0 PYSEC-0002 fix 9.9" ""
+    "pytest 9.2.0 PYSEC-0002" ""
+# Die behobene Fassung steht in der Fundzeile, sonst fehlt der Weg zum Update.
+AUSNAHMEN="$KEINE" FAKE_VULN="jinja2:PYSEC-0001:3.1.7" lauf fund_nennt_behobene_fassung 1 \
+    "behoben in 3.1.7" "NICHT GEMESSEN"
 
 # Ausnahmen: Kennung, Issue, Ablauf, seit. Updates zuerst, Ausnahme ist die Not.
 # Heute ist 2026-11-18 (PAKETE_HEUTE). Hoechstfrist 30 Tage, gerechnet ab `seit`.
+# A3: ungueltige/zu lange/abgelaufene Ausnahmezeile ergibt Exit 2 (nicht 1).
 V="jinja2:PYSEC-0001:3.1.7"
 ok_zeile() { AUSNAHMEN="$1
 " FAKE_VULN="$V" lauf "$2" 0 "OK" "NICHT GEMESSEN"; }
 rot_zeile() { AUSNAHMEN="$1
-" FAKE_VULN="$V" lauf "$2" 1 "$3" "OK"; }
+" FAKE_VULN="$V" lauf "$2" 2 "$3" "OK"; }
 ok_zeile "PYSEC-0001 #12 2026-12-10 2026-11-18" gueltige_ausnahme_macht_gruen
 AUSNAHMEN="# Kommentar
 
@@ -213,20 +226,20 @@ AUSNAHMEN="# Kommentar
 ok_zeile "PYSEC-0001 #12 2026-11-18 2026-10-20" ablauftag_gilt_noch
 rot_zeile "PYSEC-0001 #12 2026-11-17 2026-10-20" abgelaufene_ausnahme_ist_rot "abgelaufen"
 AUSNAHMEN="PYSEC-0001 #12 2026-11-17 2026-10-20
-" lauf abgelaufene_ausnahme_ohne_fund_ist_rot 1 "abgelaufen" "OK"
-rot_zeile "PYSEC-0001 #12 2026-12-10" ausnahme_ohne_seit_ist_rot "Ausnahme unvollständig"
-rot_zeile "PYSEC-0001 2026-12-10 2026-11-18" ausnahme_ohne_issue_ist_rot "Ausnahme unvollständig"
-rot_zeile "PYSEC-0001 #12 2026-12-10 2026-11-18 mehr" ausnahme_mit_zuviel_ist_rot "Ausnahme unvollständig"
+" lauf abgelaufene_ausnahme_ohne_fund_ist_rot 2 "abgelaufen" "OK"
+rot_zeile "PYSEC-0001 #12 2026-12-10" ausnahme_ohne_seit_ist_rot "unvollstaendig"
+rot_zeile "PYSEC-0001 2026-12-10 2026-11-18" ausnahme_ohne_issue_ist_rot "unvollstaendig"
+rot_zeile "PYSEC-0001 #12 2026-12-10 2026-11-18 mehr" ausnahme_mit_zuviel_ist_rot "unvollstaendig"
 rot_zeile "PYSEC-0001 #12 31.12.2026 2026-11-18" ausnahme_mit_falschem_datum_ist_rot "Datum"
 rot_zeile "PYSEC-0001 #12 2026-13-45 2026-11-18" ausnahme_mit_unmoeglichem_monat_ist_rot "kein Kalendertag"
 rot_zeile "PYSEC-0001 #12 2026-02-31 2026-02-01" ablauf_31_februar_ist_kein_kalendertag "2026-02-31 ist kein Kalendertag"
 rot_zeile "PYSEC-0001 #12 2026-12-10 2026-02-31" seit_31_februar_ist_kein_kalendertag "2026-02-31 ist kein Kalendertag"
 rot_zeile "PYSEC-0001 abc 2026-12-10 2026-11-18" ausnahme_mit_falscher_issue_nummer_ist_rot "Issue"
 # Hoechstfrist: ab seit, nicht ab heute; Obergrenze genau 30 Tage.
-rot_zeile "PYSEC-0001 #12 2026-12-13 2026-10-29" frist_zaehlt_ab_seit_nicht_ab_heute "länger als 30 Tage ab seit"
+rot_zeile "PYSEC-0001 #12 2026-12-13 2026-10-29" frist_zaehlt_ab_seit_nicht_ab_heute "laenger als 30 Tage ab seit"
 ok_zeile "PYSEC-0001 #12 2026-11-19 2026-10-20" frist_30_tage_ab_seit_ist_gruen
-rot_zeile "PYSEC-0001 #12 2026-11-20 2026-10-20" frist_31_tage_ab_seit_ist_rot "länger als 30 Tage ab seit"
-rot_zeile "PYSEC-0001 #12 9999-12-31 2026-11-18" unbefristete_ausnahme_ist_rot "länger als 30 Tage ab seit"
+rot_zeile "PYSEC-0001 #12 2026-11-20 2026-10-20" frist_31_tage_ab_seit_ist_rot "laenger als 30 Tage ab seit"
+rot_zeile "PYSEC-0001 #12 9999-12-31 2026-11-18" unbefristete_ausnahme_ist_rot "laenger als 30 Tage ab seit"
 rot_zeile "PYSEC-0001 #12 2026-11-25 2026-11-19" seit_in_der_zukunft_ist_rot "seit liegt in der Zukunft"
 rot_zeile "PYSEC-0001 #12 2026-11-05 2026-11-10" ablauf_vor_seit_ist_rot "Ablauf liegt vor seit"
 AUSNAHMEN="PYSEC-0999 #12 2026-12-10 2026-11-18
@@ -235,9 +248,9 @@ AUSNAHMEN="PYSEC-0001 #12 2026-12-10 2026-11-18
 " FAKE_PA=rc2 FAKE_VULN="$V" lauf rc2_trotz_ausgenommenem_fund_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN="CVE-2026-0001 #12 2026-12-10 2026-11-18
 " FAKE_VULN="jinja2:PYSEC-0001:3.1.7:CVE-2026-0001" lauf ausnahme_ueber_alias_macht_gruen 0 "OK" "NICHT GEMESSEN"
-# Hinweis, nicht rot: eine Ausnahme, die zu keinem Fund passt, soll gestrichen werden.
+# Hinweis, nicht rot: gemeinsame Fassung sagt "keiner Luecke" statt "keinem Fund".
 AUSNAHMEN="PYSEC-0999 #12 2026-12-10 2026-11-18
-" lauf ungenutzte_ausnahme_wird_als_hinweis_genannt 0 "Hinweis: Ausnahme PYSEC-0999 passt zu keinem Fund" "NICHT GEMESSEN"
+" lauf ungenutzte_ausnahme_wird_als_hinweis_genannt 0 "Hinweis: Ausnahme PYSEC-0999 passt zu keiner Luecke" "NICHT GEMESSEN"
 AUSNAHMEN="PYSEC-0001 #12 2026-12-10 2026-11-18
 " FAKE_VULN="$V" lauf genutzte_ausnahme_ist_kein_hinweis 0 "OK" "Hinweis"
 AUSNAHMEN="PYSEC-0002 #12 2026-12-10 2026-11-18
@@ -248,7 +261,7 @@ AUSNAHMEN="PYSEC-0002 #12 2026-12-10 2026-11-18
 # gerade die Kopfkommentare lagen daneben.
 wurzel=$(cd "$hier/.." && pwd)
 zahl=$((zahl + 1))
-genannt=$(grep -ho '\.github/workflows/[A-Za-z0-9_.-]*\.yml' "$skript" "$hier/pakete_auswerten.py" \
+genannt=$(grep -ho '\.github/workflows/[A-Za-z0-9_.-]*\.yml' "$skript" \
     "$wurzel/.github/pip-audit-ausnahmen.txt" | sort -u)
 if [ -z "$genannt" ]; then
     echo "ROT  genannte_workflows_existieren: kein Workflow genannt, die Pruefung misst nichts" >&2
