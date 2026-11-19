@@ -4,6 +4,17 @@ from sqlalchemy.exc import OperationalError
 from tests.helpers.verbindungsfehler import ist_verbindungsfehler
 
 
+class _PgOrig(Exception):
+    """Erfundene psycopg-Ursache mit SQLSTATE, ohne echte DB."""
+
+    def __init__(self, meldung: str, pgcode: str | None = None, sqlstate: str | None = None):
+        super().__init__(meldung)
+        if pgcode is not None:
+            self.pgcode = pgcode
+        if sqlstate is not None:
+            self.sqlstate = sqlstate
+
+
 def test_verbindungsfehler_erkennen_ohne_echte_db():
     """Erfundene Ausnahmeobjekte: Verbindung ja, Rechte/fehlende DB nein."""
     assert ist_verbindungsfehler(OperationalError("x", {}, Exception("connection refused")))
@@ -15,6 +26,29 @@ def test_verbindungsfehler_erkennen_ohne_echte_db():
     assert not ist_verbindungsfehler(
         OperationalError("x", {}, Exception("permission denied to create database")))
 
+
+def test_sqlstate_klasse_08_ist_verbindungsfehler_auch_ohne_passenden_text():
+    """SQLSTATE-Klasse 08 schlägt den Meldungstext: Verbindung, egal was der Text sagt."""
+    assert ist_verbindungsfehler(
+        OperationalError("x", {}, _PgOrig("irgendwas anderes", pgcode="08006")))
+    assert ist_verbindungsfehler(
+        OperationalError("x", {}, _PgOrig("irgendwas anderes", sqlstate="08001")))
+
+
+def test_sqlstate_andere_klasse_ist_kein_verbindungsfehler_trotz_passendem_text():
+    """Andere SQLSTATE-Klasse verneint den Verbindungsfehler, auch wenn der Text passt."""
+    assert not ist_verbindungsfehler(
+        OperationalError("x", {}, _PgOrig("connection refused", pgcode="28P01")))
+    assert not ist_verbindungsfehler(
+        OperationalError("x", {}, _PgOrig("could not connect to server", sqlstate="42501")))
+
+
+def test_ohne_sqlstate_bleibt_der_text_massgeblich():
+    """Ohne SQLSTATE (Verbindung kam nie zustande) entscheidet weiterhin der Text."""
+    assert ist_verbindungsfehler(
+        OperationalError("x", {}, _PgOrig("connection refused")))
+    assert not ist_verbindungsfehler(
+        OperationalError("x", {}, _PgOrig("password authentication failed")))
 
 def test_skip_stellen_nutzen_das_gemeinsame_hilfsmodul():
     """conftest, Migrationskette, Altzeilen und Owner-Bootstrap importieren denselben Helfer."""
