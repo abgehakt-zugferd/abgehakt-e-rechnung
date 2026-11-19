@@ -27,6 +27,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.config import get_settings
 from tests.helpers.testdb import je_prozess
+from tests.helpers.verbindungsfehler import ist_verbindungsfehler
 from app.db.roles import ensure_owner_role
 
 # Eigene Namen, die mit nichts kollidieren: der Test legt eine echte Rolle im
@@ -67,8 +68,10 @@ def frische_datenbank():
         with admin.connect() as conn:
             _aufraeumen(conn)
             conn.execute(text(f"CREATE DATABASE {TEST_DB}"))
-    except OperationalError:
+    except OperationalError as fehler:
         admin.dispose()
+        if not ist_verbindungsfehler(fehler):
+            raise
         pytest.skip("PostgreSQL nicht erreichbar – Owner-Rollen-Test übersprungen")
 
     teile = urlsplit(bootstrap_url)
