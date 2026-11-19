@@ -14,7 +14,7 @@ from app.models.customer import Customer
 from app.models.invoice import Invoice
 from app.services import mustang, pdfa
 from app.services.ersteinrichtung import ist_eingerichtet
-from scripts.seed_testdaten import main
+from scripts.seed_testdaten import _firma_belegt, _firma_felder, main
 from tests.helpers import mustang_befund
 from tests.helpers.firma_eingerichtet import leere_firma as _teilweise_leer
 
@@ -206,3 +206,19 @@ def test_jedes_nicht_leere_firmenfeld_ist_bestand_auch_bei_leerem_namen(
     assert getattr(firma, feld) == wert
     assert not (firma.name or "").strip()
     assert _zahlen(pg_session) == (0, 0)
+
+
+def test_firma_belegt_liest_vorgabeland_aus_dem_modell(monkeypatch):
+    """Vorgabeland kommt von der Modellspalte, nicht aus dem Musterliteral.
+
+    Aendert man den Spaltendefault (hier per monkeypatch auf „AT“), zaehlt eine
+    sonst leere Firmenzeile mit country="AT" nicht als Bestand, eine mit "DE" doch.
+    """
+    from types import SimpleNamespace
+
+    spalte = Company.__table__.c.country
+    monkeypatch.setattr(spalte.default, "arg", "AT")
+
+    leer = {feld: "" for feld in _firma_felder()}
+    assert _firma_belegt(SimpleNamespace(**{**leer, "country": "AT"})) is False
+    assert _firma_belegt(SimpleNamespace(**{**leer, "country": "DE"})) is True

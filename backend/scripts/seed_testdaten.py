@@ -51,14 +51,25 @@ def _firma_felder() -> dict:
     )
 
 
+def _vorgabe_land() -> str:
+    """Spaltendefault von Company.country (Modell), nicht das Musterliteral."""
+    from app.models.company import Company
+    spalte = Company.__table__.c.country
+    if spalte.default is not None and spalte.default.arg is not None:
+        return str(spalte.default.arg).strip().upper()
+    if spalte.server_default is not None and spalte.server_default.arg is not None:
+        return str(spalte.server_default.arg).strip().upper()
+    raise RuntimeError("Company.country hat weder default noch server_default")
+
+
 def _firma_belegt(firma) -> bool:
     """Irgendein Feld, das das Skript mit Musterwerten ueberschriebe, ist nicht leer.
-    `country` hat einen Spaltenvorgabewert (DE) und ist nie leer: es zaehlt nur, wenn es
-    davon abweicht, denn dann hat jemand es gewaehlt."""
+    `country` hat einen Spaltenvorgabewert und ist nie leer: es zaehlt nur, wenn es
+    davon abweicht, denn dann hat jemand es gewaehlt. Die Vorgabe kommt aus dem Modell."""
     if firma is None:
         return False
     muster = _firma_felder()
-    vorgabe_land = muster["country"]
+    vorgabe_land = _vorgabe_land()
     if (firma.country or "").strip().upper() not in ("", vorgabe_land):
         return True
     return any(str(getattr(firma, feld) or "").strip()
