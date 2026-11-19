@@ -27,7 +27,7 @@ Das BEG IV hat §14b Abs. 1 UStG **und** §147 Abs. 3 AO geändert: Die Aufbewah
 |-----------|-------|------|
 | Rechnungen (Ein- und Ausgang) | **8 Jahre** | §14b UStG (ab 1.1.2025) |
 | Buchungsbelege | **8 Jahre** | §147 Abs. 3 AO (ab 1.1.2025) |
-| Bücher, Inventare, Jahresabschlüsse, Lageberichte, Eröffnungsbilanzen, Organisations­unterlagen | **8 Jahre** | §147 Abs. 3 AO (ab 1.1.2025) |
+| Bücher, Aufzeichnungen, Inventare, Jahresabschlüsse, Lageberichte, Eröffnungsbilanzen, Organisations­unterlagen | **10 Jahre** | §147 Abs. 3 AO (BEG IV hat nur die Buchungsbelege verkürzt) |
 | Empfangene/gesandte Handelsbriefe | **6 Jahre** | §147 Abs. 3 AO |
 | Sonstige steuerrelevante Unterlagen | **6 Jahre** | §147 Abs. 3 AO |
 | Aufzeichnungen nach §22 UStG | **10 Jahre** | §22 UStG (NICHT durch BEG IV geändert) |
