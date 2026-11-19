@@ -185,10 +185,10 @@ AUSNAHMEN="$KEINE" FAKE_PA=vulns_string lauf vulns_string_bei_rc0_ist_rot 1 "NIC
 AUSNAHMEN="$KEINE" FAKE_PA=vulns_umbenannt lauf fehlendes_vulns_nennt_das_paket 1 "aiofiles ohne vulns-Liste" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=skip lauf skip_reason_ist_nicht_geprueft 1 "aiofiles uebersprungen: kein Wheel" "OK"
 # Gemeinsame Fassung: Pin-Abgleich nennt Name+Version (fachgleich, anderer Wortlaut).
-AUSNAHMEN="$KEINE" FAKE_PA=fremd lauf fremde_namen_gleicher_anzahl_sind_rot 1 "aiofiles" "OK"
-AUSNAHMEN="$KEINE" FAKE_PA=fremd lauf fremder_name_im_bericht_wird_genannt 1 "fremd1" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=fremd lauf fremde_namen_gleicher_anzahl_sind_rot 1 "aiofiles 24.1.0 gepinnt, aber nicht im Bericht" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=fremd lauf fremder_name_im_bericht_wird_genannt 1 "fremd1 24.1.0 im Bericht, aber nicht gepinnt" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=rc1 lauf pip_audit_rc1_ohne_fund_ist_werkzeugfehler 1 "NICHT GEMESSEN" "OK"
-AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf fehlendes_paket_wird_mit_namen_genannt 1 "aiofiles" "OK"
+AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf fehlendes_paket_wird_mit_namen_genannt 1 "aiofiles 24.1.0 gepinnt, aber nicht im Bericht" "OK"
 AUSNAHMEN="$KEINE" FAKE_PA=norm LAUFZEIT="$werkstatt/norm.txt" lauf namen_nach_pep503_gleich_ist_gruen 0 "OK" "NICHT GEMESSEN"
 AUSNAHMEN="$KEINE" FAKE_PA=weniger lauf weniger_geprueft_als_gepinnt_ist_rot 1 "NICHT GEMESSEN" "OK"
 AUSNAHMEN=- lauf ausnahmedatei_fehlt_ist_rot 1 "NICHT GEMESSEN" "OK"
@@ -206,6 +206,9 @@ AUSNAHMEN="$KEINE" FAKE_VULN="jinja2:PYSEC-0001:3.1.7" lauf fund_laufzeit_ist_ro
     "jinja2 3.1.6 PYSEC-0001" "NICHT GEMESSEN"
 AUSNAHMEN="$KEINE" FAKE_VULN="pytest:PYSEC-0002:9.9" lauf fund_im_test_ist_rot 1 \
     "pytest 9.2.0 PYSEC-0002" ""
+# Die behobene Fassung steht in der Fundzeile, sonst fehlt der Weg zum Update.
+AUSNAHMEN="$KEINE" FAKE_VULN="jinja2:PYSEC-0001:3.1.7" lauf fund_nennt_behobene_fassung 1 \
+    "behoben in 3.1.7" "NICHT GEMESSEN"
 
 # Ausnahmen: Kennung, Issue, Ablauf, seit. Updates zuerst, Ausnahme ist die Not.
 # Heute ist 2026-11-18 (PAKETE_HEUTE). Hoechstfrist 30 Tage, gerechnet ab `seit`.
