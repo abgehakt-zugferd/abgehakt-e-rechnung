@@ -73,27 +73,37 @@ tp_ist_erwartet() {
 }
 
 # $1 Name  $2 erwarteter rc (0 = gruen; 1 = beliebiger Fehler; 2 = genau Exit 2)
-# $3 erwarteter Wortlaut (leer = keiner)
+# $3 erwarteter Wortlaut in zusammengefuehrter Ausgabe (leer = keiner)
 # $4 Wortlaut, der NICHT vorkommen darf (leer = keiner)
+# $5 optional: Wortlaut, der auf stderr stehen muss
+# $6 optional: Wortlaut, der auf stdout NICHT stehen darf
 # Umgebung des Falls: FAKE_*, AUSNAHMEN (Dateiinhalt, "-" = Datei fehlt), OHNE_LOCK,
 # OHNE_UV, OHNE_PA, HEUTE, AUSWERTER (Test-Naht fuer den Auswerter-Pfad).
+# PAKETE_AUSWERTER wird immer gesetzt (auch leer): so bleibt leer vs. ungesetzt
+# unterscheidbar; ${AUSWERTER:-} allein wuerde beides zur leeren Übergabe.
 lauf() {
     name=$1
     erw_rc=$2
     wortlaut=$3
     verboten=${4:-}
+    muss_stderr=${5:-}
+    nicht_stdout=${6:-}
     zahl=$((zahl + 1))
     w="$werkstatt/fall.$zahl"
     tp_baue_fallwurzel "$w"
     pfad="$werkstatt/pfad.$zahl"
     tp_baue_toolpfad "$pfad"
-    aus=$(PATH="$pfad" PAKETE_WURZEL="$w" PAKETE_HEUTE="${HEUTE:-2026-11-18}" \
+    out_f="$w/stdout.txt"
+    err_f="$w/stderr.txt"
+    PATH="$pfad" PAKETE_WURZEL="$w" PAKETE_HEUTE="${HEUTE:-2026-11-18}" \
         PAKETE_AUSWERTER="${AUSWERTER:-}" \
         FAKE_EXPORT_LAUFZEIT="${LAUFZEIT:-$werkstatt/lauf.txt}" \
         FAKE_EXPORT_TEST="${TESTEXPORT:-$werkstatt/test.txt}" \
-        "$(command -v bash)" "$skript" 2>&1)
+        "$(command -v bash)" "$skript" >"$out_f" 2>"$err_f"
     rc=$?
-    if tp_ist_erwartet "$rc" "$erw_rc" "$aus" "$wortlaut" "$verboten"; then
+    aus=$(cat "$out_f"; cat "$err_f")
+    if tp_ist_erwartet "$rc" "$erw_rc" "$aus" "$wortlaut" "$verboten" \
+        && tp_strom_ok "$out_f" "$err_f" "$muss_stderr" "$nicht_stdout"; then
         echo "gruen $name"
     else
         echo "ROT  $name: erwartet rc=$erw_rc und '$wortlaut', nicht '$verboten' (rc=$rc)" >&2
@@ -103,6 +113,21 @@ lauf() {
     # Zuweisungen vor einem Funktionsaufruf bleiben in sh bestehen: wegraeumen.
     unset OHNE_LOCK OHNE_UV OHNE_PA FAKE_UV_RC FAKE_PA FAKE_VULN LAUFZEIT TESTEXPORT
     unset AUSNAHMEN HEUTE PYPROJECT_ZUSATZ AUSWERTER
+}
+
+# $1 stdout-Datei  $2 stderr-Datei  $3 muss-auf-stderr  $4 darf-nicht-auf-stdout
+tp_strom_ok() {
+    out_f=$1
+    err_f=$2
+    muss_stderr=$3
+    nicht_stdout=$4
+    if [ -n "$muss_stderr" ]; then
+        grep -qF -- "$muss_stderr" "$err_f" || return 1
+    fi
+    if [ -n "$nicht_stdout" ]; then
+        ! grep -qF -- "$nicht_stdout" "$out_f" || return 1
+    fi
+    return 0
 }
 
 # uv-Version: paketpruefung.yml (pip install uv==…) und backend/Dockerfile
