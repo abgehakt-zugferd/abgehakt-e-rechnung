@@ -13,6 +13,7 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
 
 hier=$(cd "$(dirname "$0")" && pwd)
 . "$hier/pre_push_testhilfe.sh"
+. "$hier/test_umweg_hilfe.sh"
 fehl=0
 leer=0000000000000000000000000000000000000000
 
@@ -24,31 +25,9 @@ PIPAUDIT_QUELLE=$(mktemp -d "$werkstatt/q-leer.XXXXXX") || {
 }
 export PIPAUDIT_QUELLE
 
-# schreib_gruen, schreib_rot_netz und das Grundgeruest des Spiegel-Repos
-# (spiegel_repo_anlegen) kommen aus pre_push_testhilfe.sh.
-neues_repo() {
-    d=$(spiegel_repo_anlegen)
-    # Hook unter Test: lebende Skripte, nicht eine zweite Abschrift der Regeln.
-    mkdir -p "$d/.githooks"
-    cp "$hier/pre-push" "$d/.githooks/pre-push"
-    cp "$hier/datenwache.sh" "$d/.githooks/datenwache.sh"
-    cp "$hier/wachen.sh" "$d/.githooks/wachen.sh"
-    cp "$hier/netzwache.sh" "$d/.githooks/netzwache.sh"
-    cp "$hier/compose_ports_pruefen.py" "$d/.githooks/compose_ports_pruefen.py"
-    # Hilfsskript, sobald vorhanden (nach Implementierung); fehlend = alter Hook.
-    if [ -f "$hier/pre-push-stand.sh" ]; then
-        cp "$hier/pre-push-stand.sh" "$d/.githooks/pre-push-stand.sh"
-        chmod +x "$d/.githooks/pre-push-stand.sh"
-    fi
-    chmod +x "$d/.githooks/pre-push" "$d/.githooks/datenwache.sh" "$d/.githooks/wachen.sh"
-    # Eigenes .git: Schalter nicht vom umgebenden Klon (pipaudit.gleichlauf=pflicht)
-    # erben. Ausdruecklich "aus", damit fehlt-Checkout nur warnt, nicht blockt.
-    git -C "$d" config --local pipaudit.gleichlauf aus
-    printf '%s\n' "$d"
-}
-
-# rufe_hook (Hook im Spiegel laufen lassen, rc und Wortlaut pruefen) kommt aus
-# pre_push_testhilfe.sh.
+# stand_neues_repo, schreib_gruen, schreib_rot_netz, rufe_hook: pre_push_testhilfe.sh
+# umweg_empfehlungen, pruefe_umweg_probe: test_umweg_hilfe.sh
+neues_repo() { stand_neues_repo; }
 
 # --- Fall A: Checkout gruen, gepushter Commit rot → Push muss fallen ----------
 repo_a=$(neues_repo)
@@ -203,52 +182,6 @@ fi
 # Weitere Muster neben no-verify: hooksPath=/dev/null bzw. hooksPath /dev/null und HUSKY=0
 # (gleicher Umweg). HUSKY="0" bleibt bewusst draußen (Text-Lint, siehe Kommentar oben).
 # Text-Lint ist nie vollstaendig (z. B. SKIP=..., zerlegte Woerter); das bleibt bewusst so.
-#
-# $1 Ordner → Zeilen mit Umweg-Empfehlung (ohne reine Kommentare und ohne "nicht ...")
-umweg_empfehlungen() {
-    ordner=$1
-    treffer_datei="$werkstatt/umweg-treffer.txt"
-    : > "$treffer_datei"
-    for f in "$ordner"/*.sh "$ordner"/pre-push; do
-        [ -f "$f" ] || continue
-        name=${f##*/}
-        if [ "${name#test_}" != "$name" ]; then
-            continue
-        fi
-        grep -nH -E -- 'no-verify|hooksPath[ =]/dev/null|HUSKY=0' "$f" \
-            >> "$treffer_datei" 2>/dev/null
-    done
-    grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' "$treffer_datei" \
-        | grep -vE 'nicht[^"]{0,12}(no-verify|hooksPath[ =]/dev/null|HUSKY=0)' || true
-}
-
-# $1 Name  $2 Dateiinhalt  $3 erwartet (rot=Empfehlung erkannt, gruen=kein Treffer)
-pruefe_umweg_probe() {
-    name=$1
-    inhalt=$2
-    erwartet=$3
-    d="$werkstatt/probe-$name"
-    mkdir -p "$d"
-    printf '%s\n' "$inhalt" > "$d/hinweis.sh"
-    fund=$(umweg_empfehlungen "$d")
-    if [ "$erwartet" = rot ]; then
-        if [ -n "$fund" ]; then
-            echo "gruen $name"
-        else
-            echo "ROT  $name: Umweg-Empfehlung nicht erkannt" >&2
-            fehl=1
-        fi
-    else
-        if [ -z "$fund" ]; then
-            echo "gruen $name"
-        else
-            echo "ROT  $name: Verbot als Umweg gewertet:" >&2
-            printf '%s\n' "$fund" | sed 's/^/      /' >&2
-            fehl=1
-        fi
-    fi
-}
-
 pruefe_umweg_probe empfehlung_hooksPath_ist_umweg \
     'echo "nutze git -c core.hooksPath=/dev/null push"' rot
 pruefe_umweg_probe verbot_hooksPath_ist_kein_umweg \
@@ -276,6 +209,37 @@ sha_h=$(git -C "$repo_h" rev-parse HEAD)
 # Getrackte, uncommittete Aenderung, die den Arbeitsbaum rot macht.
 schreib_rot_netz "$repo_h"
 rufe_hook uncommittete_aenderung_nimmt_exportweg "$repo_h" "$sha_h" 0 ""
+
+# --- Fall I: HEAD gleich SHA, Baum sauber, ungetrackte Datei unter .githooks/ ---
+# Committed Wache: vor exit optionales Overlay (nur Fixture). Ungetracktes Overlay
+# faerbt den Arbeitsbaum rot; der Export enthaelt es nicht → gruen.
+repo_i=$(neues_repo)
+schreib_gruen "$repo_i"
+overlay_naht='if [ -f .githooks/lokal-overlay.sh ]; then . .githooks/lokal-overlay.sh; fi'
+awk -v naht="$overlay_naht" '
+    /^exit "\$fehler"$/ { print naht }
+    { print }
+' "$repo_i/.githooks/wachen.sh" > "$repo_i/.githooks/wachen.sh.neu"
+mv "$repo_i/.githooks/wachen.sh.neu" "$repo_i/.githooks/wachen.sh"
+chmod +x "$repo_i/.githooks/wachen.sh"
+git -C "$repo_i" add -A
+git -C "$repo_i" commit -qm gruen-i
+sha_i=$(git -C "$repo_i" rev-parse HEAD)
+printf '%s\n' 'echo "untracked-overlay: ROT" >&2' 'exit 1' \
+    > "$repo_i/.githooks/lokal-overlay.sh"
+if ( cd "$repo_i" && DATENWACHE_UEBERSTIMMT=1 .githooks/wachen.sh ); then
+    echo "ABBRUCH: Fall I, Arbeitsbaum unerwartet gruen - Fixture kaputt." >&2
+    exit 2
+fi
+git -C "$repo_i" diff --quiet HEAD || {
+    echo "ABBRUCH: Fall I, Baum nicht sauber - nichts gemessen." >&2
+    exit 2
+}
+[ -n "$(git -C "$repo_i" ls-files --others --exclude-standard -- .githooks)" ] || {
+    echo "ABBRUCH: Fall I, keine ungetrackte .githooks-Datei - nichts gemessen." >&2
+    exit 2
+}
+rufe_hook ungetrackte_githooks_nimmt_exportweg "$repo_i" "$sha_i" 0 ""
 
 umweg=$(umweg_empfehlungen "$hier")
 if [ -n "$umweg" ]; then
