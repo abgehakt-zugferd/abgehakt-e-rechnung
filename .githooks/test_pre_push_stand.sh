@@ -264,6 +264,19 @@ pruefe_umweg_probe empfehlung_HUSKY0_ist_umweg \
 pruefe_umweg_probe verbot_HUSKY0_ist_kein_umweg \
     'echo "nicht HUSKY=0 setzen"' gruen
 
+# --- Fall H: HEAD gleich SHA, aber getrackte Datei geaendert → Exportweg ------
+# Schneller Weg (Arbeitsbaum) wuerde die uncommittete Aenderung mitpruefen und
+# den Push an der roten Netz-Wache festhalten; der Export prueft genau den
+# gepushten Stand und ist gruen.
+repo_h=$(neues_repo)
+schreib_gruen "$repo_h"
+git -C "$repo_h" add -A
+git -C "$repo_h" commit -qm gruen-h
+sha_h=$(git -C "$repo_h" rev-parse HEAD)
+# Getrackte, uncommittete Aenderung, die den Arbeitsbaum rot macht.
+schreib_rot_netz "$repo_h"
+rufe_hook uncommittete_aenderung_nimmt_exportweg "$repo_h" "$sha_h" 0 ""
+
 umweg=$(umweg_empfehlungen "$hier")
 if [ -n "$umweg" ]; then
     echo "ROT  hooks_empfehlen_keinen_umweg: Umweg in einer Hook-Meldung" >&2

@@ -175,6 +175,12 @@ aus_stderr=$(schreib_auswerter_attrappe stderr_scheinerfolg 0 '""' '"ERGEBNIS SA
 AUSNAHMEN="$KEINE" AUSWERTER="$aus_stderr" lauf ergebnis_nur_auf_stderr_zaehlt_nicht 1 \
     "NICHT GEMESSEN" "OK"
 
+# PAKETE_AUSWERTER ist eine reine Test-Naht: gesetzt muss eine Warnzeile auf
+# stderr stehen, Exit und ERGEBNIS-Logik bleiben unveraendert (hier: gruen).
+aus_warn=$(schreib_auswerter_attrappe warn_naht 0 '"ERGEBNIS SAUBER (5 Pakete)\n"' '""')
+AUSNAHMEN="$KEINE" AUSWERTER="$aus_warn" lauf auswerter_naht_warnt_auf_stderr 0 \
+    "WARNUNG: PAKETE_AUSWERTER gesetzt" "NICHT GEMESSEN"
+
 # Ausnahmen: Kennung, Issue, Ablauf, seit. Updates zuerst, Ausnahme ist die Not.
 # Heute ist 2026-11-18 (PAKETE_HEUTE). Hoechstfrist 30 Tage, gerechnet ab `seit`.
 # A3: ungueltige/zu lange/abgelaufene Ausnahmezeile ergibt Exit 2 (nicht 1).

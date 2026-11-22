@@ -112,9 +112,13 @@ kurz=$(git rev-parse --short "$sha" 2>/dev/null || printf '%s' "$sha" | cut -c1-
 echo "tdd: prüfe Commit $kurz ($sha)." >&2
 
 kopf=$(git rev-parse HEAD)
-if [ "$sha" = "$kopf" ]; then
-  # Schneller Weg: Checkout ist genau der gepushte Stand. Export waere identisch
-  # und kostet Worktree plus Docker-Kontext; der Alltags-Push bleibt lokal.
+if [ "$sha" = "$kopf" ] && git diff --quiet HEAD; then
+  # Schneller Weg nur bei sauberem Arbeitsbaum: getrackte Aenderungen (auch
+  # gestagte) gehoeren nicht zum gepushten Stand; der Exportweg unten prueft
+  # genau ihn. `git diff --quiet HEAD` ignoriert ungetrackte Dateien; die
+  # landen im Export ebenfalls nicht und bleiben bewusst ohne Wirkung.
+  # Ohne Aenderungen waere der Export identisch und kostet nur Worktree plus
+  # Docker-Kontext; der Alltags-Push bleibt lokal.
   pruefe_baum
   ec=$?
   trap - EXIT

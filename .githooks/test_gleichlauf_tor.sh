@@ -24,78 +24,56 @@ leer=0000000000000000000000000000000000000000
 
 werkstatt_anlegen gleichlauf-tor
 
-# Spiegel der App: Hook unter Test, teure Suite nur als Spur.
-neues_repo() {
-    d=$(spiegel_repo_anlegen)
-    mkdir -p "$d/.githooks/pip-audit-auswerter"
-    cp "$hier/pre-push" "$d/.githooks/pre-push"
-    chmod +x "$d/.githooks/pre-push"
-    printf '#!/bin/sh\ntouch "%s/spur.datenwache"\nexit 0\n' "$werkstatt" \
-        > "$d/.githooks/datenwache.sh"
-    printf '#!/bin/sh\ntouch "%s/spur.stand"\nexit 0\n' "$werkstatt" \
-        > "$d/.githooks/pre-push-stand.sh"
-    chmod +x "$d/.githooks/datenwache.sh" "$d/.githooks/pre-push-stand.sh"
-    printf 'probe\n' > "$d/README"
-    git -C "$d" add README
-    git -C "$d" commit -qm probe
-    printf '%s\n' "$d"
+# Die Git-Fixture (gleichlauf_repo_anlegen, quelle_anlegen, schreib_attrappe,
+# q_klonieren, argv_felder_ok) steht in pre_push_testhilfe.sh (300er-Grenze).
+
+# $1 Repo  $2 Q  $3 HOME (leer=normal)  $4 Ref-Zeilen  $5 Ausgabedatei
+# Loescht die Spuren und laesst den Hook laufen; rc steht danach in $rc.
+fall_ausfuehren() {
+    repo=$1
+    q=$2
+    home_ort=$3
+    refzeilen=$4
+    aus=$5
+    rm -f "$werkstatt/spur.datenwache" "$werkstatt/spur.stand" \
+        "$werkstatt/argv.txt" "$werkstatt/arbeitsbaum-lief.txt"
+    # Quotiert ueber set --: unquotiert wuerde ein Pfad mit Leerzeichen
+    # gesplittet; ein quotiertes leeres HOME-Argument ginge als leeres
+    # Argument an env und der Hook startete nicht.
+    set -- env "PIPAUDIT_QUELLE=$q"
+    [ -n "$home_ort" ] && set -- env "PIPAUDIT_QUELLE=" "HOME=$home_ort"
+    ( cd "$repo" && printf '%s\n' "$refzeilen" \
+        | "$@" bash .githooks/pre-push origin unused-url ) >"$aus" 2>&1
+    rc=$?
 }
 
-# Quelle: bare origin unter $1/origin.git plus Saat-Klon, dessen Pfad
-# ausgegeben wird (schreib_attrappe arbeitet in ihm).
-quelle_anlegen() {
-    git init -q --bare "$1/origin.git"
-    git -C "$1/origin.git" symbolic-ref HEAD refs/heads/main
-    saat=$(mktemp -d "$werkstatt/saat.XXXXXX")
-    git -C "$saat" init -q
-    git -C "$saat" config user.name probe
-    git -C "$saat" config user.email probe@example.invalid
-    git -C "$saat" checkout -q -b main
-    git -C "$saat" remote add origin "$1/origin.git"
-    printf '%s\n' "$saat"
-}
-
-# Attrappe mit Exit $2 in der Saat committen und per force-push auf
-# origin/main legen (der Hook holt sie per fetch + archive daraus).
-schreib_attrappe() {
-    mkdir -p "$1/pip-audit-auswerter"
-    cat > "$1/pip-audit-auswerter/gleichlauf.py" <<ATT
-import sys
-with open("$werkstatt/argv.txt", "a", encoding="utf-8") as f:
-    f.write(" ".join(sys.argv[1:]) + "\n")
-sys.exit($2)
-ATT
-    git -C "$1" add pip-audit-auswerter/gleichlauf.py
-    git -C "$1" commit -qm "attrappe $2"
-    git -C "$1" push -q -f origin main
-}
-
-# Klon von $1 nach $2; legt danach die ABWEICHENDE Attrappe uncommittet in
-# den Arbeitsbaum. Gibt den physikalischen Klonpfad aus.
-q_klonieren() {
-    git clone -q "$1" "$2"
-    mkdir -p "$2/pip-audit-auswerter"
-    cat > "$2/pip-audit-auswerter/gleichlauf.py" <<ATT
-import sys
-with open("$werkstatt/arbeitsbaum-lief.txt", "a", encoding="utf-8") as f:
-    f.write("arbeitsbaum\n")
-sys.exit(9)
-ATT
-    (cd "$2" && pwd -P)
-}
-
-# argv-Zeile der Attrappe gegen den Vertrag pruefen:
-# --push <sha> --repo <wurzel> .githooks/pip-audit-auswerter --checkout <Q>
-# $1 Zeile  $2 erwartete sha  $3 Repo physikalisch  $4 Q physikalisch
-argv_felder_ok() {
-    s=$2
-    rp=$3
-    qp=$4
-    set -- $1
-    [ "$1" = "--push" ] && [ "$2" = "$s" ] && [ "$3" = "--repo" ] \
-        && [ "$(cd "$4" 2>/dev/null && pwd -P)" = "$rp" ] \
-        && [ "$5" = ".githooks/pip-audit-auswerter" ] \
-        && [ "$6" = "--checkout" ] && [ "$(cd "$7" 2>/dev/null && pwd -P)" = "$qp" ]
+# rc und Spuren gegen die Erwartung. $1 Name  $2 erw_rc  $3 Wortlaut
+# $4 Wortlaut-verboten (leer=keiner)  $5 suite_erwartet (0|1);
+# liest $rc und $werkstatt/$1.aus.
+fall_bewerten() {
+    aus="$werkstatt/$1.aus"
+    ok=1
+    [ "$rc" -eq "$2" ] || ok=0
+    [ -z "$3" ] || grep -qF -- "$3" "$aus" || ok=0
+    [ -z "$4" ] || ! grep -qF -- "$4" "$aus" || ok=0
+    if [ "$5" -eq 1 ]; then
+        [ -e "$werkstatt/spur.datenwache" ] || ok=0
+        [ -e "$werkstatt/spur.stand" ] || ok=0
+    else
+        [ ! -e "$werkstatt/spur.datenwache" ] || ok=0
+        [ ! -e "$werkstatt/spur.stand" ] || ok=0
+    fi
+    # Zusicherung: die abweichende Attrappe im Arbeitsbaum von Q lief nie.
+    [ ! -e "$werkstatt/arbeitsbaum-lief.txt" ] || ok=0
+    if [ "$ok" -eq 1 ]; then
+        echo "gruen $1"
+    else
+        echo "ROT  $1: rc=$rc (erwartet $2), suite_erwartet=$5" >&2
+        [ ! -e "$werkstatt/arbeitsbaum-lief.txt" ] \
+            || echo "      arbeitsbaum-attrappe lief!" >&2
+        sed 's/^/      /' "$aus" | tail -30 >&2
+        fehl=1
+    fi
 }
 
 # $1 Name  $2 Repo  $3 Q  $4 Schalter (leer=unset, sonst Wert)  $5 erw_rc
@@ -113,8 +91,6 @@ fall() {
     home_ort=${9:-}
     refzeilen=${10:-}
     zahl=$((zahl + 1))
-    rm -f "$werkstatt/spur.datenwache" "$werkstatt/spur.stand" \
-        "$werkstatt/argv.txt" "$werkstatt/arbeitsbaum-lief.txt"
     if [ -n "$schalter" ]; then
         git -C "$repo" config --local pipaudit.gleichlauf "$schalter"
     else
@@ -124,44 +100,11 @@ fall() {
         sha=$(git -C "$repo" rev-parse HEAD)
         refzeilen=$(printf 'refs/heads/main %s refs/heads/main %s\n' "$sha" "$leer")
     fi
-    aus="$werkstatt/$name.aus"
-    if [ -n "$home_ort" ]; then
-        env_q='PIPAUDIT_QUELLE='
-        env_home="HOME=$home_ort"
-    else
-        env_q="PIPAUDIT_QUELLE=$q"
-        env_home=
-    fi
-    ( cd "$repo" && printf '%s\n' "$refzeilen" \
-        | env $env_q $env_home bash .githooks/pre-push origin unused-url ) >"$aus" 2>&1
-    rc=$?
-    ok=1
-    if [ "$rc" -ne "$erw_rc" ]; then
-        ok=0
-    fi
-    [ -z "$wortlaut" ] || grep -qF -- "$wortlaut" "$aus" || ok=0
-    [ -z "$verboten" ] || ! grep -qF -- "$verboten" "$aus" || ok=0
-    if [ "$suite_erwartet" -eq 1 ]; then
-        [ -e "$werkstatt/spur.datenwache" ] || ok=0
-        [ -e "$werkstatt/spur.stand" ] || ok=0
-    else
-        [ ! -e "$werkstatt/spur.datenwache" ] || ok=0
-        [ ! -e "$werkstatt/spur.stand" ] || ok=0
-    fi
-    # Zusicherung: die abweichende Attrappe im Arbeitsbaum von Q lief nie.
-    [ ! -e "$werkstatt/arbeitsbaum-lief.txt" ] || ok=0
-    if [ "$ok" -eq 1 ]; then
-        echo "gruen $name"
-    else
-        echo "ROT  $name: rc=$rc (erwartet $erw_rc), suite_erwartet=$suite_erwartet" >&2
-        [ ! -e "$werkstatt/arbeitsbaum-lief.txt" ] \
-            || echo "      arbeitsbaum-attrappe lief!" >&2
-        sed 's/^/      /' "$aus" | tail -30 >&2
-        fehl=1
-    fi
+    fall_ausfuehren "$repo" "$q" "$home_ort" "$refzeilen" "$werkstatt/$name.aus"
+    fall_bewerten "$name" "$erw_rc" "$wortlaut" "$verboten" "$suite_erwartet"
 }
 
-repo=$(neues_repo)
+repo=$(gleichlauf_repo_anlegen)
 repo_phys=$(cd "$repo" && pwd -P)
 
 # Hauptquelle: bare origin + Klon Q mit abweichender Arbeitsbaum-Attrappe.
@@ -262,6 +205,89 @@ if [ -f "$werkstatt/argv.txt" ] \
     echo "gruen leere_quelle_verwendet_home_als_checkout"
 else
     echo "ROT  leere_quelle_verwendet_home_als_checkout: $(cat "$werkstatt/argv.txt" 2>/dev/null)" >&2
+    fehl=1
+fi
+
+# Quellpfad mit Leerzeichen: der env-Aufruf in fall darf die Zuweisung
+# PIPAUDIT_QUELLE=... nicht am Leerzeichen splitten (unquotiert kaeme der
+# zweite Teil als env-Befehl durch und der Hook stuerbe nie am Gleichlauf).
+schreib_attrappe "$saat" 0
+q_space=$(q_klonieren "$werkstatt/hauptquelle/origin.git" \
+    "$werkstatt/q mit leerzeichen")
+fall quellpfad_mit_leerzeichen_laesst_durch "$repo" "$q_space" "" 0 "" "" 1
+
+# Leeres stdin: null Refs. Ohne Leer-Waechter liefe das Heredoc genau einmal
+# mit leerem local_sha, also --push "" gegen die Attrappe. Der Pruefer darf
+# nicht gerufen werden, der Hook endet mit 0 und erreicht die Datenwache.
+zahl=$((zahl + 1))
+schreib_attrappe "$saat" 0
+rm -f "$werkstatt/spur.datenwache" "$werkstatt/spur.stand" \
+    "$werkstatt/argv.txt" "$werkstatt/arbeitsbaum-lief.txt"
+aus_leer="$werkstatt/leeres-stdin.aus"
+( cd "$repo" && printf '' \
+    | env "PIPAUDIT_QUELLE=$q_mit" bash .githooks/pre-push origin unused-url ) \
+    >"$aus_leer" 2>&1
+rc_leer=$?
+if [ "$rc_leer" -eq 0 ] && [ ! -e "$werkstatt/argv.txt" ] \
+    && [ -e "$werkstatt/spur.datenwache" ] \
+    && [ ! -e "$werkstatt/arbeitsbaum-lief.txt" ]; then
+    echo "gruen leeres_stdin_ruft_pruefer_nicht"
+else
+    echo "ROT  leeres_stdin_ruft_pruefer_nicht: rc=$rc_leer" >&2
+    [ ! -e "$werkstatt/argv.txt" ] || echo "      pruefer lief mit: $(cat "$werkstatt/argv.txt")" >&2
+    sed 's/^/      /' "$aus_leer" | tail -20 >&2
+    fehl=1
+fi
+
+# Loesch-Ref (local_sha aus Nullen): der echte Pruefer wertet Nullen als
+# Loesch-Push mit Exit 0; die Attrappe (Exit 0) bildet das nach. Der Block
+# reicht die Zeile durch: --push 0...0 muss in der Spur stehen. Die
+# Stand-Pruefung dahinter ueberspringt Nullen (kein spur.stand), die
+# Datenwache laeuft (spur.datenwache).
+zahl=$((zahl + 1))
+schreib_attrappe "$saat" 0
+rm -f "$werkstatt/spur.datenwache" "$werkstatt/spur.stand" \
+    "$werkstatt/argv.txt" "$werkstatt/arbeitsbaum-lief.txt"
+aus_loesch="$werkstatt/loesch-ref.aus"
+( cd "$repo" && printf 'refs/heads/main %s refs/heads/main %s\n' \
+    "$leer" "$(git -C "$repo" rev-parse HEAD)" \
+    | env "PIPAUDIT_QUELLE=$q_mit" bash .githooks/pre-push origin unused-url ) \
+    >"$aus_loesch" 2>&1
+rc_loesch=$?
+if [ "$rc_loesch" -eq 0 ] && [ -e "$werkstatt/spur.datenwache" ] \
+    && [ ! -e "$werkstatt/spur.stand" ] \
+    && [ ! -e "$werkstatt/arbeitsbaum-lief.txt" ] \
+    && [ -f "$werkstatt/argv.txt" ] \
+    && [ "$(wc -l < "$werkstatt/argv.txt" | tr -d ' ')" -eq 1 ] \
+    && argv_felder_ok "$(sed -n '1p' "$werkstatt/argv.txt")" "$leer" "$repo_phys" "$q_mit"; then
+    echo "gruen loesch_ref_wird_als_loeschung_durchgereicht"
+else
+    echo "ROT  loesch_ref_wird_als_loeschung_durchgereicht: rc=$rc_loesch" >&2
+    sed 's/^/      /' "$aus_loesch" | tail -20 >&2
+    fehl=1
+fi
+
+# stdin aus einem Verzeichnis: der Lese-Fehler von cat muss den Hook mit
+# Meldung abbrechen. `push_refs=$(cat; printf x)` verschluckte ihn, weil nur
+# der Status von printf zaehlte; der Hook lief mit leerer Ref-Liste weiter.
+# (Geschlossenes stdin loest den Fehler nicht aus: in der Kommandoersetzung
+# landet der Auffang-Pipe auf fd 0 und cat haengt, statt zu scheitern.)
+zahl=$((zahl + 1))
+mkdir -p "$werkstatt/stdin-als-verzeichnis"
+rm -f "$werkstatt/spur.datenwache" "$werkstatt/spur.stand" \
+    "$werkstatt/argv.txt" "$werkstatt/arbeitsbaum-lief.txt"
+aus_cat="$werkstatt/stdin-zu.aus"
+( cd "$repo" && env "PIPAUDIT_QUELLE=$q_mit" \
+    bash .githooks/pre-push origin unused-url \
+    < "$werkstatt/stdin-als-verzeichnis" ) >"$aus_cat" 2>&1
+rc_cat=$?
+if [ "$rc_cat" -ne 0 ] && grep -qF -- "stdin" "$aus_cat" \
+    && [ ! -e "$werkstatt/argv.txt" ] \
+    && [ ! -e "$werkstatt/spur.datenwache" ]; then
+    echo "gruen stdin_unlesbar_bricht_mit_meldung_ab"
+else
+    echo "ROT  stdin_unlesbar_bricht_mit_meldung_ab: rc=$rc_cat" >&2
+    sed 's/^/      /' "$aus_cat" | tail -20 >&2
     fehl=1
 fi
 
