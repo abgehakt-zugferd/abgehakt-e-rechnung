@@ -32,6 +32,40 @@ cd "$wurzel" || exit 1
 push_refs=$(cat; printf x) || exit 1
 push_refs=${push_refs%x}
 
+# pip-audit-gleichlauf: hook-vorlage
+# Gleichlauf der Auswerter-Kopie mit der Quelle (claude-global-skills).
+Q="${PIPAUDIT_QUELLE:-$HOME/Documents/claude/claude-global-skills}"
+if git -C "$Q" rev-parse --git-dir >/dev/null 2>&1; then
+    # Pruefprogramm UND Quelle kommen aus origin/main — der Arbeitsbaum
+    # des Checkouts wird nie gelesen, ein Pull ist nicht noetig.
+    git -C "$Q" fetch --quiet origin +refs/heads/main:refs/remotes/origin/main || {
+        echo "ROT: Gleichlauf NICHT GEMESSEN: Fetch von origin/main unter $Q fehlgeschlagen" >&2
+        exit 1
+    }
+    # TMPDIR explizit: nacktes `mktemp -d` ignoriert TMPDIR auf macOS
+    # (BSD) und landet in der Session-Tempdir — ohne Schreibrechte dort
+    # (Sandbox) stirbt der Hook. Mit Vorlage gilt es auf BSD UND GNU.
+    tmp="$(mktemp -d "${TMPDIR:-/tmp}/pipaudit.XXXXXX")"
+    trap 'rm -rf "$tmp"' EXIT
+    git -C "$Q" archive refs/remotes/origin/main pip-audit-auswerter | tar -x -C "$tmp" || {
+        echo "ROT: Gleichlauf NICHT GEMESSEN: kein pip-audit-auswerter auf origin/main unter $Q" >&2
+        exit 1
+    }
+    # Geprueft wird der Push-Commit aus der pre-push-stdin
+    # (local_ref local_sha remote_ref remote_sha), nie der Arbeitsbaum.
+    repo="$(git rev-parse --show-toplevel)"
+    while read -r local_ref local_sha remote_ref remote_sha; do
+        python3 "$tmp/pip-audit-auswerter/gleichlauf.py" --push "$local_sha" --repo "$repo" .githooks/pip-audit-auswerter --checkout "$Q" || exit 1
+    done <<EOF
+$(printf '%s' "$push_refs")
+EOF
+elif [ "$(git config --local --get pipaudit.gleichlauf)" = "pflicht" ]; then
+    echo "ROT: Gleichlauf NICHT GEMESSEN: kein claude-global-skills-Checkout unter $Q (pipaudit.gleichlauf=pflicht)" >&2
+    exit 1
+else
+    echo "WARNUNG: Gleichlauf NICHT GEMESSEN: kein claude-global-skills-Checkout unter $Q" >&2
+fi
+
 # Datenwache (#49): nur neu hinzukommende Zeilen der gepushten Commits.
 if ! printf '%s' "$push_refs" | .githooks/datenwache.sh; then
   echo "  Push blockiert." >&2

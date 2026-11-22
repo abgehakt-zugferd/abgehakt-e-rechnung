@@ -12,57 +12,22 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
       GIT_COMMON_DIR GIT_NAMESPACE GIT_QUARANTINE_PATH
 
 hier=$(cd "$(dirname "$0")" && pwd)
+. "$hier/pre_push_testhilfe.sh"
 fehl=0
 leer=0000000000000000000000000000000000000000
 
-werkstatt=$(mktemp -d "${TMPDIR:-/tmp}/pre-push-stand.XXXXXX") \
-    && [ -n "$werkstatt" ] && [ -d "$werkstatt" ] || {
-    echo "ABBRUCH: keine Werkstatt anlegbar (mktemp) - nichts gemessen." >&2
+werkstatt_anlegen pre-push-stand
+# Leerer Checkout-Pfad: Gleichlauf-Block darf keine echte gleichlauf.py rufen.
+PIPAUDIT_QUELLE=$(mktemp -d "$werkstatt/q-leer.XXXXXX") || {
+    echo "ABBRUCH: kein leerer PIPAUDIT_QUELLE-Ordner." >&2
     exit 2
 }
-trap 'rm -rf "$werkstatt"' EXIT
+export PIPAUDIT_QUELLE
 
-# Minimaldateien, unter denen wachen.sh gruen bleibt (vgl. test_wachen.sh).
-schreib_gruen() {
-    root=$1
-    mkdir -p "$root/backend" "$root/.githooks"
-    printf '%s\n' 'services:' '  app:' '    image: probe' > "$root/docker-compose.yml"
-    printf '%s\n' \
-        'FROM scratch' \
-        'RUN adduser --system --uid 100 --gid 101 x' \
-        'ENV EXTRA_GROUP_GID=2000 EXTRA_GROUP_NAME=belegordner' \
-        > "$root/backend/Dockerfile"
-    printf 'chown -R 100:101 storage\n' > "$root/README.md"
-    printf '%s\n' \
-        'services:' \
-        '  app:' \
-        '    volumes:' \
-        '      - ./schluessel-integration:/app/schluessel:ro' \
-        > "$root/docker-compose.integration.yml"
-    printf '# ok\n' > "$root/hinweis.md"
-}
-
-schreib_rot_netz() {
-    # Offener Port: wachen.sh netz: ROT
-    printf '%s\n' \
-        'services:' \
-        '  app:' \
-        '    image: probe' \
-        '    ports:' \
-        '      - "3000:3000"' \
-        > "$1/docker-compose.yml"
-}
-
+# schreib_gruen, schreib_rot_netz und das Grundgeruest des Spiegel-Repos
+# (spiegel_repo_anlegen) kommen aus pre_push_testhilfe.sh.
 neues_repo() {
-    d=$(mktemp -d "$werkstatt/repo.XXXXXX") && [ -n "$d" ] && [ -d "$d" ] || {
-        echo "ABBRUCH: kein Wegwerf-Repo anlegbar." >&2
-        exit 2
-    }
-    git -C "$d" init -q
-    git -C "$d" config user.name probe
-    git -C "$d" config user.email probe@example.invalid
-    git -C "$d" config core.hooksPath "$werkstatt/keine-hooks"
-    mkdir -p "$werkstatt/keine-hooks"
+    d=$(spiegel_repo_anlegen)
     # Hook unter Test: lebende Skripte, nicht eine zweite Abschrift der Regeln.
     mkdir -p "$d/.githooks"
     cp "$hier/pre-push" "$d/.githooks/pre-push"
@@ -76,46 +41,14 @@ neues_repo() {
         chmod +x "$d/.githooks/pre-push-stand.sh"
     fi
     chmod +x "$d/.githooks/pre-push" "$d/.githooks/datenwache.sh" "$d/.githooks/wachen.sh"
+    # Eigenes .git: Schalter nicht vom umgebenden Klon (pipaudit.gleichlauf=pflicht)
+    # erben. Ausdruecklich "aus", damit fehlt-Checkout nur warnt, nicht blockt.
+    git -C "$d" config --local pipaudit.gleichlauf aus
     printf '%s\n' "$d"
 }
 
-# $1 Name  $2 Repo  $3 local_sha (gepusht)  $4 erwartet rc (0 oder ungleich 0)
-# $5 Wortlaut der erwartet wird (leer = egal)
-rufe_hook() {
-    name=$1
-    repo=$2
-    lokal_sha=$3
-    erwartet_rc=$4
-    wortlaut=$5
-    aus="$werkstatt/$name.aus"
-    ( cd "$repo" && printf 'refs/heads/feature %s refs/heads/feature %s\n' \
-        "$lokal_sha" "$leer" \
-        | env DATENWACHE_UEBERSTIMMT=1 PRE_PUSH_TEST_CMD='echo suite-attrappe' \
-            bash .githooks/pre-push origin unused-url ) >"$aus" 2>&1
-    rc=$?
-    if [ "$erwartet_rc" -eq 0 ]; then
-        if [ "$rc" -ne 0 ]; then
-            echo "ROT  $name: rc=$rc, erwartet 0" >&2
-            sed 's/^/      /' "$aus" | tail -20 >&2
-            fehl=1
-            return
-        fi
-    else
-        if [ "$rc" -eq 0 ]; then
-            echo "ROT  $name: rc=0, erwartet Abbruch" >&2
-            sed 's/^/      /' "$aus" | tail -20 >&2
-            fehl=1
-            return
-        fi
-    fi
-    if [ -n "$wortlaut" ] && ! grep -qF -- "$wortlaut" "$aus"; then
-        echo "ROT  $name: Wortlaut fehlt: $wortlaut" >&2
-        sed 's/^/      /' "$aus" | tail -20 >&2
-        fehl=1
-        return
-    fi
-    echo "gruen $name"
-}
+# rufe_hook (Hook im Spiegel laufen lassen, rc und Wortlaut pruefen) kommt aus
+# pre_push_testhilfe.sh.
 
 # --- Fall A: Checkout gruen, gepushter Commit rot → Push muss fallen ----------
 repo_a=$(neues_repo)

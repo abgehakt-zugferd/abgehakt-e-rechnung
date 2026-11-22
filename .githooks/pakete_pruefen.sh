@@ -13,22 +13,21 @@
 #             aber sichtbar.
 # Der Export ist hashgesichert (`--require-hashes`): pip-audit baut dann kein eigenes
 # venv und loest nichts auf, es fragt nur zu genau den Fassungen der Lock-Datei nach.
-# Plattformmarker (`; sys_platform == 'win32'`) werden vorher entfernt: sonst liesse
-# pip-audit Pakete der jeweils anderen Plattform lautlos aus, und die Pruefung sagte
-# auf einem Linux-Runner nichts ueber Windows-Pakete.
+# Plattformmarker (`; sys_platform == 'win32'`) entfernt `vorbereiten` im gemeinsamen
+# Auswerter (`.githooks/pip-audit-auswerter/`), damit pip-audit Pakete aller
+# Plattformen prueft.
 #
 # "Nicht gemessen" ist nie gruen. Fehlt uv.lock, uv, pip-audit, python3, die
 # Ausnahmendatei oder die Ausgabe, oder sind es null Pakete, oder weniger geprueft als
-# gepinnt: Exit 1 mit "NICHT GEMESSEN" und dem Grund. Ein Fund ist ebenfalls Exit 1.
+# gepinnt: Exit ungleich 0 mit "NICHT GEMESSEN" und dem Grund. Ein Fund ist Exit 1.
+# Ungueltige/abgelaufene Ausnahme: Exit 2 (gemeinsamer Auswerter).
 #
 # Ausnahmen (.github/pip-audit-ausnahmen.txt): Format und Regeln stehen im Kopf dieser
-# Datei, die Pruefung in pakete_auswerten.py (echter Kalendertag, hoechstens 30 Tage ab
-# `seit`, Ablauf). Die Ausnahmen werden hier selbst ausgewertet, nicht per
-# --ignore-vuln: pip-audit kennt kein Ablaufdatum und meldet nicht, ob eine Ausnahme
-# etwas getroffen hat. Eine Ausnahme ohne Fund erscheint als Hinweis (nicht rot).
+# Datei und im gemeinsamen Auswerter (echter Kalendertag, hoechstens 30 Tage ab `seit`,
+# Ablauf). Der Auswerter filtert selbst, nicht per --ignore-vuln.
 #
 # Gruppen: nur "test" ist zugeordnet. Jede weitere Gruppe oder jeder Extra in
-# pyproject.toml ergibt NICHT GEMESSEN mit Namen.
+# pyproject.toml ergibt NICHT GEMESSEN mit Namen (App-Sache, nicht im Auswerter).
 #
 # Umgebung (fuer Tests): PAKETE_WURZEL (Repo-Wurzel), PAKETE_HEUTE (JJJJ-MM-TT).
 set -uo pipefail
@@ -38,6 +37,8 @@ wurzel="${PAKETE_WURZEL:-$(cd "$(dirname "$0")/.." && pwd)}"
 heute="${PAKETE_HEUTE:-$(date +%Y-%m-%d)}"
 lock="$wurzel/backend/uv.lock"
 ausnahmen="$wurzel/.github/pip-audit-ausnahmen.txt"
+# Gemeinsamer Auswerter (Kopie). Ohne -I: Nachbarmodule _ausnahmen/_bericht.
+auswerter="${PAKETE_AUSWERTER:-$(cd "$(dirname "$0")" && pwd)/pip-audit-auswerter/pip_audit_auswerten.py}"
 
 werkstatt=$(mktemp -d "${TMPDIR:-/tmp}/pakete.XXXXXX") && [ -d "$werkstatt" ] || {
     echo "NICHT GEMESSEN: keine Werkstatt anlegbar (mktemp)." >&2
@@ -57,86 +58,118 @@ command -v uv >/dev/null 2>&1 || ungemessen "uv ist nicht installiert (nicht auf
 command -v pip-audit >/dev/null 2>&1 || ungemessen "pip-audit ist nicht installiert (nicht auf PATH)."
 command -v python3 >/dev/null 2>&1 || ungemessen "python3 fehlt (Auswertung der Ausgabe)."
 [ -f "$ausnahmen" ] || ungemessen ".github/pip-audit-ausnahmen.txt fehlt (leere Datei genuegt, aber sie muss da sein)."
+[ -f "$auswerter" ] || ungemessen "Auswerter fehlt: $auswerter"
 
-# --- Ausnahmen lesen: Kennung, Issue, Ablauf, seit -------------------------------
-# Regeln und Meldungen stehen in pakete_auswerten.py (echter Kalendertag, Hoechstfrist
-# ab seit, Ablauf). Hier nur der Ablauf: jede Meldung ist rot, jede Ausnahme des
-# Pruefers ebenfalls.
-py="$(dirname "$0")/pakete_auswerten.py"
-ausnahme_aus=$(python3 -I "$py" ausnahmen "$ausnahmen" "$heute")
-ausnahme_rc=$?
-if [ "$ausnahme_rc" -ne 0 ]; then
-    printf '%s\n' "$ausnahme_aus" | sed -n 's/^FEHLER /ROT: /p' >&2
-    printf '%s\n' "$ausnahme_aus" | grep -q '^FEHLER ' \
-        || ungemessen "Ausnahmendatei nicht auswertbar (rc=$ausnahme_rc): $(printf '%s' "$ausnahme_aus" | tr '\n' ' ' | cut -c1-300)"
-    exit 1
-fi
-# Die Ausnahmen werden hier ausgewertet, nicht per `pip-audit --ignore-vuln`: pip-audit
-# meldet nicht, ob eine Ausnahme etwas getroffen hat, und die Attrappe im Test kann den
-# Aufruf dann exakt vergleichen.
-ausnahme_ids=()
-while read -r art kennung; do
-    [ "$art" = "ID" ] && ausnahme_ids+=("$kennung")
-done <<< "$ausnahme_aus"
-benutzt=" "
+# Exit des Auswerters gegen die ERGEBNIS-Schlusszeile. Passen sie nicht, gilt
+# der Lauf als nicht gemessen (Vertrag der gemeinsamen Fassung).
+ergebnis_passt() {
+    rc=$1
+    ausgabe=$2
+    letzte=$(printf '%s\n' "$ausgabe" | awk 'NF{line=$0} END{print line}')
+    case "$rc" in
+        0) printf '%s' "$letzte" | grep -q '^ERGEBNIS SAUBER (' ;;
+        1) printf '%s' "$letzte" | grep -q '^ERGEBNIS LUECKE (' ;;
+        2) printf '%s' "$letzte" | grep -q '^ERGEBNIS NICHT GEMESSEN' ;;
+        *) return 1 ;;
+    esac
+}
 
-# --- ein Lauf: Export, Zaehlen, pip-audit, Auswerten ------------------------------
-# $1 Name  $2.. Gruppenschalter fuer uv export. Setzt gepruefte_$1 nicht global,
-# sondern gibt die Zahl in $werkstatt/zahl.$1 ab (kein Unterprozess-Verlust).
+# --- ein Lauf: Export, vorbereiten, pip-audit, auswerten --------------------------
+# $1 Name  $2.. Gruppenschalter fuer uv export.
 fund=0
+nicht_gemessen=0
+# HINWEIS je Lauf waere falsch: Ausnahme nur in Laufzeit trifft im Test-Lauf
+# als ungenutzt. Wie bisher ueber beide Laeufe sammeln (App-Sache).
+benutzt=" "
+: > "$werkstatt/hinweise.txt"
 lauf() {
     name=$1; shift
+    exp_roh="$werkstatt/$name.roh"
     exp="$werkstatt/$name.txt"
     if ! ( cd "$wurzel/backend" && uv export --frozen --format requirements-txt \
-            --no-emit-project --no-header --no-annotate "$@" ) > "$exp.roh" 2> "$werkstatt/$name.uv.err"; then
+            --no-emit-project --no-header --no-annotate "$@" ) > "$exp_roh" 2> "$werkstatt/$name.uv.err"; then
         ungemessen "uv export ($name) ist gescheitert: $(tr '\n' ' ' < "$werkstatt/$name.uv.err")"
     fi
-    sed 's/^\([A-Za-z0-9_.-]*==[^ ]*\) ; .* \\$/\1 \\/' "$exp.roh" > "$exp"
-    gepinnt=$(grep -cE '^[A-Za-z0-9_.-]+==' "$exp")
+    if ! python3 "$auswerter" vorbereiten "$exp_roh" > "$exp" 2> "$werkstatt/$name.vor.err"; then
+        ungemessen "vorbereiten ($name): $(tr '\n' ' ' < "$werkstatt/$name.vor.err" | cut -c1-300)"
+    fi
+    gepinnt=$(grep -cE '^[A-Za-z0-9_.-]+==' "$exp" || true)
     [ "$gepinnt" -gt 0 ] || ungemessen "Export ($name) enthaelt kein einziges gepinntes Paket."
 
     pip-audit --require-hashes --disable-pip --format json \
         -r "$exp" \
         > "$werkstatt/$name.json" 2> "$werkstatt/$name.pa.err"
     pa_rc=$?
-    auswertung=$(python3 -I "$py" auswerten "$werkstatt/$name.json" "$exp" ${ausnahme_ids[@]+"${ausnahme_ids[@]}"})
+    auswertung=$(python3 "$auswerter" auswerten \
+        --pins "$exp" \
+        --bericht "$werkstatt/$name.json" \
+        --rc "$pa_rc" \
+        --ausnahmen "$ausnahmen" \
+        --heute "$heute" 2> "$werkstatt/$name.aus.err")
     py_rc=$?
-    [ "$py_rc" -eq 0 ] || ungemessen "pip-audit ($name): Auswertung ist gescheitert (rc=$py_rc): $(printf '%s' "$auswertung" | tr '\n' ' ' | cut -c1-300)"
-    benutzt="$benutzt$(printf '%s\n' "$auswertung" | sed -n 's/^AUSGENOMMEN \([^ ]*\) .*/\1/p' | tr '\n' ' ')"
-    nicht_geprueft=$(printf '%s\n' "$auswertung" | sed -n 's/^UNGEMESSEN //p')
-    [ -z "$nicht_geprueft" ] || ungemessen "pip-audit ($name): $(printf '%s' "$nicht_geprueft" | tr '\n' ';')"
-    geprueft=$(printf '%s\n' "$auswertung" | sed -n 's/^ANZAHL //p')
-    # pip-audit meldet dieselbe Kennung je Alias mehrfach: einmal je Zeile genuegt.
-    funde=$(printf '%s\n' "$auswertung" | sed -n 's/^FUND //p' | sort -u)
-    if [ -n "$funde" ]; then
-        printf 'ROT: Fund in %s:\n' "$name" >&2
-        printf '%s\n' "$funde" | sed 's/^/  /' >&2
-        fund=1
-    elif [ "$pa_rc" -ne 0 ] && { [ "$pa_rc" -ne 1 ] || ! printf '%s\n' "$auswertung" | grep -q '^AUSGENOMMEN '; }; then
-        # rc 1 ist bei pip-audit "Fund": ohne Fund im Bericht (auch ausgenommenen) ein Werkzeugfehler.
-        ungemessen "pip-audit ($name) endete mit rc=$pa_rc ohne Fund: $(tr '\n' ' ' < "$werkstatt/$name.pa.err" | cut -c1-300)"
+    auswertung_err=$(tr '\n' ' ' < "$werkstatt/$name.aus.err" | cut -c1-300)
+    if ! ergebnis_passt "$py_rc" "$auswertung"; then
+        ungemessen "pip-audit ($name): Exit $py_rc und ERGEBNIS passen nicht: $(printf '%s %s' "$auswertung" "$auswertung_err" | tr '\n' ' ' | cut -c1-300)"
     fi
+    # NICHT GEMESSEN / LUECKE sofort; HINWEIS erst nach beiden Laeufen.
+    printf '%s\n' "$auswertung" | grep -E '^(NICHT GEMESSEN|LUECKE) ' \
+        | sed 's/^NICHT GEMESSEN /ROT: NICHT GEMESSEN: /; s/^LUECKE /ROT: Fund in '"$name"': /' >&2 || true
+    benutzt="$benutzt$(printf '%s\n' "$auswertung" | sed -n 's/^AUSGENOMMEN \([^ ]*\) .*/\1/p' | tr '\n' ' ')"
+    printf '%s\n' "$auswertung" | sed -n 's/^HINWEIS Ausnahme \([^ ]*\) .*/\1/p' \
+        >> "$werkstatt/hinweise.txt" || true
+    if [ "$py_rc" -eq 2 ]; then
+        nicht_gemessen=1
+    elif [ "$py_rc" -eq 1 ]; then
+        fund=1
+    elif [ "$py_rc" -ne 0 ]; then
+        ungemessen "pip-audit ($name): unerwarteter Auswerter-rc=$py_rc"
+    fi
+    # Kein tail: Test-PATH hat es nicht. Letzte ERGEBNIS-Zeile zaehlt.
+    geprueft=
+    while IFS= read -r zeile || [ -n "$zeile" ]; do
+        case "$zeile" in
+            ERGEBNIS\ *\(*\ Pakete\))
+                geprueft=${zeile##*(}
+                geprueft=${geprueft%% Pakete*}
+                ;;
+        esac
+    done <<EOF
+$auswertung
+EOF
+    [ -n "$geprueft" ] || geprueft=0
     zahlen+=("$name $geprueft Pakete")
 }
 
-# Nur "test" ist einem Lauf zugeordnet. Jede weitere Gruppe (oder jeder Extra) wuerde
-# in keinem Lauf stehen: lieber NICHT GEMESSEN mit Namen als stilles Auslassen. Alle
-# Gruppen automatisch zu pruefen wuerde sie unbesehen der Laufzeit oder dem Test
-# zuschlagen und damit die getrennte Meldung aushoehlen; zuordnen soll ein Mensch.
-gruppen_aus=$(python3 -I "$py" gruppen "$wurzel/backend/pyproject.toml")
+# Gruppen: nur "test" ist zugeordnet (App-Sache).
+gruppen_aus=$(python3 - "$wurzel/backend/pyproject.toml" <<'PY'
+import sys, tomllib
+bekannte = {"test"}
+daten = tomllib.load(open(sys.argv[1], "rb"))
+for name in sorted(set(daten.get("dependency-groups", {})) - bekannte):
+    print("UNBEKANNT Gruppe", name)
+for name in sorted(daten.get("project", {}).get("optional-dependencies", {})):
+    print("UNBEKANNT Extra", name)
+PY
+)
 gruppen_rc=$?
 [ "$gruppen_rc" -eq 0 ] || ungemessen "backend/pyproject.toml nicht auswertbar (rc=$gruppen_rc): $(printf '%s' "$gruppen_aus" | tr '\n' ' ' | cut -c1-200)"
-[ -z "$gruppen_aus" ] || ungemessen "$(printf '%s' "$gruppen_aus" | sed 's/^UNBEKANNT //' | tr '\n' ',') in backend/pyproject.toml keinem Lauf zugeordnet (bekannt: nur Gruppe test); in pakete_auswerten.py zuordnen."
+[ -z "$gruppen_aus" ] || ungemessen "$(printf '%s' "$gruppen_aus" | sed 's/^UNBEKANNT //' | tr '\n' ',') in backend/pyproject.toml keinem Lauf zugeordnet (bekannt: nur Gruppe test); in pakete_pruefen.sh zuordnen."
 
 zahlen=()
 lauf Laufzeit --no-group test
 lauf Test --only-group test
 
-for kennung in ${ausnahme_ids[@]+"${ausnahme_ids[@]}"}; do
-    case "$benutzt" in
-        *" $kennung "*) ;;
-        *) echo "Hinweis: Ausnahme $kennung passt zu keinem Fund, sie kann aus .github/pip-audit-ausnahmen.txt gestrichen werden." >&2 ;;
-    esac
-done
+# Ungenutzte Ausnahmen erst jetzt: Treffer in einem Lauf deckt den Hinweis.
+if [ -s "$werkstatt/hinweise.txt" ]; then
+    sort -u "$werkstatt/hinweise.txt" | while IFS= read -r kennung || [ -n "$kennung" ]; do
+        [ -n "$kennung" ] || continue
+        case "$benutzt" in
+            *" $kennung "*) ;;
+            *) echo "Hinweis: Ausnahme $kennung passt zu keiner Luecke" >&2 ;;
+        esac
+    done
+fi
+
+[ "$nicht_gemessen" -eq 0 ] || exit 2
 [ "$fund" -eq 0 ] || exit 1
-echo "OK: ${zahlen[0]}, ${zahlen[1]} gegen backend/uv.lock geprueft, keine bekannten Luecken (Ausnahmen: ${#ausnahme_ids[@]})."
+echo "OK: ${zahlen[0]}, ${zahlen[1]} gegen backend/uv.lock geprueft, keine bekannten Luecken."

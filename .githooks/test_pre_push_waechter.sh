@@ -34,7 +34,15 @@ for attrappe in datenwache.sh wachen.sh; do
     chmod +x "$spiegel/.githooks/$attrappe"
 done
 
+# PIPAUDIT_QUELLE auf leeren Ordner: sonst wuerde der Gleichlauf-Block auf dem
+# Rechner mit Checkout die echte gleichlauf.py rufen (Netz). Spiegel ist kein
+# Repo; Schalter greift hier nicht, Isolation nur ueber die ENV-Naht.
+q_leer=$(mktemp -d "$werkstatt/q-leer.XXXXXX") && [ -d "$q_leer" ] || {
+    echo "ABBRUCH: kein leerer PIPAUDIT_QUELLE-Ordner." >&2
+    exit 2
+}
 aus=$( cd "$spiegel" && GIT_CEILING_DIRECTORIES="$werkstatt" \
+       PIPAUDIT_QUELLE="$q_leer" \
        bash .githooks/pre-push probe probe </dev/null 2>&1 )
 rc=$?
 
