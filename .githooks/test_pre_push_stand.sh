@@ -13,7 +13,7 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
 
 hier=$(cd "$(dirname "$0")" && pwd)
 . "$hier/pre_push_testhilfe.sh"
-. "$hier/test_umweg_hilfe.sh"
+. "$hier/umweg_testhilfe.sh"
 fehl=0
 leer=0000000000000000000000000000000000000000
 
@@ -26,7 +26,7 @@ PIPAUDIT_QUELLE=$(mktemp -d "$werkstatt/q-leer.XXXXXX") || {
 export PIPAUDIT_QUELLE
 
 # stand_neues_repo, schreib_gruen, schreib_rot_netz, rufe_hook: pre_push_testhilfe.sh
-# umweg_empfehlungen, pruefe_umweg_probe: test_umweg_hilfe.sh
+# umweg_empfehlungen, pruefe_umweg_probe: umweg_testhilfe.sh
 neues_repo() { stand_neues_repo; }
 
 # --- Fall A: Checkout gruen, gepushter Commit rot → Push muss fallen ----------

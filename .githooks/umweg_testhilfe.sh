@@ -1,6 +1,8 @@
 #!/bin/sh
 # Umweg-Empfehlungs-Lint fuer test_pre_push_stand.sh (ausgelagert: 300-Zeilen-Grenze).
-# test_-Praefix: die Probe in umweg_empfehlungen ueberspringt diese Datei selbst.
+# Kein test_-Praefix, sonst liefe die Datei in jeder test_*.sh-Schleife als Test
+# mit, der nichts prueft. Die Probe ueberspringt test_*- und *testhilfe.sh-Dateien:
+# beide enthalten die Umweg-Muster als Testdaten, nicht als Empfehlung.
 
 # $1 Ordner → Zeilen mit Umweg-Empfehlung (ohne reine Kommentare und ohne "nicht ...")
 umweg_empfehlungen() {
@@ -10,9 +12,9 @@ umweg_empfehlungen() {
     for f in "$ordner"/*.sh "$ordner"/pre-push; do
         [ -f "$f" ] || continue
         name=${f##*/}
-        if [ "${name#test_}" != "$name" ]; then
-            continue
-        fi
+        case "$name" in
+            test_*|*testhilfe.sh) continue ;;
+        esac
         grep -nH -E -- 'no-verify|hooksPath[ =]/dev/null|HUSKY=0' "$f" \
             >> "$treffer_datei" 2>/dev/null
     done
