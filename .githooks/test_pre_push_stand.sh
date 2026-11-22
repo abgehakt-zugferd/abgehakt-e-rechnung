@@ -241,6 +241,50 @@ git -C "$repo_i" diff --quiet HEAD || {
 }
 rufe_hook ungetrackte_githooks_nimmt_exportweg "$repo_i" "$sha_i" 0 ""
 
+# --- Fall J: HEAD gleich SHA, Aenderung nur gestagt → Exportweg ----------------
+# Wie Fall H, aber nach git add (Index == Arbeitsbaum, beides ungleich HEAD).
+# `git diff --quiet` ohne HEAD wuerde den schnellen Weg nehmen und rot werden.
+repo_j=$(neues_repo)
+schreib_gruen "$repo_j"
+git -C "$repo_j" add -A
+git -C "$repo_j" commit -qm gruen-j
+sha_j=$(git -C "$repo_j" rev-parse HEAD)
+schreib_rot_netz "$repo_j"
+git -C "$repo_j" add docker-compose.yml
+git -C "$repo_j" diff --quiet HEAD && {
+    echo "ABBRUCH: Fall J, gestagte Aenderung unsichtbar - nichts gemessen." >&2
+    exit 2
+}
+git -C "$repo_j" diff --quiet || {
+    echo "ABBRUCH: Fall J, Index und Baum differieren - Fixture kaputt." >&2
+    exit 2
+}
+rufe_hook gestagte_aenderung_nimmt_exportweg "$repo_j" "$sha_j" 0 ""
+
+# --- Fall K: Ref-Zeile auf stdin ohne Schluss-Newline wird trotzdem geprueft ---
+# Charakterisierung: pre-push liest per Markierung und heredoc; printf ohne \n.
+# Mutation die rot macht: Stand-Schleife als process substitution
+# `done < <(printf '%s' "$push_refs")` ohne `|| [ -n "${lokal_sha:-}" ]`
+# (Pipe+while waere Subshell und wuerde zusaetzlich Exit 1 verschlucken).
+repo_k=$(neues_repo)
+schreib_gruen "$repo_k"
+git -C "$repo_k" add -A
+git -C "$repo_k" commit -qm gruen-k
+sha_k=$(git -C "$repo_k" rev-parse HEAD)
+kurz_k=$(printf '%s' "$sha_k" | cut -c1-7)
+aus_k="$werkstatt/stdin-ohne-newline.aus"
+( cd "$repo_k" && printf 'refs/heads/main %s refs/heads/main %s' "$sha_k" "$leer" \
+    | env DATENWACHE_UEBERSTIMMT=1 PRE_PUSH_TEST_CMD='echo suite-attrappe' \
+        bash .githooks/pre-push origin unused-url ) >"$aus_k" 2>&1
+rc_k=$?
+if [ "$rc_k" -ne 0 ] || ! grep -qF -- "tdd: prüfe Commit $kurz_k" "$aus_k"; then
+    echo "ROT  stdin_ohne_newline_wird_geprueft: rc=$rc_k, Meldung fehlt" >&2
+    sed 's/^/      /' "$aus_k" | tail -20 >&2
+    fehl=1
+else
+    echo "gruen stdin_ohne_newline_wird_geprueft"
+fi
+
 umweg=$(umweg_empfehlungen "$hier")
 if [ -n "$umweg" ]; then
     echo "ROT  hooks_empfehlen_keinen_umweg: Umweg in einer Hook-Meldung" >&2

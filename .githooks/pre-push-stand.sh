@@ -2,9 +2,10 @@
 # Prueft einen Commit-Stand fuer pre-push (#219): Gedankenstrich-Wache, wachen.sh,
 # Suite inkl. Skip-Guard. Aufruf aus der Repo-Wurzel mit einem lokalen SHA.
 #
-# Ist HEAD gleich dem SHA, bleibt der schnelle Weg (Arbeitsbaum). Sonst Wegwerf-
-# Worktree unter TMPDIR, damit wachen.sh und git ls-files ein Toplevel haben
-# (reines git archive haette keines). Immer Abraeumen per trap.
+# Schneller Weg (Arbeitsbaum) nur wenn HEAD gleich SHA, Baum sauber (keine
+# getrackten Aenderungen, auch keine gestagten) und keine ungetrackten Dateien
+# unter .githooks/. Sonst Wegwerf-Worktree unter TMPDIR (reines git archive
+# haette kein Toplevel). Immer Abraeumen per trap.
 set -uo pipefail
 
 sha="${1:?pre-push-stand: SHA fehlt}"
@@ -116,13 +117,12 @@ kopf=$(git rev-parse HEAD)
 # koennte eine im Commit fehlende/andere Datei ersetzen → Exportweg.
 githooks_untracked=$(git ls-files --others --exclude-standard -- .githooks)
 if [ "$sha" = "$kopf" ] && git diff --quiet HEAD && [ -z "$githooks_untracked" ]; then
-  # Schneller Weg nur bei sauberem Arbeitsbaum: getrackte Aenderungen (auch
-  # gestagte) gehoeren nicht zum gepushten Stand; der Exportweg unten prueft
-  # genau ihn. `git diff --quiet HEAD` sieht ungetrackte Dateien nicht: der
-  # schnelle Weg prueft sie mit, der Export enthielte sie nicht. Bewusst so
-  # fuer Notizen ausserhalb .githooks/, sonst jeder Krusel in den Exportweg.
-  # Ohne Aenderungen waere der Export identisch und kostet nur Worktree plus
-  # Docker-Kontext; der Alltags-Push bleibt lokal.
+  # Sauberer Baum: keine getrackten Aenderungen (auch keine gestagten) und keine
+  # ungetrackten Dateien unter .githooks/. Andere ungetrackte Dateien sieht
+  # `git diff --quiet HEAD` nicht: der schnelle Weg prueft sie mit, der Export
+  # enthaelt sie nicht. Bewusst so, sonst jede Notiz ausserhalb .githooks/ in
+  # den langsamen Exportweg. Ohne Aenderungen waere der Export identisch und
+  # kostet nur Worktree plus Docker-Kontext; der Alltags-Push bleibt lokal.
   pruefe_baum
   ec=$?
   trap - EXIT
