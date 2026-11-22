@@ -99,8 +99,9 @@ genau diesen Stand (Wegwerf-Worktree unter `$TMPDIR`, Abräumen per trap). Entsp
 `HEAD` bereits der lokalen SHA und ist der Arbeitsbaum sauber (`git diff --quiet HEAD`
 meldet keine getrackte Änderung, auch keine gestagte), bleibt der schnelle Weg im
 Arbeitsbaum: Export wäre derselbe Baum und kostet nur Zeit. Bei getrackten Änderungen
-geht es in den Exportweg, denn sie gehören nicht zum gepushten Stand; ungetrackte
-Dateien bleiben unberücksichtigt, sie landen auch im Export nicht. Löschungen (SHA
+geht es in den Exportweg, denn sie gehören nicht zum gepushten Stand. Ungetrackte
+Dateien lösen den Exportweg nicht aus: Der schnelle Weg prüft sie mit, der Export
+enthält sie nicht. Löschungen (SHA
 aus Nullen) werden übersprungen;
 mehrere Refs werden nacheinander geprüft. Die Meldung nennt den geprüften Commit.
 `backend/run-tests.sh` braucht nur `backend/` plus optional `UEBERGABE_VEKTOREN` (absoluter

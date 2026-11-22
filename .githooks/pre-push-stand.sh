@@ -115,8 +115,9 @@ kopf=$(git rev-parse HEAD)
 if [ "$sha" = "$kopf" ] && git diff --quiet HEAD; then
   # Schneller Weg nur bei sauberem Arbeitsbaum: getrackte Aenderungen (auch
   # gestagte) gehoeren nicht zum gepushten Stand; der Exportweg unten prueft
-  # genau ihn. `git diff --quiet HEAD` ignoriert ungetrackte Dateien; die
-  # landen im Export ebenfalls nicht und bleiben bewusst ohne Wirkung.
+  # genau ihn. `git diff --quiet HEAD` sieht ungetrackte Dateien nicht: der
+  # schnelle Weg prueft sie mit, der Export enthielte sie nicht. Bewusst so,
+  # sonst fuehrte jede liegengebliebene Notiz in den langsamen Exportweg.
   # Ohne Aenderungen waere der Export identisch und kostet nur Worktree plus
   # Docker-Kontext; der Alltags-Push bleibt lokal.
   pruefe_baum
