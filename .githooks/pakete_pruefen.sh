@@ -29,7 +29,8 @@
 # Gruppen: nur "test" ist zugeordnet. Jede weitere Gruppe oder jeder Extra in
 # pyproject.toml ergibt NICHT GEMESSEN mit Namen (App-Sache, nicht im Auswerter).
 #
-# Umgebung (fuer Tests): PAKETE_WURZEL (Repo-Wurzel), PAKETE_HEUTE (JJJJ-MM-TT).
+# Umgebung (fuer Tests): PAKETE_WURZEL (Repo-Wurzel), PAKETE_HEUTE (JJJJ-MM-TT),
+# PAKETE_AUSWERTER (Pfad zu einem anderen Auswerter, nur Tests).
 set -uo pipefail
 set -f
 
@@ -39,6 +40,9 @@ lock="$wurzel/backend/uv.lock"
 ausnahmen="$wurzel/.github/pip-audit-ausnahmen.txt"
 # Gemeinsamer Auswerter (Kopie). Ohne -I: Nachbarmodule _ausnahmen/_bericht.
 auswerter="${PAKETE_AUSWERTER:-$(cd "$(dirname "$0")" && pwd)/pip-audit-auswerter/pip_audit_auswerten.py}"
+if [ -n "${PAKETE_AUSWERTER:-}" ]; then
+    echo "WARNUNG: PAKETE_AUSWERTER gesetzt, Auswerter ist $auswerter statt der Kopie (nur fuer Tests)" >&2
+fi
 
 werkstatt=$(mktemp -d "${TMPDIR:-/tmp}/pakete.XXXXXX") && [ -d "$werkstatt" ] || {
     echo "NICHT GEMESSEN: keine Werkstatt anlegbar (mktemp)." >&2
@@ -72,6 +76,36 @@ ergebnis_passt() {
         2) printf '%s' "$letzte" | grep -q '^ERGEBNIS NICHT GEMESSEN' ;;
         *) return 1 ;;
     esac
+}
+
+# Meldungen eines Laufs: NICHT GEMESSEN / LUECKE sofort auf stderr;
+# AUSGENOMMEN-Kennungen sammeln, HINWEIS-Kennungen fuer den Schluss ablegen
+# (warum ueber beide Laeufe gesammelt wird: siehe `benutzt` unten).
+# $1 Laufname  $2 Auswerter-Ausgabe.
+meldungen_des_laufs() {
+    printf '%s\n' "$2" | grep -E '^(NICHT GEMESSEN|LUECKE) ' \
+        | sed 's/^NICHT GEMESSEN /ROT: NICHT GEMESSEN: /; s/^LUECKE /ROT: Fund in '"$1"': /' >&2 || true
+    benutzt="$benutzt$(printf '%s\n' "$2" | sed -n 's/^AUSGENOMMEN \([^ ]*\) .*/\1/p' | tr '\n' ' ')"
+    printf '%s\n' "$2" | sed -n 's/^HINWEIS Ausnahme \([^ ]*\) .*/\1/p' \
+        >> "$werkstatt/hinweise.txt" || true
+}
+
+# Anzahl gepruefter Pakete aus der letzten ERGEBNIS-Zeile ($1 Ausgabe).
+# Kein tail: der Test-PATH hat es nicht. Letzte ERGEBNIS-Zeile zaehlt.
+paketzahl_des_laufs() {
+    geprueft=
+    while IFS= read -r zeile || [ -n "$zeile" ]; do
+        case "$zeile" in
+            ERGEBNIS\ *\(*\ Pakete\))
+                geprueft=${zeile##*(}
+                geprueft=${geprueft%% Pakete*}
+                ;;
+        esac
+    done <<EOF
+$1
+EOF
+    [ -n "$geprueft" ] || geprueft=0
+    printf '%s\n' "$geprueft"
 }
 
 # --- ein Lauf: Export, vorbereiten, pip-audit, auswerten --------------------------
@@ -111,12 +145,7 @@ lauf() {
     if ! ergebnis_passt "$py_rc" "$auswertung"; then
         ungemessen "pip-audit ($name): Exit $py_rc und ERGEBNIS passen nicht: $(printf '%s %s' "$auswertung" "$auswertung_err" | tr '\n' ' ' | cut -c1-300)"
     fi
-    # NICHT GEMESSEN / LUECKE sofort; HINWEIS erst nach beiden Laeufen.
-    printf '%s\n' "$auswertung" | grep -E '^(NICHT GEMESSEN|LUECKE) ' \
-        | sed 's/^NICHT GEMESSEN /ROT: NICHT GEMESSEN: /; s/^LUECKE /ROT: Fund in '"$name"': /' >&2 || true
-    benutzt="$benutzt$(printf '%s\n' "$auswertung" | sed -n 's/^AUSGENOMMEN \([^ ]*\) .*/\1/p' | tr '\n' ' ')"
-    printf '%s\n' "$auswertung" | sed -n 's/^HINWEIS Ausnahme \([^ ]*\) .*/\1/p' \
-        >> "$werkstatt/hinweise.txt" || true
+    meldungen_des_laufs "$name" "$auswertung"
     if [ "$py_rc" -eq 2 ]; then
         nicht_gemessen=1
     elif [ "$py_rc" -eq 1 ]; then
@@ -124,20 +153,7 @@ lauf() {
     elif [ "$py_rc" -ne 0 ]; then
         ungemessen "pip-audit ($name): unerwarteter Auswerter-rc=$py_rc"
     fi
-    # Kein tail: Test-PATH hat es nicht. Letzte ERGEBNIS-Zeile zaehlt.
-    geprueft=
-    while IFS= read -r zeile || [ -n "$zeile" ]; do
-        case "$zeile" in
-            ERGEBNIS\ *\(*\ Pakete\))
-                geprueft=${zeile##*(}
-                geprueft=${geprueft%% Pakete*}
-                ;;
-        esac
-    done <<EOF
-$auswertung
-EOF
-    [ -n "$geprueft" ] || geprueft=0
-    zahlen+=("$name $geprueft Pakete")
+    zahlen+=("$name $(paketzahl_des_laufs "$auswertung") Pakete")
 }
 
 # Gruppen: nur "test" ist zugeordnet (App-Sache).

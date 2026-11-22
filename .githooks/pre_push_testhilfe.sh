@@ -100,3 +100,82 @@ rufe_hook() {
     fi
     echo "gruen $name"
 }
+
+# --- Git-Fixture des Gleichlauf-Tors (nur test_gleichlauf_tor.sh) ------------
+# Steht hier wegen der 300-Zeilen-Grenze der Testdatei. Heisst nicht
+# neues_repo, damit die lokale Fassung in test_pre_push_stand.sh nichts
+# maskiert und umgekehrt.
+
+# Spiegel der App: Hook unter Test, teure Suite nur als Spur.
+gleichlauf_repo_anlegen() {
+    d=$(spiegel_repo_anlegen)
+    mkdir -p "$d/.githooks/pip-audit-auswerter"
+    cp "$hier/pre-push" "$d/.githooks/pre-push"
+    chmod +x "$d/.githooks/pre-push"
+    printf '#!/bin/sh\ntouch "%s/spur.datenwache"\nexit 0\n' "$werkstatt" \
+        > "$d/.githooks/datenwache.sh"
+    printf '#!/bin/sh\ntouch "%s/spur.stand"\nexit 0\n' "$werkstatt" \
+        > "$d/.githooks/pre-push-stand.sh"
+    chmod +x "$d/.githooks/datenwache.sh" "$d/.githooks/pre-push-stand.sh"
+    printf 'probe\n' > "$d/README"
+    git -C "$d" add README
+    git -C "$d" commit -qm probe
+    printf '%s\n' "$d"
+}
+
+# Quelle: bare origin unter $1/origin.git plus Saat-Klon, dessen Pfad
+# ausgegeben wird (schreib_attrappe arbeitet in ihm).
+quelle_anlegen() {
+    git init -q --bare "$1/origin.git"
+    git -C "$1/origin.git" symbolic-ref HEAD refs/heads/main
+    saat=$(mktemp -d "$werkstatt/saat.XXXXXX")
+    git -C "$saat" init -q
+    git -C "$saat" config user.name probe
+    git -C "$saat" config user.email probe@example.invalid
+    git -C "$saat" checkout -q -b main
+    git -C "$saat" remote add origin "$1/origin.git"
+    printf '%s\n' "$saat"
+}
+
+# Attrappe mit Exit $2 in der Saat committen und per force-push auf
+# origin/main legen (der Hook holt sie per fetch + archive daraus).
+schreib_attrappe() {
+    mkdir -p "$1/pip-audit-auswerter"
+    cat > "$1/pip-audit-auswerter/gleichlauf.py" <<ATT
+import sys
+with open("$werkstatt/argv.txt", "a", encoding="utf-8") as f:
+    f.write(" ".join(sys.argv[1:]) + "\n")
+sys.exit($2)
+ATT
+    git -C "$1" add pip-audit-auswerter/gleichlauf.py
+    git -C "$1" commit -qm "attrappe $2"
+    git -C "$1" push -q -f origin main
+}
+
+# Klon von $1 nach $2; legt danach die ABWEICHENDE Attrappe uncommittet in
+# den Arbeitsbaum. Gibt den physikalischen Klonpfad aus.
+q_klonieren() {
+    git clone -q "$1" "$2"
+    mkdir -p "$2/pip-audit-auswerter"
+    cat > "$2/pip-audit-auswerter/gleichlauf.py" <<ATT
+import sys
+with open("$werkstatt/arbeitsbaum-lief.txt", "a", encoding="utf-8") as f:
+    f.write("arbeitsbaum\n")
+sys.exit(9)
+ATT
+    (cd "$2" && pwd -P)
+}
+
+# argv-Zeile der Attrappe gegen den Vertrag pruefen:
+# --push <sha> --repo <wurzel> .githooks/pip-audit-auswerter --checkout <Q>
+# $1 Zeile  $2 erwartete sha  $3 Repo physikalisch  $4 Q physikalisch
+argv_felder_ok() {
+    s=$2
+    rp=$3
+    qp=$4
+    set -- $1
+    [ "$1" = "--push" ] && [ "$2" = "$s" ] && [ "$3" = "--repo" ] \
+        && [ "$(cd "$4" 2>/dev/null && pwd -P)" = "$rp" ] \
+        && [ "$5" = ".githooks/pip-audit-auswerter" ] \
+        && [ "$6" = "--checkout" ] && [ "$(cd "$7" 2>/dev/null && pwd -P)" = "$qp" ]
+}

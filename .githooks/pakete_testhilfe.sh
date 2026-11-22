@@ -62,6 +62,7 @@ tp_ist_erwartet() {
     if [ "$erw" -eq 0 ]; then
         [ "$rc" -eq 0 ] || return 1
     elif [ "$erw" -eq 2 ]; then
+        # A3: ungueltige/zu lange/abgelaufene Ausnahme ergibt genau 2.
         [ "$rc" -eq 2 ] || return 1
     else
         [ "$rc" -ne 0 ] || return 1
@@ -71,6 +72,11 @@ tp_ist_erwartet() {
     return 0
 }
 
+# $1 Name  $2 erwarteter rc (0 = gruen; 1 = beliebiger Fehler; 2 = genau Exit 2)
+# $3 erwarteter Wortlaut (leer = keiner)
+# $4 Wortlaut, der NICHT vorkommen darf (leer = keiner)
+# Umgebung des Falls: FAKE_*, AUSNAHMEN (Dateiinhalt, "-" = Datei fehlt), OHNE_LOCK,
+# OHNE_UV, OHNE_PA, HEUTE, AUSWERTER (Test-Naht fuer den Auswerter-Pfad).
 lauf() {
     name=$1
     erw_rc=$2
@@ -94,15 +100,22 @@ lauf() {
         printf '%s\n' "$aus" >&2
         fehl=1
     fi
+    # Zuweisungen vor einem Funktionsaufruf bleiben in sh bestehen: wegraeumen.
     unset OHNE_LOCK OHNE_UV OHNE_PA FAKE_UV_RC FAKE_PA FAKE_VULN LAUFZEIT TESTEXPORT
     unset AUSNAHMEN HEUTE PYPROJECT_ZUSATZ AUSWERTER
 }
 
+# uv-Version: paketpruefung.yml (pip install uv==…) und backend/Dockerfile
+# (ghcr.io/astral-sh/uv:…) muessen dieselbe Fassung pinnen; sonst misst die
+# Paketpruefung mit einem anderen Exporter als der Abbild-Bau. Fehlt eine Angabe
+# oder ist sie nicht lesbar: NICHT GEMESSEN, nicht gruen.
+# $1 workflow-Pfad  $2 Dockerfile-Pfad → gruen|abweichend|ungemessen
 uv_version_lage() {
     wf=$1
     df=$2
     [ -f "$wf" ] && [ -r "$wf" ] || { echo ungemessen; return; }
     [ -f "$df" ] && [ -r "$df" ] || { echo ungemessen; return; }
+    # workflow: "uv==0.11.32" (pip install); Dockerfile: "ghcr.io/astral-sh/uv:0.11.32@"
     v_wf=$(grep -oE 'uv==[0-9]+\.[0-9]+\.[0-9]+' "$wf" | head -n 1 | sed 's/^uv==//')
     v_df=$(grep -oE 'ghcr\.io/astral-sh/uv:[0-9]+\.[0-9]+\.[0-9]+' "$df" \
         | head -n 1 | sed 's/^.*://')
@@ -115,6 +128,7 @@ uv_version_lage() {
     fi
 }
 
+# $1 Name  $2 workflow  $3 Dockerfile  $4 erwartet (gruen|abweichend|ungemessen)
 pruefe_uv_versionen() {
     name=$1
     zahl=$((zahl + 1))
