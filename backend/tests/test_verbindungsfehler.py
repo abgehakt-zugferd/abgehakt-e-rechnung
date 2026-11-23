@@ -1,4 +1,5 @@
 """Gemeinsames Hilfsmodul: nur echte Verbindungsfehler rechtfertigen einen Skip."""
+import pytest
 from sqlalchemy.exc import OperationalError
 
 from tests.helpers.verbindungsfehler import ist_verbindungsfehler
@@ -49,6 +50,26 @@ def test_ohne_sqlstate_bleibt_der_text_massgeblich():
         OperationalError("x", {}, _PgOrig("connection refused")))
     assert not ist_verbindungsfehler(
         OperationalError("x", {}, _PgOrig("password authentication failed")))
+
+
+def test_sqlstate_08p01_ist_kein_verbindungsfehler_trotz_passendem_text():
+    """08P01 (protocol_violation) ist kein Erreichbarkeitsfehler, auch bei passendem Text."""
+    assert not ist_verbindungsfehler(
+        OperationalError("x", {}, _PgOrig("connection refused", pgcode="08P01")))
+
+
+def test_sqlstate_08007_ist_kein_verbindungsfehler_trotz_passendem_text():
+    """08007 (transaction_resolution_unknown) rechtfertigt keinen Skip trotz passendem Text."""
+    assert not ist_verbindungsfehler(
+        OperationalError("x", {}, _PgOrig("connection refused", pgcode="08007")))
+
+
+@pytest.mark.parametrize("code", ["08000", "08001", "08003", "08004", "08006"])
+def test_sqlstate_positivliste_ist_verbindungsfehler(code):
+    """Nur die Positivliste 08000/08001/08003/08004/08006 ist Verbindungsfehler."""
+    assert ist_verbindungsfehler(
+        OperationalError("x", {}, _PgOrig("irgendwas anderes", pgcode=code)))
+
 
 def test_skip_stellen_nutzen_das_gemeinsame_hilfsmodul():
     """conftest, Migrationskette, Altzeilen und Owner-Bootstrap importieren denselben Helfer."""

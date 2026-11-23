@@ -251,3 +251,23 @@ def test_vorgabe_land_lehnt_fremden_arg_typ_ab(monkeypatch):
 
     with pytest.raises(RuntimeError, match=r"str"):
         _vorgabe_land()
+
+
+@pytest.mark.parametrize("wert", ["DEU", "", "D1", "'  '"])
+def test_vorgabe_land_lehnt_nicht_iso_alpha2_ab(monkeypatch, wert):
+    """Nach strip/upper muss das Vorgabeland genau zwei A–Z sein."""
+    spalte = Company.__table__.c.country
+    monkeypatch.setattr(spalte.default, "arg", wert)
+    gefunden = wert.strip().strip("'\"").upper()
+
+    with pytest.raises(RuntimeError) as ei:
+        _vorgabe_land()
+    assert repr(gefunden) in str(ei.value)
+
+
+def test_vorgabe_land_nimmt_kleingeschriebenes_iso_alpha2(monkeypatch):
+    """Kleinbuchstaben werden normalisiert und als ISO-Alpha-2 akzeptiert."""
+    spalte = Company.__table__.c.country
+    monkeypatch.setattr(spalte.default, "arg", "at")
+
+    assert _vorgabe_land() == "AT"

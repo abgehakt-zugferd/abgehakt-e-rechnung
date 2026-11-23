@@ -23,6 +23,7 @@ Steuernummer oder USt-IdNr.; das Skript gehoert nicht in eine Live-Installation.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -55,6 +56,7 @@ def _vorgabe_als_text(arg, herkunft: str) -> str:
     """Nur ein str gilt als Vorgabe; SQL-Klausel → Klauseltext ohne Anführungszeichen.
 
     Callable oder andere Typen würden per str() Unsinn liefern — deshalb RuntimeError.
+    Das Ergebnis (nach strip/upper) muss ISO-Alpha-2 sein (`^[A-Z]{2}$`).
     """
     if callable(arg):
         raise RuntimeError(
@@ -69,7 +71,12 @@ def _vorgabe_als_text(arg, herkunft: str) -> str:
         raise RuntimeError(
             f"Company.country.{herkunft}.arg muss str sein, nicht {type(arg).__name__}"
         )
-    return roh.strip().strip("'\"").upper()
+    land = roh.strip().strip("'\"").upper()
+    if not re.fullmatch(r"[A-Z]{2}", land):
+        raise RuntimeError(
+            f"Company.country.{herkunft}.arg muss ISO-Alpha-2 sein, gefunden: {land!r}"
+        )
+    return land
 
 
 def _vorgabe_land() -> str:
