@@ -56,11 +56,11 @@ def test_de_eur_traegt_alle_angaben(tmp_path):
     # „Belegnummer“ statt „Aufstellungsnummer“: die Texterkennung beim Belegempfang
     # findet die Nummer nur direkt hinter dem Etikett. Die Aufstellung bleibt als solche
     # ueberschrieben.
-    assert re.search(r"Belegnummer:\s*" + re.escape(aufstellung.nummer), t)
+    assert re.search(r"Belegnummer:\s*" + re.escape(aufstellung.nummer) + r"\b", t)
     assert "Aufstellungsnummer" not in t
     assert "Ausstellungsdatum:" in t and "18.10.2026" in t
     assert "Leistungsmonat:" in t and "09/2026" in t
-    assert re.search(r"Zahlungsnummer:\s*4711", t)
+    assert re.search(r"Zahlungsnummer:\s*4711\b", t)
     assert "Zahlungsdatum:" in t and "30.09.2026" in t
     assert "Aussteller" in t and "Muster Handwerk GmbH" in t
     assert "Auszahler" in t and "Kunde GmbH" in t
@@ -86,11 +86,11 @@ def test_en_fremdwaehrung_traegt_alle_angaben(tmp_path):
 
     t = text(ziel)
     assert "SETTLEMENT STATEMENT" in t
-    assert re.search(r"Document number:\s*" + re.escape(a.nummer), t)
+    assert re.search(r"Document number:\s*" + re.escape(a.nummer) + r"\b", t)
     assert "Statement number" not in t
     assert "Date of issue:" in t and "2026-10-18" in t
     assert "Month of service:" in t and "09/2026" in t
-    assert re.search(r"Payment number:\s*4711", t)
+    assert re.search(r"Payment number:\s*4711\b", t)
     assert "Payment date:" in t and "2026-09-30" in t
     assert "Issuer" in t and "Muster Handwerk GmbH" in t
     assert "Payer" in t and "Kunde GmbH" in t
