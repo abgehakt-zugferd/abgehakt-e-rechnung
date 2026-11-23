@@ -60,7 +60,7 @@ def test_de_eur_traegt_alle_angaben(tmp_path):
     assert "Aufstellungsnummer" not in t
     assert "Ausstellungsdatum:" in t and "18.10.2026" in t
     assert "Leistungsmonat:" in t and "09/2026" in t
-    assert "Zahlungsnummer:" in t and "4711" in t
+    assert re.search(r"Zahlungsnummer:\s*4711", t)
     assert "Zahlungsdatum:" in t and "30.09.2026" in t
     assert "Aussteller" in t and "Muster Handwerk GmbH" in t
     assert "Auszahler" in t and "Kunde GmbH" in t
@@ -86,11 +86,11 @@ def test_en_fremdwaehrung_traegt_alle_angaben(tmp_path):
 
     t = text(ziel)
     assert "SETTLEMENT STATEMENT" in t
-    assert "Document number:" in t and a.nummer in t
+    assert re.search(r"Document number:\s*" + re.escape(a.nummer), t)
     assert "Statement number" not in t
     assert "Date of issue:" in t and "2026-10-18" in t
     assert "Month of service:" in t and "09/2026" in t
-    assert "Payment number:" in t and "4711" in t
+    assert re.search(r"Payment number:\s*4711", t)
     assert "Payment date:" in t and "2026-09-30" in t
     assert "Issuer" in t and "Muster Handwerk GmbH" in t
     assert "Payer" in t and "Kunde GmbH" in t

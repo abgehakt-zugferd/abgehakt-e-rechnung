@@ -253,16 +253,29 @@ def test_vorgabe_land_lehnt_fremden_arg_typ_ab(monkeypatch):
         _vorgabe_land()
 
 
-@pytest.mark.parametrize("wert", ["DEU", "", "D1", "'  '"])
-def test_vorgabe_land_lehnt_nicht_iso_alpha2_ab(monkeypatch, wert):
-    """Nach strip/upper muss das Vorgabeland genau zwei A–Z sein."""
+@pytest.mark.parametrize(("wert", "gemeldet"), [
+    ("DEU", "'DEU'"), ("", "''"), ("D1", "'D1'"), ("'  '", "'  '"),
+])
+def test_vorgabe_land_lehnt_nicht_iso_alpha2_ab(monkeypatch, wert, gemeldet):
+    """Nach strip/upper muss das Vorgabeland genau zwei A–Z sein; die Meldung nennt den Wert."""
     spalte = Company.__table__.c.country
     monkeypatch.setattr(spalte.default, "arg", wert)
-    gefunden = wert.strip().strip("'\"").upper()
 
     with pytest.raises(RuntimeError) as ei:
         _vorgabe_land()
-    assert repr(gefunden) in str(ei.value)
+    assert f"gefunden: {gemeldet}" in str(ei.value)
+
+
+def test_vorgabe_land_lehnt_cast_klausel_ab(monkeypatch):
+    """Server-Default mit Cast (`'DE'::character varying`) ist kein reines Landeskürzel."""
+    from sqlalchemy import text
+
+    spalte = Company.__table__.c.country
+    monkeypatch.setattr(spalte, "default", None)
+    monkeypatch.setattr(spalte.server_default, "arg", text("'DE'::character varying"))
+
+    with pytest.raises(RuntimeError, match="ISO-Alpha-2"):
+        _vorgabe_land()
 
 
 def test_vorgabe_land_nimmt_kleingeschriebenes_iso_alpha2(monkeypatch):
