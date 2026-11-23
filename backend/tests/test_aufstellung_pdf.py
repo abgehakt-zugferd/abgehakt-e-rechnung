@@ -6,6 +6,7 @@ Leistungsmonat, die Zahlung des Auszahlers und die Anlagen als Nachweis.
 Die Matrix de/EUR gegen en/Fremdwaehrung deckt die Beschriftungen aus
 belegsprache.py ab; die Schriftpruefung ist die PDF/A-Pflicht.
 """
+import re
 from datetime import date
 from decimal import Decimal
 
@@ -53,8 +54,9 @@ def test_de_eur_traegt_alle_angaben(tmp_path):
     t = text(ziel)
     assert "ABRECHNUNGSAUFSTELLUNG" in t
     # „Belegnummer“ statt „Aufstellungsnummer“: die Texterkennung beim Belegempfang
-    # findet die Nummer sonst nicht. Die Aufstellung bleibt als solche ueberschrieben.
-    assert "Belegnummer:" in t and aufstellung.nummer in t
+    # findet die Nummer nur direkt hinter dem Etikett. Die Aufstellung bleibt als solche
+    # ueberschrieben.
+    assert re.search(r"Belegnummer:\s*" + re.escape(aufstellung.nummer), t)
     assert "Aufstellungsnummer" not in t
     assert "Ausstellungsdatum:" in t and "18.10.2026" in t
     assert "Leistungsmonat:" in t and "09/2026" in t
