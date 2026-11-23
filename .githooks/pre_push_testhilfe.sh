@@ -32,6 +32,25 @@ spiegel_repo_anlegen() {
     printf '%s\n' "$d"
 }
 
+# Spiegel mit lebenden Hook-Skripten aus $hier (von der Testdatei gesetzt).
+# Gibt den Repo-Pfad aus. pipaudit.gleichlauf aus: fehlt-Checkout warnt nur.
+stand_neues_repo() {
+    d=$(spiegel_repo_anlegen)
+    mkdir -p "$d/.githooks"
+    cp "$hier/pre-push" "$d/.githooks/pre-push"
+    cp "$hier/datenwache.sh" "$d/.githooks/datenwache.sh"
+    cp "$hier/wachen.sh" "$d/.githooks/wachen.sh"
+    cp "$hier/netzwache.sh" "$d/.githooks/netzwache.sh"
+    cp "$hier/compose_ports_pruefen.py" "$d/.githooks/compose_ports_pruefen.py"
+    if [ -f "$hier/pre-push-stand.sh" ]; then
+        cp "$hier/pre-push-stand.sh" "$d/.githooks/pre-push-stand.sh"
+        chmod +x "$d/.githooks/pre-push-stand.sh"
+    fi
+    chmod +x "$d/.githooks/pre-push" "$d/.githooks/datenwache.sh" "$d/.githooks/wachen.sh"
+    git -C "$d" config --local pipaudit.gleichlauf aus
+    printf '%s\n' "$d"
+}
+
 # Minimaldateien, unter denen wachen.sh gruen bleibt (vgl. test_wachen.sh).
 schreib_gruen() {
     root=$1

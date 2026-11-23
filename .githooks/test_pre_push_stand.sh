@@ -13,6 +13,7 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
 
 hier=$(cd "$(dirname "$0")" && pwd)
 . "$hier/pre_push_testhilfe.sh"
+. "$hier/umweg_testhilfe.sh"
 fehl=0
 leer=0000000000000000000000000000000000000000
 
@@ -24,31 +25,9 @@ PIPAUDIT_QUELLE=$(mktemp -d "$werkstatt/q-leer.XXXXXX") || {
 }
 export PIPAUDIT_QUELLE
 
-# schreib_gruen, schreib_rot_netz und das Grundgeruest des Spiegel-Repos
-# (spiegel_repo_anlegen) kommen aus pre_push_testhilfe.sh.
-neues_repo() {
-    d=$(spiegel_repo_anlegen)
-    # Hook unter Test: lebende Skripte, nicht eine zweite Abschrift der Regeln.
-    mkdir -p "$d/.githooks"
-    cp "$hier/pre-push" "$d/.githooks/pre-push"
-    cp "$hier/datenwache.sh" "$d/.githooks/datenwache.sh"
-    cp "$hier/wachen.sh" "$d/.githooks/wachen.sh"
-    cp "$hier/netzwache.sh" "$d/.githooks/netzwache.sh"
-    cp "$hier/compose_ports_pruefen.py" "$d/.githooks/compose_ports_pruefen.py"
-    # Hilfsskript, sobald vorhanden (nach Implementierung); fehlend = alter Hook.
-    if [ -f "$hier/pre-push-stand.sh" ]; then
-        cp "$hier/pre-push-stand.sh" "$d/.githooks/pre-push-stand.sh"
-        chmod +x "$d/.githooks/pre-push-stand.sh"
-    fi
-    chmod +x "$d/.githooks/pre-push" "$d/.githooks/datenwache.sh" "$d/.githooks/wachen.sh"
-    # Eigenes .git: Schalter nicht vom umgebenden Klon (pipaudit.gleichlauf=pflicht)
-    # erben. Ausdruecklich "aus", damit fehlt-Checkout nur warnt, nicht blockt.
-    git -C "$d" config --local pipaudit.gleichlauf aus
-    printf '%s\n' "$d"
-}
-
-# rufe_hook (Hook im Spiegel laufen lassen, rc und Wortlaut pruefen) kommt aus
-# pre_push_testhilfe.sh.
+# stand_neues_repo, schreib_gruen, schreib_rot_netz, rufe_hook: pre_push_testhilfe.sh
+# umweg_empfehlungen, pruefe_umweg_probe: umweg_testhilfe.sh
+neues_repo() { stand_neues_repo; }
 
 # --- Fall A: Checkout gruen, gepushter Commit rot → Push muss fallen ----------
 repo_a=$(neues_repo)
@@ -203,52 +182,6 @@ fi
 # Weitere Muster neben no-verify: hooksPath=/dev/null bzw. hooksPath /dev/null und HUSKY=0
 # (gleicher Umweg). HUSKY="0" bleibt bewusst draußen (Text-Lint, siehe Kommentar oben).
 # Text-Lint ist nie vollstaendig (z. B. SKIP=..., zerlegte Woerter); das bleibt bewusst so.
-#
-# $1 Ordner → Zeilen mit Umweg-Empfehlung (ohne reine Kommentare und ohne "nicht ...")
-umweg_empfehlungen() {
-    ordner=$1
-    treffer_datei="$werkstatt/umweg-treffer.txt"
-    : > "$treffer_datei"
-    for f in "$ordner"/*.sh "$ordner"/pre-push; do
-        [ -f "$f" ] || continue
-        name=${f##*/}
-        if [ "${name#test_}" != "$name" ]; then
-            continue
-        fi
-        grep -nH -E -- 'no-verify|hooksPath[ =]/dev/null|HUSKY=0' "$f" \
-            >> "$treffer_datei" 2>/dev/null
-    done
-    grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' "$treffer_datei" \
-        | grep -vE 'nicht[^"]{0,12}(no-verify|hooksPath[ =]/dev/null|HUSKY=0)' || true
-}
-
-# $1 Name  $2 Dateiinhalt  $3 erwartet (rot=Empfehlung erkannt, gruen=kein Treffer)
-pruefe_umweg_probe() {
-    name=$1
-    inhalt=$2
-    erwartet=$3
-    d="$werkstatt/probe-$name"
-    mkdir -p "$d"
-    printf '%s\n' "$inhalt" > "$d/hinweis.sh"
-    fund=$(umweg_empfehlungen "$d")
-    if [ "$erwartet" = rot ]; then
-        if [ -n "$fund" ]; then
-            echo "gruen $name"
-        else
-            echo "ROT  $name: Umweg-Empfehlung nicht erkannt" >&2
-            fehl=1
-        fi
-    else
-        if [ -z "$fund" ]; then
-            echo "gruen $name"
-        else
-            echo "ROT  $name: Verbot als Umweg gewertet:" >&2
-            printf '%s\n' "$fund" | sed 's/^/      /' >&2
-            fehl=1
-        fi
-    fi
-}
-
 pruefe_umweg_probe empfehlung_hooksPath_ist_umweg \
     'echo "nutze git -c core.hooksPath=/dev/null push"' rot
 pruefe_umweg_probe verbot_hooksPath_ist_kein_umweg \
@@ -264,18 +197,29 @@ pruefe_umweg_probe empfehlung_HUSKY0_ist_umweg \
 pruefe_umweg_probe verbot_HUSKY0_ist_kein_umweg \
     'echo "nicht HUSKY=0 setzen"' gruen
 
-# --- Fall H: HEAD gleich SHA, aber getrackte Datei geaendert → Exportweg ------
-# Schneller Weg (Arbeitsbaum) wuerde die uncommittete Aenderung mitpruefen und
-# den Push an der roten Netz-Wache festhalten; der Export prueft genau den
-# gepushten Stand und ist gruen.
-repo_h=$(neues_repo)
-schreib_gruen "$repo_h"
-git -C "$repo_h" add -A
-git -C "$repo_h" commit -qm gruen-h
-sha_h=$(git -C "$repo_h" rev-parse HEAD)
-# Getrackte, uncommittete Aenderung, die den Arbeitsbaum rot macht.
-schreib_rot_netz "$repo_h"
-rufe_hook uncommittete_aenderung_nimmt_exportweg "$repo_h" "$sha_h" 0 ""
+# --- Fall K: Ref-Zeile auf stdin ohne Schluss-Newline wird trotzdem geprueft ---
+# Charakterisierung (Durchstich), keine Mutationsprobe: das heredoc der
+# Stand-Schleife schliesst die letzte Zeile selbst ab, `|| [ -n "${lokal_sha:-}" ]`
+# in pre-push ist dort redundant (Streichen bleibt gruen, gemessen in #309).
+# Der Fall haelt fest, dass eine Zeile ohne Schluss-Newline geprueft wird.
+repo_k=$(neues_repo)
+schreib_gruen "$repo_k"
+git -C "$repo_k" add -A
+git -C "$repo_k" commit -qm gruen-k
+sha_k=$(git -C "$repo_k" rev-parse HEAD)
+kurz_k=$(printf '%s' "$sha_k" | cut -c1-7)
+aus_k="$werkstatt/stdin-ohne-newline.aus"
+( cd "$repo_k" && printf 'refs/heads/main %s refs/heads/main %s' "$sha_k" "$leer" \
+    | env DATENWACHE_UEBERSTIMMT=1 PRE_PUSH_TEST_CMD='echo suite-attrappe' \
+        bash .githooks/pre-push origin unused-url ) >"$aus_k" 2>&1
+rc_k=$?
+if [ "$rc_k" -ne 0 ] || ! grep -qF -- "tdd: prüfe Commit $kurz_k" "$aus_k"; then
+    echo "ROT  stdin_ohne_newline_wird_geprueft: rc=$rc_k, Meldung fehlt" >&2
+    sed 's/^/      /' "$aus_k" | tail -20 >&2
+    fehl=1
+else
+    echo "gruen stdin_ohne_newline_wird_geprueft"
+fi
 
 umweg=$(umweg_empfehlungen "$hier")
 if [ -n "$umweg" ]; then

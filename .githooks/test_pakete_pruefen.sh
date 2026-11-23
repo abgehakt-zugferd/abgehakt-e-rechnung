@@ -176,10 +176,14 @@ AUSNAHMEN="$KEINE" AUSWERTER="$aus_stderr" lauf ergebnis_nur_auf_stderr_zaehlt_n
     "NICHT GEMESSEN" "OK"
 
 # PAKETE_AUSWERTER ist eine reine Test-Naht: gesetzt muss eine Warnzeile auf
-# stderr stehen, Exit und ERGEBNIS-Logik bleiben unveraendert (hier: gruen).
+# stderr stehen (nicht auf stdout), Exit und ERGEBNIS-Logik bleiben unveraendert.
 aus_warn=$(schreib_auswerter_attrappe warn_naht 0 '"ERGEBNIS SAUBER (5 Pakete)\n"' '""')
 AUSNAHMEN="$KEINE" AUSWERTER="$aus_warn" lauf auswerter_naht_warnt_auf_stderr 0 \
-    "WARNUNG: PAKETE_AUSWERTER gesetzt" "NICHT GEMESSEN"
+    "WARNUNG: PAKETE_AUSWERTER gesetzt" "NICHT GEMESSEN" \
+    "WARNUNG: PAKETE_AUSWERTER gesetzt" "WARNUNG: PAKETE_AUSWERTER gesetzt"
+# Leer gesetzt: ${PAKETE_AUSWERTER:-…} greift auf die Kopie; keine Warnung.
+AUSNAHMEN="$KEINE" lauf auswerter_leer_gesetzt_warnt_nicht 0 "OK" \
+    "WARNUNG: PAKETE_AUSWERTER"
 
 # Ausnahmen: Kennung, Issue, Ablauf, seit. Updates zuerst, Ausnahme ist die Not.
 # Heute ist 2026-11-18 (PAKETE_HEUTE). Hoechstfrist 30 Tage, gerechnet ab `seit`.
