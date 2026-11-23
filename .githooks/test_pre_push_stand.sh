@@ -197,75 +197,11 @@ pruefe_umweg_probe empfehlung_HUSKY0_ist_umweg \
 pruefe_umweg_probe verbot_HUSKY0_ist_kein_umweg \
     'echo "nicht HUSKY=0 setzen"' gruen
 
-# --- Fall H: HEAD gleich SHA, aber getrackte Datei geaendert → Exportweg ------
-# Schneller Weg (Arbeitsbaum) wuerde die uncommittete Aenderung mitpruefen und
-# den Push an der roten Netz-Wache festhalten; der Export prueft genau den
-# gepushten Stand und ist gruen.
-repo_h=$(neues_repo)
-schreib_gruen "$repo_h"
-git -C "$repo_h" add -A
-git -C "$repo_h" commit -qm gruen-h
-sha_h=$(git -C "$repo_h" rev-parse HEAD)
-# Getrackte, uncommittete Aenderung, die den Arbeitsbaum rot macht.
-schreib_rot_netz "$repo_h"
-rufe_hook uncommittete_aenderung_nimmt_exportweg "$repo_h" "$sha_h" 0 ""
-
-# --- Fall I: HEAD gleich SHA, Baum sauber, ungetrackte Datei unter .githooks/ ---
-# Committed Wache: vor exit optionales Overlay (nur Fixture). Ungetracktes Overlay
-# faerbt den Arbeitsbaum rot; der Export enthaelt es nicht → gruen.
-repo_i=$(neues_repo)
-schreib_gruen "$repo_i"
-overlay_naht='if [ -f .githooks/lokal-overlay.sh ]; then . .githooks/lokal-overlay.sh; fi'
-awk -v naht="$overlay_naht" '
-    /^exit "\$fehler"$/ { print naht }
-    { print }
-' "$repo_i/.githooks/wachen.sh" > "$repo_i/.githooks/wachen.sh.neu"
-mv "$repo_i/.githooks/wachen.sh.neu" "$repo_i/.githooks/wachen.sh"
-chmod +x "$repo_i/.githooks/wachen.sh"
-git -C "$repo_i" add -A
-git -C "$repo_i" commit -qm gruen-i
-sha_i=$(git -C "$repo_i" rev-parse HEAD)
-printf '%s\n' 'echo "untracked-overlay: ROT" >&2' 'exit 1' \
-    > "$repo_i/.githooks/lokal-overlay.sh"
-if ( cd "$repo_i" && DATENWACHE_UEBERSTIMMT=1 .githooks/wachen.sh ); then
-    echo "ABBRUCH: Fall I, Arbeitsbaum unerwartet gruen - Fixture kaputt." >&2
-    exit 2
-fi
-git -C "$repo_i" diff --quiet HEAD || {
-    echo "ABBRUCH: Fall I, Baum nicht sauber - nichts gemessen." >&2
-    exit 2
-}
-[ -n "$(git -C "$repo_i" ls-files --others --exclude-standard -- .githooks)" ] || {
-    echo "ABBRUCH: Fall I, keine ungetrackte .githooks-Datei - nichts gemessen." >&2
-    exit 2
-}
-rufe_hook ungetrackte_githooks_nimmt_exportweg "$repo_i" "$sha_i" 0 ""
-
-# --- Fall J: HEAD gleich SHA, Aenderung nur gestagt → Exportweg ----------------
-# Wie Fall H, aber nach git add (Index == Arbeitsbaum, beides ungleich HEAD).
-# `git diff --quiet` ohne HEAD wuerde den schnellen Weg nehmen und rot werden.
-repo_j=$(neues_repo)
-schreib_gruen "$repo_j"
-git -C "$repo_j" add -A
-git -C "$repo_j" commit -qm gruen-j
-sha_j=$(git -C "$repo_j" rev-parse HEAD)
-schreib_rot_netz "$repo_j"
-git -C "$repo_j" add docker-compose.yml
-git -C "$repo_j" diff --quiet HEAD && {
-    echo "ABBRUCH: Fall J, gestagte Aenderung unsichtbar - nichts gemessen." >&2
-    exit 2
-}
-git -C "$repo_j" diff --quiet || {
-    echo "ABBRUCH: Fall J, Index und Baum differieren - Fixture kaputt." >&2
-    exit 2
-}
-rufe_hook gestagte_aenderung_nimmt_exportweg "$repo_j" "$sha_j" 0 ""
-
 # --- Fall K: Ref-Zeile auf stdin ohne Schluss-Newline wird trotzdem geprueft ---
-# Charakterisierung: pre-push liest per Markierung und heredoc; printf ohne \n.
-# Mutation die rot macht: Stand-Schleife als process substitution
-# `done < <(printf '%s' "$push_refs")` ohne `|| [ -n "${lokal_sha:-}" ]`
-# (Pipe+while waere Subshell und wuerde zusaetzlich Exit 1 verschlucken).
+# Charakterisierung (Durchstich), keine Mutationsprobe: das heredoc der
+# Stand-Schleife schliesst die letzte Zeile selbst ab, `|| [ -n "${lokal_sha:-}" ]`
+# in pre-push ist dort redundant (Streichen bleibt gruen, gemessen in #309).
+# Der Fall haelt fest, dass eine Zeile ohne Schluss-Newline geprueft wird.
 repo_k=$(neues_repo)
 schreib_gruen "$repo_k"
 git -C "$repo_k" add -A

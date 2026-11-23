@@ -100,7 +100,10 @@ genau diesen Stand (Wegwerf-Worktree unter `$TMPDIR`, Abräumen per trap). Entsp
 Änderungen, auch keine gestagten, und keine ungetrackten Dateien unter `.githooks/`),
 bleibt der schnelle Weg im Arbeitsbaum. Bei getrackten Änderungen oder ungetrackten
 Dateien unter `.githooks/` geht es in den Exportweg, denn sie gehören nicht zum
-gepushten Stand bzw. könnten dort eine Hook-Datei ersetzen. Andere ungetrackte
+gepushten Stand bzw. könnten dort eine Hook-Datei ersetzen. Ignorierte Dateien dort
+(etwa `__pycache__/`) zählen nicht mit, sonst ginge jeder Push nach einem Testlauf in
+den Exportweg. Scheitert die Abfrage nach ungetrackten Dateien, nimmt der Hook den
+Exportweg. Andere ungetrackte
 Dateien lösen den Exportweg nicht aus: Der schnelle Weg prüft sie mit, der Export
 enthält sie nicht. Löschungen (SHA
 aus Nullen) werden übersprungen;

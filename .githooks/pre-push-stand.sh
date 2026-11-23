@@ -3,9 +3,10 @@
 # Suite inkl. Skip-Guard. Aufruf aus der Repo-Wurzel mit einem lokalen SHA.
 #
 # Schneller Weg (Arbeitsbaum) nur wenn HEAD gleich SHA, Baum sauber (keine
-# getrackten Aenderungen, auch keine gestagten) und keine ungetrackten Dateien
-# unter .githooks/. Sonst Wegwerf-Worktree unter TMPDIR (reines git archive
-# haette kein Toplevel). Immer Abraeumen per trap.
+# getrackten Aenderungen, auch keine gestagten) und keine ungetrackten, nicht
+# ignorierten Dateien unter .githooks/ (scheitert die Abfrage: Exportweg).
+# Sonst Wegwerf-Worktree unter TMPDIR (reines git archive haette kein
+# Toplevel). Immer Abraeumen per trap.
 set -uo pipefail
 
 sha="${1:?pre-push-stand: SHA fehlt}"
@@ -115,7 +116,10 @@ echo "tdd: prüfe Commit $kurz ($sha)." >&2
 kopf=$(git rev-parse HEAD)
 # Ungetrackte unter .githooks/: schneller Weg wuerde sie mitausfuehren und
 # koennte eine im Commit fehlende/andere Datei ersetzen → Exportweg.
-githooks_untracked=$(git ls-files --others --exclude-standard -- .githooks)
+# Ignorierte (__pycache__) bewusst nicht: sonst nach jedem Testlauf Exportweg.
+# Scheitert ls-files, ist "leer" nicht gemessen → fail-safe Exportweg.
+githooks_untracked=$(git ls-files --others --exclude-standard -- .githooks) \
+  || githooks_untracked="ls-files gescheitert"
 if [ "$sha" = "$kopf" ] && git diff --quiet HEAD && [ -z "$githooks_untracked" ]; then
   # Sauberer Baum: keine getrackten Aenderungen (auch keine gestagten) und keine
   # ungetrackten Dateien unter .githooks/. Andere ungetrackte Dateien sieht
