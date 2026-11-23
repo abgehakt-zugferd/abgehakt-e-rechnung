@@ -58,8 +58,10 @@ if git -C "$Q" rev-parse --git-dir >/dev/null 2>&1; then
     }
     # Geprueft wird der Push-Commit aus der pre-push-stdin
     # (local_ref local_sha remote_ref remote_sha), nie der Arbeitsbaum.
+    # Form wie die README-Vorlage (claude-global-skills #254). Hier redundant:
+    # das heredoc endet immer mit Newline, siehe Fall K in test_pre_push_stand.sh.
     repo="$(git rev-parse --show-toplevel)"
-    while read -r local_ref local_sha remote_ref remote_sha; do
+    while read -r local_ref local_sha remote_ref remote_sha || [ -n "${local_sha:-}" ]; do
         [ -n "$local_sha" ] || continue
         python3 "$tmp/pip-audit-auswerter/gleichlauf.py" --push "$local_sha" --repo "$repo" .githooks/pip-audit-auswerter --checkout "$Q" || exit 1
     done <<EOF
